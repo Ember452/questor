@@ -43,7 +43,7 @@
 | 子 agent / DAG 调度 | P8 | `TaskNode.kind=subagent` 字段、`edge_kind` 预留、deps 仅读校验 |
 | 多模态 / 语音事件 data | P6 | 事件 `type` 占位（`voice_attached`/`artifact` 等只增名） |
 | 完整 fallback 链 / 凭据池 / 多 hint 分类 | P10 | 单模型；`run_failed.error{code,message,retryable,resumable}` 形状到位 |
-| 沙箱后端（seatbelt/bubblewrap/Windows） | P2 | `SandboxPort` 探针接口 + `none` 后端时 exec/high **直接 deny**（T4 fail-closed，03 §10） |
+| 沙箱后端（seatbelt/bubblewrap/Windows）与 capability floor | P2（ADR-0015） | `SandboxPort` 探针接口 + P1 `none` 后端时 exec/write/network/high **直接 deny**（T4 fail-closed，03 §10）；P2 再允许有围栏的降级 ask，但不得把 floor 降为 allow |
 | 三层记忆 / Deep Dream | P4 | `WriteMemory` Command 位；不接向量库 |
 | Tauri 桌面壳 | P7 | 不做；P1 仅 CLI + 本地 SSE |
 
@@ -262,6 +262,6 @@ P0 已产八层包骨架 + 分层三防线 + 冷导入/CI；P1 仅在 `pyproject
 
 **诚实降级为 draft（本次未强制，非“已完成”）**
 - 梯度终止的「软预警 checkpoint 提示 / wall-clock wrap-up 提示 / 一次无工具 grace call / 耗尽强制总结」需额外 provider 往返，属 04 §13/§3 `[加固]`，**P1 未实现**（当前：预算/截止/重复到点直接 `run_failed`）；这些字段与接缝已就位，P10 加固期补全。
-- 流式看门狗双超时、idle-progress 看门狗、shell 命令解析 fail-closed、跨机/多进程一致性：均按计划后置（P2/P10），P1 不做。
+- 流式看门狗双超时、idle-progress 看门狗、POSIX/PowerShell shell 命令解析、跨机/多进程一致性：分别后置到 P2/P10；P1 不做。
 
 **未改的结论**：能力面仍守 §2.5 串行最小集（无并行/MCP/子 agent），审计 scope-drift 核验亦确认未越界；真实 LiteLLM 端到端与跨真实 HTTP 的 SSE 断连重连仍 **UNVERIFIED**（无 key / 环境无 uvicorn），列入 §7 未覆盖项。
