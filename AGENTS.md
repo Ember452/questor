@@ -100,6 +100,23 @@ Docs are the source of truth the *next* session reads; stale docs cause wrong wo
 - `CLAUDE.md` stays a thin pointer — only touch it when the doc *map* changes.
 > "Code merged, docs stale" = not done.
 
+## 5.6 Code Comments — standardized, **in Chinese**
+Identifiers, log messages and API names stay English, but **all code comments and docstrings are written in
+Chinese**. Detailed conventions live in [`CONTRIBUTING.md`](../CONTRIBUTING.md)（注释规范）; minimum bar:
+- **File/module header**: one-line responsibility + which layer (L0–L7) it belongs to + what it may import.
+- **Docstring (Chinese) on every public class / Port / function**: what it does, how to use it, dependencies,
+  invariants / pre-post conditions, and **failure semantics**.
+- **Explain *why*, not *what*** at non-obvious decisions. Cite references inline: `ADR-0005`, `HARD C2`,
+  `参照 wuu internal/loopdriver/contract.go:14-76`.
+- **Mandatory comments** at: permission checks, fail-closed branches, cancel/rollback paths, event-persistence
+  boundaries, concurrency/gate code, and anywhere code was adapted from a reference repo (**must note source +
+  license**, §4.5).
+- **No bare `TODO`**: every TODO/FIXME carries context + owning Phase/ADR; `NotImplementedError` states which
+  phase implements it.
+- Don't comment self-evident lines (§2); **when behavior changes, update its comment** — a stale comment is a
+  doc defect (§5.5).
+Non-compliant comments = the change is **not done** (§5).
+
 ## 6. Git — English, and NEVER without permission
 - **Commit / push messages in English**, Conventional Commits (`feat/fix/refactor/chore/docs/test/spike:`);
   describe the real engineering action; **do not fabricate timestamps or authorship**.
