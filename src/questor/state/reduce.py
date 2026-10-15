@@ -25,14 +25,21 @@ from questor.contracts.events import (
     Command,
     Envelope,
     EventType,
+    ExpireApproval,
     FinalizeRun,
     MarkToolDenied,
+    MarkToolRunning,
     MarkToolValidated,
     RecordToolResult,
+    RequestApproval,
+    ResolveApproval,
+    SetPermissionMode,
     SubmitMessage,
 )
 from questor.contracts.state_schema import (
     OPEN_TOOL_CALL_STATUSES,
+    ApprovalRequest,
+    ApprovalStatus,
     ContentBlock,
     Message,
     Role,
@@ -40,7 +47,7 @@ from questor.contracts.state_schema import (
     ToolCall,
     ToolCallStatus,
 )
-from questor.state.domain_state import Context, Run
+from questor.state.domain_state import Context, PermissionCtx, PermissionDecisionRecord, Run
 
 _OPEN_CALL = OPEN_TOOL_CALL_STATUSES
 
@@ -124,11 +131,89 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         new = replace(run, tool_ledger=ledger, context=ctx, seq=run.seq + 1)
         return new, [_event(new.seq, new, target.turn, EventType.TOOL_COMPLETED, {"tool_call_id": command.tool_call_id, "status": "denied"})]
 
+    if isinstance(command, RequestApproval):
+        target = _open_call(run, command.tool_call_id)
+        existing = next((a for a in run.permission_ctx.approvals if a.request_id == command.request_id), None)
+        if existing is not None:
+            if existing.status is ApprovalStatus.PENDING and existing.tool_call_id == command.tool_call_id:
+                return run, []
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"approval request {command.request_id} conflicts with an existing request"})]
+        if target is None:
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"no open tool_call to approve {command.tool_call_id}"})]
+        requested = replace(
+            target,
+            status=ToolCallStatus.AWAITING_APPROVAL,
+            approval_request_id=command.request_id,
+            permission_reason=command.reason,
+        )
+        ledger = replace(run.tool_ledger, calls=_replace_call(run.tool_ledger.calls, requested))
+        request = ApprovalRequest(
+            request_id=command.request_id,
+            tool_call_id=command.tool_call_id,
+            args_summary=command.args_summary,
+            risk=command.risk,
+            reason=command.reason,
+            created_at=utc_now(),
+            expires_at=command.expires_at,
+        )
+        permissions = replace(run.permission_ctx, approvals=(*run.permission_ctx.approvals, request))
+        new = replace(run, tool_ledger=ledger, permission_ctx=permissions, status=RunStatus.AWAITING_APPROVAL, seq=run.seq + 1)
+        event_data = {
+            "request_id": request.request_id,
+            "tool_call_id": command.tool_call_id,
+            "name": target.name,
+            "args_summary": command.args_summary,
+            "risk": command.risk,
+            "reason": command.reason,
+            "expires_at": command.expires_at.isoformat(),
+        }
+        return new, [_event(new.seq, new, target.turn, EventType.APPROVAL_REQUEST, event_data)]
+
+    if isinstance(command, ResolveApproval):
+        return _resolve_approval(run, command, decision=command.decision, decided_by=command.decided_by, status=ApprovalStatus.APPROVED if command.decision == "allow" else ApprovalStatus.DENIED, expired=False)
+
+    if isinstance(command, ExpireApproval):
+        return _resolve_approval(run, command, decision="deny", decided_by="timeout", status=ApprovalStatus.EXPIRED, expired=True)
+
+    if isinstance(command, SetPermissionMode):
+        if command.mode not in {"default", "plan", "full_auto"}:
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"invalid permission mode {command.mode}"})]
+        if run.permission_ctx.mode == command.mode:
+            return run, []
+        permissions = replace(run.permission_ctx, mode=command.mode)
+        new = replace(run, permission_ctx=permissions, seq=run.seq + 1)
+        return new, [_event(new.seq, new, run.turn, EventType.PERMISSION_MODE_CHANGED, {"mode": command.mode, "changed_by": command.changed_by, "effective_from_turn": run.turn + 1})]
+
+    if isinstance(command, MarkToolRunning):
+        target = _open_call(run, command.tool_call_id)
+        if target is None:
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"no open tool_call to start {command.tool_call_id}"})]
+        if target.status is ToolCallStatus.RUNNING:
+            return run, []
+        started = replace(
+            target,
+            status=ToolCallStatus.RUNNING,
+            capability=command.capability,
+            risk=command.risk,
+            timeout_s=command.timeout_s,
+            started_at=utc_now(),
+        )
+        ledger = replace(run.tool_ledger, calls=_replace_call(run.tool_ledger.calls, started))
+        new = replace(run, tool_ledger=ledger, status=RunStatus.RUNNING, seq=run.seq + 1)
+        return new, [_event(new.seq, new, target.turn, EventType.TOOL_STARTED, {
+            "tool_call_id": command.tool_call_id,
+            "name": target.name,
+            "capability": command.capability,
+            "risk": command.risk,
+            "args_summary": target.raw_args_summary or target.name,
+        })]
+
     if isinstance(command, Cancel):
         open_calls = _open_calls(run)
         closed, extra = _backfill_open_calls(run)
         ledger = replace(run.tool_ledger, calls=closed)
         ctx = replace(run.context, items=extra)
+        permissions = _cancel_pending_approvals(run.permission_ctx)
         # 为本次产出的全部事件（回填 + 唯一终态）连续取号，再把 Run.seq 推进到最后一个号——
         # 绝不复用同一 seq（ADR-0011；旧写法 run.seq+1 与 new.seq 相撞会打断 store.append）。
         seq = run.seq
@@ -138,7 +223,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
             events.append(_event(seq, run, None, EventType.TOOL_COMPLETED, {"tool_call_id": call.tool_call_id, "status": "cancelled"}))
         seq += 1
         events.append(_event(seq, run, run.turn, EventType.RUN_CANCELLED, {"reason": str(command.reason)}))
-        new = replace(run, tool_ledger=ledger, context=ctx, status=RunStatus.CANCELLED, cancel_reason=command.reason, completed_at=utc_now(), seq=seq)
+        new = replace(run, tool_ledger=ledger, context=ctx, permission_ctx=permissions, status=RunStatus.CANCELLED, cancel_reason=command.reason, completed_at=utc_now(), seq=seq)
         return new, events
 
     if isinstance(command, FinalizeRun):
@@ -155,6 +240,70 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
     return run, [
         _event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"unsupported command {command.type}"})
     ]
+
+
+def _cancel_pending_approvals(ctx: PermissionCtx) -> PermissionCtx:
+    return replace(
+        ctx,
+        approvals=tuple(
+            replace(a, status=ApprovalStatus.CANCELLED, decision="deny", decided_by="cancel", resolved_at=utc_now()) if a.status is ApprovalStatus.PENDING else a
+            for a in ctx.approvals
+        ),
+    )
+
+
+def _resolve_approval(
+    run: Run,
+    command: object,
+    *,
+    decision: str,
+    decided_by: str,
+    status: ApprovalStatus,
+    expired: bool,
+) -> tuple[Run, list[Envelope]]:
+    request_id = command.request_id
+    tool_call_id = getattr(command, "tool_call_id", None)
+    approval = next((item for item in run.permission_ctx.approvals if item.request_id == request_id), None)
+    if approval is None or (tool_call_id is not None and approval.tool_call_id != tool_call_id):
+        return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"unknown approval request {request_id}"})]
+    if approval.status is not ApprovalStatus.PENDING:
+        if approval.decision == decision:
+            return run, []
+        return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"approval {request_id} already {approval.status.value}"})]
+    now = utc_now()
+    target = _open_call(run, approval.tool_call_id)
+    if target is None:
+        return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"approval {request_id} has no open tool_call"})]
+    resolved = replace(approval, status=status, decision=decision, decided_by=decided_by, resolved_at=now)
+    permissions = replace(
+        run.permission_ctx,
+        approvals=tuple(resolved if a.request_id == request_id else a for a in run.permission_ctx.approvals),
+        decisions=(*run.permission_ctx.decisions, PermissionDecisionRecord(tool_call_id=target.tool_call_id, decision=decision, decided_by=decided_by, at=now, request_id=request_id)),
+    )
+    if decision == "allow":
+        call = replace(target, status=ToolCallStatus.READY, permission_decision="allow", permission_reason=approval.reason, permission_decided_by=decided_by)
+        ctx = run.context
+        run_status = RunStatus.RUNNING
+    else:
+        reason = "approval expired before a decision" if expired else f"approval denied: {approval.reason}"
+        call = replace(target, status=ToolCallStatus.DENIED, permission_decision="deny", permission_reason=reason, permission_decided_by=decided_by, result=reason, ended_at=now)
+        ctx = _append_tool_result(run.context, target.tool_call_id, reason, is_error=True)
+        run_status = RunStatus.RUNNING
+    ledger = replace(run.tool_ledger, calls=_replace_call(run.tool_ledger.calls, call))
+    seq = run.seq
+    events: list[Envelope] = []
+    seq += 1
+    events.append(_event(seq, run, target.turn, EventType.APPROVAL_RESOLVED, {
+        "request_id": request_id,
+        "tool_call_id": target.tool_call_id,
+        "decision": decision,
+        "decided_by": decided_by,
+        "resolved_at": now.isoformat(),
+    }))
+    if decision != "allow":
+        seq += 1
+        events.append(_event(seq, run, target.turn, EventType.TOOL_COMPLETED, {"tool_call_id": target.tool_call_id, "status": "denied"}))
+    return replace(run, tool_ledger=ledger, context=ctx, permission_ctx=permissions, status=run_status, seq=seq), events
 
 
 def _open_calls(run: Run) -> tuple[ToolCall, ...]:
