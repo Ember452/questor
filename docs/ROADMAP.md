@@ -16,9 +16,9 @@
 
 | Phase | 目标 | 进入条件 | **可验证判据（DoD）** | 详规 |
 |---|---|---|---|---|
-| **P0 设计骨架** | 五接缝契约 + ADR + 红线 | — | 能照文档搭出**可编译的接口骨架**（stub 全绿、import-linter 边界通过） | [plan/00](./plan/00-design-skeleton.md)（设计文档半已完成，接口骨架半待落码） |
-| **P1 最小可跑循环** | 单模型 + `read` 一个工具 + 流式 + 取消 | P0 | 终端里"问一句→流式答一句"，能中途取消且状态/事件一致 | plan/01 |
-| **P2 工具 + 权限 lite** | 文件/bash 核心工具集 + 三态权限 + json-schema 校验 + 受限沙箱 | P1 | 危险操作触发 `ask`；`deny`/敏感路径不可越；非法参数被拒 | plan/02 |
+| **P0 设计骨架** | 五接缝契约 + ADR + 红线 | — | 能照文档搭出**可编译的接口骨架**（stub 全绿、import-linter 边界通过） | [plan/00](./plan/00-design-skeleton.md)；[交付报告](./delivery/P0-completion-report.md) ✅ |
+| **P1 最小可跑循环** | 单模型 + `read` 一个工具 + 流式 + 取消 | P0 | 终端里"问一句→流式答一句"，能中途取消且状态/事件一致 | [plan/01](./plan/01-p1-minimal-loop.md)；[交付报告](./delivery/P1-completion-report.md) ✅ |
+| **P2 工具 + 权限 lite** | 文件/shell 核心工具集 + 三态权限 + json-schema 校验 + capability floor | P1 | 危险操作触发 `ask`；`deny`/敏感路径不可越；非法参数被拒；审批/取消/超时幂等可恢复 | [plan/02](./plan/02-p2-tools-permission.md) 🚧（ADR-0013-0019 已定，待实现） |
 | **P3 持久化 + 断点续传** | 事件溯源 + 快照 + resume | P2 | kill 进程后重启能续跑/回放；`after_seq` 重连不丢不重 | plan/03 |
 | **P4 记忆 v1（灵魂）** | 短期 → 三层 + Deep Dream + 检索（详 `design/06-memory.md`） | P3 | 跨会话记住并检索到一件事；夜间蒸馏产出 | plan/04 |
 | **P5 Skills / MCP** | 技能加载 + MCP 接入 | P3（仅适配器 stub 可早；完整需账本/持久化） | 丢一个 SKILL.md 即生效；挂一个 MCP server 出工具 | plan/05 |
