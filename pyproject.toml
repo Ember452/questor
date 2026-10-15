@@ -21,6 +21,7 @@ dev = [
     "pytest-timeout",
     "ruff",
     "import-linter",
+    "pytest-cov>=7.1.0",
 ]
 
 [build-system]
@@ -29,6 +30,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/questor"]
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
 
 # ---------------------------------------------------------------------------
 # Lint + layering guards (HARD-CONSTRAINTS C1/C14/C15).
