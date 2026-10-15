@@ -57,9 +57,20 @@ _SANDBOXED_CAPABILITIES = frozenset({Capability.EXEC, Capability.WRITE, Capabili
 class _ToolCtx:
     """交给工具的具体 :class:`ToolContext`——只暴露受控能力。"""
 
-    def __init__(self, workspace_root: Path, cancel_event: asyncio.Event) -> None:
+    def __init__(
+        self,
+        workspace_root: Path,
+        cancel_event: asyncio.Event,
+        *,
+        tool_call_id: str = "",
+        cwd: Path | None = None,
+    ) -> None:
         self.workspace_root = workspace_root
+        self.cwd = cwd or workspace_root
+        self.tool_call_id = tool_call_id
         self._cancel = cancel_event
+        # T11/T12 前只记录声明；真正的 ProcessRunner 必须读取此列表并执行 provider credential 过滤。
+        self._declared_env_names: set[str] = set()
 
     def is_cancelled(self) -> bool:
         """供长任务轮询的安全取消点。"""
@@ -70,6 +81,24 @@ class _ToolCtx:
 
     def emit_progress(self, payload: JsonObject) -> None:  # pragma: no cover - 观测钩子
         pass
+
+    def declare_env_passthrough(self, name: str) -> None:
+        """记录工具显式请求的环境变量名；值不在此保存（ADR-0018）。"""
+        self._declared_env_names.add(name)
+
+    async def run_process(self, request: object) -> object:
+        # P2 T12 前尚无 ProcessRunner adapter；调用它说明工具越过了当前能力阶段。
+        raise NotImplementedError("ProcessRunnerPort integration lands in P2 T12")
+
+    async def put_artifact(
+        self,
+        content: bytes,
+        *,
+        kind: str,
+        media_type: str = "text/plain",
+    ) -> object:
+        # P2 T10 前尚无 ArtifactStore；工具不得自拼落盘路径。
+        raise NotImplementedError("ArtifactStorePort integration lands in P2 T10")
 
 
 class DefaultTurnLoop:
@@ -277,7 +306,12 @@ class DefaultTurnLoop:
             await self._emit(events)
             return run
 
-        ctx = _ToolCtx(self.workspace_root, self.cancel_event)
+        ctx = _ToolCtx(
+            self.workspace_root,
+            self.cancel_event,
+            tool_call_id=intent.tool_call_id or "",
+            cwd=self.workspace_root,
+        )
         result = await tool.execute(intent.args, ctx)
         run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status=result.status, result=result.result, display=result.display))
         await self._emit(events)

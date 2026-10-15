@@ -304,3 +304,12 @@ class Budget:
     deadline_seconds: float | None = None
     repeat_tool_limit: int = 3
     max_consecutive_continuations: int = 8
+    approval_timeout_seconds: float = 300
+    tool_default_timeout_seconds: float = 120
+
+    def __post_init__(self) -> None:
+        # 审批/工具超时是 fail-closed 默认；非法值必须在状态构造期拒绝。
+        if self.approval_timeout_seconds <= 0:
+            raise ValueError("Budget.approval_timeout_seconds must be positive")
+        if self.tool_default_timeout_seconds <= 0:
+            raise ValueError("Budget.tool_default_timeout_seconds must be positive")

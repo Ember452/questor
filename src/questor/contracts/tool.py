@@ -9,11 +9,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import PurePosixPath
-from typing import Any, Protocol, runtime_checkable
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from questor.contracts.common import JsonObject
 from questor.contracts.errors import ErrorEntry
+
+if TYPE_CHECKING:
+    from questor.contracts.artifacts import ArtifactRef
+    from questor.contracts.process import ProcessRequest, ProcessResult
 
 
 class Capability(StrEnum):
@@ -45,11 +49,17 @@ class ToolSpec:
     risk: Risk
     read_only: bool = False  # 权威布尔；缺 metadata 一律 fail-closed 视为非只读
     available: bool = True
+    timeout_s: float | None = None  # None → Budget 默认；0/负值注册期拒绝
     parallel_safe: bool = False  # 仅 schema 占位，完整并行到 P5（ROADMAP §2.5）
     approval_mode: str | None = None  # MCP：只收紧不放宽，unknown→deny（03 §11）
     orchestrator: bool = False  # 嵌套/子代理工具：不参与 gate（03 §11）
     barrier: bool = False  # 同批独占
-    description_max_chars: int = 1024  # 描述长度上限（防超长/注入面）
+    description_max_chars: int = 2000  # 描述长度上限（防超长/注入面）
+
+    def __post_init__(self) -> None:
+        # 超时必须是正数；None 表示“采用 run 级默认”，不是无限等待。
+        if self.timeout_s is not None and not self.timeout_s > 0:
+            raise ValueError("ToolSpec.timeout_s must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,18 +76,33 @@ class ToolResult:
 
 @runtime_checkable
 class ToolContext(Protocol):
-    """交给工具的**受控**能力（design/03 §2；T1）。
+    """交给工具的**受控**能力（design/03 §2；ADR-0018/0019）。
 
-    不给裸文件系统/向量库句柄。工具只能返回 ``ToolResult``，绝不提交 Command 或改
-    Domain_State（T1 → 单写者）。"""
+    不给裸 filesystem/vector/provider/sandbox 句柄。工具只能返回 `ToolResult`，
+    进程与 artifact 都必须经 Harness port，状态写入由 Harness reduce 完成。
+    """
 
-    workspace_root: PurePosixPath
+    tool_call_id: str
+    workspace_root: Path
+    cwd: Path
 
     def is_cancelled(self) -> bool: ...
 
     def report_progress(self, message: str) -> None: ...
 
     def emit_progress(self, payload: JsonObject) -> None: ...  # 仅瞬态观测事件
+
+    def declare_env_passthrough(self, name: str) -> None: ...
+
+    async def run_process(self, request: ProcessRequest) -> ProcessResult: ...
+
+    async def put_artifact(
+        self,
+        content: bytes,
+        *,
+        kind: str,
+        media_type: str = "text/plain",
+    ) -> ArtifactRef: ...
 
 
 class Tool(ABC):
