@@ -1,6 +1,6 @@
 # R02 · 02-event-protocol.md 外部参考扫描增量报告
 
-> **定位**：本文件是基于外部优秀项目实扒后的**增量评审报告**，不是权威契约本体；采纳项再并回 [`02-event-protocol.md`](./02-event-protocol.md)。
+> **定位**：本文件是基于外部优秀项目实扒后的**增量评审报告**，不是权威契约本体；采纳项再并回 [`02-event-protocol.md`](../design/02-event-protocol.md)。
 > **方法**：读全不抽样、只提增量与缺口、每条带 `文件:行号` 证据（对齐"外部参考扫描驱动的文档优化流程"）。
 > **扫描面**：
 > - CowAgent：`bridge/agent_event_handler.py`、`agent/protocol/step_writer.py`、`channel/web/core/channel.py`(SSE)、`channel/web/core/_common.py`(SSEStreamState)、`channel/web/api/chat.py`(Last-Event-ID)、`channel/web/api/openai_compat.py`

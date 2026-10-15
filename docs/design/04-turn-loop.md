@@ -97,3 +97,25 @@ Provider 错误→ProviderPort/LiteLLM 重试/fallback；耗尽则 `run_failed`�
 **压缩（R06）**：§7 由单档升为**四档梯度**（L0 裁剪 / L1 摘要 / **L2 整体归档留指针=默认** / L2' 蒸馏进长期记忆）；recovery_pointer 形态见 01；**压缩时可选发 `MemoryWrite` Command → 06**；只在 turn 边界、策略仅 advisory。
 **契约（R07）**：§9 PolicyPort 用 wuu `loopdriver` 契约具体化（LoopPolicy/Gateway/Create-Resume + **版本门控 checkpoint**），细化见 05。
 **X1 取齐**：v1 串行、`parallel_safe` 占位→P5；启用并行时须 gate(reader/writer/饥饿/orchestrator 绕开) + 取消 poll 感知 + ledger 回填 pending（03 §8/02 §10）。
+
+## 14. P2 Command Inbox / HITL / Process 生命周期（ADR-0013-0018）
+```text
+RunController(inbox, current Run)
+ ├ 安全点：drain Cancel / SetPermissionMode / ResolveApproval / ExpireApproval
+ ├ SubmitMessage → provider stream → assistant 定稿
+ ├ ProposeAction
+ │   └ raw args → JSON → schema → arg-key/shell analysis
+ │       → PermissionCtx + capability floor
+ │       ├ deny: MarkToolDenied
+ │       ├ ask: RequestApproval → durable approval_request
+ │       │      wait(inbox: Resolve/Expire/Cancel, timer)
+ │       └ allow/ready: MarkToolRunning → durable tool_started
+ │           → ToolContext.run_process(...) → settle Command → tool_completed
+ └ turn 边界 checkpoint（完整 Domain_State）
+```
+- **只有一个消费者**：loop/RunController 按 inbox FIFO 串行执行 reduce；provider 流式期间到达的 Command 排队到下一安全点，审批等待期间才即时消费相关 request。
+- **审批不是阻塞回调旁路**：CLI、HTTP、桌面最终都提交同一 Command；Approver 只能把 human 决策转成 Inbox submission，不能直接改 state。
+- **取消优先级**：pending ResolveApproval 与 Cancel 同 request 到达时，以 reduce 串行顺序判首个有效 transition；后续 stale command 幂等拒绝。
+- **Provider 取消也是安全点**：流式期间 Cancel 到达必须关闭 async iterator；尚未定稿的半 tool_use 不登记为可执行 ToolCall，已定稿则必须由 Cancel 回填，禁止“模型已产生 tool_use、账本无 result”。
+- **ProcessRunner 在工具执行边界内**：loop 等待工具，工具只通过 ctx.run_process 请求进程；timeout/cancel/kill-tree/env/artifact 全由同一 adapter 保证。
+- **settle 脱离取消链**：Cancel 到达不能吞掉已经发起的工具最终结果；先以 shield/finally 完成 settle，再让 Cancel 收尾，终态仍唯一。

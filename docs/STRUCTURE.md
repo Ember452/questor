@@ -40,6 +40,7 @@ src/questor/
 ├── version.py  __main__.py / app.py     # 入口（sidecar 启动点）
 ```
 - **依赖方向**：外层 → 内层；`kernel` 只依赖 `contracts/state/providers 端口`，**不 import `policy`/`surfaces` 具体实现**（用端口注入）。策略/MCP 通过注册表挂进内核。
+- **P2 新增接缝（ADR-0013-0019）**：`contracts/{inbox,process,sandbox,shell_analysis,artifacts}.py` 与扩展后的 `state_schema/events/tool.py` 只放数据/Port；`kernel/{run_control,permission_policy,capability_floor,shell_parse_posix,shell_parse_powershell}.py` 放机制；`providers/{process_runner,artifact_store,env_safety}.py` 放适配器；`capabilities/tools/{read,write,edit,apply_patch,ls,glob,grep,bash,powershell}.py` 只经 ToolContext 请求进程/artifact；surfaces 只提交 Command。
 - `contracts` 是全系统"词汇"，改动最保守（C6/C11）。
 
 ## 3. 桌面 `desktop/`（Tauri v2）

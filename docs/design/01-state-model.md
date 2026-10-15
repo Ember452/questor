@@ -76,16 +76,19 @@ TaskNode {
 ToolCall {
   tool_call_id,        # 关联键，跨事件稳定
   turn, node_id?,      # 属于哪个 turn / 任务节点
-  name, args,
-  status: pending|running|success|error|critical_error|denied,
-  result?, display?,   # 给模型的 result / 给人的 display
-  permission_decision?,# 见 §6
-  started_at, ended_at?, elapsed?,
-  seq_request, seq_result
+  name, args_status, args?, raw_args_summary?,
+  status: pending|validated|awaiting_approval|ready|running|success|error|critical_error|timed_out|cancelled|denied,
+  approval_request_id?, permission_decision?, permission_reason?, permission_decided_by?,
+  capability?, risk?, timeout_s?, sandbox_backend?, confinement?,
+  result?, display?,   # 给模型的有界 result / 给人的有界 display
+  artifact_refs[], env_scrubbed[], permission_warnings[],
+  started_at?, ended_at?, seq_request?, seq_result?
 }
 ```
+- **状态转移只由 Command 驱动**：`MarkToolValidated`、`RequestApproval`、`MarkToolRunning`、`ResolveApproval`、`ExpireApproval`、`RecordToolResult`、`MarkToolDenied`、`Cancel`。事件只是转移的投影，不能反哺状态。
+- **非法参数**：`args_status=invalid` 时必须有有界 `raw_args_summary`/error；不得再把原始不可解析文本伪装成 `{}`。
 - **写**：Kernel 工具路由（发起时 pending，结束回填）。**读**：UI 卡片/持久化/策略。
-- 取消时未完成的调用**必须回填一条 error 结果**，保证 §2 配对不变式不破。
+- 取消/超时/审批拒绝未完成调用**必须回填一条有界结果**，保住 tool_use/tool_result 配对；approval request 同步置 expired/cancelled。
 
 ## 5. 断点 Checkpoint（决策③）
 run 的可恢复快照点。
@@ -103,13 +106,17 @@ Checkpoint { cp_id, seq, turn, kind: auto|manual|pre_tool|post_tool|pre_compact,
 ```
 PermissionCtx {
   mode: default|plan|full_auto,
-  rules[]: {pattern, action: allow|ask|deny, scope},   # 二维通配
-  denylist[]: 不可被 mode/rules 覆盖的敏感路径          # 如凭据 .env
-  decisions[]: {tool_call_id, decision: allow|ask|deny, decided_by: rule|user, at}
+  rules[]: {id, tool_pattern, argument_pattern, action: allow|ask|deny, scope},
+  denylist[]: 不可被 mode/rules 覆盖的敏感路径，
+  approvals[]: {request_id, tool_call_id, status, args_summary, risk, reason,
+                created_at, expires_at, decision?, decided_by?, resolved_at?},
+  decisions[]: {tool_call_id, request_id?, decision, decided_by, at}
 }
 ```
-- **决策是纯函数**（引擎判定），**审批**（ask 时）产生 `awaiting_approval` 状态 + 一条 HITL 事件；**执行/封装**在 Kernel 与工具执行器。沙箱后端(seatbelt/bubblewrap)是**可插拔实现**，v1 可先"受限执行"、后补。
-- 不变式：`deny` 命中直接拒且**不计入失败重试**；`denied` 也要写进 ToolLedger（审计）。
+- **唯一真源**：PermissionCtx 属权威 Domain_State；权限引擎不得自带第二份 mode/rules（ADR-0014）。
+- **决策是纯函数**（引擎判定），**审批**（ask 时）产生带 request_id 的 `ApprovalRequest` + `approval_request` 事件；执行/封装在 Kernel 与 ProcessRunner（ADR-0016/0018）。
+- **capability floor**：OS 写围栏缺失、后端缺失、审批策略 never、敏感路径 deny 均高于 mode；`full_auto` 只改变可 auto-approve 的上层决策，不能伪造隔离能力（ADR-0015）。
+- 不变式：`deny` 命中直接拒且**不计入失败重试**；`denied` 也要写进 ToolLedger（审计）。mode 改变**不回溯重算**历史 decision（I5）。
 
 ## 7. 变更与事件的关系（投影模型）
 ```
@@ -164,6 +171,8 @@ StorePort→SQLite：`sessions / runs / messages(+content) / task_nodes / tool_c
 - **I5 mode/权限变更=Command、不回溯**：mode 属 `Command`走 reduce；**已发生的 tool_call 历史 decision 不重算**，只对**未来调用**生效（否则审计/回放的 decision 会漂移）。
 - **I6 TaskTree v1 只用森林**：父子层级即可；**DAG 跨节点依赖只预留、v2 再启用**（DAG 会暴涨 reduce 校验/调度/断点恢复复杂度）。
 - **I7 Event 不可反哺**：只有 Command 改状态（C5）；回滚只回 Domain_State、**已发 Event 不撒销**（C10）。
+- **I8 Command Inbox 串行化**：外部 surfaces 只提交 Command，Kernel 的 RunController 是唯一消费/串行化入口；禁止 surfaces 直接 reduce（C16/ADR-0013）。
+- **I9 状态快照必须完整**：checkpoint 的 `state_version`、task_tree、permission_ctx、tool_ledger 全字段、error_stack 必须可 round-trip；未知版本 fail-closed，不静默丢权限/审批状态（ADR-0014/0016）。
 
 ## 13. 评审增补（R03/R06；均为 working-draft 未决带，不动已定接缝）
 - `Message` 加 `provider_state`（opaque、reducer 只搬运不解释，供跨 provider 断点续传）；summary/checkpoint 记录带**显式标记**（勿伪造成 user）；派生自 live 环境的不持久化。

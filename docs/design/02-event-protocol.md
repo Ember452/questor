@@ -37,7 +37,9 @@ Kernel 内部事件(细粒度、私有、可随实现演进)
 | `tool_started` | 工具发起 | tool_call_id, name, args_summary | 否 |
 | `tool_progress` | 工具中间进度 | tool_call_id, message | 否（不持久化） |
 | `tool_completed` | 工具返回 | tool_call_id, status, result?, display? | 否 |
-| `approval_request` | 权限=ask | tool_call_id, name, args, risk | 否（进入 awaiting_approval） |
+| `approval_request` | 权限=ask 且审批请求已落账 | request_id, tool_call_id, name, args_summary, risk, reason, expires_at | 否（进入 per-call awaiting_approval） |
+| `approval_resolved` | 人工/超时/取消裁决一个 request | request_id, tool_call_id, decision, decided_by, resolved_at | 否 |
+| `permission_mode_changed` | `SetPermissionMode` 成功变更未来模式 | mode, changed_by, effective_from_turn | 否 |
 | `node_updated` | 任务树节点状态变 | node_id, status | 否 |
 | `usage_delta` | 用量更新 | tokens, cost? | 否 |
 | `heartbeat` | 长任务保活 | ts | 否 |
@@ -52,14 +54,17 @@ Kernel 内部事件(细粒度、私有、可随实现演进)
 - HTTP + SSE：`data: {json}\n\n`，行首 `id: <seq>`；`POST /run`、`/cancel`、`/resume`。
 - 重连带 `Last-Event-ID`/`after_seq` → 从最近快照重放其后事件；游标过期回 `resync_required`。
 
-## 5. Command 集（输入事件，均经 reduce）
-`SubmitMessage`、`ProposeAction`（策略的单步意图：调工具/收尾）、`ResolveApproval(allow|deny)`、`Cancel(reason ∈ {user|timeout|budget_exhausted|no_progress|safety|owner})`、`WriteMemory`、`RequestCompactHint`(仅 advisory，不强制)。
+## 5. Command 集（输入事件，均经 CommandInboxPort→reduce）
+`SubmitMessage`、`ProposeAction`（策略的单步意图：调工具/收尾）、`MarkToolValidated`、`RequestApproval`、`ResolveApproval(allow|deny, request_id)`、`ExpireApproval`、`SetPermissionMode`、`MarkToolRunning`、`RecordToolResult`、`MarkToolDenied`、`Cancel(reason ∈ {user|timeout|budget_exhausted|no_progress|safety|owner})`、`WriteMemory`、`RequestCompactHint`(仅 advisory，不强制)。
+- surfaces 只向对应 active run 的 Command Inbox 提交；不得直接调用 reduce（ADR-0013/C16）。
+- 每个 Command 有来源与幂等键；重复/终态后/队满提交返回明确 receipt，不生成 durable event。审批以 `request_id` 为幂等边界，同 request 同 decision 为 no-op，异 decision 拒绝（ADR-0016）。
 - 每个 Command → reduce 校验不变式 → 新 State + 发 Event[]；非法 Command 被拒并发错误事件（不靠上层自觉）。
 
 ## 6. 兼容与版本规则
 - **只加**：新 `type`、`data` 新**可选**字段；消费者忽略未知。
-- **禁**：改/删既有 type/字段语义、把可选变必填、复用废弃 type 名。
-- 破坏性 → `v` 升版 + 投影层做兼容转换；CI 对外部契约做 schema 快照 diff。
+- **禁**：改/删既有 type/字段语义、把可选变必填、复用废弃 type 名。外部事件**完整 args**与内部路径/env 明细不属于公开契约。
+- 破坏性 → `v` 升版 + 投影层做兼容转换；CI 对每个外部 type 的 data schema 做字段级快照，不只比较 type 集。
+- `protocol/event.schema.json` 采用 `type → $defs payload schema` 的 `oneOf`；每 payload `additionalProperties:false`。新增可选字段先 schema、再代码、再 TS codegen。
 
 ## 7. 生长场景验收（证明"只增不改"够用）
 语音附件→`voice_attached`；子agent→`peer_started/peer_ended`+`node(kind=subagent)`；产物→`artifact`；MCP 热增→`tools_changed`；预算→`budget_update`。**均不碰信封/关联键/终止序**——若某扩展逼着改这三样，即协议设计错。
@@ -80,7 +85,7 @@ Kernel 内部事件(细粒度、私有、可随实现演进)
 ## 10. 评审增补（R02/R08；只增不改，不触信封/关联键/终止序三根硬骨）
 - **事件完备性**：补 `item_started`/`item_removed`（在途条目撤销）· `text_replace`/`reasoning_replace`（provider 整体改写、live-only）· `message_completed.phase`（commentary|final，一轮可多条）· `reasoning_delta.channel(summary|trace)+source`· `turn_queued/steered/held`（中途插话，配 §5 `Steer/Enqueue`）· `warning`（非终态告警，承 §0-3）· `compact_started/applied`· `thread_started/resumed/updated`· `usage_delta.response_ordinal`· `tools_changed` 加 `domain(skills|plugins|mcp|settings)`。
 - **投影**：内部至少**三层**（provider-stream / kernel-domain → 外部）；`hidden` 可见位 + 投影产物**脱离内部实例的拷贝**；raw/normalized 双轨（**兼容判定只赖 normalized**）；外部集之上每 surface 再二次投影（信封 `surface`；IM 合并限流属投影层职责）。
-- **seq/续传**：`resync_required` 分因 `{expired|ahead|unknown_request|version_mismatch}`+边界 seq；**delta/heartbeat 不占 durable seq**（走 item offset、live-only）；终态 `run_completed` 与传输 `stream_end` 两标记、取消只在下个 checkpoint 生效有尾窗；溢出→`replayRequired`（丢 notification 不触发全量 resync、丢 durable 才）；**Command 受理即占 durable seq**（早失败也能落终态）；重写/压缩发 `baseline_seq` 栅栏。
+- **seq/续传**：`resync_required` 分因 `{expired|ahead|unknown_request|version_mismatch}`+边界 seq；**delta/heartbeat 不占 durable seq**（走 item offset、live-only）；终态 `run_completed` 与传输 `stream_end` 两标记、取消只在下个 checkpoint 生效有尾窗；溢出→`replayRequired`（丢 notification 不触发全量 resync、丢 durable 才）；**Command 进入 reduce 受理时占 durable seq**（早失败也能落终态；仅入队 receipt 不另存一份真相）；重写/压缩发 `baseline_seq` 栅栏。
 - **版本**：续传前**版本闸门**（不符→resync，禁新版本解旧事件）；契约版本≠策略版本；一次性 `capabilities` 协商；**每 Command 携幂等键、reduce 去重、变更类 default-never 自动重放**；禁 NaN/Inf+单帧字节上限。
 - **OpenAI 兼容映射表**：标准字段走 OpenAI 语义、专有收进扩展位（如 `x_questor`）、无原生续传（断连=取消、`[DONE]` 终结）、错误编进 `finish_reason`；**内核三终态不因兼容面简化**。
 - **投递幂等**（→ ADR-0011）：终态/工具事件配**稳定投递 id**、claim-then-deliver；**投递/claim 视图从事件重放重建、不落第二份真相**。

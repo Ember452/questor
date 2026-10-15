@@ -85,6 +85,21 @@
 - **分层强制靠三道防线**（import-linter 在本参考集零采用且拦不住动态 import）：① 声明式 `.importlinter`（人读意图）② ruff `flake8-tidy-imports.banned-api` 点名禁跨层 import + `ban-relative-imports=all` ③ 自研 AST 检查器。**以包/模块边界为主、lint 为兜底**。
 - **每条机械守卫必须可信**：`--self-test`/fixture 证其能判红判绿 + **fail-on-empty**（扫不到文件≠通过）+ 分层守卫作为**不依赖 change-classifier 的独立 blocking job**（否则会被语言 lane 意外门控掉）。
 
+## C16 Command Inbox 是唯一外部写入口（ADR-0013）
+- **约束**：CLI/HTTP/桌面/IM/远程适配器只能向对应 run 的 `CommandInboxPort` 提交带来源和幂等键的 Command；禁止 surfaces 直接调用 `reduce()`、Store 或权限引擎。
+- **为什么**：外部写意图与 loop 当前状态并发时会产生第二写者，撕裂 Run、seq 与审批状态。
+- **强制**：Kernel `RunController` 串行消费；surfaces import 守卫禁止 import reduce/store implementation；契约测试覆盖重复、终态后提交、队满拒绝。
+
+## C17 PermissionCtx 与 capability floor 优先于 mode（ADR-0014/0015）
+- **约束**：`Run.permission_ctx` 是 mode/rules/denylist/approval policy 的唯一真源；权限引擎无自建可变配置。OS 能力下限高于用户 mode，`full_auto` 不得把无写围栏 write 或缺能力 exec 降为 allow。
+- **为什么**：mode 是审批偏好，不是 OS 隔离声明；让 mode 覆盖 capability 会把配置便利变成不可逆损害面。
+- **强制**：纯函数求值、`SandboxDescriptor` 能力探针、matrix 单测、checkpoint round-trip、无围栏静默执行守卫测试。
+
+## C18 ToolCall 生命周期与输出载荷有界（ADR-0016/0019）
+- **约束**：`tool_started` 必须由 pending/ready→running 的 Command 产生；审批必须带 `request_id` 并幂等；工具全文/args/raw 输出进入模型、事件、checkpoint 前必须有大小上限与 artifact 引用。
+- **为什么**：没有唯一状态转移，UI 重连与 resume 会猜；没有载荷上限，长跑会把内存、SQLite、prompt 与 SSE 同时拖垮。
+- **强制**：ToolCall 状态机、approval request 表、字段级协议 schema、事件 payload 长度断言、artifact 写失败返回有界 error。
+
 ## 天花板（诚实标注，别当免费）
 "扩事件协议就能到分布式"是错觉。**跨机**的**状态排序、租约、exactly-once、部分失败恢复**是独立的硬骨头（hermes `hermes_state_*`、wuu `agentcontrol` 就在啃）。本架构*容许*演进到那，但那一跳要单独设计，别写进"只是加事件"。
 
