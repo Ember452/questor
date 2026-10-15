@@ -104,16 +104,21 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         return new, [_event(new.seq, new, target.turn, EventType.TOOL_COMPLETED, {"tool_call_id": command.tool_call_id, "status": "denied"})]
 
     if isinstance(command, Cancel):
+        open_calls = _open_calls(run)
         closed, extra = _backfill_open_calls(run)
         ledger = replace(run.tool_ledger, calls=closed)
         ctx = replace(run.context, items=extra)
-        new = replace(run, tool_ledger=ledger, context=ctx, status=RunStatus.CANCELLED, cancel_reason=command.reason, completed_at=utc_now(), seq=run.seq + 1)
-        events = [
-            _event(run.seq + 1 + i, new, None, EventType.TOOL_COMPLETED, {"tool_call_id": c.tool_call_id, "status": "cancelled"})
-            for i, c in enumerate(_open_calls(run))
-        ]
-        final_seq = new.seq
-        events.append(_event(final_seq, new, new.turn, EventType.RUN_CANCELLED, {"reason": str(command.reason)}))
+        # Allocate contiguous seqs for all emitted events (backfill + the single
+        # terminal), then advance Run.seq to the last one — never reuse a seq
+        # (ADR-0011; the old run.seq+1 / new.seq collision broke store.append).
+        seq = run.seq
+        events: list[Envelope] = []
+        for call in open_calls:
+            seq += 1
+            events.append(_event(seq, run, None, EventType.TOOL_COMPLETED, {"tool_call_id": call.tool_call_id, "status": "cancelled"}))
+        seq += 1
+        events.append(_event(seq, run, run.turn, EventType.RUN_CANCELLED, {"reason": str(command.reason)}))
+        new = replace(run, tool_ledger=ledger, context=ctx, status=RunStatus.CANCELLED, cancel_reason=command.reason, completed_at=utc_now(), seq=seq)
         return new, events
 
     if isinstance(command, FinalizeRun):
