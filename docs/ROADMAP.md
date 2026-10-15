@@ -33,7 +33,7 @@
 - **P0**：只产**接口桩(stub)**，无业务逻辑、**不能跑 Agent 任务**；可跑从 P1 起（R5）。
 - **P2**：v1 主干**串行工具**；`parallel_safe` 仅 schema 占位，**完整并行后置 P5**（R7）。
 - **P5**：进入条件以 **P3**（MCP 调用需账本/持久化）；早期可只做**适配器 stub**（R小文本）。
-- **P7**：“可早接”=**只做极简调试面板、仅消费外部事件协议**，**禁止把业务/状态/校验下沉到 Shell**（R1）。前端**尽量改造参考项目已有 UI 代码**（**DeepCode Tauri v2 `web`+`src-tauri` 同栈优先**；Electron 前端可迁 Tauri；hermes `web`/`ui-tui` 参照），复用后仍守“瘦客户端、零业务下沉”（AGENTS §4.5）。
+- **P7**：“可早接”=**只做极简调试面板、仅消费外部事件协议**，**禁止把业务/状态/校验下沉到 Shell**（R1）。前端**尽量改造参考项目已有 UI 代码**（**同栈优先：DeepCode Tauri v2 `web`+`src-tauri` + EvoFlow `evopanel`(Tauri+pnpm)**；GenericAgent(tauri)、Cow/wuu/hermes 的 Electron 前端可迁 Tauri；hermes `web`/`ui-tui` 与 wuu `clients/` 参照），**仓库列表以 `project-main/` 目录当下为准、写计划前重看**，复用后仍守“瘦客户端、零业务下沉”（AGENTS §4.5）。
 - **P4**：记忆走 **Command→Reduce→StorePort**、算法作可插拔策略不耦合 Kernel；**依赖 P3、不提前做**（R3）。
 - **P10**：横切 concern——**轻量可观测/错误栈从 P1 就落**；完整可恢复压缩、回归评测套件后期（R4）。
 - **契约占位在前期**：MCP/子agent/多模态的 ToolSpec/事件 type/state 字段，**P0-P2 先写 draft/unimplemented 占位**，别等 P5/P6 回头改 02/03 造成破坏性变更（R2）。
@@ -53,7 +53,7 @@
 
 ## 3. 维护规则
 - 本文件只随**阶段增删/顺序变化**更新；细节改动进各 Phase 的 `plan/NN-*.md`。
-- **实现前扫描复用（写每份 `plan/NN-*.md` 时必做）**：实现某能力前，先扫 `project-main/` 其余项目找已验证实现（**扫全、别只翻几个**），更优者**改造复用**、不为省篇幅缩范围；计划里逐能力记「扫了哪些仓 · `file:line` · 结论(复用/改造/自写 · 为什么)」。复用须守分层(C1/C14)与许可署名。详见 [AGENTS §4.5](../AGENTS.md)。
+- **实现前扫描复用（写每份 `plan/NN-*.md` 时必做）**：实现某能力前，先扫 `project-main/` 其余项目找已验证实现（**扫全、别只翻几个**）；**以 `project-main/` 目录当下实际存在的仓为准、新加自动纳入**（上次刷新含 12 个：hermes-agent/wuu/DeepCode/CowAgent/MetaGPT/cordis/**EvoFlow**/autogen/crewAI/OpenManus/**GenericAgent**/Agent-S；**计划时重新 `Get-ChildItem` 复核**）。更优者**改造复用**、不为省篇幅缩范围；计划里逐能力记「扫了哪些仓 · `file:line` · 结论(复用/改造/自写 · 为什么)」。复用须守分层(C1/C14)与许可署名。详见 [AGENTS §4.5](../AGENTS.md)。
 - 每 Phase 收尾：回填"实际 vs 计划的偏差"到 `docs/adr/`（新决策）或对应 design 文档，保持路线图不腐。
 
 ## 4. 对外发布里程碑（附加标记，不改技术阶段/顺序）
