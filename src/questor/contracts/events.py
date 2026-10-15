@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, ClassVar
 
-from questor.contracts.common import JsonObject, utc_now
+from questor.contracts.common import JsonObject, freeze, utc_now
 from questor.contracts.errors import ErrorEntry
 from questor.contracts.state_schema import CancelReason, Checkpoint, Message, TaskNode
 
@@ -156,6 +156,7 @@ class Envelope:
     def __post_init__(self) -> None:
         if self.seq < 0:
             raise ValueError("Envelope.seq must be >= 0")
+        object.__setattr__(self, "data", freeze(self.data))
 
 
 class EventType:
