@@ -19,6 +19,27 @@ uv run pytest           # 测试
 - **每个改动可验证**：编译 + 测试 + lint + 冷导入 + 不破 `HARD-CONSTRAINTS` 红线；"跑不通不提交"。
 - **小步提交**，Conventional Commits（`feat/fix/refactor/chore/docs/test:`，英文）。
 
+## 代码注释规范（**中文**）
+
+标识符、日志消息、API 名保持英文；**注释与 docstring 一律用中文**。（AGENTS §5.6）
+
+1. **文件/模块头**（必写）：一句话职责 + 属于哪一层（L0–L7）+ 允许 import 什么。
+   ```python
+   """turn 循环的阶段流水线：把一次 run 拆成可单测的 phase。L2 Kernel。
+
+   只依赖 contracts / state / providers 端口；禁止 import policy、surfaces 的具体实现（HARD C1/C14）。
+   """
+   ```
+2. **公开类 / Port / 函数都要中文 docstring**：做什么 · 怎么用 · 依赖什么 · **不变式与前后置条件** · **失败语义**（抛/返回/降级）。复杂或公开接口补参数与返回说明。
+3. **写"为什么"，不写"是什么"**：非显然的决策、绕坑、权衡处必须注释；并就地引用依据：
+   `ADR-0005`、`HARD C2`、`docs/design/02-event-protocol.md §10`、`参照 wuu internal/loopdriver/contract.go:14-76`。
+4. **这些位置必须有注释**：权限判定分支、fail-closed 处、取消/回滚路径、事件是否落库的边界、并发/gate/租约代码、以及**任何改造自参考项目的代码**（注明来源与许可，AGENTS §4.5）。
+5. **禁止裸 `TODO`**：每条 TODO/FIXME 要带上下文 + 归属的 Phase 或 ADR；`raise NotImplementedError` 处写明"P几实现"。
+6. **别注释自明代码**（`i += 1  # 加一` 是噪音）；**改了行为就同步改注释**——过期注释按文档缺陷处理（§5.5 活文档）。
+7. 不提交：大块被注释掉的死代码（除非注释说明为何保留）、未标来源/许可的复制代码。
+
+> **注释不合格 = 该改动未完成**（AGENTS §5 DoD）；评审会按上述抽查。
+
 ## 分层红线（别越过）
 
 内层只依赖 `contracts` + 注入端口；`kernel` 不 import `policy/surfaces/providers` 具体实现；只有 `Command` 改状态、`Event` 不反哺；策略只读状态视图。CI（分层守卫/冷导入）会挡住越界。
