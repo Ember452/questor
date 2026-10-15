@@ -75,7 +75,9 @@ class SQLiteStore(StorePort):
             cur = await db.execute("SELECT COALESCE(MAX(seq), 0) FROM event_log WHERE run_id = ?", (run_id,))
             seq = (await cur.fetchone())[0]
             for ev in events:
-                seq += 1
+                # reduce owns the authoritative per-run seq; honor it when present,
+                # otherwise append after the current head (ADR-0011).
+                seq = int(ev["seq"]) if "seq" in ev else seq + 1
                 await db.execute(
                     "INSERT INTO event_log (run_id, seq, type, turn, item_id, payload, ts) VALUES (?,?,?,?,?,?,?)",
                     (
