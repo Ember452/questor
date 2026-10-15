@@ -28,6 +28,7 @@ from questor.contracts.events import (
     EventType,
     FinalizeRun,
     MarkToolDenied,
+    MarkToolValidated,
     RecordToolResult,
     SubmitMessage,
 )
@@ -39,6 +40,7 @@ from questor.contracts.state_schema import (
     ContentBlock,
     Message,
     Role,
+    ToolArgsStatus,
 )
 from questor.contracts.tool import Capability, Risk, Tool
 from questor.kernel.events import EventBus
@@ -232,7 +234,7 @@ class DefaultTurnLoop:
                 repeat_sig = sig
                 if repeat_count > run.budget.repeat_tool_limit:
                     return await self._fail(run, turn, ErrorKind.INTERNAL, f"repeated identical tool call '{intent.name}' x{repeat_count}", "no_progress")
-                run = await self._handle_tool_call(run, intent)
+                run = await self._handle_tool_call(controller, run, intent)
 
     async def _consume_commands(self, controller: RunController, run: Run) -> Run:
         """按 FIFO 应用 inbox 中已到达的 Command；reduce 只在此处由 loop 调用。"""
@@ -270,8 +272,7 @@ class DefaultTurnLoop:
         if text_parts:
             blocks.append(ContentBlock(type="text", text="".join(text_parts)))
         for index in sorted(calls):
-            slot = calls[index]
-            blocks.append(ContentBlock(type="tool_use", tool_use_id=slot["id"] or new_id("tc"), name=slot["name"], input=_parse_args(slot["args"])))
+            blocks.append(_finish_tool_use(index, calls[index]))
         msg = Message(id=new_id("msg"), role=Role.ASSISTANT, content=tuple(blocks), seq=len(run.context.items))
         return msg, usage
 
@@ -306,38 +307,50 @@ class DefaultTurnLoop:
         except Exception:  # noqa: BLE001 - 策略故障绝不得打断循环
             return None, True
 
-    async def _handle_tool_call(self, run: Run, intent: ProposeToolCall) -> Run:
-        """工具路由：未知工具/deny/审批拒/参数非法/无沙箱 → 分别回写错误或 denied；否则执行并回填。"""
-        tool = self.tool_for(intent.name)
-        if tool is None:
-            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=f"unknown tool '{intent.name}'"))
+    async def _handle_tool_call(self, controller: RunController, run: Run, intent: ProposeToolCall) -> Run:
+        """工具路由：args→schema→validated→permission→sandbox→execute。"""
+        call = next((c for c in run.tool_ledger.calls if c.tool_call_id == intent.tool_call_id), None)
+        if call is None:
+            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result="missing tool_use ledger entry"))
+            controller.run = run
+            await self._emit(events)
+            return run
+        if call.args_status is not ToolArgsStatus.VALID:
+            reason = call.permission_reason or "invalid or missing tool arguments"
+            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=f"invalid json arguments: {reason}"))
+            controller.run = run
             await self._emit(events)
             return run
 
-        decision, reason = self.permission.evaluate(intent.name, intent.args)
-        if decision == "deny":
-            run, events = reduce(run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=reason))
+        tool = self.tool_for(intent.name)
+        if tool is None:
+            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=_unknown_tool_message(intent.name, self.tools)))
+            controller.run = run
             await self._emit(events)
             return run
-        if decision == "ask":
-            allowed = bool(self.approver) and await self.approver(intent.name, intent.args, reason)
-            if not allowed:
-                run, events = reduce(run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason="denied by approver"))
-                await self._emit(events)
-                return run
 
         error = _schema_error(tool.spec.params, intent.args)
         if error is not None:
             run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=error))
+            controller.run = run
             await self._emit(events)
             return run
 
+        run = await self._apply_command(controller, run, MarkToolValidated(run_id=run.run_id, tool_call_id=intent.tool_call_id or ""))
+        decision, reason = self.permission.evaluate(intent.name, intent.args)
+        if decision == "deny":
+            run = await self._apply_command(controller, run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=reason))
+            return run
+        if decision == "ask":
+            allowed = bool(self.approver) and await self.approver(intent.name, intent.args, reason)
+            if not allowed:
+                run = await self._apply_command(controller, run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason="denied by approver"))
+                return run
+
         # 能力/风险 fail-closed 闸：需沙箱的能力若无可能力后端 → DENIED，绝不裸执行（03 §10 T4；C9）。
-        # 置于权限判定之后，以免把显式 allow 降级为裸执行。
         deny_reason = self._sandbox_denial(tool)
         if deny_reason is not None:
-            run, events = reduce(run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=deny_reason))
-            await self._emit(events)
+            run = await self._apply_command(controller, run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=deny_reason))
             return run
 
         ctx = _ToolCtx(
@@ -348,6 +361,14 @@ class DefaultTurnLoop:
         )
         result = await tool.execute(intent.args, ctx)
         run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status=result.status, result=result.result, display=result.display))
+        controller.run = run
+        await self._emit(events)
+        return run
+
+    async def _apply_command(self, controller: RunController, run: Run, command: object) -> Run:
+        """内部 helper：所有 lifecycle transition 都先落 authority，再 emit。"""
+        run, events = reduce(run, command)  # type: ignore[arg-type]
+        controller.run = run
         await self._emit(events)
         return run
 
@@ -402,6 +423,61 @@ def _parse_args(raw: str) -> JsonObject:
         return json.loads(raw) if raw else {}
     except json.JSONDecodeError:
         return {}
+
+
+def _bounded_raw_args(raw: str) -> str:
+    """保留有界原始参数；不保存可能含密钥的无界文本（ADR-0019）。"""
+    return raw[:4096]
+
+
+def _finish_tool_use(index: int, slot: dict) -> ContentBlock:
+    """把 provider 分片定稿成 tool_use，同时区分 valid/invalid/missing args。"""
+    raw = slot["args"]
+    if not raw:
+        return ContentBlock(
+            type="tool_use",
+            tool_use_id=slot["id"] or new_id("tc"),
+            name=slot["name"],
+            raw_input="",
+            args_status=ToolArgsStatus.MISSING,
+            args_error="provider sent no tool arguments",
+        )
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return ContentBlock(
+            type="tool_use",
+            tool_use_id=slot["id"] or new_id("tc"),
+            name=slot["name"],
+            raw_input=_bounded_raw_args(raw),
+            args_status=ToolArgsStatus.INVALID,
+            args_error=exc.msg,
+        )
+    if not isinstance(parsed, dict):
+        return ContentBlock(
+            type="tool_use",
+            tool_use_id=slot["id"] or new_id("tc"),
+            name=slot["name"],
+            raw_input=_bounded_raw_args(raw),
+            args_status=ToolArgsStatus.INVALID,
+            args_error="tool arguments must be a JSON object",
+        )
+    return ContentBlock(
+        type="tool_use",
+        tool_use_id=slot["id"] or new_id("tc"),
+        name=slot["name"],
+        input=parsed,
+        raw_input=_bounded_raw_args(raw),
+        args_status=ToolArgsStatus.VALID,
+    )
+
+
+def _unknown_tool_message(name: str, tools: tuple[Tool, ...]) -> str:
+    """静态候选只提示，不扩工具面（03 §6；P2 T4）。"""
+    candidates = [tool.spec.name for tool in tools if tool.spec.name.startswith(name[:2]) or name[:2] in tool.spec.name][:3]
+    if candidates:
+        return f"unknown tool '{name}'; did you mean: {', '.join(candidates)}?"
+    return f"unknown tool '{name}'"
 
 
 def _schema_error(params: JsonObject, args: JsonObject) -> str | None:
