@@ -15,7 +15,7 @@ from typing import Any
 
 import litellm
 
-from questor.contracts.common import JsonObject
+from questor.contracts.common import JsonObject, thaw
 from questor.contracts.ports import ProviderPort, ProviderRequest, StreamChunk
 from questor.contracts.state_schema import Message, Role
 from questor.contracts.tool import ToolSpec
@@ -39,7 +39,7 @@ def to_openai_messages(messages: tuple[Message, ...], system: str | None) -> lis
                     out.append({"role": "tool", "tool_call_id": b.tool_use_id, "content": b.text or ""})
         else:
             tool_calls = [
-                {"id": b.tool_use_id, "type": "function", "function": {"name": b.name, "arguments": json.dumps(b.input or {})}}
+                {"id": b.tool_use_id, "type": "function", "function": {"name": b.name, "arguments": json.dumps(thaw(b.input or {}))}}
                 for b in m.content
                 if b.type == "tool_use"
             ]
