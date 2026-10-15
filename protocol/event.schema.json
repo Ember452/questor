@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://questor.local/protocol/event.schema.json",
+  "title": "Questor external event projection (v1)",
+  "description": "Single source of truth for the external event envelope (HARD C6/C15; design/02). Additive-only: new `type` values and optional `data` fields are allowed; existing semantics must not change. Cross-language TS types are codegen'd from this file in P7; CI --check prevents drift against questor.contracts.events.EventType.",
+  "type": "object",
+  "required": ["v", "seq", "run_id", "type", "ts", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "type": "integer", "minimum": 1, "description": "Wire-contract version; bump only on breaking change." },
+    "seq": { "type": "integer", "minimum": 0, "description": "Per-run monotonic logical cursor (after_seq resume)." },
+    "run_id": { "type": "string", "minLength": 1 },
+    "turn": { "type": ["integer", "null"], "minimum": 0 },
+    "ts": { "type": "string", "format": "date-time", "description": "UTC, timezone-aware." },
+    "type": {
+      "type": "string",
+      "enum": [
+        "run_started",
+        "turn_started",
+        "text_delta",
+        "reasoning_delta",
+        "message_completed",
+        "tool_started",
+        "tool_progress",
+        "tool_completed",
+        "approval_request",
+        "node_updated",
+        "usage_delta",
+        "heartbeat",
+        "run_cancelled",
+        "run_failed",
+        "run_completed",
+        "resync_required",
+        "warning"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "description": "Type-specific payload; exact fields are draft until P1 (C11). Unknown members are allowed and ignored by consumers (C6)."
+    }
+  }
+}
