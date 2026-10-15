@@ -96,3 +96,48 @@ desktop/
 - **CI 分道**：`python-ci` / `desktop-ci`(Rust+web) / `security-ci` + **改动分类器跳过无关 job**；契约快照挂 `contracts_changed`；**分层守卫/冷导入作为不依赖分类器的独立 blocking job**。
 - **每条机械守卫带 `--self-test` + fail-on-empty**（扫不到文件≠通过）。
 - **反面清单（别照抄）**：别扁平文件海（保持 src 包化）、别把核心代码不打包、别靠整目录 lint 豁免维持边界。长期记忆子系统落 `src/questor/memory/`（与 `state/` 分离，见 `design/06-memory.md`）；策略契约 `contracts/policy.py`、实现 `policy/`。
+
+## 10. 开源仓库完整骨架（目标；此前只写了架构层，遗漏了 OSS 治理层）
+
+> ⚑ 标记：**[N]**=现在就该有（不依赖代码）；**[P#]**=等对应里程碑有实物再铺（避免空 CI 假绿）。
+
+```
+questor/
+├── README.md            [N]  门面：徽章/一句话/截图-gif/快速开始/功能表/架构指链/贡献链接/许可证
+├── LICENSE              [N]  MIT（需版权人+年份）
+├── CONTRIBUTING.md      [N]  开发环境(uv)、分支/提交规范、跑测试/lint、提 PR 流程、AI 辅助声明
+├── SECURITY.md          [N]  漏洞报告渠道 + 支持版本表（桌面 agent 必配）
+├── CODE_OF_CONDUCT.md   [N]  Contributor Covenant
+├── CHANGELOG.md         [N]  Keep a Changelog 格式、按里程碑追记
+├── .gitattributes        [N]  统一换行（Windows 开发必需）、二进制标记、export-ignore
+├── .editorconfig         [N]  跨编辑器缩进/编码一致
+├── .env.example          [N]  配置模板（无真凭据）
+├── .pre-commit-config.yaml[P2]  ruff/格式/hook（有代码后）
+├── .github/
+│   ├── workflows/        [P0+]  ci-python / ci-desktop / security / release（需代码才能真跑）
+│   ├── ISSUE_TEMPLATE/   [N]  bug.yml / feature.yml / config.yml（禁用空白 issue）
+│   ├── PULL_REQUEST_TEMPLATE.md [N]
+│   ├── dependabot.yml    [N]  升 pip/npm/cargo/github-actions
+│   ├── CODEOWNERS        [N]  单人项目可省或指自己
+│   ├── actions/          [P]  复用自定义 action（如 ci-scope）
+│   └── FUNDING.yml       [N]  可选（GitHub Sponsors 等）
+├── docs/
+│   ├── VISION · ROADMAP · STRUCTURE · ARCHITECTURE   （现有些已在）
+│   ├── getting-started/  installation / quickstart / configuration  [N]
+│   ├── guide/            usage / models(LiteLLM) / tools / desktop   [P#]
+│   ├── reference/        api / event-protocol / cli                [P#]
+│   ├── adr/  design/  references/   （已有）
+│   └── media/            图片/动图
+├── src/questor/          （见 §2）
+├── tests/
+│   ├── unit/  integration/  evals/   [P1+]
+│   └── conftest.py
+├── examples/             [P#]  可跑示例/脚本
+├── scripts/              dev/build/lint 辅助
+├── assets/               logo/图标/截图
+├── desktop/  (Tauri：src-tauri/ + web/，见 §3)
+├── pyproject.toml · uv.lock · .python-version · .node-version · rust-toolchain.toml
+└── .gitignore
+```
+
+**README 标配（开源项门面）**：顶部徽章(CI/license/release/ stars)、一句话定位、一张截图/gif、特性表、快速安装/运行、指向 `docs/` 的链接、贡献指引、许可证、鸣谢（含"参考了 hermes/wuu/… 设计"）。
