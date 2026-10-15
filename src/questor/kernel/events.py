@@ -85,6 +85,10 @@ class InProcessEventBus(EventBus):
             return
         for queue in self._subs.get(env.run_id, ()):
             queue.put_nowait(projected)
+        if env.type in TERMINAL:
+            self._subs.pop(env.run_id, None)  # run finished: drop subscriber queues (no leak).
+            # Keep _closed: it is the memory that suppresses any later terminal for
+            # this run (C13 first-writer-wins). It holds only short run ids.
 
     async def subscribe(
         self, run_id: str, after_seq: int = 0, *, expected_version: int | None = None
