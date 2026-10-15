@@ -12,12 +12,14 @@ schema placeholder), one model, cancel/deny/illegal-intent must not crash.
 from __future__ import annotations
 
 import asyncio
+import json
+import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from questor.contracts.common import JsonObject, new_id, utc_now
+from questor.contracts.common import JsonObject, new_id, thaw, utc_now
 from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints
 from questor.contracts.events import (
     AdvanceTurn,
@@ -31,19 +33,26 @@ from questor.contracts.events import (
     SubmitMessage,
 )
 from questor.contracts.policy import PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
-from questor.contracts.ports import ProviderPort, ProviderRequest
+from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort
 from questor.contracts.state_schema import (
+    OPEN_TOOL_CALL_STATUSES,
     CancelReason,
     ContentBlock,
     Message,
     Role,
 )
-from questor.contracts.tool import Tool
+from questor.contracts.tool import Capability, Risk, Tool
 from questor.kernel.events import EventBus
+from questor.state.checkpoint import open_tool_use_ids
 from questor.state.domain_state import Run
 from questor.state.reduce import reduce
+from questor.state.snapshot import to_snapshot
 
 Approver = Callable[[str, JsonObject, str], Awaitable[bool]]
+
+#: capabilities that MUST be sandboxed; with no capable backend they are denied
+#: (fail-closed, design/03 §10 T4 — "degrade = safer, not looser").
+_SANDBOXED_CAPABILITIES = frozenset({Capability.EXEC, Capability.WRITE, Capability.NETWORK})
 
 
 class _ToolCtx:
@@ -73,6 +82,8 @@ class DefaultTurnLoop:
         bus: EventBus,
         tool_for: Callable[[str], Tool | None],
         tools: tuple[Tool, ...] = (),
+        sandbox: SandboxPort | None = None,
+        store: StorePort | None = None,
         workspace_root: Path | None = None,
         model: str = "",
         system: str | None = None,
@@ -85,6 +96,8 @@ class DefaultTurnLoop:
         self.bus = bus
         self.tool_for = tool_for
         self.tools = tools
+        self.sandbox = sandbox
+        self.store = store
         self.workspace_root = workspace_root or Path.cwd()
         self.model = model
         self.system = system
@@ -97,6 +110,12 @@ class DefaultTurnLoop:
         await self._emit(events)
 
         turn = 0
+        started = time.monotonic()
+        total_tokens = 0
+        faults = 0
+        repeat_sig: tuple | None = None
+        repeat_count = 0
+        empties = 0
         while True:
             if self.cancel_event.is_set():
                 run, events = reduce(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
@@ -104,39 +123,59 @@ class DefaultTurnLoop:
                 return run
             if run.status.is_terminal:
                 return run
+            if run.budget.deadline_seconds is not None and (time.monotonic() - started) > run.budget.deadline_seconds:
+                return await self._fail(run, turn, ErrorKind.TIMEOUT, f"wall-clock deadline {run.budget.deadline_seconds}s exceeded", "deadline")
 
             turn += 1
             if turn > run.budget.max_turns:
-                err = ErrorEntry(
-                    kind=ErrorKind.TIMEOUT,
-                    layer=ErrorLayer.KERNEL,
-                    message=f"max_turns {run.budget.max_turns} exhausted",
-                    at_turn=turn,
-                    hints=RecoveryHints(),
-                    timestamp=utc_now(),
-                )
-                run, events = reduce(run, FinalizeRun(run_id=run.run_id, status="failed", error=err, exit_reason="budget_exhausted"))
-                await self._emit(events)
-                return run
+                return await self._fail(run, turn, ErrorKind.TIMEOUT, f"max_turns {run.budget.max_turns} exhausted", "budget_exhausted")
 
+            turn_start = run  # C10/X4 rollback point: state at the start of this turn
             run, events = reduce(run, AdvanceTurn(run_id=run.run_id, turn=turn))
             await self._emit(events)
 
             assistant_msg, usage = await self._stream_turn(run, turn)
+            total_tokens += _token_total(usage)
             run, events = reduce(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
             await self._emit(events)
+            await self._checkpoint(run, "auto")
 
-            intent = self._ask_policy(run)
-            if intent is None:  # policy panicked -> stay alive, ask provider again
+            if run.budget.max_tokens is not None and total_tokens > run.budget.max_tokens:
+                return await self._fail(run, turn, ErrorKind.INTERNAL, f"token budget {run.budget.max_tokens} exceeded (used {total_tokens})", "budget_exhausted")
+
+            has_text = _has_text(assistant_msg)
+            has_tool = any(b.type == "tool_use" for b in assistant_msg.content)
+            if not has_text and not has_tool:  # provider kept "continuing" with empty answers
+                empties += 1
+                if empties > run.budget.max_consecutive_continuations:
+                    return await self._fail(run, turn, ErrorKind.INTERNAL, "repeated empty answers (no text/tool)", "no_progress")
+            else:
+                empties = 0
+
+            intent, faulted = self._ask_policy(run)
+            if faulted:
+                faults += 1
+                await self._live(run, turn, EventType.WARNING, {"message": "policy raised; rolling back turn (C10)"})
+                run = turn_start  # restore Domain_State to turn start; already-emitted deltas are not withdrawn
+                if faults > 2:
+                    return await self._fail(run, turn, ErrorKind.POLICY_VIOLATION, "policy raised repeatedly", "policy_error")
                 continue
+            faults = 0
 
             if isinstance(intent, SuggestFinish):
-                final = assistant_msg if _has_text(assistant_msg) else None
+                if any(c.status in OPEN_TOOL_CALL_STATUSES for c in run.tool_ledger.calls):
+                    continue  # stop-gate: reject premature Finish while tool calls are still open
+                final = assistant_msg if has_text else None
                 run, events = reduce(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
                 await self._emit(events)
                 return run
 
             if isinstance(intent, ProposeToolCall):
+                sig = (intent.name, str(thaw(intent.args)))
+                repeat_count = repeat_count + 1 if sig == repeat_sig else 1
+                repeat_sig = sig
+                if repeat_count > run.budget.repeat_tool_limit:
+                    return await self._fail(run, turn, ErrorKind.INTERNAL, f"repeated identical tool call '{intent.name}' x{repeat_count}", "no_progress")
                 run = await self._handle_tool_call(run, intent)
 
     # ---- phase helpers ----------------------------------------------------
@@ -169,12 +208,35 @@ class DefaultTurnLoop:
         msg = Message(id=new_id("msg"), role=Role.ASSISTANT, content=tuple(blocks), seq=len(run.context.items))
         return msg, usage
 
-    def _ask_policy(self, run: Run):
+    async def _fail(self, run: Run, turn: int, kind: ErrorKind, message: str, exit_reason: str) -> Run:
+        err = ErrorEntry(kind=kind, layer=ErrorLayer.KERNEL, message=message, at_turn=turn, hints=RecoveryHints(), timestamp=utc_now())
+        run, events = reduce(run, FinalizeRun(run_id=run.run_id, status="failed", error=err, exit_reason=exit_reason))
+        await self._emit(events)
+        return run
+
+    async def _checkpoint(self, run: Run, kind: str) -> None:
+        """Persist a turn-boundary snapshot for recovery (A1). No-op without a store."""
+        if self.store is None:
+            return
+        await self.store.save_checkpoint(
+            {
+                "cp_id": new_id("cp"),
+                "run_id": run.run_id,
+                "seq": run.seq,
+                "turn": run.turn,
+                "kind": kind,
+                "state_digest": json.dumps(to_snapshot(run), ensure_ascii=False, default=str),
+                "pending": list(open_tool_use_ids(run.context.items)),
+            }
+        )
+
+    def _ask_policy(self, run: Run) -> tuple[object, bool]:
+        """Return ``(intent, faulted)``; a strategy exception is isolated (X4), never crashes the run."""
         view = PolicyView(context=run.context.items, tool_results=run.tool_ledger.calls, tools=tuple(t.spec for t in self.tools), budget=run.budget)
         try:
-            return self.policy.propose_action(view)
-        except Exception:  # X4: isolate strategy faults, never crash the run
-            return None
+            return self.policy.propose_action(view), False
+        except Exception:  # noqa: BLE001 - strategy faults must not break the loop
+            return None, True
 
     async def _handle_tool_call(self, run: Run, intent: ProposeToolCall) -> Run:
         tool = self.tool_for(intent.name)
@@ -201,11 +263,36 @@ class DefaultTurnLoop:
             await self._emit(events)
             return run
 
+        # Capability/risk fail-closed gate: a sandboxed capability with no capable
+        # backend is DENIED rather than run raw (03 §10 T4; C9). Runs after the
+        # permission decision so we never downgrade an explicit allow to execute.
+        deny_reason = self._sandbox_denial(tool)
+        if deny_reason is not None:
+            run, events = reduce(run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=deny_reason))
+            await self._emit(events)
+            return run
+
         ctx = _ToolCtx(self.workspace_root, self.cancel_event)
         result = await tool.execute(intent.args, ctx)
         run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status=result.status, result=result.result, display=result.display))
         await self._emit(events)
         return run
+
+    def _sandbox_denial(self, tool: Tool) -> str | None:
+        """Return a deny reason when the tool needs isolation the backend can't give."""
+        spec = tool.spec
+        needs = spec.capability in _SANDBOXED_CAPABILITIES or spec.risk is Risk.HIGH
+        if not needs:
+            return None
+        if self.sandbox is None:
+            return f"no sandbox backend available for {spec.capability.value}/{spec.risk.value} tool (fail-closed)"
+        if spec.capability is Capability.WRITE and not self.sandbox.fences_writes():
+            return "sandbox cannot fence writes for a write tool (fail-closed)"
+        if spec.capability is Capability.NETWORK and not self.sandbox.fences_network():
+            return "sandbox cannot fence network for a network tool (fail-closed)"
+        if spec.capability is Capability.EXEC and not self.sandbox.isolates_process_tree():
+            return "sandbox cannot isolate the process tree for an exec tool (fail-closed)"
+        return None
 
     async def _emit(self, events: list[Envelope]) -> None:
         for env in events:
@@ -218,6 +305,17 @@ class DefaultTurnLoop:
 
 def _has_text(message: Message) -> bool:
     return any(b.type == "text" and b.text for b in message.content)
+
+
+def _token_total(usage: JsonObject) -> int:
+    for key in ("total_tokens", "completion_tokens", "output_tokens"):
+        value = usage.get(key)
+        if value:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return 0
+    return 0
 
 
 def _parse_args(raw: str) -> JsonObject:
