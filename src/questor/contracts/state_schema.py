@@ -280,15 +280,28 @@ class Checkpoint:
     state_digest: str  # 指向该点状态（P1 存整份快照的序列化）
     # 中断时未闭合的 tool_use，供恢复时回填/修复（design/01 §5）。
     pending_tool_calls: tuple[str, ...] = ()
+    contract_version: int = 1  # 快照 schema 版本；不兼容升级必须显式迁移，不能静默丢字段
 
 
 @dataclass(frozen=True, slots=True)
 class PermissionRule:
-    """二维通配权限规则：permission(工具名) × pattern(参数串) → action。"""
+    """二维通配权限规则：tool_pattern × argument_pattern → action。
 
-    pattern: str
+    ADR-0014：这是权威状态里的规则词汇，kernel 不得再维护字段不同的第二套 Rule。
+    列表按时间/插入顺序求值，后匹配者覆盖前匹配者（last-match-wins）。
+    """
+
+    id: str
+    tool_pattern: str
+    argument_pattern: str
     action: str  # allow | ask | deny
     scope: str = "*"
+    created_at: datetime = field(default_factory=utc_now)
+
+    def __post_init__(self) -> None:
+        require_aware(self.created_at, "PermissionRule.created_at")
+        if self.action not in {"allow", "ask", "deny"}:
+            raise ValueError("PermissionRule.action must be allow, ask, or deny")
 
 
 @dataclass(frozen=True, slots=True)
