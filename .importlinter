@@ -1,0 +1,52 @@
+# Questor layering contracts (HARD-CONSTRAINTS C1/C14/C15; STRUCTURE S2).
+# Declarative INTENT (defense line 1, human-readable). Package boundaries +
+# ruff banned-api + scripts/check_layering_ast.py are the mechanical enforcement
+# (import-linter can't catch dynamic imports -- see R09).
+# Higher layer may import lower; lower must never import higher.
+# NOTE: keep this file pure ASCII (import-linter reads it with the OS default
+# encoding, which is not UTF-8 on Windows/zh locales).
+
+[importlinter]
+root_packages =
+    questor
+
+[importlinter:contract:layers]
+name = Questor layered architecture
+type = layers
+layers =
+    questor.surfaces
+    questor.providers
+    questor.policy
+    questor.capabilities
+    questor.kernel
+    questor.state
+    questor.contracts
+
+[importlinter:contract:kernel-owns-mechanism]
+name = Kernel must not import policy/surfaces implementations (wire via Ports)
+type = forbidden
+source_modules =
+    questor.kernel
+forbidden_modules =
+    questor.policy
+    questor.surfaces
+
+[importlinter:contract:contracts-innermost]
+name = Contracts (L0) import nothing from outer layers
+type = forbidden
+source_modules =
+    questor.contracts
+forbidden_modules =
+    questor.state
+    questor.kernel
+    questor.capabilities
+    questor.policy
+    questor.providers
+    questor.surfaces
+
+[importlinter:contract:crosscutting-independent]
+name = config and observability are independent of each other
+type = independence
+modules =
+    questor.config
+    questor.observability

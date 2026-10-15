@@ -1,0 +1,44 @@
+name: ci-python
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Independent, always-blocking (C15): does NOT depend on any change classifier,
+  # so a language-only PR can never skip the layering/contract guards.
+  boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --all-groups
+      - name: Cold import (every layer)
+        run: uv run python scripts/verify_p0.py
+      - name: import-linter contracts
+        run: uv run lint-imports
+      - name: ruff (incl. banned-api layering)
+        run: uv run ruff check src scripts tests
+      - name: AST layering guard (self-test proves it can go red)
+        run: |
+          uv run python scripts/check_layering_ast.py --self-test
+          uv run python scripts/check_layering_ast.py
+      - name: Wire-contract single source drift check
+        run: |
+          uv run python scripts/check_protocol_schema.py --self-test
+          uv run python scripts/check_protocol_schema.py --check
+
+  tests:
+    needs: boundaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --all-groups
+      - name: pytest
+        run: uv run pytest -q
