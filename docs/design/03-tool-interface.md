@@ -68,3 +68,19 @@ SandboxPort.wrap/exec(capability, cmd|fs|net) -> 受限执行
 ## 9. 待定（v0 后锁）
 - 工具总数与 v1 白名单（对齐 ROADMAP P2）；`memory` 工具与 StorePort 的具体只读接口签名。
 - MCP 适配放 P5，先留 `ToolSpec` 形状兼容，不提前实现进程隔离。
+
+## 10. 落地补充（评审采纳）
+- **T1 ctx.emit_event 只能发瞬态观测事件**（如 `tool_progress`）；**严禁工具内提交 Command / 改 Domain_State**。工具只能返回 `ToolResult`，状态写入由 Harness reduce 完成——否则绕开单写者。（写进 §2 ctx 注释）
+- **T3 memory 写只发 `WriteMemory` 意图 Command**，经 reduce→StorePort；工具绝不直连向量库（C4）。
+- **T4 沙箱降级 = 更安全不是更松**：无可用后端时，`exec`/high 风险工具**直接 deny**（绝不裸执行）；readonly/write 走最严边界 + warning。
+- **T2 并行时序**：并行返回事件乱序属正常，客户端靠 tool_call_id 归组（见 02 §9）。
+
+## 11. 评审增补（R04；均为落地细节，不动"策略只提议、校验/权限/沙箱/记账在 Harness"主轴）
+- ToolSpec 补 `read_only`（权威布尔、缺 metadata=fail-closed）· `orchestrator`（嵌套/子代理、不参 gate）· `barrier`（同批独占、可占位）· `approval_mode`（MCP **只收紧不放宽**、unknown→deny）· `description max_chars` + untrusted sanitize。
+- **§3 五层校验**：JSON 合法→schema→**arg-key 词典抽路径/命令/动作**（path/shell/action keys + apply_patch 结构化前缀，属 L0）→权限→业务（工具内、不下沉沙箱）。
+- **§4 权限求值 8 步次序**：提权拦截（审批回复不带 mode 提权）→sensitive-path denylist（**realpath+expanduser+evalsymlink**、不可被 rules/mode 覆盖）→roots 内二次保护（mcp.json/config.json/.env）→read-only 上限→rules last-match-wins（二维通配）→mode 默认→`approval_policy=never` 时 ask 降 deny→MCP approval_mode 组合。`reason` 面向模型可读、给合法替代、不重试同 call。
+- **shell 命令解析（阻断级）**：先按分隔符切段再 shlex；unwrap env/nohup/time 等 wrapper + 前置 VAR=；flag 簇展开(-rf/-r -f/--recursive)；redirect 目标单抽（NULL sink 除外）；只读命令的"写形态"flag 精确列；git 子命令白名单+写flag黑名单；**unparsable 在 read-only 判定=fail-closed deny、在 destructive screen=交沙箱**（沙箱才是边界）。
+- **§4 沙箱**：`SandboxPort` 能力探针 `fences_writes/fences_network/isolates_process_tree`；后端**绝对路径/verified lookup** 防 PATH 注入；策略 **deny-default + 显式 regrant**；降级矩阵：`none`→exec/high **deny**、Windows job（无 write-fence）→write 加严走 ask；**wrap_shell/wrap_argv 分离**（禁 shell 串伪装 argv）。
+- **新 §11 子进程 env**：exec/write 默认 scrub credential-shaped env（留 PATH/HOME/proxy）、`ctx.declare_env_passthrough` 显式转发（记 `ToolCall.env_scrubbed` 审计）、provider 凭据永不默认继承；MCP env 是白名单装配（另一方向）。
+- **§6 MCP 进程模型 7 条**（一 server 一 task 拥 transport / child-task 独立 timeout / transport 三绑 / env 白名单 / 占位符 / plugin containment / stderr 落盘 / 上限256）+ 映射同一 ToolSpec + 命名 `mcp_<server>_<tool>` rules 按 **suffix** + **账本同源**（走同一路由写 ToolLedger，observability 补充非替代）。
+- **§8 并行 gate + 取消四源**：reader 共享/writer 独占+饥饿保护/orchestrator 绕 gate；**返回顺序=模型请求顺序**（保配对）；**账本 settle 用脱离取消链的 ctx**；取消源 owner/invocation/user/observation-detach（断连后台续跑）；工具异常/panic 转 error ToolResult，KeyboardInterrupt/SystemExit 例外透传。
