@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from questor.contracts.common import JsonObject, require_aware, utc_now
+from questor.contracts.common import JsonObject, freeze, require_aware, utc_now
 
 
 class RunStatus(StrEnum):
@@ -94,6 +94,14 @@ class ContentBlock:
     payload: dict[str, Any] | None = None  # image/file opaque carrier
     provider_state: dict[str, Any] | None = None  # opaque, reducer-agnostic (R03 A-2)
 
+    def __post_init__(self) -> None:
+        # Deep-freeze dict leaves so shared COW instances can't be mutated (C2).
+        object.__setattr__(self, "input", freeze(self.input) if self.input is not None else None)
+        object.__setattr__(self, "payload", freeze(self.payload) if self.payload is not None else None)
+        object.__setattr__(
+            self, "provider_state", freeze(self.provider_state) if self.provider_state is not None else None
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class Message:
@@ -137,6 +145,9 @@ class ToolCall:
     seq_result: int | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "args", freeze(self.args))
 
 
 @dataclass(frozen=True, slots=True)
