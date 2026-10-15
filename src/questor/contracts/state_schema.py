@@ -218,6 +218,38 @@ class ToolCall:
 
 
 @dataclass(frozen=True, slots=True)
+class ApprovalRequest:
+    """一次 HITL 审批请求的持久身份（ADR-0016）。
+
+    `request_id` 是幂等边界：同一 request 的重复决策不产新事件；过期后迟到决策不得翻案。
+    `args_summary` 必须是已脱敏/截断摘要，工具原始参数不得直接外发。
+    """
+
+    request_id: str
+    tool_call_id: str
+    args_summary: str
+    risk: str
+    reason: str
+    created_at: datetime
+    expires_at: datetime
+    status: ApprovalStatus = ApprovalStatus.PENDING
+    decision: str | None = None
+    decided_by: str | None = None
+    resolved_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        # 时间必须可比较且带时区；否则 timeout/replay/checkpoint 会跨机器漂出错误结论。
+        require_aware(self.created_at, "ApprovalRequest.created_at")
+        require_aware(self.expires_at, "ApprovalRequest.expires_at")
+        if self.expires_at < self.created_at:
+            raise ValueError("ApprovalRequest.expires_at must not be before created_at")
+        if self.resolved_at is not None:
+            require_aware(self.resolved_at, "ApprovalRequest.resolved_at")
+        if self.status is not ApprovalStatus.PENDING and (self.decision is None or self.resolved_at is None):
+            raise ValueError("resolved ApprovalRequest requires decision and resolved_at")
+
+
+@dataclass(frozen=True, slots=True)
 class Checkpoint:
     """run 的可恢复快照点（design/01 §5）。"""
 

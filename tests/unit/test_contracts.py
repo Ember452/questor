@@ -5,7 +5,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import dataclasses
+from datetime import UTC, datetime
 
 import pytest
 
@@ -16,6 +17,7 @@ from questor.contracts.events import Cancel, Envelope
 from questor.contracts.state_schema import (
     CLOSED_TOOL_CALL_STATUSES,
     OPEN_TOOL_CALL_STATUSES,
+    ApprovalRequest,
     ApprovalStatus,
     CancelReason,
     Message,
@@ -25,7 +27,7 @@ from questor.contracts.state_schema import (
     ToolCallStatus,
 )
 from questor.contracts.tool import Capability
-from questor.state.domain_state import Run
+from questor.state.domain_state import PermissionCtx, Run
 
 
 def test_run_terminal_requires_completed_at() -> None:
@@ -134,3 +136,65 @@ def test_p2_contract_lifecycle_supports_args_and_approval_states() -> None:
         "expired",
         "cancelled",
     }
+
+
+def test_approval_request_identity_enforces_time_and_resolution_invariants() -> None:
+    now = datetime.now(UTC)
+    request = ApprovalRequest(
+        request_id=new_id("apr"),
+        tool_call_id=new_id("tc"),
+        args_summary="remove 3 files under src/",
+        risk="high",
+        reason="destructive command",
+        created_at=now,
+        expires_at=now.replace(microsecond=now.microsecond + 1),
+    )
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        request.status = ApprovalStatus.APPROVED  # type: ignore[misc]
+    with pytest.raises(ValueError, match="timezone-aware"):
+        ApprovalRequest(
+            request_id="a",
+            tool_call_id="t",
+            args_summary="x",
+            risk="low",
+            reason="test",
+            created_at=datetime(2026, 1, 1),
+            expires_at=now,
+        )
+    with pytest.raises(ValueError, match="expires_at"):
+        ApprovalRequest(
+            request_id="a",
+            tool_call_id="t",
+            args_summary="x",
+            risk="low",
+            reason="test",
+            created_at=now,
+            expires_at=now.replace(microsecond=now.microsecond - 1),
+        )
+    with pytest.raises(ValueError, match="resolved ApprovalRequest"):
+        ApprovalRequest(
+            request_id="a",
+            tool_call_id="t",
+            args_summary="x",
+            risk="low",
+            reason="test",
+            created_at=now,
+            expires_at=now,
+            status=ApprovalStatus.APPROVED,
+        )
+
+
+def test_permission_context_persists_pending_approvals() -> None:
+    now = datetime.now(UTC)
+    request = ApprovalRequest(
+        request_id="apr-1",
+        tool_call_id="tc-1",
+        args_summary="write file",
+        risk="medium",
+        reason="no write fence",
+        created_at=now,
+        expires_at=now,
+    )
+    ctx = PermissionCtx(approvals=(request,))
+    assert ctx.approvals[0].request_id == "apr-1"
+    assert ctx.approvals[0].status is ApprovalStatus.PENDING
