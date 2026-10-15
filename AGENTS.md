@@ -47,6 +47,25 @@ alone** (they evolve). Priority: user instruction → §0 + [HARD-CONSTRAINTS](.
   "Refactor X" → tests pass before and after.
 - Multi-step: state `step → verify: check`. Strong DoDs let you loop independently.
 
+## 4.5 Reuse proven implementations — scan the sibling repos before you build
+When writing or executing any phase plan (`docs/plan/NN-*.md`), **before implementing a capability, scan
+the sibling projects under `project-main/`** (hermes-agent, wuu, DeepCode, CowAgent, MetaGPT, cordis, …):
+- **Scan thoroughly — all relevant repos, not a cursory few** (§0 applies). A feature often already exists,
+  battle-tested, in one of them.
+- **If a peer has a proven / better implementation, adapt and reuse it** rather than writing fresh — lower
+  bug risk. **Do not trim scope or cut corners to save code volume** (volume is explicitly not a concern).
+- Guardrails: keep it behind the correct layer / port (HARD-CONSTRAINTS C1/C14); respect each project's
+  **license + attribution** — when actually porting code, mark provenance in-file (never present others'
+  code as our original); prefer adapting to our contracts over verbatim copy.
+- Record it in the plan, per capability: which repos scanned, `file:line`, verdict (reuse / adapt / write-fresh + why).
+- **Frontend especially:** for the desktop/web UI (React/Svelte + TS, Tauri), strongly prefer **adapting
+  existing UI code from the reference repos** over writing fresh — chat/streaming render, SSE event-subscribe
+  client, settings/permission panels, code highlight/diff, sidecar-lifecycle UI mostly already exist and are
+  battle-tested. **DeepCode's Tauri v2 `desktop/web` + `src-tauri` is same-stack → first choice**; CowAgent/wuu
+  Electron frontends are adaptable to Tauri; hermes `web/`/`ui-tui/` for reference. Still keep the iron rule:
+  **UI is a thin client that only consumes the event protocol — never sink business/state/validation into the
+  shell** (C14/ADR-0007); preserve license + attribution.
+
 ## 5. Quality Bar (Definition of Done) — never "looks done", only "verifiably works"
 A change is done only when, as applicable: it **compiles + passes tests + lints clean + cold-imports
 (`uv run python -c "import <mod>")` + violates no HARD-CONSTRAINT boundary**, and the relevant
