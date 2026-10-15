@@ -13,8 +13,9 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -27,10 +28,14 @@ from questor.contracts.events import (
     Cancel,
     Envelope,
     EventType,
+    ExpireApproval,
     FinalizeRun,
     MarkToolDenied,
+    MarkToolRunning,
     MarkToolValidated,
     RecordToolResult,
+    RequestApproval,
+    ResolveApproval,
     SubmitMessage,
 )
 from questor.contracts.policy import PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
@@ -44,6 +49,7 @@ from questor.contracts.state_schema import (
     Message,
     Role,
     ToolArgsStatus,
+    ToolCallStatus,
 )
 from questor.contracts.tool import Tool
 from questor.kernel.events import EventBus
@@ -56,8 +62,6 @@ from questor.state.checkpoint import open_tool_use_ids
 from questor.state.domain_state import Run
 from questor.state.reduce import reduce
 from questor.state.snapshot import to_snapshot
-
-Approver = Callable[[str, JsonObject, str], Awaitable[bool]]
 
 
 class _ToolCtx:
@@ -157,7 +161,6 @@ class DefaultTurnLoop:
         workspace_root: Path | None = None,
         model: str = "",
         system: str | None = None,
-        approver: Approver | None = None,
         cancel_event: asyncio.Event | None = None,
     ) -> None:
         self.provider = provider
@@ -171,7 +174,6 @@ class DefaultTurnLoop:
         self.workspace_root = workspace_root or Path.cwd()
         self.model = model
         self.system = system
-        self.approver = approver
         self.cancel_event = cancel_event or asyncio.Event()
 
     async def drive(self, run: Run, user_text: str) -> Run:
@@ -393,10 +395,34 @@ class DefaultTurnLoop:
             run = await self._apply_command(controller, run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=reason))
             return run
         if decision is PermissionDecision.ASK:
-            allowed = bool(self.approver) and await self.approver(intent.name, intent.args, reason)
-            if not allowed:
-                run = await self._apply_command(controller, run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason="denied by approver"))
+            run = await self._handle_ask(controller, run, tool, intent, outcome)
+            call = next(c for c in run.tool_ledger.calls if c.tool_call_id == intent.tool_call_id)
+            if call.status in {ToolCallStatus.DENIED, ToolCallStatus.CANCELLED} or run.status.is_terminal:
                 return run
+            if call.status is not ToolCallStatus.RUNNING:
+                run = await self._apply_command(
+                    controller,
+                    run,
+                    MarkToolRunning(
+                        run_id=run.run_id,
+                        tool_call_id=intent.tool_call_id or "",
+                        capability=tool.spec.capability.value,
+                        risk=tool.spec.risk.value,
+                        timeout_s=tool.spec.timeout_s or run.budget.tool_default_timeout_seconds,
+                    ),
+                )
+        else:
+            run = await self._apply_command(
+                controller,
+                run,
+                MarkToolRunning(
+                    run_id=run.run_id,
+                    tool_call_id=intent.tool_call_id or "",
+                    capability=tool.spec.capability.value,
+                    risk=tool.spec.risk.value,
+                    timeout_s=tool.spec.timeout_s or run.budget.tool_default_timeout_seconds,
+                ),
+            )
 
         ctx = _ToolCtx(
             self.workspace_root,
@@ -416,6 +442,56 @@ class DefaultTurnLoop:
         controller.run = run
         await self._emit(events)
         return run
+
+    async def _handle_ask(self, controller: RunController, run: Run, tool: Tool, intent: ProposeToolCall, outcome: object) -> Run:
+        """ask → durable approval request → inbox/timeout；绝不阻塞回调。"""
+        target = next(c for c in run.tool_ledger.calls if c.tool_call_id == intent.tool_call_id)
+        request_id = new_id("apr")
+        timeout = run.budget.approval_timeout_seconds
+        expires_at = utc_now() + timedelta(seconds=timeout)
+        args_summary = getattr(outcome, "args_summary", target.name)
+        reason = getattr(outcome, "reason", "approval required")
+        run = await self._apply_command(
+            controller,
+            run,
+            RequestApproval(
+                run_id=run.run_id,
+                tool_call_id=intent.tool_call_id or "",
+                request_id=request_id,
+                args_summary=args_summary,
+                risk=target.risk or tool.spec.risk.value,
+                reason=reason,
+                expires_at=expires_at,
+            ),
+        )
+        deadline = time.monotonic() + timeout
+        while True:
+            def relevant(command: object) -> bool:
+                return isinstance(command, Cancel) or (
+                    isinstance(command, ResolveApproval | ExpireApproval) and command.request_id == request_id
+                )
+
+            command = await controller.wait_for(relevant, timeout=max(0.001, deadline - time.monotonic()))
+            if command is None:
+                return await self._apply_command(controller, run, ExpireApproval(run_id=run.run_id, request_id=request_id))
+            if isinstance(command, Cancel):
+                return await self._apply_command(controller, run, command)
+            run = await self._apply_command(controller, run, command)
+            call = next(c for c in run.tool_ledger.calls if c.tool_call_id == (intent.tool_call_id or ""))
+            if call.status is ToolCallStatus.READY:
+                return await self._apply_command(
+                    controller,
+                    run,
+                    MarkToolRunning(
+                        run_id=run.run_id,
+                        tool_call_id=intent.tool_call_id or "",
+                        capability=tool.spec.capability.value,
+                        risk=tool.spec.risk.value,
+                        timeout_s=tool.spec.timeout_s or run.budget.tool_default_timeout_seconds,
+                    ),
+                )
+            if call.status in {ToolCallStatus.DENIED, ToolCallStatus.CANCELLED}:
+                return run
 
     async def _emit(self, events: list[Envelope]) -> None:
         """把一批事件逐条交给总线（可持久的会落库、live-only 只转发）。"""
