@@ -23,6 +23,9 @@ env:
 jobs:
   # Independent, always-blocking (C15): does NOT depend on any change classifier,
   # so a language-only PR can never skip the layering/contract guards.
+  #
+  # checkout@v7 / setup-uv@v7: v7 是上游 node20→node24 那次切换（托管 runner 直接可用），
+  # 消掉“actions 仍标 node20 却被强跑 node24”的弃用告警（supersedes Dependabot PR #16/#17）。
   boundaries:
     # 钉住镜像（DeepCode 同样做法）：ubuntu-latest 将于 2026-10-19 静默迁移到 Ubuntu 26，
     # 不能让 CI 环境在我们未主动升级时被改掉（本次故障就是“本地绿、runner 卡死”的环境差异型）。
@@ -30,11 +33,12 @@ jobs:
     # 兜底：任何一步卡住都在 10 分钟内判红，而不是挂到 6 小时默认超时。
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           # 按依赖清单缓存 ~/.cache/uv（hermes 做法）：uv sync 仍旧每次都跑，但从热缓存
-          # 解析/构建，不重复下载与重建 wheel。
+          # 解析/构建，不重复下载与重建 wheel。v7 把 enable-cache 默认从 true 改成了 auto，
+          # 这里显式写死 true 以保持与 v4 行为一致。
           enable-cache: true
           cache-dependency-glob: |
             pyproject.toml
@@ -65,8 +69,8 @@ jobs:
     # 兜底：曾经因 aiosqlite 非守护线程泄漏使 pytest step 永不结束，这里限时自停。
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: |
