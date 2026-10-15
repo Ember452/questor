@@ -24,6 +24,8 @@
         "tool_progress",
         "tool_completed",
         "approval_request",
+        "approval_resolved",
+        "permission_mode_changed",
         "node_updated",
         "usage_delta",
         "heartbeat",

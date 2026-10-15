@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, ClassVar
 
-from questor.contracts.common import JsonObject, freeze, utc_now
+from questor.contracts.common import JsonObject, freeze, require_aware, utc_now
 from questor.contracts.errors import ErrorEntry
 from questor.contracts.state_schema import CancelReason, Checkpoint, Message, TaskNode
 
@@ -51,13 +51,74 @@ class ProposeAction:
 
 
 @dataclass(frozen=True, slots=True)
-class ResolveApproval:
-    """人工审批回执：幂等——reduce 丢弃已处理过的重复投递（02 E3）。"""
+class RequestApproval:
+    """把一次工具调用转为 durable HITL request。
+
+    `request_id` 是超时/取消/人工回执的共同身份；没有它就无法区分同一 tool_call 的多个请求。
+    """
 
     run_id: str
     tool_call_id: str
+    request_id: str
+    args_summary: str
+    risk: str
+    reason: str
+    expires_at: datetime
+    type: ClassVar[str] = "request_approval"
+
+    def __post_init__(self) -> None:
+        require_aware(self.expires_at, "RequestApproval.expires_at")
+
+
+@dataclass(frozen=True, slots=True)
+class ResolveApproval:
+    """人工审批回执：幂等——同一 request 同决策为 no-op，异决策被拒绝（02 E3/ADR-0016）。"""
+
+    run_id: str
+    request_id: str
     decision: str  # allow | deny
+    decided_by: str  # user | http_client | cli | system
     type: ClassVar[str] = "resolve_approval"
+
+
+@dataclass(frozen=True, slots=True)
+class ExpireApproval:
+    """把唯一 pending request 置 expired；迟到 ResolveApproval 不得翻案。"""
+
+    run_id: str
+    request_id: str
+    type: ClassVar[str] = "expire_approval"
+
+
+@dataclass(frozen=True, slots=True)
+class MarkToolValidated:
+    """记录“已通过 schema/arg-key 校验，可进入权限判定”的账本状态。"""
+
+    run_id: str
+    tool_call_id: str
+    type: ClassVar[str] = "mark_tool_validated"
+
+
+@dataclass(frozen=True, slots=True)
+class MarkToolRunning:
+    """工具从 ready/pending 转为 running，是 `tool_started` 的唯一产生入口。"""
+
+    run_id: str
+    tool_call_id: str
+    capability: str
+    risk: str
+    timeout_s: float
+    type: ClassVar[str] = "mark_tool_running"
+
+
+@dataclass(frozen=True, slots=True)
+class SetPermissionMode:
+    """变更未来调用的权限模式；历史 decision 不回溯（design/01 I5）。"""
+
+    run_id: str
+    mode: str  # default | plan | full_auto
+    changed_by: str
+    type: ClassVar[str] = "set_permission_mode"
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,7 +206,12 @@ class FinalizeRun:
 Command = (
     SubmitMessage
     | ProposeAction
+    | RequestApproval
     | ResolveApproval
+    | ExpireApproval
+    | SetPermissionMode
+    | MarkToolValidated
+    | MarkToolRunning
     | Cancel
     | WriteMemory
     | RequestCompactHint
@@ -190,6 +256,8 @@ class EventType:
     TOOL_PROGRESS = "tool_progress"  # live-only
     TOOL_COMPLETED = "tool_completed"
     APPROVAL_REQUEST = "approval_request"
+    APPROVAL_RESOLVED = "approval_resolved"
+    PERMISSION_MODE_CHANGED = "permission_mode_changed"
     NODE_UPDATED = "node_updated"
     USAGE_DELTA = "usage_delta"
     HEARTBEAT = "heartbeat"  # live-only

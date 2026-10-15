@@ -13,7 +13,17 @@ import pytest
 from questor.capabilities.tools.read import ReadTool
 from questor.contracts.common import new_id, validate_json_object
 from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints
-from questor.contracts.events import Cancel, Envelope
+from questor.contracts.events import (
+    Cancel,
+    Envelope,
+    EventType,
+    ExpireApproval,
+    MarkToolRunning,
+    MarkToolValidated,
+    RequestApproval,
+    ResolveApproval,
+    SetPermissionMode,
+)
 from questor.contracts.state_schema import (
     CLOSED_TOOL_CALL_STATUSES,
     OPEN_TOOL_CALL_STATUSES,
@@ -242,3 +252,34 @@ def test_tool_call_carries_lifecycle_audit_metadata() -> None:
     assert call.status is ToolCallStatus.AWAITING_APPROVAL
     assert call.permission_warnings == ("job object does not fence writes",)
     assert call.env_scrubbed == ("OPENAI_API_KEY",)
+
+
+def test_p2_approval_and_lifecycle_commands_carry_identity() -> None:
+    now = datetime.now(UTC)
+    request = RequestApproval(
+        run_id="run",
+        tool_call_id="tc",
+        request_id="apr",
+        args_summary="remove files",
+        risk="high",
+        reason="destructive",
+        expires_at=now,
+    )
+    resolve = ResolveApproval(run_id="run", request_id="apr", decision="allow", decided_by="user")
+    expire = ExpireApproval(run_id="run", request_id="apr")
+    validated = MarkToolValidated(run_id="run", tool_call_id="tc")
+    running = MarkToolRunning(run_id="run", tool_call_id="tc", capability="exec", risk="high", timeout_s=30)
+    mode = SetPermissionMode(run_id="run", mode="plan", changed_by="user")
+    assert (request.type, resolve.type, expire.type) == ("request_approval", "resolve_approval", "expire_approval")
+    assert (validated.type, running.type, mode.type) == ("mark_tool_validated", "mark_tool_running", "set_permission_mode")
+    assert {EventType.APPROVAL_RESOLVED, EventType.PERMISSION_MODE_CHANGED} == {"approval_resolved", "permission_mode_changed"}
+    with pytest.raises(ValueError, match="timezone-aware"):
+        RequestApproval(
+            run_id="run",
+            tool_call_id="tc",
+            request_id="apr",
+            args_summary="x",
+            risk="low",
+            reason="test",
+            expires_at=datetime(2026, 1, 1),
+        )
