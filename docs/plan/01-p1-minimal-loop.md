@@ -246,3 +246,22 @@ P0 已产八层包骨架 + 分层三防线 + 冷导入/CI；P1 仅在 `pyproject
 
 **建议提交粒度**（细粒度、英文 Conventional Commits，**每次 commit/push 均须用户当轮明确许可**，AGENTS §6）：
 `chore(p1): add impl deps + wire P0 stubs` → `feat(contracts): fill contract fields (additive)` → `feat(state): domain state + reduce invariants` → `feat(providers): litellm stream adapter` → `feat(capabilities): read tool` → `feat(kernel): permission engine` → `feat(kernel): event bus + projection` → `feat(providers): event-sourcing store + checkpoint` → `feat(kernel): turn loop` → `feat(surfaces): cli + local sse` → `feat(policy): in-proc react policy` → `test(p1): DoD 五验证项` → `docs: fill plan/01 deviations`。
+
+## 11. 实现偏差回填（reality wins，AGENTS §5.5；据 2026-10-15 对抗审计 `docs/audit/P0-P1-review-2026-10-15.md` 全量修复）
+
+审计判定 P1 存在两个已复现 Blocker 与若干阻断/应修项，本session已逐条修复并补证伪测试（当前 `pytest` 64 passed、四守卫全绿）。与本文原承诺的偏差：
+
+**已修复（含测试）**
+- **C2 假不可变**（Blocker）：`ToolCall.args` / `ContentBlock.input·payload·provider_state` / `Envelope.data` 改 `immutables.Map` 深冻结（`contracts/common.py: freeze/thaw`），序列化/校验边界 `thaw` 还原。测试 `test_leaf_dict_is_immutable` / `test_cow_states_do_not_share_mutable_leaf`。本文 §0「工程面砌实」据此补实。
+- **Cancel seq 碰撞**（Blocker）：`reduce` 的 Cancel 分支改为「本次事件连续取号 `run.seq+1..+n`、`Run.seq` 推进到最大事件号」，回填事件与终态不再同 seq（旧路径落库 `IntegrityError`）。测试 `test_cancel_persist.py`（带 store）。
+- **A1 checkpoint/断点恢复**：`state/snapshot.py` 序列化 + loop turn 边界 `save_checkpoint` + `kernel/recovery.py: resume_run`（取最近快照重建 Domain_State）。测试 `test_checkpoint_and_resume_roundtrip`（关库重开模拟新进程）。
+- **A3 capability/risk fail-closed**：loop 工具路由读 `spec.capability/risk` + `SandboxPort` 探针；无后端时 exec/write/network/high → **deny**（非 ask/裸执行）。测试 `test_sandbox_gate.py`。
+- **A2 护栏**：`Budget` 的 `repeat_tool_limit`（同工具同参连续）、`max_consecutive_continuations`（空答）、`deadline_seconds`（墙钟）、`max_tokens`（用量）全部接进 loop 并触发 `run_failed`；新增「拒绝过早 Finish」（有未闭合 tool_use 时不 finalize，续跑）。测试 `test_loop_hardening.py`。
+- **C10 策略故障隔离**：`propose_action` 抛错 → 捕获、发 `warning` 事件、**回滚 Domain_State 到 turn 起点**、连续 3 次则优雅 `run_failed`（外部已发 delta 不撤）。测试 `test_run_survives_panicking_policy_and_fails_gracefully`。
+- **A4/入口/活文档/守卫细节**：`python -m questor` 接 CLI；CHANGELOG 补 P0/P1+Fixed；bus 终态清理订阅队列（`_closed` 保留以守终态唯一）；`check_protocol_schema` 加 fail-on-empty。
+
+**诚实降级为 draft（本次未强制，非“已完成”）**
+- 梯度终止的「软预警 checkpoint 提示 / wall-clock wrap-up 提示 / 一次无工具 grace call / 耗尽强制总结」需额外 provider 往返，属 04 §13/§3 `[加固]`，**P1 未实现**（当前：预算/截止/重复到点直接 `run_failed`）；这些字段与接缝已就位，P10 加固期补全。
+- 流式看门狗双超时、idle-progress 看门狗、shell 命令解析 fail-closed、跨机/多进程一致性：均按计划后置（P2/P10），P1 不做。
+
+**未改的结论**：能力面仍守 §2.5 串行最小集（无并行/MCP/子 agent），审计 scope-drift 核验亦确认未越界；真实 LiteLLM 端到端与跨真实 HTTP 的 SSE 断连重连仍 **UNVERIFIED**（无 key / 环境无 uvicorn），列入 §7 未覆盖项。
