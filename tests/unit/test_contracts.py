@@ -13,7 +13,17 @@ from questor.capabilities.tools.read import ReadTool
 from questor.contracts.common import new_id, validate_json_object
 from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints
 from questor.contracts.events import Cancel, Envelope
-from questor.contracts.state_schema import CancelReason, Message, Role, RunStatus
+from questor.contracts.state_schema import (
+    CLOSED_TOOL_CALL_STATUSES,
+    OPEN_TOOL_CALL_STATUSES,
+    ApprovalStatus,
+    CancelReason,
+    Message,
+    Role,
+    RunStatus,
+    ToolArgsStatus,
+    ToolCallStatus,
+)
 from questor.contracts.tool import Capability
 from questor.state.domain_state import Run
 
@@ -80,3 +90,47 @@ def test_read_tool_is_readonly_capability() -> None:
 def test_validate_json_object_blocks_nan() -> None:
     with pytest.raises(ValueError, match="JSON-safe"):
         validate_json_object({"x": float("nan")}, "payload")
+
+
+def test_p2_tool_call_lifecycle_locks_every_state() -> None:
+    """P2 状态机必须可持久化，不能把审批/运行中状态退回为内存变量。"""
+    assert {status.value for status in ToolCallStatus} == {
+        "pending",
+        "validated",
+        "awaiting_approval",
+        "ready",
+        "running",
+        "success",
+        "error",
+        "critical_error",
+        "timed_out",
+        "cancelled",
+        "denied",
+    }
+    assert OPEN_TOOL_CALL_STATUSES == {
+        ToolCallStatus.PENDING,
+        ToolCallStatus.VALIDATED,
+        ToolCallStatus.AWAITING_APPROVAL,
+        ToolCallStatus.READY,
+        ToolCallStatus.RUNNING,
+    }
+    assert CLOSED_TOOL_CALL_STATUSES == {
+        ToolCallStatus.SUCCESS,
+        ToolCallStatus.ERROR,
+        ToolCallStatus.CRITICAL_ERROR,
+        ToolCallStatus.TIMED_OUT,
+        ToolCallStatus.CANCELLED,
+        ToolCallStatus.DENIED,
+    }
+    assert not OPEN_TOOL_CALL_STATUSES & CLOSED_TOOL_CALL_STATUSES
+
+
+def test_p2_contract_lifecycle_supports_args_and_approval_states() -> None:
+    assert {status.value for status in ToolArgsStatus} == {"valid", "invalid", "missing"}
+    assert {status.value for status in ApprovalStatus} == {
+        "pending",
+        "approved",
+        "denied",
+        "expired",
+        "cancelled",
+    }

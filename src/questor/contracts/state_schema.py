@@ -53,19 +53,69 @@ class Role(StrEnum):
 
 
 class ToolCallStatus(StrEnum):
-    """工具调用账本状态；denied 也入账（审计），且不计入失败重试（design/01 §6）。"""
+    """工具调用账本状态；denied 也入账（审计），且不计入失败重试（design/01 §6）。
+
+    P2 生命周期要求每个 transition 都由带类型 Command 驱动；`validated/awaiting_approval/ready` 是
+    审批与取消可恢复的中间态，不能被简化成 loop 内存变量。
+    """
 
     PENDING = "pending"
+    VALIDATED = "validated"
+    AWAITING_APPROVAL = "awaiting_approval"
+    READY = "ready"
     RUNNING = "running"
     SUCCESS = "success"
     ERROR = "error"
     CRITICAL_ERROR = "critical_error"
+    TIMED_OUT = "timed_out"
+    CANCELLED = "cancelled"
     DENIED = "denied"
+
+
+class ToolArgsStatus(StrEnum):
+    """provider 工具入参的可解析状态。
+
+    非法 JSON 绝不能伪装成空对象继续跑；这里把“参数事实”与 schema 校验解耦（ADR-0016）。
+    """
+
+    VALID = "valid"
+    INVALID = "invalid"
+    MISSING = "missing"
+
+
+class ApprovalStatus(StrEnum):
+    """一次审批请求的状态；每个 request 有独立身份，迟到决策不能翻案。"""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
 
 
 #: 表示「调用仍未闭合（无结果）」的状态集合——配对不变式、取消回填(C7)、策略的
 #: 「未应答 tool_use」判定都复用它，避免各处口径漂移。
-OPEN_TOOL_CALL_STATUSES: frozenset[ToolCallStatus] = frozenset({ToolCallStatus.PENDING, ToolCallStatus.RUNNING})
+OPEN_TOOL_CALL_STATUSES: frozenset[ToolCallStatus] = frozenset(
+    {
+        ToolCallStatus.PENDING,
+        ToolCallStatus.VALIDATED,
+        ToolCallStatus.AWAITING_APPROVAL,
+        ToolCallStatus.READY,
+        ToolCallStatus.RUNNING,
+    }
+)
+
+#: 终态工具结果；这些状态不再允许被普通 RecordToolResult 重复闭合。
+CLOSED_TOOL_CALL_STATUSES: frozenset[ToolCallStatus] = frozenset(
+    {
+        ToolCallStatus.SUCCESS,
+        ToolCallStatus.ERROR,
+        ToolCallStatus.CRITICAL_ERROR,
+        ToolCallStatus.TIMED_OUT,
+        ToolCallStatus.CANCELLED,
+        ToolCallStatus.DENIED,
+    }
+)
 
 
 class TaskStatus(StrEnum):
