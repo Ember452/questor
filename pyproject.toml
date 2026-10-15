@@ -16,6 +16,7 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-asyncio",
+    "pytest-timeout",
     "ruff",
     "import-linter",
 ]
@@ -62,3 +63,7 @@ ban-relative-imports = "all"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src"]
+# --timeout：单个测试内部卡住时的限时（tests/conftest.py 的看门狗只管“退出阶段卡死”，两者互补）。
+# 显式固定 thread 方法：signal 方法仅 Unix 可用，不指定的话 Windows 本地与 Linux CI 行为会不一致
+# ——而本次 CI 挂死恰恰是“本地绿、runner 卡死”的平台差异型故障，不能再留一个。
+addopts = "--timeout=60 --timeout-method=thread"
