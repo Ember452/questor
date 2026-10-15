@@ -183,3 +183,16 @@ CI：`cold-import` / `layering-guards`（import-linter + ruff + AST，独立 blo
 
 **建议提交粒度**（英文 Conventional Commits，**每次 commit/push 须用户当轮明确许可**，AGENTS §6）：
 `chore: bootstrap layered package skeleton + layering guards` → `feat(contracts): command/event/policy/tool/port signatures` → `feat(state): domain-state schemas + seam invariants (stubs)` → `feat(kernel,capabilities,policy,providers,surfaces): interface stubs (NotImplemented)` → `feat(protocol): event JSON-Schema single source + drift check` → `ci: cold-import + boundary + contract-snapshot jobs` → `docs: plan/00 design-skeleton`。
+
+## 11. 实现偏差回填（reality wins，AGENTS §5.5；P0 已完成并验证）
+
+P0 已按 T1→T6 落码并通过 DoD 全套（冷导入 / `lint-imports` 4 契约 KEPT / `ruff` 0 违规 / AST 守卫 self-test 判红判绿 + 扫描 0 违规 / `protocol --check` schema↔EventType 17 类锁步 / `pytest` 全绿）。实做相对纸面计划的偏差：
+
+- **contracts 多两文件**：`contracts/` 除 T2 简表（ports/events/policy/tool/common）外，增补 `state_schema.py`（值对象/枚举）与 `errors.py`（ErrorEntry/分类）。原因：`policy`(L4) 与 `state`(L1) 都要引用这些词汇，而 contracts 是最内层、不能被外层依赖——把它们放 contracts 才不破分层（更贴 STRUCTURE §2「contracts=状态 schema」）。属 additive 微调。
+- **`.importlinter` 必须纯 ASCII**：import-linter 用 OS 默认编码读配置，Windows/zh locale 下中文注释触发 `gbk` 解码崩溃 → 配置改纯英文。
+- **契约类型名**：横切独立性用 `type = independence`（字段 `modules`），非 `type = independent_packages`（后者是 independence 契约里的字段名，写成 type 会被当未知类型直接报错）。
+- **依赖分层**：P0 运行依赖仅 `pydantic`/`immutables`/`jsonschema`（`immutables` 现留位、尚未在形状代码用到）；`litellm`/`fastapi`/`sse-starlette`/`aiosqlite` 按计划推到 P1 T1 再加（P0 只锁 Port 不绑实现）。
+- **守卫实证**：`check_layering_ast.py` 抓 `importlib.import_module("questor.*")` 动态 import + `--self-test` 造坏样本判红 + `fail-on-empty`；`check_protocol_schema.py --check` 防 schema↔EventType 漂移。
+- **实扒归档**：本轮 P0 扫描（DeepCode 领域/事件/turn/serde、Protocol 范式、import-linter 零采用、protocol 单一真源）落 [`R10-interface-skeleton.md`](../references/R10-interface-skeleton.md)。
+
+**下一步进 P1**：[`plan/01`](./01-p1-minimal-loop.md) 承接本骨架填行为（T3 `reduce` → T4/T5/T6 → T7 循环 → T8/T9 → T10 surfaces → T11 策略 → T12 可观测 → T13 验收）。
