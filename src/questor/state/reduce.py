@@ -27,10 +27,12 @@ from questor.contracts.events import (
     EventType,
     FinalizeRun,
     MarkToolDenied,
+    MarkToolValidated,
     RecordToolResult,
     SubmitMessage,
 )
 from questor.contracts.state_schema import (
+    OPEN_TOOL_CALL_STATUSES,
     ContentBlock,
     Message,
     Role,
@@ -40,7 +42,7 @@ from questor.contracts.state_schema import (
 )
 from questor.state.domain_state import Context, Run
 
-_OPEN_CALL = {ToolCallStatus.PENDING, ToolCallStatus.RUNNING}
+_OPEN_CALL = OPEN_TOOL_CALL_STATUSES
 
 
 def _event(seq: int, run: Run, turn: int | None, etype: str, data: dict) -> Envelope:
@@ -48,7 +50,7 @@ def _event(seq: int, run: Run, turn: int | None, etype: str, data: dict) -> Enve
     return Envelope(v=EVENT_SCHEMA_VERSION, seq=seq, run_id=run.run_id, type=etype, turn=turn, data=data)
 
 
-def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C901（分派是一张平铺表）
+def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C901
     """应用一条 Command；返回新 Run + 按 seq 有序的可持久事件。"""
     if run.status.is_terminal:
         # C13 first-writer-wins：终态后冻结，忽略后续写。
@@ -73,7 +75,16 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         if any(i in known for i in use_ids):
             return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "duplicate tool_use id; command rejected"})]
         new_calls = tuple(
-            ToolCall(tool_call_id=b.tool_use_id, turn=command.turn, name=b.name or "", args=dict(b.input or {}), status=ToolCallStatus.PENDING)
+            ToolCall(
+                tool_call_id=b.tool_use_id,
+                turn=command.turn,
+                name=b.name or "",
+                args=dict(b.input or {}),
+                args_status=b.args_status,
+                raw_args_summary=b.raw_input,
+                permission_reason=b.args_error,
+                status=ToolCallStatus.PENDING,
+            )
             for b in command.message.content
             if b.type == "tool_use" and b.tool_use_id
         )
@@ -90,6 +101,18 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         ctx = _append_tool_result(run.context, command.tool_call_id, command.result, is_error=command.status != "success")
         new = replace(run, tool_ledger=ledger, context=ctx, seq=run.seq + 1)
         return new, [_event(new.seq, new, target.turn, EventType.TOOL_COMPLETED, {"tool_call_id": command.tool_call_id, "status": command.status})]
+
+    if isinstance(command, MarkToolValidated):
+        target = _open_call(run, command.tool_call_id)
+        if target is None:
+            # 已 validated/闭合的重复 transition 是幂等 no-op；未知 id 同样不产 durable event，
+            # 避免把内部 lifecycle 噪声污染 replay。
+            return run, []
+        if target.status is ToolCallStatus.VALIDATED:
+            return run, []
+        validated = replace(target, status=ToolCallStatus.VALIDATED)
+        ledger = replace(run.tool_ledger, calls=_replace_call(run.tool_ledger.calls, validated))
+        return replace(run, tool_ledger=ledger), []
 
     if isinstance(command, MarkToolDenied):
         target = _open_call(run, command.tool_call_id)
@@ -150,6 +173,8 @@ def _call_status(status: str) -> ToolCallStatus:
         "success": ToolCallStatus.SUCCESS,
         "error": ToolCallStatus.ERROR,
         "critical_error": ToolCallStatus.CRITICAL_ERROR,
+        "timed_out": ToolCallStatus.TIMED_OUT,
+        "cancelled": ToolCallStatus.CANCELLED,
     }
     return mapping.get(status, ToolCallStatus.ERROR)
 
@@ -167,9 +192,16 @@ def _append_tool_result(ctx: Context, tool_call_id: str, result: object, *, is_e
 
 
 def _backfill_open_calls(run: Run) -> tuple[tuple[ToolCall, ...], tuple[Message, ...]]:
-    """C7：用 error 结果闭合每一个未完成的调用，保住配对不变式。"""
+    """C7：用 cancelled 结果闭合每一个未完成的调用，保住配对不变式。
+
+    取消不是普通工具 error：账本必须保留可区分事实，resume/审计才能判断进程被用户停止
+    而非业务失败（ADR-0016）。
+    """
+    open_ids = {c.tool_call_id for c in _open_calls(run)}
     closed = tuple(
-        replace(c, status=ToolCallStatus.ERROR, result="cancelled before completion")
+        replace(c, status=ToolCallStatus.CANCELLED, result="cancelled before completion")
+        if c.tool_call_id in open_ids
+        else c
         for c in run.tool_ledger.calls
     )
     extra = tuple(
