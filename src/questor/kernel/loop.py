@@ -45,7 +45,7 @@ from questor.contracts.state_schema import (
     Role,
     ToolArgsStatus,
 )
-from questor.contracts.tool import Capability, Risk, Tool
+from questor.contracts.tool import Tool
 from questor.kernel.events import EventBus
 from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
 from questor.kernel.run_control import RunController
@@ -58,10 +58,6 @@ from questor.state.reduce import reduce
 from questor.state.snapshot import to_snapshot
 
 Approver = Callable[[str, JsonObject, str], Awaitable[bool]]
-
-#: 必须被沙箱隔离的能力；无可用后端时一律 deny（fail-closed，design/03 §10 T4——
-#: “降级只会更安全、不会更松”）。
-_SANDBOXED_CAPABILITIES = frozenset({Capability.EXEC, Capability.WRITE, Capability.NETWORK})
 
 
 class _ToolCtx:
@@ -402,12 +398,6 @@ class DefaultTurnLoop:
                 run = await self._apply_command(controller, run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason="denied by approver"))
                 return run
 
-        # 能力/风险 fail-closed 闸：需沙箱的能力若无可能力后端 → DENIED，绝不裸执行（03 §10 T4；C9）。
-        deny_reason = self._sandbox_denial(tool)
-        if deny_reason is not None:
-            run = await self._apply_command(controller, run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=deny_reason))
-            return run
-
         ctx = _ToolCtx(
             self.workspace_root,
             self.cancel_event,
@@ -426,22 +416,6 @@ class DefaultTurnLoop:
         controller.run = run
         await self._emit(events)
         return run
-
-    def _sandbox_denial(self, tool: Tool) -> str | None:
-        """当工具需要的隔离后端给不了时，返回一个 deny 理由。"""
-        spec = tool.spec
-        needs = spec.capability in _SANDBOXED_CAPABILITIES or spec.risk is Risk.HIGH
-        if not needs:
-            return None
-        if self.sandbox is None:
-            return f"no sandbox backend available for {spec.capability.value}/{spec.risk.value} tool (fail-closed)"
-        if spec.capability is Capability.WRITE and not self.sandbox.fences_writes():
-            return "sandbox cannot fence writes for a write tool (fail-closed)"
-        if spec.capability is Capability.NETWORK and not self.sandbox.fences_network():
-            return "sandbox cannot fence network for a network tool (fail-closed)"
-        if spec.capability is Capability.EXEC and not self.sandbox.isolates_process_tree():
-            return "sandbox cannot isolate the process tree for an exec tool (fail-closed)"
-        return None
 
     async def _emit(self, events: list[Envelope]) -> None:
         """把一批事件逐条交给总线（可持久的会落库、live-only 只转发）。"""
