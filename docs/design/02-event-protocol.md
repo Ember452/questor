@@ -53,7 +53,7 @@ Kernel 内部事件(细粒度、私有、可随实现演进)
 - 重连带 `Last-Event-ID`/`after_seq` → 从最近快照重放其后事件；游标过期回 `resync_required`。
 
 ## 5. Command 集（输入事件，均经 reduce）
-`SubmitMessage`、`ProposeAction`（策略的单步意图：调工具/收尾）、`ResolveApproval(allow|deny)`、`Cancel(reason: user|timeout|safety)`、`WriteMemory`、`RequestCompactHint`(仅 advisory，不强制)。
+`SubmitMessage`、`ProposeAction`（策略的单步意图：调工具/收尾）、`ResolveApproval(allow|deny)`、`Cancel(reason ∈ {user|timeout|budget_exhausted|no_progress|safety|owner})`、`WriteMemory`、`RequestCompactHint`(仅 advisory，不强制)。
 - 每个 Command → reduce 校验不变式 → 新 State + 发 Event[]；非法 Command 被拒并发错误事件（不靠上层自觉）。
 
 ## 6. 兼容与版本规则
@@ -67,3 +67,20 @@ Kernel 内部事件(细粒度、私有、可随实现演进)
 ## 8. 待定（v0 后锁，C11）
 - 每事件的**精确 data 字段**：先给上面核心集，跑通 2-3 个策略变体后 lock。
 - 编码先 **JSON**；量大再评估压缩/二进制帧。内部事件全集随 04-turn-loop 细化时补齐。
+
+## 9. 落地补充（评审采纳）
+- **E2 终态唯一性**：靠 **reduce 串行化 + first-writer-wins**，一轮**至多一条终态事件**；并发终止按优先级择一（默认 用户取消>安全告警>超时>预算耗尽，**可配置**）。严禁同时下发 `run_cancelled`+`run_failed`。
+- **E1 resync 流程**：收到 `resync_required` 后客户端必须 ①丢弃本地 UI 态 ②拉当前 run 完整快照 ③从最新 `seq` 重新订阅 SSE。归入 §4。
+- **E3 审批幂等**：`ResolveApproval` 可能被 SSE 重复投递，**reduce 层幂等丢弃已处理的审批**，不靠前端。
+- **E4 版本覆盖嵌套**：`v` 的"只增不改"不只管信封顶层，`data` 内嵌对象字段同样受管。
+- **T2 乱序**：外部事件**到达顺序≠业务顺序**；并行工具返回乱序属正常，客户端按 `tool_call_id`/`seq` 归组渲染，**不靠 SSE 到达序**。
+- **X2 存储**：`events` 表**只存内部事件**；外部事件是运行时投影、**不入库不存两份**；回放=重放内部事件再投影。
+- **X5 OpenAI 兼容=投影适配器**：把 Questor 事件翻译成 OpenAI SSE 形状；**内核状态/权限/账本不为它简化**。
+
+## 10. 评审增补（R02/R08；只增不改，不触信封/关联键/终止序三根硬骨）
+- **事件完备性**：补 `item_started`/`item_removed`（在途条目撤销）· `text_replace`/`reasoning_replace`（provider 整体改写、live-only）· `message_completed.phase`（commentary|final，一轮可多条）· `reasoning_delta.channel(summary|trace)+source`· `turn_queued/steered/held`（中途插话，配 §5 `Steer/Enqueue`）· `warning`（非终态告警，承 §0-3）· `compact_started/applied`· `thread_started/resumed/updated`· `usage_delta.response_ordinal`· `tools_changed` 加 `domain(skills|plugins|mcp|settings)`。
+- **投影**：内部至少**三层**（provider-stream / kernel-domain → 外部）；`hidden` 可见位 + 投影产物**脱离内部实例的拷贝**；raw/normalized 双轨（**兼容判定只赖 normalized**）；外部集之上每 surface 再二次投影（信封 `surface`；IM 合并限流属投影层职责）。
+- **seq/续传**：`resync_required` 分因 `{expired|ahead|unknown_request|version_mismatch}`+边界 seq；**delta/heartbeat 不占 durable seq**（走 item offset、live-only）；终态 `run_completed` 与传输 `stream_end` 两标记、取消只在下个 checkpoint 生效有尾窗；溢出→`replayRequired`（丢 notification 不触发全量 resync、丢 durable 才）；**Command 受理即占 durable seq**（早失败也能落终态）；重写/压缩发 `baseline_seq` 栅栏。
+- **版本**：续传前**版本闸门**（不符→resync，禁新版本解旧事件）；契约版本≠策略版本；一次性 `capabilities` 协商；**每 Command 携幂等键、reduce 去重、变更类 default-never 自动重放**；禁 NaN/Inf+单帧字节上限。
+- **OpenAI 兼容映射表**：标准字段走 OpenAI 语义、专有收进扩展位（如 `x_questor`）、无原生续传（断连=取消、`[DONE]` 终结）、错误编进 `finish_reason`；**内核三终态不因兼容面简化**。
+- **投递幂等**（→ ADR-0011）：终态/工具事件配**稳定投递 id**、claim-then-deliver；**投递/claim 视图从事件重放重建、不落第二份真相**。
