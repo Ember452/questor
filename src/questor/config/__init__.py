@@ -1,3 +1,3 @@
-"""Cross-cutting: configuration loading incl. the secrets boundary.
+"""横切：配置加载（含 secrets 边界）。
 
-Independent of observability (see .importlinter). Must not be imported by L0/L1."""
+与 observability 相互独立（见 .importlinter）；不得被 L0/L1 import。"""

@@ -1,9 +1,8 @@
-"""Cross-cutting observability (STRUCTURE S7; HARD C14; ROADMAP §1.5 lightweight-from-P1).
+"""横切可观测性（STRUCTURE S7；HARD C14；ROADMAP §1.5 从 P1 就落轻量面）。
 
-Read-only: observes events and logs a normalized error stack. Depends only on
-``contracts`` — never imports kernel/policy implementations and never mutates
-state (S7). Full tracing/metrics/trace-viewer are P10; P1 only needs structured
-logs + the terminal-event error surface to satisfy "errors visible from day 1".
+只读：观测事件、把终态错误归一化为结构化日志。只依赖 ``contracts``——绝不 import
+kernel/policy 实现、绝不改状态（S7）。完整的 tracing/metrics/trace 视图归 P10；P1 只需
+结构化日志 + 终态错误面，以做到“错误从第一天起就可见”。
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ from questor.contracts.events import Envelope, EventType
 
 _LOG = logging.getLogger("questor")
 
-# Levels for the event stream; error-class events never fall silent (C6).
+# 各类事件的日志级别；错误类事件绝不静默（C6）。
 _LEVELS: dict[str, int] = {
     EventType.RUN_FAILED: logging.ERROR,
     EventType.WARNING: logging.WARNING,
@@ -26,12 +25,12 @@ _LEVELS: dict[str, int] = {
 
 
 def configure_logging(level: int = logging.INFO) -> None:
-    """Idempotent basicConfig for the CLI/sidecar process."""
+    """为 CLI/sidecar 进程配置 basicConfig（幂等）。"""
     logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s", force=False)
 
 
 def log_event(env: Envelope) -> None:
-    """One structured line per (durable) event; deltas are skipped to avoid spam."""
+    """每条（可持久）事件打一行；delta 跳过以防刷屏。"""
     if env.type in {EventType.TEXT_DELTA, EventType.REASONING_DELTA, EventType.HEARTBEAT, EventType.TOOL_PROGRESS}:
         return
     level = _LEVELS.get(env.type, logging.DEBUG)
@@ -40,7 +39,7 @@ def log_event(env: Envelope) -> None:
 
 
 def error_from_failed_event(env: Envelope) -> str | None:
-    """Extract a human-readable error line from a ``run_failed`` event payload."""
+    """从 ``run_failed`` 事件载荷里抽一行人类可读错误；非该类型返回 None。"""
     if env.type != EventType.RUN_FAILED:
         return None
     err = env.data.get("error") or {}

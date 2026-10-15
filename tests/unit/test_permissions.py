@@ -1,4 +1,4 @@
-"""P1 T6 DoD — permission engine: sensitive deny, three-state, mode default, rules, never."""
+"""P1 T6 DoD —— 权限引擎：敏感路径 deny、三态、mode 默认、规则、never。"""
 
 from __future__ import annotations
 

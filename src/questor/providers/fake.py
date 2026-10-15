@@ -1,8 +1,7 @@
-"""A deterministic ``ProviderPort`` double for tests and the offline CLI demo.
+"""测试与离线演示用的确定性 ``ProviderPort`` 替身。
 
-Replays a scripted list of "turns", where each turn is the sequence of
-``StreamChunk``\\ s the model would emit. No network, no key — it lets the loop's
-DoD (happy path + cancel + deny + illegal-intent) be verified repeatably.
+回放一份脚本化的 “turn” 序列——每个 turn 就是模型本应产出的一串 ``StreamChunk``。
+无网络、无需密钥，让循环的 DoD（happy path + cancel + deny + 非法意图）可重复验证。
 """
 
 from __future__ import annotations
@@ -14,6 +13,8 @@ from questor.contracts.ports import ProviderPort, ProviderRequest, StreamChunk
 
 
 class ScriptedProvider(ProviderPort):
+    """按预定脚本逐 turn 回放 chunk 的测试替身；脚本用尽后礼貌地发 finish 收尾。"""
+
     turns: list[list[StreamChunk]]
     _index: int
 
@@ -22,7 +23,7 @@ class ScriptedProvider(ProviderPort):
         self._index = 0
 
     async def stream(self, request: ProviderRequest) -> AsyncIterator[StreamChunk]:
-        if self._index >= len(self.turns):  # script exhausted -> politely stop
+        if self._index >= len(self.turns):  # 脚本耗尽 -> 礼貌收尾，避免越界
             yield StreamChunk(kind="finish", finish_reason="stop")
             return
         for chunk in self.turns[self._index]:
@@ -31,7 +32,7 @@ class ScriptedProvider(ProviderPort):
 
 
 class EchoProvider(ProviderPort):
-    """Minimal provider that just streams a canned answer, no tools (smoke demo)."""
+    """最小 provider：只流式一段写死的答复、不调用工具（离线冒烟演示用）。"""
 
     answer: ClassVar[str] = "echo: got your message."
 

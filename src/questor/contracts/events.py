@@ -1,15 +1,11 @@
-"""L0 Command / Event vocabulary (design/02; HARD C5/C6/C13).
+"""L0 Command / Event 词汇表（design/02；HARD C5/C6/C13）。
 
-Iron rules encoded by these shapes:
-- Only a :class:`Command` mutates state; an :class:`Event` is a projection and
-  must never be fed back as state input (C5).
-- Commands are checkable/rejectable (not append-only); Events are append-only and
-  irrevocable once emitted (C5).
-- Internal events differ from the external projection; consumers ignore unknown
-  ``type`` except error-class events (C6).
+这些形状编码的铁律：
+- 只有 :class:`Command` 改状态；:class:`Event` 是投影，绝不可反哺为状态输入（C5）。
+- Command 可校验、可拒绝、非 append-only；Event append-only、发出即不可撤回（C5）。
+- 内部事件 ≠ 外部投影；消费者遇未知 ``type`` 静默忽略——错误类事件除外（C6）。
 
-P0 fixes names + the envelope + correlation keys (locked forever). Exact ``data``
-fields stay ``draft`` (C11).
+P0 锁定名称 + 信封 + 关联键（永不改名）；``data`` 具体字段留 ``draft``（C11）。
 """
 
 from __future__ import annotations
@@ -22,20 +18,22 @@ from questor.contracts.common import JsonObject, freeze, utc_now
 from questor.contracts.errors import ErrorEntry
 from questor.contracts.state_schema import CancelReason, Checkpoint, Message, TaskNode
 
-#: Association keys — once shipped these are never renamed/removed (design/02 §1).
+#: 关联键——一旦发布永不改名/删除（design/02 §1）。
 CORRELATION_KEYS: frozenset[str] = frozenset(
     {"run_id", "turn", "tool_call_id", "card_id", "item_id"}
 )
 
-#: Wire-contract version; bump only on a breaking change (design/02 §6).
+#: wire 契约版本；仅在破坏性变更时 bump（design/02 §6）。
 EVENT_SCHEMA_VERSION = 1
 
 
 # --------------------------------------------------------------------------- #
-# Commands (input events) — the only writers, all via ``reduce``.
+# Command（输入事件）——唯一写入口，全部经 reduce。
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class SubmitMessage:
+    """用户发起一轮：受理时即占用 durable seq（02 §10）。"""
+
     run_id: str
     content: Message
     type: ClassVar[str] = "submit_message"
@@ -43,23 +41,29 @@ class SubmitMessage:
 
 @dataclass(frozen=True, slots=True)
 class ProposeAction:
+    """承载策略单步意图的 Command。"""
+
     run_id: str
     turn: int
-    # A single-step intent from the PolicyPort (design/05). Untrusted input.
+    # 来自 PolicyPort 的单步意图（design/05）；属不可信输入，内核执行前先校验。
     intent: JsonObject
     type: ClassVar[str] = "propose_action"
 
 
 @dataclass(frozen=True, slots=True)
 class ResolveApproval:
+    """人工审批回执：幂等——reduce 丢弃已处理过的重复投递（02 E3）。"""
+
     run_id: str
     tool_call_id: str
-    decision: str  # allow | deny  (idempotent; reduce drops repeats, 02 E3)
+    decision: str  # allow | deny
     type: ClassVar[str] = "resolve_approval"
 
 
 @dataclass(frozen=True, slots=True)
 class Cancel:
+    """取消：经 reduce、不硬杀；置 cancelled 并回填所有未闭合 tool_call（C7）。"""
+
     run_id: str
     reason: CancelReason
     type: ClassVar[str] = "cancel"
@@ -67,6 +71,8 @@ class Cancel:
 
 @dataclass(frozen=True, slots=True)
 class WriteMemory:
+    """记忆写入的唯一途径：经 Command→reduce→StorePort（C4）。"""
+
     run_id: str
     payload: JsonObject
     type: ClassVar[str] = "write_memory"
@@ -74,15 +80,18 @@ class WriteMemory:
 
 @dataclass(frozen=True, slots=True)
 class RequestCompactHint:
+    """仅建议压缩压力，不强制；何时/如何压缩由内核决定（design/01 I2）。"""
+
     run_id: str
-    # Advisory only; the kernel decides when/how to compact (design/01 I2).
     pressure: float
     type: ClassVar[str] = "request_compact_hint"
 
 
-# ---- Kernel-internal commands (still Commands -> still via reduce; C2) ------
+# ---- 内核内部 Command（仍是 Command，仍经 reduce 单写；C2）----
 @dataclass(frozen=True, slots=True)
 class AppendAssistantMessage:
+    """定稿一条 assistant 消息；其 tool_use 块会在账本登记为 pending 调用。"""
+
     run_id: str
     turn: int
     message: Message
@@ -91,6 +100,8 @@ class AppendAssistantMessage:
 
 @dataclass(frozen=True, slots=True)
 class AdvanceTurn:
+    """推进到下一 turn 号（护栏计数、续跑判定依赖它）。"""
+
     run_id: str
     turn: int
     type: ClassVar[str] = "advance_turn"
@@ -98,6 +109,8 @@ class AdvanceTurn:
 
 @dataclass(frozen=True, slots=True)
 class RecordToolResult:
+    """回填工具结果，闭合一个仍打开的调用；只能闭合 pending/running 的（配对不变式）。"""
+
     run_id: str
     tool_call_id: str
     status: str  # success | error | critical_error
@@ -108,6 +121,8 @@ class RecordToolResult:
 
 @dataclass(frozen=True, slots=True)
 class MarkToolDenied:
+    """权限 deny：置 denied 并写 tool_result（denied 也入账、不计失败重试）。"""
+
     run_id: str
     tool_call_id: str
     reason: str
@@ -116,11 +131,13 @@ class MarkToolDenied:
 
 @dataclass(frozen=True, slots=True)
 class FinalizeRun:
+    """收尾为唯一终态（completed/failed）；终态后 Run 冻结（C13）。"""
+
     run_id: str
     status: str  # completed | failed
     final: Message | None = None
     usage: JsonObject | None = None
-    exit_reason: str | None = None
+    exit_reason: str | None = None  # turn_exit_reason，用于对外归因（R01 G-1）
     error: ErrorEntry | None = None
     type: ClassVar[str] = "finalize_run"
 
@@ -141,10 +158,12 @@ Command = (
 
 
 # --------------------------------------------------------------------------- #
-# Events (output) — envelope + external projection type names.
+# Event（输出）——信封 + 外部投影的类型名。
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class Envelope:
+    """事件信封：``{v, seq, run_id, turn?, ts, type, data}``。data 深冻结（C2）。"""
+
     v: int
     seq: int
     run_id: str
@@ -160,11 +179,11 @@ class Envelope:
 
 
 class EventType:
-    """External event ``type`` names (design/02 §3). Additive only (C6)."""
+    """对外事件的 ``type`` 取值域（design/02 §3）。只增不改（C6）。"""
 
     RUN_STARTED = "run_started"
     TURN_STARTED = "turn_started"
-    TEXT_DELTA = "text_delta"  # live-only, never persisted (I3)
+    TEXT_DELTA = "text_delta"  # 仅实时、永不持久化（I3）
     REASONING_DELTA = "reasoning_delta"  # live-only
     MESSAGE_COMPLETED = "message_completed"
     TOOL_STARTED = "tool_started"
@@ -174,14 +193,14 @@ class EventType:
     NODE_UPDATED = "node_updated"
     USAGE_DELTA = "usage_delta"
     HEARTBEAT = "heartbeat"  # live-only
-    RUN_CANCELLED = "run_cancelled"  # precedes run_completed
+    RUN_CANCELLED = "run_cancelled"  # 先于 run_completed
     RUN_FAILED = "run_failed"
     RUN_COMPLETED = "run_completed"
     RESYNC_REQUIRED = "resync_required"
-    WARNING = "warning"  # non-terminal alert (02 §10)
+    WARNING = "warning"  # 非终态告警（02 §10）
 
 
-#: Event types that MUST NOT be silently dropped when unknown (C6 exception).
+#: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。
 ERROR_CLASS_EVENT_TYPES: frozenset[str] = frozenset(
     {EventType.RUN_FAILED, EventType.WARNING, EventType.RESYNC_REQUIRED}
 )
@@ -189,35 +208,45 @@ ERROR_CLASS_EVENT_TYPES: frozenset[str] = frozenset(
 
 @dataclass(frozen=True, slots=True)
 class RunFailedData:
+    """``run_failed`` 的 data：携归一化错误（含 retryable/resumable）。"""
+
     error: ErrorEntry
     type: ClassVar[str] = EventType.RUN_FAILED
 
 
 @dataclass(frozen=True, slots=True)
 class RunCompletedData:
+    """``run_completed`` 的 data：最终答复 + 用量 + 退出归因。"""
+
     final: Message | None = None
     usage: JsonObject | None = None
-    exit_reason: str | None = None  # turn_exit_reason (R01 G-1)
+    exit_reason: str | None = None  # turn_exit_reason（R01 G-1）
     type: ClassVar[str] = EventType.RUN_COMPLETED
 
 
 @dataclass(frozen=True, slots=True)
 class TextDeltaData:
+    """``text_delta`` 的 data：一段可见文本增量（live-only）。"""
+
     delta: str
     item_id: str | None = None
     type: ClassVar[str] = EventType.TEXT_DELTA
 
 
-# Internal domain events (private, may evolve; projected outward). Kept minimal
-# in P0; the full internal set is filled with the loop in P1 (design/02 §2/§8).
+# 内部领域事件（私有、可随实现演进；投影为外部后才外发）。P0 只留最小集，
+# 完整内部集在 P1 随 turn 循环补齐（design/02 §2/§8）。
 @dataclass(frozen=True, slots=True)
 class NodeUpdated:
+    """任务树节点状态变更（内部）。"""
+
     node: TaskNode
     type: ClassVar[str] = EventType.NODE_UPDATED
 
 
 @dataclass(frozen=True, slots=True)
 class CheckpointRecorded:
+    """落了一个 checkpoint（内部，不进对外投影）。"""
+
     checkpoint: Checkpoint
     type: ClassVar[str] = "checkpoint_recorded"
 

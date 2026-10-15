@@ -1,4 +1,4 @@
-"""L6 Surfaces/Transports — CLI, HTTP+SSE event service (later OpenAI-compat/IM).
+"""L6 Surfaces/传输 —— CLI、HTTP+SSE 事件服务（后期 OpenAI 兼容/IM）。
 
-Zero business logic: only receives Commands and projects Events (STRUCTURE S6).
-Never sinks state/validation into the shell (C14/ADR-0007)."""
+零业务逻辑（STRUCTURE S6）：只“收 Command + 投事件”；绝不把业务/状态/校验下沉进壳
+（C14/ADR-0007）。"""

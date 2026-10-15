@@ -1,6 +1,6 @@
-"""P0 DoD — constructor invariants hold on the interface skeleton (design/01/02).
+"""P0 DoD —— 接口骨架上的构造不变式成立（design/01/02）。
 
-These assert the *shape* guards only; runtime reduce/loop behavior is P1.
+只断言*形状*守卫；reduce/循环的运行时行为属 P1。
 """
 
 from __future__ import annotations

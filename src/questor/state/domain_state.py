@@ -1,13 +1,12 @@
-"""L1 Domain_State aggregate (design/01). P0 = shapes + constructor invariants.
+"""L1 Domain_State 聚合（design/01）。P0 只有形状 + 构造不变式，无 reduce。
 
-The single authoritative, immutable, replayable state. This module composes the
-L0 vocabulary into ``Run`` / ``Session`` and enforces *local* invariants at
-construction time (DeepCode ``domain/turn.py`` pattern). The cross-object
-invariants (``tool_use``<->``tool_result`` pairing, DAG acyclicity) and the sole
-writer ``reduce`` are **P1** (design/01 §12 I1; plan/01 T3) — not here.
+Harness 全程唯一可信状态：权威、可序列化、可回放、可断点。本模块把 L0 词汇组合成
+``Run`` / ``DomainState``，并在**构造期**强制局部不变式（仿 DeepCode ``domain/turn.py``）。
+跨对象不变式（``tool_use``↔``tool_result`` 配对、DAG 无环）与唯一写者 ``reduce`` 在
+:mod:`questor.state.reduce`（P1，design/01 §12 I1）。
 
-Immutable discipline (C2): every collection is a ``tuple``/``frozenset``; a
-frozen dataclass with tuple fields is deep-readonly, unlike a shallow freeze.
+不可变纪律（C2）：集合字段一律 ``tuple``/``frozenset``——frozen dataclass 配不可变
+容器才是真深只读，浅冻结会漏改内层。
 """
 
 from __future__ import annotations
@@ -31,28 +30,32 @@ from questor.contracts.state_schema import (
 
 @dataclass(frozen=True, slots=True)
 class Context:
-    """Conversation context + compaction boundary (design/01 §2)."""
+    """会话上下文 + 压缩边界（design/01 §2）。"""
 
     items: tuple[Message, ...] = ()
-    compaction_floor: int | None = None
-    summary: str | None = None
-    recovery_pointers: tuple[tuple[int, int], ...] = ()  # (seq_from, seq_to) ranges
+    compaction_floor: int | None = None  # 已压缩区下界
+    summary: str | None = None  # 对已压区的摘要
+    recovery_pointers: tuple[tuple[int, int], ...] = ()  # 指向被压原文的 (seq_from, seq_to) 区间
 
 
 @dataclass(frozen=True, slots=True)
 class TaskTree:
-    """Forest of nodes (v1 = strict forest; DAG deferred, I6)."""
+    """任务节点森林（v1 严格森林；DAG 后置，I6）。"""
 
     nodes: tuple[TaskNode, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class ToolLedger:
+    """工具调用账本：可审计、可重放、与事件按 tool_call_id 关联。"""
+
     calls: tuple[ToolCall, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class PermissionDecisionRecord:
+    """单条权限决策记录（审计用；mode 变更不回溯已发生的决策，I5）。"""
+
     tool_call_id: str
     decision: str  # allow | ask | deny
     decided_by: str  # rule | user
@@ -61,20 +64,20 @@ class PermissionDecisionRecord:
 
 @dataclass(frozen=True, slots=True)
 class PermissionCtx:
-    """Three-valued permission context (design/01 §6; decision/eval in kernel)."""
+    """三态权限上下文（design/01 §6；决策/求值在 kernel，这里只存状态）。"""
 
     mode: str = "default"  # default | plan | full_auto
     rules: tuple[PermissionRule, ...] = ()
-    denylist: frozenset[str] = frozenset()  # non-overridable sensitive paths
+    denylist: frozenset[str] = frozenset()  # 不可被 rules/mode 覆盖的敏感路径
     decisions: tuple[PermissionDecisionRecord, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class Run:
-    """One execution — the checkpoint / replay / resume unit (design/01 §1)."""
+    """一次执行——断点/回放/续传的单位（design/01 §1）。"""
 
     run_id: str
-    seq: int = 0
+    seq: int = 0  # 本 run 单调事件游标（after_seq 续传）
     turn: int = 0
     status: RunStatus = RunStatus.IDLE
     budget: Budget = field(default_factory=Budget)
@@ -89,13 +92,13 @@ class Run:
     completed_at: datetime | None = None
 
     def __post_init__(self) -> None:
-        # Local, cheap invariants only. Sequence must never go backwards.
+        # 只强制局部、廉价的不变式；序列号不得倒退。
         if self.seq < 0:
             raise ValueError("Run.seq must be >= 0")
         if self.turn < 0:
             raise ValueError("Run.turn must be >= 0")
         require_aware(self.created_at, "Run.created_at")
-        # Terminal-state consistency (R03/C13; mirrors DeepCode turn.py).
+        # 终态一致性（R03/C13；镜像 DeepCode turn.py）：一轮至多一个终态且字段自洽。
         if self.status.is_terminal:
             if self.completed_at is None:
                 raise ValueError("terminal Run requires completed_at")
@@ -112,7 +115,7 @@ class Run:
 
 @dataclass(frozen=True, slots=True)
 class SessionDefaults:
-    """Per-session defaults (immutable; design/01 §1)."""
+    """会话级默认值（不可变；design/01 §1）。"""
 
     model: str | None = None
     locale: str = "en"
@@ -121,14 +124,14 @@ class SessionDefaults:
 
 @dataclass(frozen=True, slots=True)
 class DomainState:
-    """Session root = the authoritative per-user conversation line (§1)."""
+    """会话根：一个用户可见的长期对话线（§1）。"""
 
     session_id: str
     runs: tuple[Run, ...] = ()
     defaults: SessionDefaults = field(default_factory=SessionDefaults)
 
     def active_run(self, run_id: str) -> Run | None:
-        """Read-only lookup (no mutation)."""
+        """只读查找，不改状态（写一律经 reduce）。"""
         return next((r for r in self.runs if r.run_id == run_id), None)
 
 

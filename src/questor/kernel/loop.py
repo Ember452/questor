@@ -1,12 +1,11 @@
-"""L2 turn loop (design/04; HARD C7/C8/C10). P1 = single model, serial tools.
+"""L2 turn 循环（design/04；HARD C7/C8/C10）。P1 = 单模型、串行工具。
 
-``DefaultTurnLoop`` drives one Run to a single terminal event. It is *pure
-mechanism*: it never imports a concrete policy/tool/surface — those arrive
-injected as ``contracts`` Ports/callbacks (C1/C14). Every state change goes
-through ``reduce`` (single writer); deltas are emitted live and never persisted.
+``DefaultTurnLoop`` 把一次 Run 驱动到唯一终态。它是*纯机制*：从不 import 具体
+策略/工具/传输面——那些以 ``contracts`` 的 Port/回调注入（C1/C14）。所有状态变更走
+``reduce``（单写者）；delta 直发事件流、永不落库。
 
-Scope guards honored (ROADMAP §2.5): serial tools only (``parallel_safe`` is a
-schema placeholder), one model, cancel/deny/illegal-intent must not crash.
+恪守的 phase 范围（ROADMAP §2.5）：仅串行工具（``parallel_safe`` 只是 schema 占位）、
+单模型，且取消/deny/非法意图三条路径绝不得崩。
 """
 
 from __future__ import annotations
@@ -50,29 +49,32 @@ from questor.state.snapshot import to_snapshot
 
 Approver = Callable[[str, JsonObject, str], Awaitable[bool]]
 
-#: capabilities that MUST be sandboxed; with no capable backend they are denied
-#: (fail-closed, design/03 §10 T4 — "degrade = safer, not looser").
+#: 必须被沙箱隔离的能力；无可用后端时一律 deny（fail-closed，design/03 §10 T4——
+#: “降级只会更安全、不会更松”）。
 _SANDBOXED_CAPABILITIES = frozenset({Capability.EXEC, Capability.WRITE, Capability.NETWORK})
 
 
 class _ToolCtx:
-    """Concrete :class:`ToolContext` handed to a tool — controlled capabilities only."""
+    """交给工具的具体 :class:`ToolContext`——只暴露受控能力。"""
 
     def __init__(self, workspace_root: Path, cancel_event: asyncio.Event) -> None:
         self.workspace_root = workspace_root
         self._cancel = cancel_event
 
     def is_cancelled(self) -> bool:
+        """供长任务轮询的安全取消点。"""
         return self._cancel.is_set()
 
-    def report_progress(self, message: str) -> None:  # pragma: no cover - observability hook
+    def report_progress(self, message: str) -> None:  # pragma: no cover - 观测钩子
         pass
 
-    def emit_progress(self, payload: JsonObject) -> None:  # pragma: no cover - observability hook
+    def emit_progress(self, payload: JsonObject) -> None:  # pragma: no cover - 观测钩子
         pass
 
 
 class DefaultTurnLoop:
+    """P1 内核循环：用注入的 provider/policy/permission/tools/bus/store 驱动 phase pipeline。"""
+
     def __init__(
         self,
         *,
@@ -105,6 +107,7 @@ class DefaultTurnLoop:
         self.cancel_event = cancel_event or asyncio.Event()
 
     async def drive(self, run: Run, user_text: str) -> Run:
+        """驱动一次 Run 直到唯一终态：提交→（流式→定稿→询问策略→路由）循环。"""
         user_msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=user_text),), seq=len(run.context.items))
         run, events = reduce(run, SubmitMessage(run_id=run.run_id, content=user_msg))
         await self._emit(events)
@@ -130,7 +133,7 @@ class DefaultTurnLoop:
             if turn > run.budget.max_turns:
                 return await self._fail(run, turn, ErrorKind.TIMEOUT, f"max_turns {run.budget.max_turns} exhausted", "budget_exhausted")
 
-            turn_start = run  # C10/X4 rollback point: state at the start of this turn
+            turn_start = run  # C10/X4 回滚点：本 turn 起始时的状态
             run, events = reduce(run, AdvanceTurn(run_id=run.run_id, turn=turn))
             await self._emit(events)
 
@@ -145,7 +148,7 @@ class DefaultTurnLoop:
 
             has_text = _has_text(assistant_msg)
             has_tool = any(b.type == "tool_use" for b in assistant_msg.content)
-            if not has_text and not has_tool:  # provider kept "continuing" with empty answers
+            if not has_text and not has_tool:  # provider 连续“续跑”却返回空答
                 empties += 1
                 if empties > run.budget.max_consecutive_continuations:
                     return await self._fail(run, turn, ErrorKind.INTERNAL, "repeated empty answers (no text/tool)", "no_progress")
@@ -156,7 +159,7 @@ class DefaultTurnLoop:
             if faulted:
                 faults += 1
                 await self._live(run, turn, EventType.WARNING, {"message": "policy raised; rolling back turn (C10)"})
-                run = turn_start  # restore Domain_State to turn start; already-emitted deltas are not withdrawn
+                run = turn_start  # 回滚 Domain_State 到 turn 起点；已发出的 delta 不撤销
                 if faults > 2:
                     return await self._fail(run, turn, ErrorKind.POLICY_VIOLATION, "policy raised repeatedly", "policy_error")
                 continue
@@ -164,7 +167,7 @@ class DefaultTurnLoop:
 
             if isinstance(intent, SuggestFinish):
                 if any(c.status in OPEN_TOOL_CALL_STATUSES for c in run.tool_ledger.calls):
-                    continue  # stop-gate: reject premature Finish while tool calls are still open
+                    continue  # stop-gate：尚有未闭合工具调用时拒绝过早 Finish
                 final = assistant_msg if has_text else None
                 run, events = reduce(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
                 await self._emit(events)
@@ -178,8 +181,9 @@ class DefaultTurnLoop:
                     return await self._fail(run, turn, ErrorKind.INTERNAL, f"repeated identical tool call '{intent.name}' x{repeat_count}", "no_progress")
                 run = await self._handle_tool_call(run, intent)
 
-    # ---- phase helpers ----------------------------------------------------
+    # ---- phase 辅助方法 ------------------------------------------------
     async def _stream_turn(self, run: Run, turn: int) -> tuple[Message, JsonObject]:
+        """跑一轮流式：逐块 emit live delta、累积文本/工具参/用量，定稿为一条 assistant 消息。"""
         request = ProviderRequest(model=self.model, messages=run.context.items, tools=tuple(t.spec for t in self.tools), system=self.system)
         text_parts: list[str] = []
         usage: JsonObject = {}
@@ -209,13 +213,14 @@ class DefaultTurnLoop:
         return msg, usage
 
     async def _fail(self, run: Run, turn: int, kind: ErrorKind, message: str, exit_reason: str) -> Run:
+        """以 failed 终态优雅收尾（归一化 ErrorEntry 入栈）。"""
         err = ErrorEntry(kind=kind, layer=ErrorLayer.KERNEL, message=message, at_turn=turn, hints=RecoveryHints(), timestamp=utc_now())
         run, events = reduce(run, FinalizeRun(run_id=run.run_id, status="failed", error=err, exit_reason=exit_reason))
         await self._emit(events)
         return run
 
     async def _checkpoint(self, run: Run, kind: str) -> None:
-        """Persist a turn-boundary snapshot for recovery (A1). No-op without a store."""
+        """落一个 turn 边界快照供恢复（A1）。无 store 时为空操作。"""
         if self.store is None:
             return
         await self.store.save_checkpoint(
@@ -231,14 +236,15 @@ class DefaultTurnLoop:
         )
 
     def _ask_policy(self, run: Run) -> tuple[object, bool]:
-        """Return ``(intent, faulted)``; a strategy exception is isolated (X4), never crashes the run."""
+        """返回 ``(intent, faulted)``；策略异常被隔离（X4），绝不崩整个 run。"""
         view = PolicyView(context=run.context.items, tool_results=run.tool_ledger.calls, tools=tuple(t.spec for t in self.tools), budget=run.budget)
         try:
             return self.policy.propose_action(view), False
-        except Exception:  # noqa: BLE001 - strategy faults must not break the loop
+        except Exception:  # noqa: BLE001 - 策略故障绝不得打断循环
             return None, True
 
     async def _handle_tool_call(self, run: Run, intent: ProposeToolCall) -> Run:
+        """工具路由：未知工具/deny/审批拒/参数非法/无沙箱 → 分别回写错误或 denied；否则执行并回填。"""
         tool = self.tool_for(intent.name)
         if tool is None:
             run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=f"unknown tool '{intent.name}'"))
@@ -263,9 +269,8 @@ class DefaultTurnLoop:
             await self._emit(events)
             return run
 
-        # Capability/risk fail-closed gate: a sandboxed capability with no capable
-        # backend is DENIED rather than run raw (03 §10 T4; C9). Runs after the
-        # permission decision so we never downgrade an explicit allow to execute.
+        # 能力/风险 fail-closed 闸：需沙箱的能力若无可能力后端 → DENIED，绝不裸执行（03 §10 T4；C9）。
+        # 置于权限判定之后，以免把显式 allow 降级为裸执行。
         deny_reason = self._sandbox_denial(tool)
         if deny_reason is not None:
             run, events = reduce(run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=deny_reason))
@@ -279,7 +284,7 @@ class DefaultTurnLoop:
         return run
 
     def _sandbox_denial(self, tool: Tool) -> str | None:
-        """Return a deny reason when the tool needs isolation the backend can't give."""
+        """当工具需要的隔离后端给不了时，返回一个 deny 理由。"""
         spec = tool.spec
         needs = spec.capability in _SANDBOXED_CAPABILITIES or spec.risk is Risk.HIGH
         if not needs:
@@ -295,19 +300,22 @@ class DefaultTurnLoop:
         return None
 
     async def _emit(self, events: list[Envelope]) -> None:
+        """把一批事件逐条交给总线（可持久的会落库、live-only 只转发）。"""
         for env in events:
             await self.bus.emit(env)
 
     async def _live(self, run: Run, turn: int, etype: str, data: dict) -> None:
-        # live-only deltas: forwarded to subscribers, never persisted (design/01 I3).
+        # live-only delta：只转发给订阅者，永不持久化（design/01 I3）。
         await self.bus.emit(Envelope(v=1, seq=run.seq, run_id=run.run_id, type=etype, turn=turn, data=data))
 
 
 def _has_text(message: Message) -> bool:
+    """消息是否含非空可见文本块。"""
     return any(b.type == "text" and b.text for b in message.content)
 
 
 def _token_total(usage: JsonObject) -> int:
+    """从用量里取总 token（优先 total，回退 completion/output）；无则 0。"""
     for key in ("total_tokens", "completion_tokens", "output_tokens"):
         value = usage.get(key)
         if value:
@@ -319,6 +327,7 @@ def _token_total(usage: JsonObject) -> int:
 
 
 def _parse_args(raw: str) -> JsonObject:
+    """解析工具入参 JSON 片段；不可解析则当空（后续 schema 校验会兼为错）。"""
     import json
 
     try:
@@ -328,6 +337,7 @@ def _parse_args(raw: str) -> JsonObject:
 
 
 def _schema_error(params: JsonObject, args: JsonObject) -> str | None:
+    """用 JSON-Schema 校验入参（C8 第一层）；非法则返回可读错误。"""
     validator = Draft202012Validator(params)
     errs = sorted(validator.iter_errors(args), key=lambda e: e.path)
     if not errs:

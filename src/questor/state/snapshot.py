@@ -1,9 +1,8 @@
-"""L1 Run <-> plain-dict snapshot (checkpoint serialize/deserialize).
+"""L1 Run <-> 普通 dict 快照（checkpoint 的序列化/反序列化）。
 
-Used by the loop's turn-boundary checkpoint and by ``resume`` to rebuild the
-authoritative ``Run`` from the latest durable snapshot (ADR-0005: recovery = most
-recent snapshot + replay after it; P1 keeps turn-boundary snapshots as the restore
-point). JSON leaves are thaws of the ``immutables`` maps so they serialize.
+供 turn 边界的 checkpoint 与 ``resume`` 使用：把权威的 ``Run`` 序列化成 JSON 安全的
+dict，或从其重建（ADR-0005：恢复 = 最近快照 + 其后事件重放；P1 以 turn 边界快照作为
+还原点）。JSON 叶是 ``immutables`` Map 的 thaw，从而可被序列化。
 """
 
 from __future__ import annotations
@@ -23,10 +22,11 @@ from questor.contracts.state_schema import (
     ToolCall,
     ToolCallStatus,
 )
-from questor.state.domain_state import Context, DomainState, PermissionCtx, Run, SessionDefaults, TaskTree, ToolLedger  # noqa: F401  (documented shape)
+from questor.state.domain_state import Context, DomainState, PermissionCtx, Run, SessionDefaults, TaskTree, ToolLedger  # noqa: F401  （标注形状，供阅读）
 
 
 def _block_to(b: ContentBlock) -> dict[str, Any]:
+    """ContentBlock → dict（Map 叶经 thaw 还原为普通 dict）。"""
     return {
         "type": b.type,
         "text": b.text,
@@ -40,6 +40,7 @@ def _block_to(b: ContentBlock) -> dict[str, Any]:
 
 
 def _block_from(d: dict[str, Any]) -> ContentBlock:
+    """dict → ContentBlock（构造期会再次深冻结）。"""
     return ContentBlock(
         type=d["type"],
         text=d.get("text"),
@@ -53,10 +54,12 @@ def _block_from(d: dict[str, Any]) -> ContentBlock:
 
 
 def _msg_to(m: Message) -> dict[str, Any]:
+    """Message → dict；时间戳转 ISO 字符串以便 JSON 化。"""
     return {"id": m.id, "role": m.role.value, "seq": m.seq, "created_at": m.created_at.isoformat(), "content": [_block_to(b) for b in m.content]}
 
 
 def _msg_from(d: dict[str, Any]) -> Message:
+    """dict → Message；字符串角色/时间戳还原为枚举与 tz-aware datetime。"""
     return Message(
         id=d["id"],
         role=Role(d["role"]),
@@ -67,6 +70,7 @@ def _msg_from(d: dict[str, Any]) -> Message:
 
 
 def _call_to(c: ToolCall) -> dict[str, Any]:
+    """ToolCall → dict（args/result 经 thaw 还原）。"""
     return {
         "tool_call_id": c.tool_call_id,
         "turn": c.turn,
@@ -79,6 +83,7 @@ def _call_to(c: ToolCall) -> dict[str, Any]:
 
 
 def _call_from(d: dict[str, Any]) -> ToolCall:
+    """dict → ToolCall；result 为容器时再次深冻结以保持不可变。"""
     return ToolCall(
         tool_call_id=d["tool_call_id"],
         turn=d["turn"],
@@ -91,7 +96,7 @@ def _call_from(d: dict[str, Any]) -> ToolCall:
 
 
 def to_snapshot(run: Run) -> dict[str, Any]:
-    """Serialize a Run into a JSON-safe dict (immutable leaves thawed)."""
+    """把 Run 序列化为 JSON 安全的 dict（不可变叶已 thaw）。"""
     return {
         "run_id": run.run_id,
         "seq": run.seq,
@@ -117,7 +122,7 @@ def to_snapshot(run: Run) -> dict[str, Any]:
 
 
 def from_snapshot(d: dict[str, Any]) -> Run:
-    """Rebuild a Run from :func:`to_snapshot` output."""
+    """从 :func:`to_snapshot` 的输出重建 Run。"""
     b = d.get("budget", {})
     ctx = Context(items=tuple(_msg_from(m) for m in d.get("items", [])))
     ledger = ToolLedger(calls=tuple(_call_from(c) for c in d.get("calls", [])))

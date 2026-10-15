@@ -1,6 +1,5 @@
-"""L0 Contracts — the system-wide vocabulary (schemas, events, Port protocols).
+"""L0 Contracts —— 全系统共享的“词汇”（schema、事件、Port 协议）。
 
-Innermost and most stable layer. Contains **abstract interfaces + frozen data
-only**; no implementation, no I/O, and no imports from any outer layer
-(HARD-CONSTRAINTS C1/C14; STRUCTURE S4). Change here is additive-only (C6/C11).
+最内、最稳定层：只放**抽象接口 + frozen 数据**；无实现、无 I/O，绝不 import 任何外层
+（HARD C1/C14；STRUCTURE S4）。此处改动一律只增不改（C6/C11）。
 """

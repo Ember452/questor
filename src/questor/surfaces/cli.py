@@ -1,10 +1,8 @@
-"""L6 CLI surface — the P1 DoD main stage (design/02 §4; STRUCTURE S6).
+"""L6 CLI 传输面 —— P1 DoD 主面（design/02 §4；STRUCTURE S6）。
 
-Zero business logic: it *wires* the injected ports and turns them into a
-terminal that asks a line, streams the answer, and can be cancelled. All state
-changes still flow through the loop -> ``reduce`` (C2). Provider is chosen by
-configuration: ``EchoProvider`` for an offline demo (no key), ``LiteLLMProvider``
-for a real model (BYOM).
+零业务逻辑：它只*装配*注入的各 Port，拼成一个“问一句、流式答一句、可取消”的终端。
+所有状态变更仍走 loop -> ``reduce``（C2）。Provider 由配置选：无密钥时 ``EchoProvider``
+离线演示，有密钥时 ``LiteLLMProvider`` 走真模型（BYOM）。
 """
 
 from __future__ import annotations
@@ -30,21 +28,23 @@ from questor.state.domain_state import Run
 
 
 async def terminal_approver(name: str, arguments: JsonObject, reason: str) -> bool:
-    """Resolve an ``ask`` on the terminal (adapted from DeepCode ``harness/approval.py``)."""
+    """在终端把一个 ``ask`` 解析成人决策（改形自 DeepCode ``harness/approval.py``）。"""
     if not sys_stdin_tty():
-        return False  # non-interactive -> fail-closed
+        return False  # 非交互 -> fail-closed
     print(f"\n[approval] {name}({arguments}) — {reason}")
     answer = await asyncio.to_thread(input, "allow? [y/n]: ")
     return answer.strip().lower() in {"y", "yes"}
 
 
 def sys_stdin_tty() -> bool:
+    """stdin 是否接终端（决定能否弹审批）。"""
     import sys
 
     return sys.stdin.isatty()
 
 
 def provider_from_env() -> ProviderPort:
+    """根据环境变量选 provider：有 model+key 走 LiteLLM，否则离线 Echo。"""
     model = os.environ.get("QUESTOR_MODEL")
     if model and os.environ.get("LITELLM_API_KEY"):
         return LiteLLMProvider(model)
@@ -52,6 +52,8 @@ def provider_from_env() -> ProviderPort:
 
 
 class CliSurface:
+    """把 provider/权限/工具/总线/存储装配成可跑的终端会话。"""
+
     def __init__(
         self,
         *,
@@ -68,6 +70,7 @@ class CliSurface:
         self.registry = {self.read.spec.name: self.read}
 
     def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event) -> DefaultTurnLoop:
+        """组装一个面向本次会话的 turn 循环（P1 只注册 read）。"""
         return DefaultTurnLoop(
             provider=self.provider,
             policy=ReActPolicy(),
@@ -83,7 +86,7 @@ class CliSurface:
         )
 
     async def run_once(self, text: str, *, on_delta=None) -> Run:
-        """Run one user turn to a terminal event, streaming deltas as they arrive."""
+        """跑一轮用户输入直到终态，边到边流式 delta。"""
         store = await SQLiteStore(":memory:").connect()
         bus = InProcessEventBus(store)
         cancel = asyncio.Event()
@@ -96,6 +99,7 @@ class CliSurface:
         return final
 
     async def _stream(self, bus: InProcessEventBus, run_id: str, on_delta) -> None:
+        """订阅事件流：text_delta 打印/回调，终态后换行退出。"""
         async for env in bus.subscribe(run_id, 0):
             log_event(env)
             if env.type == EventType.TEXT_DELTA:
@@ -110,7 +114,7 @@ class CliSurface:
 
 
 async def interactive() -> int:
-    """REPL loop: type a line, stream the answer; Ctrl-C cancels the current run."""
+    """REPL 循环：输一行、流式看答复；Ctrl-D 退出。"""
     configure_logging()
     surface = CliSurface()
     print("questor P1 CLI — type a message (Ctrl-D to exit).")
@@ -127,6 +131,7 @@ async def interactive() -> int:
 
 
 def main() -> int:
+    """CLI 入口：跑交互 REPL；Ctrl-C 退出码 130。"""
     try:
         return asyncio.run(interactive())
     except KeyboardInterrupt:

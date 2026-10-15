@@ -1,4 +1,3 @@
-"""Cross-cutting: logging, event-sourcing queries, trace (read-only reporting).
+"""横切：日志、事件溯源查询、trace（只读上报）。
 
-Depends only on :mod:`questor.contracts`; never imports kernel/policy impl and
-never mutates state (STRUCTURE S7)."""
+只依赖 :mod:`questor.contracts`；绝不 import kernel/policy 实现、绝不改状态（STRUCTURE S7）。"""

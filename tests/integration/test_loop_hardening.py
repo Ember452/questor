@@ -1,4 +1,4 @@
-"""P1 hardening DoD — audit fixes: C10 policy isolation, A2 guards, A1 recovery."""
+"""P1 加固 DoD —— 审计修复：C10 策略隔离、A2 护栏、A1 恢复。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,3 @@
-"""L1 Domain/State — the single authoritative, immutable, replayable state.
+"""L1 Domain/State —— 唯一权威、不可变、可回放的 Domain_State。
 
-Pure data models + invariants; ``reduce`` (the only writer) lives here from P1.
-Depends only on :mod:`questor.contracts` (C2)."""
+纯数据 + 不变式；唯一写者 ``reduce`` 在此。只依赖 :mod:`questor.contracts`（C2）。"""

@@ -1,9 +1,8 @@
-"""L5 Port protocols (design/00 §3.1; HARD C1/C4/C9/C12).
+"""L5 Port 协议（design/00 §3.1；HARD C1/C4/C9/C12）。
 
-Ports are abstract (`Protocol`) and defined at the innermost layer; concrete
-adapters (LiteLLM, SQLite, sandbox backends) live in :mod:`questor.providers` and
-are *injected* into the kernel. The kernel imports only these protocols, never an
-implementation (C1/C14). P0 fixes signatures; bodies are implemented from P1.
+Port 是最内层的抽象接口；具体适配器（LiteLLM、SQLite、沙箱后端）住在
+:mod:`questor.providers`，以**注入**方式交给内核。内核只 import 这些协议、绝不
+import 实现（C1/C14）。P0 固定签名，实现体自 P1 起。
 """
 
 from __future__ import annotations
@@ -19,6 +18,8 @@ from questor.contracts.tool import ToolSpec
 
 @dataclass(frozen=True, slots=True)
 class ProviderRequest:
+    """一次模型调用的请求描述（消息 + 工具 + 采样设置）。"""
+
     model: str
     messages: tuple[Message, ...]
     tools: tuple[ToolSpec, ...] = ()
@@ -29,7 +30,7 @@ class ProviderRequest:
 
 @dataclass(frozen=True, slots=True)
 class StreamChunk:
-    """One normalized streaming increment (kernel maps to *_delta / tool_use)."""
+    """一段归一化的流式增量；内核据此映射为 ``*_delta`` / tool_use / usage。"""
 
     kind: str  # text | reasoning | tool_call | usage | finish
     text: str | None = None
@@ -41,16 +42,18 @@ class StreamChunk:
 
 @runtime_checkable
 class ProviderPort(Protocol):
+    """模型访问端口。错误分类是纯函数（进 contracts），此处只产出归一化增量。"""
+
     async def stream(self, request: ProviderRequest):  # -> AsyncIterator[StreamChunk]
-        """Yield normalized chunks; the caller classifies errors (ADR-0010)."""
+        """产出归一化 chunk；调用方负责按 ADR-0010 分类处置错误。"""
         ...
 
 
 @runtime_checkable
 class StorePort(Protocol):
-    """Append-only event log + snapshot read/write (design/01 §9; ADR-0005/0011).
+    """append-only 事件日志 + 快照读写（design/01 §9；ADR-0005/0011）。
 
-    The ONLY persistence path; strategies hold no raw handle (C4)."""
+    唯一持久化路径；策略不持裸句柄（C4）。"""
 
     async def append(self, run_id: str, events: tuple[JsonObject, ...]) -> int: ...
 
@@ -67,6 +70,8 @@ class StorePort(Protocol):
 
 @runtime_checkable
 class Clock(Protocol):
+    """时间端口：墙上时间 + 单调时钟（退避/超时须同基准，R08 B-P2）。"""
+
     def now(self) -> datetime: ...
 
     def monotonic(self) -> float: ...
@@ -74,15 +79,17 @@ class Clock(Protocol):
 
 @runtime_checkable
 class IdGenerator(Protocol):
+    """id 生成端口（默认实现见 ``common.new_id``；测试可注入定序实现）。"""
+
     def new(self, prefix: str) -> str: ...
 
 
 @runtime_checkable
 class SandboxPort(Protocol):
-    """Pluggable execution isolation + capability probes (design/03 §4; C9/T4).
+    """执行隔离 + 能力探针（design/03 §4；C9/T4）。
 
-    ``fences_*`` report what the backend actually isolates; when a capability is
-    absent the Harness fail-closes (exec/high => deny) rather than run raw."""
+    ``fences_*`` 报告后端**真正**隔离了什么；能力缺失时内核 fail-closed（exec/high→deny）
+    而非裸执行。"""
 
     def fences_writes(self) -> bool: ...
 

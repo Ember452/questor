@@ -1,8 +1,7 @@
-"""P1's single built-in tool: ``read`` (design/03 §6). P0 = declared shape only.
+"""P1 的唯一内置工具：``read``（design/03 §6）。P0 只声明形状。
 
-Real behavior (read a file inside the workspace root, respect the denylist, poll
-``is_cancelled``) lands in P1 T5. Business validation lives here (a pure fn),
-never in the sandbox (C8)."""
+真正行为（在 workspace 根内读文件、轮询 ``is_cancelled`` 早退）在 P1 T5 落地。业务
+校验留在这里（纯函数），绝不下沉到沙箱（C8）。敏感路径的拦截由上游权限门负责。"""
 
 from __future__ import annotations
 
@@ -28,20 +27,22 @@ _READ_SPEC = ToolSpec(
 
 
 class ReadTool(Tool):
+    """读取 workspace 根内的一个 UTF-8 文本文件。"""
+
     spec = _READ_SPEC
 
     def available(self) -> bool:
         return True
 
     async def execute(self, args: JsonObject, ctx: ToolContext) -> ToolResult:
+        """读取 file_path；越界/缺失/取消/IO 错误都回 error（不抛），维持配对。"""
         raw = args.get("file_path")
         if not isinstance(raw, str) or not raw.strip():
             return ToolResult(status="error", result="missing or empty 'file_path'")
         root = Path(ctx.workspace_root).resolve()
         candidate = Path(raw)
         target = (candidate if candidate.is_absolute() else root / candidate).resolve()
-        # Boundary check: refuse to read outside the workspace root (defense-in-
-        # depth; the sensitive-path denylist is enforced earlier by the gate).
+        # 边界检查：拒读 workspace 根之外（纵深防御；敏感路径 denylist 已由权限门更早拦截）。
         try:
             target.relative_to(root)
         except ValueError:

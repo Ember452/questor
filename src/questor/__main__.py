@@ -1,8 +1,7 @@
-"""Entry point: launches the CLI terminal surface (the P1 interactive demo).
+"""入口：启动 CLI 传输面（P1 的交互演示）。
 
-Run with ``python -m questor``. The Python sidecar / Tauri launch point is added
-in later phases; for P1 this starts the terminal "ask one line, stream one answer".
-"""
+用 ``python -m questor`` 运行。Python sidecar / Tauri 启动点在后续阶段接入；P1 这里
+启动“问一句、流式答一句”的终端。"""
 
 from questor.surfaces.cli import main
 

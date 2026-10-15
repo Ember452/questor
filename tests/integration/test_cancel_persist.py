@@ -1,4 +1,4 @@
-"""P1 fix #2 guard — Cancel with an open tool must persist without seq collision."""
+"""P1 修复 #2 守卫 —— 带在途工具的 Cancel 必须无 seq 碰撞地落库。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""P1 T5 DoD — read tool: reads within workspace root, refuses escapes / missing."""
+"""P1 T5 DoD —— read 工具：在 workspace 根内读，拒绝越界/缺失。"""
 
 from __future__ import annotations
 

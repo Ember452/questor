@@ -1,4 +1,4 @@
-"""P1 T9 DoD — event-sourcing: after_seq replay (no loss/dup) + head + checkpoint."""
+"""P1 T9 DoD —— 事件溯源：after_seq 重放（不丢不重）+ head + checkpoint。"""
 
 from __future__ import annotations
 

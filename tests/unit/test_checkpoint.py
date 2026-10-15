@@ -1,4 +1,4 @@
-"""P1 T9 write-gate — closed_prefix never counts a half-finished tool call."""
+"""P1 T9 写门 —— closed_prefix 绝不会把半截 tool call 计入可持久前缀。"""
 
 from __future__ import annotations
 

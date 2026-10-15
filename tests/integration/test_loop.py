@@ -1,10 +1,9 @@
-"""P1 T13 DoD — end-to-end turn loop (ROADMAP §2.5 items 1 & 2), no network.
+"""P1 T13 DoD —— 端到端 turn 循环（ROADMAP §2.5 项 1 & 2），无网络。
 
-Drives ``DefaultTurnLoop`` with a scripted provider to prove:
-- happy path: SubmitMessage -> turn -> ProposeAction(read) -> tool_completed -> run_completed;
-- exception paths that must NOT crash: user cancel, tool denied (sensitive path),
-  and an illegal intent (unknown tool).
-Exactly one terminal event per run (C13); the ledger stays paired (C7).
+用脚本化 provider 驱动 ``DefaultTurnLoop``，证明：
+- happy path：SubmitMessage -> turn -> ProposeAction(read) -> tool_completed -> run_completed；
+- 三条不得崩的异常路径：用户取消、工具被 deny（敏感路径）、非法意图（未知工具）。
+一个 run 恰一个终态事件（C13）；账本保持配对（C7）。
 """
 
 from __future__ import annotations

@@ -1,10 +1,9 @@
-"""L5 ProviderPort -> LiteLLM streaming adapter (ADR-0002).
+"""L5 ProviderPort -> LiteLLM 流式适配器（ADR-0002）。
 
-Emits normalized ``StreamChunk``s for the kernel to assemble: text / reasoning /
-tool_call fragments / usage / finish. Pitfalls handled per R08 C: usage is read
-whenever present (not assumed last-chunk-only), reasoning aliases are normalized,
-and tool-call argument fragments are passed through by index for the kernel to
-accumulate. ``litellm`` is imported only here (ruff banned-api exempts providers/*).
+产出归一化的 ``StreamChunk`` 交内核定稿：text / reasoning / tool_call 片段 / usage /
+finish。按 R08 C 处理若干坑：usage 只要出现就读（不假设只在末块）、reasoning 多别名
+归一、tool_call 的参数分片按 index 透传交内核累积。``litellm`` 只在此 import
+（ruff banned-api 对 providers/* 豁免）。
 """
 
 from __future__ import annotations
@@ -20,15 +19,20 @@ from questor.contracts.ports import ProviderPort, ProviderRequest, StreamChunk
 from questor.contracts.state_schema import Message, Role
 from questor.contracts.tool import ToolSpec
 
+# reasoning/thinking 在不同 provider 字段名各异，统一按这些键探测归一。
 _REASONING_KEYS = ("reasoning_content", "reasoning", "thinking")
 
 
 def _content_text(message: Message) -> str:
+    """拼接消息里所有可见 text 块。"""
     return "".join(b.text or "" for b in message.content if b.type == "text")
 
 
 def to_openai_messages(messages: tuple[Message, ...], system: str | None) -> list[dict[str, Any]]:
-    """Project Domain_State messages into OpenAI-shaped dicts (read-only)."""
+    """把 Domain_State 消息投影为 OpenAI 形状（只读，不改状态）。
+
+    tool_result 走 role=tool；assistant 的 tool_use 走 tool_calls；其余按角色直投。
+    """
     out: list[dict[str, Any]] = []
     if system:
         out.append({"role": "system", "content": system})
@@ -51,6 +55,7 @@ def to_openai_messages(messages: tuple[Message, ...], system: str | None) -> lis
 
 
 def tools_to_openai(tools: tuple[ToolSpec, ...]) -> list[dict[str, Any]]:
+    """把 ToolSpec 转为 OpenAI function tools 形状。"""
     return [
         {"type": "function", "function": {"name": t.name, "description": t.description, "parameters": dict(t.params)}}
         for t in tools
@@ -58,11 +63,14 @@ def tools_to_openai(tools: tuple[ToolSpec, ...]) -> list[dict[str, Any]]:
 
 
 class LiteLLMProvider(ProviderPort):
+    """经 LiteLLM 的真实模型适配器（BYOM/多供应商经 model + settings 配置）。"""
+
     def __init__(self, model: str, **settings: Any) -> None:
         self.model = model
         self.settings = settings
 
     async def stream(self, request: ProviderRequest) -> AsyncIterator[StreamChunk]:
+        """流式请求并把原始 chunk 归一化为 StreamChunk 序列。"""
         params: JsonObject = {
             "model": request.model or self.model,
             "messages": to_openai_messages(request.messages, request.system),
@@ -104,6 +112,7 @@ class LiteLLMProvider(ProviderPort):
 
 
 def _delta_reasoning(delta: Any) -> str | None:
+    """从多别名里取第一个非空 reasoning 文本。"""
     for key in _REASONING_KEYS:
         value = getattr(delta, key, None)
         if value:
@@ -112,6 +121,7 @@ def _delta_reasoning(delta: Any) -> str | None:
 
 
 def _usage_dict(usage: Any) -> JsonObject:
+    """把 usage 归一为 dict（对象形态取属性）。"""
     if isinstance(usage, dict):
         return usage
     return {

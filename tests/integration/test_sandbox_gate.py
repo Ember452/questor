@@ -1,8 +1,7 @@
-"""A3 DoD — capability/risk fail-closed: exec/write with no sandbox backend is DENIED.
+"""A3 DoD —— capability/risk fail-closed：exec/write 无沙箱后端时 被 DENIED。
 
-Permission is set to full_auto so it *allows* the call; the loop's own sandbox
-gate must still deny it (fail-closed, 03 §10 T4). Proves the deny comes from the
-sandbox gate, not the permission engine, and that ``execute`` never runs.
+把权限设为 full_auto 使其*放行*调用；loop 自身的沙箱闸仍须 deny（fail-closed，03 §10 T4）。
+以此证明 deny 来自沙箱闸而非权限引擎，且 ``execute`` 从不运行。
 """
 
 from __future__ import annotations

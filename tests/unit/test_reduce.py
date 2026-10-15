@@ -1,4 +1,4 @@
-"""P1 T3 DoD — ``reduce`` invariants: single writer, pairing, cancel backfill, terminal freeze."""
+"""P1 T3 DoD —— ``reduce`` 不变式：单写者、配对、取消回填、终态冻结。"""
 
 from __future__ import annotations
 

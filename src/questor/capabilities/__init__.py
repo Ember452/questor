@@ -1,4 +1,4 @@
-"""L3 Capabilities — tools / skills / mcp / (later) subagent orchestration.
+"""L3 Capabilities —— 内置工具 / skills / mcp / （后期）子 agent 编排。
 
-Tools return results to the Harness for accounting; they never import
-provider/store/sandbox/UI (C1). skills/mcp/subagent are reserved stubs (S2)."""
+工具只把结果返回给 Harness 记账；绝不 import provider/store/sandbox/UI（C1）。
+skills/mcp/subagent 为预留 stub，早期不塞代码（S2）。"""

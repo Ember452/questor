@@ -1,18 +1,15 @@
-"""L1 ``reduce`` — the SINGLE writer of Domain_State (design/01 §7; HARD C2/C5/C7/C13).
+"""L1 ``reduce`` —— Domain_State 的**唯一写者**（design/01 §7；HARD C2/C5/C7/C13）。
 
-``reduce(run, command) -> (new_run, durable_events)``. It never mutates the
-incoming ``Run``; it returns a brand-new one via ``dataclasses.replace`` (COW, so
-the old snapshot stays valid for replay/branching — C2/C3, X3).
+``reduce(run, command) -> (new_run, durable_events)``。它绝不原地改传入的 ``Run``，
+而是经 ``dataclasses.replace`` 返回一个全新的（COW，旧快照对回放/分支仍有效——C2/C3、X3）。
 
-Enforced invariants (not the caller's honor system — design/01 §12):
-- I1 pairing: a ``tool_use`` id must be unique, and a result may only close a
-  still-open call.
-- C7: ``Cancel`` sets cancelled AND backfills every open tool_call to an error.
-- C13 / 02 E2: once terminal, the run is frozen — later commands are rejected
-  with a ``warning`` event (first-writer-wins, exactly one terminal event).
+在 reduce 内部强制的不变式（不靠上层自觉，design/01 §12）：
+- I1 配对：``tool_use`` id 必须唯一，且结果只能闭合一个仍打开的调用。
+- C7：``Cancel`` 置 cancelled **且**把所有未闭合 tool_call 回填为 error。
+- C13 / 02 E2：一旦终态即冻结——后续 Command 被拒并发 ``warning`` 事件（first-writer-wins，恰一终态）。
 
-Deltas (``text_delta``/``tool_progress``) are live-only and never go through
-reduce (I3). This is the pure state machine; the turn loop (kernel) drives it.
+delta（``text_delta``/``tool_progress``）是 live-only、绝不经 reduce（I3）。这是纯状态机；
+turn 循环（kernel）驱动它。
 """
 
 from __future__ import annotations
@@ -47,13 +44,14 @@ _OPEN_CALL = {ToolCallStatus.PENDING, ToolCallStatus.RUNNING}
 
 
 def _event(seq: int, run: Run, turn: int | None, etype: str, data: dict) -> Envelope:
+    """构造一个对外事件信封（v 取 wire 版本，run_id 取自当前 run）。"""
     return Envelope(v=EVENT_SCHEMA_VERSION, seq=seq, run_id=run.run_id, type=etype, turn=turn, data=data)
 
 
-def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C901 (dispatch is a flat table)
-    """Apply one Command; return the new Run + durable events (seq-ordered)."""
+def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C901（分派是一张平铺表）
+    """应用一条 Command；返回新 Run + 按 seq 有序的可持久事件。"""
     if run.status.is_terminal:
-        # C13 first-writer-wins: freeze after the single terminal event.
+        # C13 first-writer-wins：终态后冻结，忽略后续写。
         msg = f"run {run.run_id} already {run.status}; ignored {command.type}"
         return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": msg})]
 
@@ -108,9 +106,8 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         closed, extra = _backfill_open_calls(run)
         ledger = replace(run.tool_ledger, calls=closed)
         ctx = replace(run.context, items=extra)
-        # Allocate contiguous seqs for all emitted events (backfill + the single
-        # terminal), then advance Run.seq to the last one — never reuse a seq
-        # (ADR-0011; the old run.seq+1 / new.seq collision broke store.append).
+        # 为本次产出的全部事件（回填 + 唯一终态）连续取号，再把 Run.seq 推进到最后一个号——
+        # 绝不复用同一 seq（ADR-0011；旧写法 run.seq+1 与 new.seq 相撞会打断 store.append）。
         seq = run.seq
         events: list[Envelope] = []
         for call in open_calls:
@@ -131,21 +128,24 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         new = replace(run, context=replace(run.context, items=items), status=RunStatus.COMPLETED, completed_at=utc_now(), seq=run.seq + 1)
         return new, [_event(new.seq, new, new.turn, EventType.RUN_COMPLETED, {"usage": command.usage or {}, "exit_reason": command.exit_reason})]
 
-    # Unhandled command => reject with a warning (never crash the loop, design/04 L1).
+    # 未处理的 Command → 以 warning 拒绝（绝不崩循环，design/04 L1）。
     return run, [
         _event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"unsupported command {command.type}"})
     ]
 
 
 def _open_calls(run: Run) -> tuple[ToolCall, ...]:
+    """返回仍打开（pending/running）的调用。"""
     return tuple(c for c in run.tool_ledger.calls if c.status in _OPEN_CALL)
 
 
 def _open_call(run: Run, tool_call_id: str) -> ToolCall | None:
+    """按 id 找一个仍打开的调用；找不到（已闭合/不存在）返回 None。"""
     return next((c for c in _open_calls(run) if c.tool_call_id == tool_call_id), None)
 
 
 def _call_status(status: str) -> ToolCallStatus:
+    """把工具返回的字符串状态映射为账本枚举；未知一律按 error（fail-closed）。"""
     mapping = {
         "success": ToolCallStatus.SUCCESS,
         "error": ToolCallStatus.ERROR,
@@ -155,17 +155,19 @@ def _call_status(status: str) -> ToolCallStatus:
 
 
 def _replace_call(calls: tuple[ToolCall, ...], updated: ToolCall) -> tuple[ToolCall, ...]:
+    """不可变替换：返回把匹配 id 的那条换成 ``updated`` 的新元组。"""
     return tuple(updated if c.tool_call_id == updated.tool_call_id else c for c in calls)
 
 
 def _append_tool_result(ctx: Context, tool_call_id: str, result: object, *, is_error: bool) -> Context:
+    """追加一条含 tool_result 的消息，维持 tool_use↔tool_result 配对（I1）。"""
     block = ContentBlock(type="tool_result", tool_use_id=tool_call_id, text=str(result), is_error=is_error)
     msg = Message(id=new_id("msg"), role=Role.TOOL, content=(block,), seq=len(ctx.items))
     return replace(ctx, items=(*ctx.items, msg))
 
 
 def _backfill_open_calls(run: Run) -> tuple[tuple[ToolCall, ...], tuple[Message, ...]]:
-    """C7: close every open call with an error result; keep pairing intact."""
+    """C7：用 error 结果闭合每一个未完成的调用，保住配对不变式。"""
     closed = tuple(
         replace(c, status=ToolCallStatus.ERROR, result="cancelled before completion")
         for c in run.tool_ledger.calls
