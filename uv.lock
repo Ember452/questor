@@ -1552,7 +1552,7 @@ requires-dist = [
     { name = "immutables" },
     { name = "jsonschema" },
     { name = "litellm" },
-    { name = "pydantic", specifier = ">=2" },
+    { name = "pydantic", specifier = ">=2.14.1" },
     { name = "sse-starlette" },
 ]
 

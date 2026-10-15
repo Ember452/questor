@@ -3,7 +3,9 @@ name = "questor"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
-    "pydantic>=2",
+    # 下限抬到 2.14.1：不是新需求，而是把声明对齐到 uv.lock 实际锁定并已安装的版本
+    # （supersedes Dependabot PR #15）。
+    "pydantic>=2.14.1",
     "immutables",
     "jsonschema",
     "aiosqlite",
