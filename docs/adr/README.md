@@ -17,6 +17,7 @@
 | [0009](./0009-policy-pluggable.md) | 策略可插拔：run 内快照冻结、热替换=新 run、AB 按 fingerprint | ✅ |
 | [0010](./0010-error-classification-layer.md) | 错误分类=纯函数进 contracts、重试/fallback 编排=Kernel | ✅ |
 | [0011](./0011-seq-semantics.md) | seq 语义：per-run 逻辑序 + 全局物理序（两游标） | ✅ |
+| [0012](./0012-branch-policy.md) | 分支/推送策略：pre-alpha 维护者直推 main；CI required check 上线后转 PR | ✅ |
 
 ## 模板
 ```
