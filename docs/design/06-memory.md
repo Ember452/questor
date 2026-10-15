@@ -1,0 +1,33 @@
+# Questor 记忆层（三层 + 检索 + 蒸馏，P4 设计地基）
+
+> 实扒来源 `../references/R06-compaction-memory.md`（Cow/hermes/wuu）；与 [`01-state-model.md`](./01-state-model.md) §2(recovery_pointers)、[`04-turn-loop.md`](./04-turn-loop.md) §7(压缩四档) 交叉。
+> 定位：**长期记忆是独立子系统，与运行态 L1 分离**；写必经 `Command→StorePort`（C4），模型永不拿裸向量句柄。
+
+## 0. 铁律
+- 记忆读写全收口 `MemoryStore`（Harness 侧），策略/工具只发 `MemoryWrite` Command、经 `memory_search` 拿回 `(path,start_line,end_line,snippet)`；**绝不直连向量库**（C4，Cow 实证）。
+- **文件/记录为真源、索引为派生投影**：`sync()` 扫盘重建、stale 行 reconcile；索引损坏可重建。
+- I3：压缩产出的 `summary` 写记忆时**只写浓缩文本，绝不写 delta**。
+
+## 1. 三层 + 蒸馏
+- **core（`MEMORY.md`）**：常绿精华索引，注入每次 system prompt（截断"取尾部保最新"）。
+- **daily（`memory/YYYY-MM-DD.md`）**：流水，懒建；**short→long 由"压缩丢弃"驱动**：`_trim_messages`/overflow 把被丢消息摘要后 append 进当天（异步后台、claim-then-commit 去重、失败可重试）。
+- **dreams（Deep Dream 蒸馏产物）**：周期性把 daily 蒸馏回 core + 梦境日记；**原子写、输入哈希去重、只删不编、空哨兵跳过**；dreams **不进索引**（防近重复噪声）。
+
+## 2. 检索栈（混合）
+`向量(cosine) + 关键词(FTS5 unicode61 / trigram-CJK / LIKE 兜底)` → **rank-normalize 加权融合** → **时间衰减**(daily 半衰、core 常绿) → 可选 rerank → 命中热度 boost(默认关)。
+- 融合用 rank 归一(0,1]加权，**不是 RRF**；向量失败静默降级关键词，不抛。
+
+## 3. 压缩↔记忆桥（接 04 §7 四档梯度）
+- **L2 归档留指针**（默认，零信息丢）：`recovery_pointers=(seq_from,seq_to)+CoveredHash 锚、fail-closed`（01 §13）。
+- **L2' 蒸馏**：压缩丢弃区可选发 `MemoryWrite(distill=被压区)` Command → reduce → StorePort（写 daily/检索层）。
+- 归档=置 inactive 不物删；rotation（开子 session）作整线可恢复的另一提交模式。
+
+## 4. StorePort 可插拔
+`VectorBackend(upsert/delete/search)` 抽象 + SQLite 实现；`StorePort` 同款切；无 embedding 降级关键词-only。
+
+## 5. 落地节奏
+- v1（P4）：三层文件真源 + 混合检索 + Deep Dream + 写收口 StorePort。
+- v1 后：rerank/热度、可恢复压缩完整判据、记忆审计。
+
+## 6. 待定（v0 后锁）
+chunk schema 精确字段、`CHUNKER_VERSION` 重建触发、时间衰减半衰期。
