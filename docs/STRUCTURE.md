@@ -1,0 +1,98 @@
+# Questor 项目结构（参考，非硬约束）
+
+> ⚠️ **这是参考蓝图，不是死规矩。** 目录/命名可按实现需要调整、增删、合并——**不必一模一样**。
+> 唯一真正要守的是**分层与依赖方向**（见 [`design/00-layering.md`](./design/00-layering.md) 与 `HARD-CONSTRAINTS`），
+> 不是具体文件夹叫什么。结构服务分层；若两者冲突，**以分层纪律为准**。若你改了这里的示例结构，无需改设计文档。
+
+一个**双栈 monorepo**：Python 后端（Agent Harness + 策略）是产品核心与真源；桌面是 Tauri 壳 + Web 瘦客户端，**只经事件协议连后端**。
+
+---
+
+## 1. 顶层
+
+```
+questor/
+├── pyproject.toml · uv.lock · .python-version     # 依赖/工具链（uv, Python 3.13）
+├── ruff.toml (或并入 pyproject) · .importlinter    # lint + 分层依赖守卫
+├── AGENTS.md · CLAUDE.md · README.md · LICENSE · .gitignore
+├── docs/            # 设计/决策/计划（见 docs/ 现状）
+├── src/questor/     # ★ Python 后端：Harness 内核 + Agent 策略
+├── tests/           # Python 测试（单元 + 任务级评测/回归网）
+├── desktop/         # Tauri 桌面应用（Rust 壳 + Web 前端）
+├── scripts/         # 开发/构建/一次性脚本
+├── assets/          # 图标/静态资源（品牌）
+└── .github/workflows/  # CI（可 P 后期再铺）
+```
+
+## 2. Python 后端 `src/questor/`（按层切包）
+
+```
+src/questor/
+├── contracts/       # L0 共享词表：状态 schema · 事件类型 · ToolSpec · 各 Port 接口  ← 最稳定
+├── state/           # L1 领域/核心状态模型（Domain_State、任务树、账本、不变式、reduce）
+├── kernel/          # L2 Harness 运行时：turn 循环(阶段) · 调度 · 压缩 · checkpoint · 权限引擎 · 事件总线
+├── capabilities/    # L3 能力：tools/ · skills/ · mcp/ · （后期）subagent 编排
+├── policy/          # L4 Agent 策略（可插拔）：ReAct/规划/反思/记忆策略，实现 PolicyPort
+├── providers/       # L5 端口 + 适配器：ProviderPort→LiteLLM · StorePort→SQLite/向量 · Clock · Id
+├── surfaces/        # L6 传输/接入：HTTP+SSE 事件服务 · /run·/cancel·/resume · OpenAI兼容 · IM · CLI
+├── config/          # 配置加载（含 secrets 边界）
+├── observability/   # 日志 · 事件溯源查询 · trace（横切）
+├── version.py  __main__.py / app.py     # 入口（sidecar 启动点）
+```
+- **依赖方向**：外层 → 内层；`kernel` 只依赖 `contracts/state/providers 端口`，**不 import `policy`/`surfaces` 具体实现**（用端口注入）。策略/MCP 通过注册表挂进内核。
+- `contracts` 是全系统"词汇"，改动最保守（C6/C11）。
+
+## 3. 桌面 `desktop/`（Tauri v2）
+
+```
+desktop/
+├── src-tauri/       # Rust 壳：窗口/生命周期/打包；把 Python 后端作为 sidecar 子进程拉起
+│   ├── src/  tauri.conf.json  build.rs  capabilities/  icons/
+└── web/             # 前端（React/Svelte + TS）：瘦客户端，仅消费事件协议（SSE）
+    ├── src/（pages · components · state · api 客户端）  index.html  vite.config.ts  package.json
+```
+- **铁律**：`web/` 只做 UI 与"订阅外部事件"，**禁止把业务/状态/校验逻辑下沉到壳**（ROADMAP §1.5 / ADR-0007）。
+- `src-tauri` 不碰内核逻辑，只负责启动 sidecar + 暴露窗口能力。
+
+## 4. 测试 `tests/`
+- 单元测试随模块镜像目录；**任务级评测/回归网**单列（如 `tests/evals/`），改内核前必备（ROADMAP P10）。
+- CI 门禁：冷导入 + `import-linter` 分层守卫 + 单测 + 回归；外部事件契约快照 diff。
+
+## 5. 命名/风格约定
+- 小写包名、动词/名词清晰的模块；跨层只暴露 Port/契约，实现细节不外泄到上层 `__init__`（HARD-CONSTRAINTS C1）。
+- 新能力优先落进"对应层的插件/注册项"，而非往 `kernel` 堆代码。
+
+## 6. 与分层的对应（结构服务纪律）
+| 层 | 目录 |
+|---|---|
+| L0 Contracts | `src/questor/contracts/` |
+| L1 State | `state/` |
+| L2 Kernel/Harness | `kernel/` |
+| L3 Capabilities | `capabilities/` |
+| L4 Policy | `policy/` |
+| L5 Ports | `providers/` |
+| L6 Surfaces | `surfaces/` |
+| L7 Shell | `desktop/` |
+
+## 7. 落地边界补充（评审采纳 S1–S7）
+> 共同落点：**目录只是提示，真正防错靠 `.importlinter` 契约 + Port 抽象**——见 [HARD-CONSTRAINTS](./design/HARD-CONSTRAINTS.md) C14。
+- **S1 providers 命名**：`providers/` 含 LLM+存储+时钟/ID 的**适配器**，易被误读为"模型提供商列表"。保留名 + 放目录 `README.md` 说明"所有底层基础设施 Port 的实现"即可（不改名）。
+- **S2 capabilities 膨胀**：v1 只实现**内置 tools**；`skills/ mcp/ subagent/` **预留 stub**，早期不塞大量代码（对齐 ROADMAP P2/P5/P8）。
+- **S3 注册/注入必须落地**：policy/MCP 经注册表+端口挂进 kernel；**禁止 kernel 直接 import policy 具体实现**，由 import-linter 强制（非口头约定）。
+- **S4 抽象 vs 实现分家**：`contracts/` 只放**抽象 Port 协议 + 数据模型**；`providers/capabilities/policy` 放具体实现。实现写进 contracts 会让"最稳定层"持续膨胀、破 C11。
+- **S5 进程边界（Tauri）**：Python Harness 是**独立 sidecar 进程**，Rust 壳与它**只经 HTTP+SSE 事件协议通信**，**严禁进程内直调 Python 函数**（否则破"Shell 只消费事件"铁律）。
+- **S6 surfaces 零业务**：`surfaces/`（HTTP/CLI/OpenAI 兼容）只做 Command 接收 + 事件协议转发/翻译；**不实现业务、不改 state**，一切写操作造 Command 送入 kernel 总线。
+- **S7 observability 依赖方向**：可被各层调用，但**只依赖 contracts**、不 import kernel/policy 实现；只读/上报，**不改状态**。
+
+## 8. 再次强调
+> 以上目录/命名是**便于阅读、可维护的常见大型开源布局**，不是必须照抄的硬约束。实际实现时按需要长什么样就长什么样；
+> **要守的只有那几条分层依赖与接缝契约**。改结构 → 不必改设计文档；改分层/契约 → 才需要走 ADR。
+
+## 9. 工程拓扑与守卫增补（R09/R07 取优；仍为参考、非硬约束）
+- **分层强制三道防线**（非单一 import-linter）：声明式 `.importlinter` + ruff `flake8-tidy-imports.banned-api` 点名禁跨层 import（附"改走哪个 Port"）+ `ban-relative-imports=all` + 自研 AST 检查器；**以包边界为主、lint 为兜底**（HARD C15）。
+- **跨语言 wire 契约单一真源**：顶层 `protocol/*.schema.json`（外部事件投影的唯一 JSON Schema）→ codegen 生 TS 类型 → CI `--check` 防漂移（呼应 02/C6）。
+- **sidecar 构建三段式**（Python→桌面）：`desktop/sidecar-requirements.{in,lock}`（**比根依赖更窄**）→ PyInstaller **onedir** 冻结（非 onefile）→ tauri `bundle.resources` 打进包 → 发布前 `verify-release-bundle`（导入探针 + initialize/shutdown RPC smoke）。**dev 与打包依赖分两份锁**。
+- **工具链钉死**：`.python-version` + `.node-version` + `rust-toolchain.toml` + 各语言 lockfile（`uv.lock`/pnpm|npm lock/`Cargo.lock`）。供应链 `[加固]`：核心 exact-pin、provider 走 extras、`exclude-newer` + `pip-audit`/osv 进 security lane。
+- **CI 分道**：`python-ci` / `desktop-ci`(Rust+web) / `security-ci` + **改动分类器跳过无关 job**；契约快照挂 `contracts_changed`；**分层守卫/冷导入作为不依赖分类器的独立 blocking job**。
+- **每条机械守卫带 `--self-test` + fail-on-empty**（扫不到文件≠通过）。
+- **反面清单（别照抄）**：别扁平文件海（保持 src 包化）、别把核心代码不打包、别靠整目录 lint 豁免维持边界。长期记忆子系统落 `src/questor/memory/`（与 `state/` 分离，见 `design/06-memory.md`）；策略契约 `contracts/policy.py`、实现 `policy/`。
