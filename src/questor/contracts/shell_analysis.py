@@ -93,8 +93,12 @@ class ShellAnalysis:
         object.__setattr__(
             self,
             "dynamic",
-            self.dynamic or any(segment.dynamic for segment in self.segments) or any(segment.write_paths for segment in self.segments),
+            self.dynamic or any(segment.dynamic for segment in self.segments),
         )
+        if not self.read_paths:
+            object.__setattr__(self, "read_paths", tuple(dict.fromkeys(path for segment in self.segments for path in segment.read_paths)))
+        if not self.write_paths:
+            object.__setattr__(self, "write_paths", tuple(dict.fromkeys(path for segment in self.segments for path in segment.write_paths)))
 
 
 __all__ = ["ShellAnalysis", "ShellDialect", "ShellParseStatus", "ShellRedirect", "ShellSegment"]

@@ -46,4 +46,5 @@ def test_all_read_only_requires_complete_parsed_segments() -> None:
         ),
     )
     assert analysis.all_read_only is False
-    assert analysis.dynamic is True
+    assert analysis.dynamic is False
+    assert analysis.write_paths == ("y",)
