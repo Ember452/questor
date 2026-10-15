@@ -11,27 +11,29 @@ from __future__ import annotations
 
 import fnmatch
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from questor.contracts.common import JsonObject, thaw
+from questor.contracts.permission import PermissionDecision, PermissionOutcome
 from questor.contracts.sandbox import SandboxDescriptor
 from questor.contracts.shell_analysis import ShellAnalysis
 from questor.contracts.state_schema import ToolArgsStatus
 from questor.contracts.tool import ToolSpec
 from questor.contracts.tool_args import PROTECTED_IN_ROOTS
+from questor.kernel.capability_floor import apply_capability_floor
 from questor.kernel.tool_arguments import extract_paths, extract_shell_commands
 from questor.state.domain_state import PermissionCtx
 
 
-class PermissionDecision(StrEnum):
-    """三态权限决策。"""
+class PermissionMode(StrEnum):
+    """历史兼容枚举；新代码应直接传 PermissionCtx.mode 字符串。"""
 
-    ALLOW = "allow"
-    ASK = "ask"
-    DENY = "deny"
+    DEFAULT = "default"
+    PLAN = "plan"
+    FULL_AUTO = "full_auto"
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,18 +52,6 @@ class PermissionEvaluation:
     def __post_init__(self) -> None:
         # 权限对象不能跨 await 被调用方原地改；转成普通 dict 仅供本纯函数读取。
         object.__setattr__(self, "arguments", thaw(self.arguments) if isinstance(self.arguments, dict) else dict(self.arguments))
-
-
-@dataclass(frozen=True, slots=True)
-class PermissionOutcome:
-    """权限结果；summary/warnings 均是有界、可展示事实。"""
-
-    decision: PermissionDecision
-    reason: str
-    args_summary: str
-    warnings: tuple[str, ...] = ()
-    floor_applied: str | None = None
-    candidate_paths: tuple[str, ...] = field(default_factory=tuple)
 
 
 _SENSITIVE_DIRS = {".ssh", ".aws", ".gnupg", ".docker", ".kube", ".azure", ".config/gcloud"}
@@ -230,6 +220,18 @@ def evaluate_permission(evaluation: PermissionEvaluation) -> PermissionOutcome:
             floor_applied="read-only-limit",
             candidate_paths=paths,
         )
+
+    floor = apply_capability_floor(
+        tool_spec=evaluation.tool_spec,
+        sandbox=evaluation.sandbox,
+        shell_analysis=evaluation.shell_analysis,
+        args_summary=summary,
+        mode=evaluation.permission.mode,
+    )
+    if floor is not None:
+        if floor.decision is PermissionDecision.DENY:
+            return floor
+        return _never_downgrade(floor, evaluation.permission)
 
     argument = _argument_string(evaluation)
     matched = next((rule for rule in reversed(evaluation.permission.rules) if _matches(rule.tool_pattern, evaluation.tool_name) and _matches(rule.argument_pattern, argument)), None)

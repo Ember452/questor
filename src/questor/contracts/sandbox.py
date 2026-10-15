@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Protocol, runtime_checkable
 
 from questor.contracts.common import JsonObject, freeze
 
@@ -67,4 +68,24 @@ class SandboxDescriptor:
                 raise ValueError("job backend must not claim write fencing")
 
 
-__all__ = ["Confinement", "SandboxBackend", "SandboxDescriptor"]
+@runtime_checkable
+class SandboxPort(Protocol):
+    """Sandbox 能力探针与包装接缝（ADR-0015/0018）。
+
+    `describe()` 是安全判断唯一入口；旧布尔方法只保留为 legacy 兼容。`wrap_*` 必须诚实：
+    给不出承诺的隔离就要抛错/返回失败，不能静默 passthrough。
+    """
+
+    def describe(self) -> SandboxDescriptor: ...
+
+    def wrap_argv(
+        self,
+        capability: str,
+        argv: tuple[str, ...],
+        *,
+        workspace_root: str | None = None,
+        cwd: str | None = None,
+    ) -> tuple[str, ...]: ...
+
+
+__all__ = ["Confinement", "SandboxBackend", "SandboxDescriptor", "SandboxPort"]
