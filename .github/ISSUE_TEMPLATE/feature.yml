@@ -1,0 +1,22 @@
+name: Feature request
+description: 提议一个新能力
+title: "[feat] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决的问题
+      description: 这个能力要解决什么、在哪些场景
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes: { label: 期望的做法 }
+  - type: dropdown
+    id: layer
+    attributes:
+      label: 落在哪一层
+      options: [harness/kernel, capability/tools-mcp, policy, providers, surfaces/api, shell/desktop, memory, 其它]
+  - type: textarea
+    id: alt
+    attributes: { label: 替代方案 }
