@@ -17,7 +17,7 @@ import json
 from fastapi import FastAPI, Request
 from sse_starlette.sse import EventSourceResponse
 
-from questor.contracts.common import new_id
+from questor.contracts.common import new_id, thaw
 from questor.contracts.events import Envelope, EventType
 from questor.contracts.state_schema import Budget
 from questor.kernel.events import InProcessEventBus
@@ -31,7 +31,7 @@ TERMINAL = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAIL
 
 def envelope_to_json(env: Envelope) -> str:
     return json.dumps(
-        {"v": env.v, "seq": env.seq, "run_id": env.run_id, "turn": env.turn, "ts": env.ts.isoformat(), "type": env.type, "data": dict(env.data)},
+        {"v": env.v, "seq": env.seq, "run_id": env.run_id, "turn": env.turn, "ts": env.ts.isoformat(), "type": env.type, "data": thaw(env.data)},
         ensure_ascii=False,
         default=str,
     )
