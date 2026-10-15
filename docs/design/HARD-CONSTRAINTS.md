@@ -18,6 +18,7 @@
 - **为什么**：策略意外改状态 = 污染可信状态 = 断点/回放当场作废，且是最难查的 bug。
 - **强制**：**copy-on-write / 持久化数据结构 / 只读投影**，**不要浅 `@dataclass(frozen)` 假装安全**（内层 list/dict 仍可改）。视图按字段暴露（策略只看得到上下文/工具结果/记忆片段，看不到断点/权限/内部元数据），**不做每轮全量深拷贝**。
 - **结构共享的根因（评审补）**：共享意味着底层容器是**同一实例**，若 reduce 原地改共享子对象，视图会看到中途变更 → **禁止原地 mutate 内部集合；reduce 永远返回新 State、旧实例不变**。Python：pydantic-v2 frozen **本身仍是浅冻结**（只挡 setattr），**必须配不可变集合**（`tuple/frozenset`/immutables）才算真不可变；Rust 天然所有权。
+- **不可变作域限定（评审 R01-G8）**：**C2 的不可变红线只强加于 `Domain_State`**（权威、可持久、可回放）；`LoopState`（per-turn 循环临时态）**允许内部可变槽位**，以"每 phase 返回 verdict + 按名拷回"解耦即可，否则字段一多即不可维护。机器强制（COW/禁原地 mutate）也只针对 `Domain_State`。
 
 ## C3 视图 vs 快照
 - **约束**：正常 turn 走**只读视图**（按需暴露、结构共享）；**全量快照**只在**回放 / 分支试验**时生成并持久化。
@@ -68,6 +69,21 @@
 - **为什么**：远程强制"下发视图+鉴权+新鲜度一致性"，v1 用不上却拖累每一处。
 
 ---
+
+## C13 存储与终态两条铁律（评审补）
+- **只存内部事件**：`events` 表存内部事件；外部事件运行时投影、**不入库不存两份**；回放=重放内部再投影（防两份事件不一致）。
+- **终态唯一**：reduce 串行、first-writer-wins，一轮至多一条终态事件；并发终止按优先级择一（可配置）。
+
+## C14 结构性边界靠机器守（评审补 S1–S7）
+- **实现不跨层 import**：`kernel` 只依赖 `contracts` + 注入的端口，禁直接 import `policy/surfaces` 具体实现（import-linter 契约强制，非口头）。
+- **contracts 只放抽象 + 数据**：Port 协议、状态/事件 schema、ToolSpec；实现留在 providers/capabilities/policy（防最稳定层膨胀，C11）。
+- **surfaces/外壳零业务**：HTTP/CLI/OpenAI 兼容只"收 Command + 投事件"；**Python↔Rust 仅 HTTP+SSE 跨进程，禁进程内互调**。
+- **observability 只依赖 contracts、只读上报、不改状态**。
+
+## C15 外部契约单一真源 + 守卫可信性（评审 R09/R07）
+- **跨语言 wire 契约单一真源**：Python↔Rust↔TS 的事件协议用一个语言中立 `protocol/*.schema.json` 承载，构建期 codegen 生 TS 类型 + CI `--check` 阻断漂移（否则 C6"只增不改"三处各写、悄悄分叉）。
+- **分层强制靠三道防线**（import-linter 在本参考集零采用且拦不住动态 import）：① 声明式 `.importlinter`（人读意图）② ruff `flake8-tidy-imports.banned-api` 点名禁跨层 import + `ban-relative-imports=all` ③ 自研 AST 检查器。**以包/模块边界为主、lint 为兜底**。
+- **每条机械守卫必须可信**：`--self-test`/fixture 证其能判红判绿 + **fail-on-empty**（扫不到文件≠通过）+ 分层守卫作为**不依赖 change-classifier 的独立 blocking job**（否则会被语言 lane 意外门控掉）。
 
 ## 天花板（诚实标注，别当免费）
 "扩事件协议就能到分布式"是错觉。**跨机**的**状态排序、租约、exactly-once、部分失败恢复**是独立的硬骨头（hermes `hermes_state_*`、wuu `agentcontrol` 就在啃）。本架构*容许*演进到那，但那一跳要单独设计，别写进"只是加事件"。
