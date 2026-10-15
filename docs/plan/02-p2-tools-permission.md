@@ -975,3 +975,18 @@ docs: record p2 deviations and license ledger
 5. approval timeout 的真实调度实现；
 6. PowerShell 5.1 vs pwsh 7 差异；
 7. 任何被 ADR 否决后又被现实证明必须调整的决策（必须新增/修订 ADR）。
+
+---
+
+## 13.1 已实现批次（2026-10-15 → 2026-10-16；分支 `feat/p2-foundation-hitl`，覆盖 T1-T13）
+
+本轮**只做到 T1-T13 基础架构与 HITL**，T14-T21 尚未开始。以下为实现对本文的偏差与实况：
+
+- **实现范围**：覆盖率非阻断基线 + T1 契约 + T2 versioned snapshot + T3 RunController/Command Inbox + T4 五层校验/raw args + T5 arg-key+Shell IR + T6 POSIX parser + T7 PowerShell parser + T8 PermissionCtx 纯引擎 + T9 SandboxDescriptor/capability floor + T10 ArtifactStore/输出预算 + T11 env safety + T12 ProcessRunner + T13 HITL 生命周期与 surfaces 只提交 Command。全量 `pytest` 246 passed，coverage 86%（branch），六守卫全绿，protocol 19 types lockstep。
+- **PermissionDecision/Outcome 下沉 L0**：本文把 outcome 记在 kernel；实现改为 `contracts/permission.py` 放 `PermissionDecision`/`PermissionOutcome` 纯数据，避免 `capability_floor` 与 `permission_policy` import 环。属 additive，不改 wire 契约。
+- **Windows Job Object 落地口径**：`AssignProcessToJobObject` 在子进程已继承其它 job 时返回 error 5。实现按本文 T9/ADR-0015 的“给不了围栏绝不静默裸跑”原则，Job 分配失败时**不谎报 full**，仍维持 partial descriptor，并在超时时用 `taskkill /F /T` 兜底杀进程树；真实 Windows PowerShell 父子进程超时清理有 `test_p2_process_timeout_tree.py` 实机验证（非 fake）。
+- **approval 事件订阅依赖 durable store**：`approval_request` 是 durable 事件。`store=None` 的进程内总线只 fan-out live 帧，晚挂的订阅者会漏；外部审批（SSE/HTTP/CLI `_approve`）必须依赖 store 重放。测试据此改用带 store 的总线，符合生产语义。
+- **permission warnings 尚未落 ToolCall**：capability floor 的 warning 目前只进入权限返回值与日志，未写进 `ToolCall.permission_warnings`/投影。留待 T17 字段级投影统一处理（不阻塞 T13 DoD）。
+- **未做（明确后置，非缺陷）**：T14 ToolRegistry、T15 文件工具、T16 bash/powershell 工具实例、T17 per-type protocol schema/投影、T18 surfaces 产品化端点细化、T19 resume 完整化、T20 新守卫扩规则、T21 端到端 DoD。`security-ci + pip-audit` 依 STRUCTURE `[P#]` 纪律推迟到 T15-T16 有真实 shell/攻击面后再铺。
+- **TDD 流程偏差**：T1/T2 部分契约测试与实现同批提交，未逐个先跑红；从 T3 起严格 RED→GREEN，并为 T1/T2 补了可证伪的生命周期/snapshot/审批/幂等回归用例。
+- **交付方式**：远端 main 已启用 “must be made through a pull request”；本批次全程走 `feat/p2-foundation-hitl` 分支逐任务 commit/push，未直推 main。

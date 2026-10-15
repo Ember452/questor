@@ -27,6 +27,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Three-state permission engine (non-overridable realpath denylist); `read` tool; LiteLLM + scripted providers; in-process ReAct policy.
 - CLI terminal surface + HTTP/SSE service (`/run`,`/events`,`/cancel` with `id:<seq>` + `Last-Event-ID` resume) + structured logging.
 
+### Added — P2 foundation (T1–T13, in progress on `feat/p2-foundation-hitl`)
+- Non-blocking coverage baseline: `pytest-cov` + branch coverage XML artifact in the `tests` job (no `fail-under` gate yet).
+- L0/contract vocabulary: tool-call lifecycle states, `ApprovalRequest`/`ApprovalStatus`, raw-args status, `SandboxDescriptor`, `ProcessRequest/Result`, `ArtifactRef`/`OutputBudget`, shell-analysis IR, `CommandInboxPort`/`InboxReceipt`, `PermissionDecision`/`Outcome`; protocol EventType grew 17→19 (`approval_resolved`, `permission_mode_changed`).
+- Versioned snapshot (v2) round-trips full authority: `permission_ctx`/approvals/rules, task_tree, error_stack, and expanded ToolCall fields; unknown versions fail-closed with v1 lossy migration.
+- `RunController` serialized Command Inbox (FIFO, idempotency, backpressure, terminal rejection) wired into the turn loop; five-layer validation reordered to args→schema→shell-analysis→validate→permission→floor.
+- Pure `PermissionCtx` engine + fail-closed POSIX/PowerShell shell parsers + capability floors above `mode`; honest host sandbox backend detection.
+- Harness-owned `SandboxedProcessRunner` (Job Object + taskkill process-tree cleanup, env credential scrub, output limits→artifact), content-addressed `FileSystemArtifactStore`, provider `env_safety`.
+- Full HITL lifecycle (request/resolve/expire/cancel idempotency, approval timeout) driven only via Commands; CLI + HTTP (`/runs/{id}/approvals/{req}/resolve`, `/permissions`, `/runs/{id}/cancel`) submit through `RunRegistry` and never `reduce`.
+
 ### Fixed (P0/P1 adversarial audit, 2026-10-15)
 - C2: deep-freeze JSON leaves (`ToolCall.args`, `ContentBlock.input/payload/provider_state`, `Envelope.data`) via `immutables` so COW states no longer share mutable leaves.
 - C7/ADR-0011: Cancel no longer emits two events with the same seq (was causing a store `IntegrityError`).
