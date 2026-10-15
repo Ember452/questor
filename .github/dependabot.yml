@@ -1,14 +1,18 @@
+# 说明：本文件的 updates 只管"例行版本升级"。
+# 防 CVE 的安全修复走仓库 Settings → Code security → Dependabot security updates（独立开关，不依赖本文件）。
+# 日常 Python 升级以 uv 为主（uv lock --upgrade / uv add），故 pip 降为 monthly、限额收紧，避免与 uv 工作流刷噪声 PR。
 version: 2
 updates:
   - package-ecosystem: "pip"
     directory: "/"
-    schedule: { interval: "weekly" }
-    open-pull-requests-limit: 5
+    schedule: { interval: "monthly" }
+    open-pull-requests-limit: 2
     labels: [dependencies]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule: { interval: "weekly" }
+    open-pull-requests-limit: 5
     labels: [ci, dependencies]
 
   # 桌面子项目引入后取消注释：
