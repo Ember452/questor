@@ -40,11 +40,15 @@ def _load_schema() -> dict:
 def check() -> int:
     schema = _load_schema()
     Draft202012Validator.check_schema(schema)  # raises if malformed
-    drift = _schema_types(schema) ^ _contract_types()
+    contract = _contract_types()
+    if not contract:  # fail-on-empty: an empty EventType set is a misconfig, not a pass
+        print("fail-on-empty: contract EventType set is empty", file=sys.stderr)
+        return 2
+    drift = _schema_types(schema) ^ contract
     if drift:
         print(f"DRIFT between {SCHEMA_PATH} and EventType: {sorted(drift)}", file=sys.stderr)
         return 1
-    print(f"protocol schema OK: {len(_contract_types())} event types in lockstep")
+    print(f"protocol schema OK: {len(contract)} event types in lockstep")
     return 0
 
 
