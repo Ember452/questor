@@ -13,7 +13,32 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+import immutables
+
 JsonObject = Mapping[str, Any]
+
+
+def freeze(value: Any) -> Any:
+    """Deep-freeze a JSON value into immutable containers (C2: not a shallow freeze).
+
+    dict/Mapping -> immutables.Map, list/tuple -> tuple, recursively, so a frozen
+    dataclass sharing a leaf across the COW old/new state cannot be mutated in
+    place (which would silently corrupt the replayable history).
+    """
+    if isinstance(value, Mapping) and not isinstance(value, immutables.Map):
+        return immutables.Map({k: freeze(v) for k, v in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(freeze(v) for v in value)
+    return value
+
+
+def thaw(value: Any) -> Any:
+    """Inverse of freeze: produce plain dict/list for JSON serialization."""
+    if isinstance(value, Mapping):
+        return {k: thaw(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [thaw(v) for v in value]
+    return value
 
 
 def utc_now() -> datetime:
