@@ -1,0 +1,20 @@
+# Normalize line endings to LF in the repo; Windows dev hosts must not commit CRLF.
+* text=auto eol=lf
+
+# Explicit binary types
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.mp4 binary
+*.pdf binary
+*.zip binary
+
+# Docs/examples excluded from published package archives
+/docs export-ignore
+/tests export-ignore
+/.github export-ignore
