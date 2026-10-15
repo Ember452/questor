@@ -7,6 +7,9 @@ dependencies = [
     "immutables",
     "jsonschema",
     "aiosqlite",
+    "litellm",
+    "fastapi",
+    "sse-starlette",
 ]
 
 [dependency-groups]
