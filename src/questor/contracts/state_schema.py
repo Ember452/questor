@@ -57,6 +57,11 @@ class ToolCallStatus(StrEnum):
     DENIED = "denied"
 
 
+#: Statuses that mean the call is still open (no result yet) — used by pairing,
+#: cancel backfill (C7), and the policy's "unanswered tool_use" check.
+OPEN_TOOL_CALL_STATUSES: frozenset[ToolCallStatus] = frozenset({ToolCallStatus.PENDING, ToolCallStatus.RUNNING})
+
+
 class TaskStatus(StrEnum):
     PENDING = "pending"
     ACTIVE = "active"

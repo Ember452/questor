@@ -34,6 +34,7 @@ class PolicyView:
 class ProposeToolCall:
     name: str
     args: JsonObject
+    tool_call_id: str | None = None  # links to the assistant's pending tool_use (set by policy)
     node_id: str | None = None
     type: ClassVar[str] = "propose_tool_call"
 
