@@ -20,7 +20,7 @@ from questor.contracts.state_schema import (
 )
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
-from questor.kernel.permissions import PermissionDecision
+from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation, PermissionOutcome
 from questor.kernel.run_control import RunController
 from questor.policy.react_policy import ReActPolicy
 from questor.providers.fake import ScriptedProvider
@@ -32,9 +32,13 @@ class _SpyPermission:
     def __init__(self) -> None:
         self.calls = 0
 
-    def evaluate(self, tool_name: str, arguments=None) -> tuple[str, str]:  # noqa: ANN001
+    def evaluate(self, evaluation: PermissionEvaluation) -> PermissionOutcome:
         self.calls += 1
-        return PermissionDecision.ALLOW.value, "test allow"
+        return PermissionOutcome(
+            decision=PermissionDecision.ALLOW,
+            reason="test allow",
+            args_summary=evaluation.tool_name,
+        )
 
 
 class _RecordingRead(ReadTool):
@@ -126,10 +130,10 @@ async def test_schema_valid_tool_transitions_through_validated_before_result(tmp
             super().__init__()
             self.controller = controller
 
-        def evaluate(self, tool_name, arguments=None):  # noqa: ANN001
+        def evaluate(self, evaluation: PermissionEvaluation) -> PermissionOutcome:
             call = next(c for c in self.controller.run.tool_ledger.calls if c.tool_call_id == "tc_ok")
             assert call.status is ToolCallStatus.VALIDATED
-            return super().evaluate(tool_name, arguments)
+            return super().evaluate(evaluation)
 
     controller = RunController(Run(run_id="run-test", budget=Budget(max_turns=3)))
     permission = _ObservingPermission(controller)

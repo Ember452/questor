@@ -26,7 +26,7 @@ def _loop(tmp_path: Path) -> DefaultTurnLoop:
     return DefaultTurnLoop(
         provider=ScriptedProvider([_ANSWER]),
         policy=ReActPolicy(),
-        permission=DefaultPermissionEngine(read_only_tools=frozenset({"read"})),
+        permission=DefaultPermissionEngine(),
         bus=InProcessEventBus(None),
         tool_for=lambda name: read if name == "read" else None,
         tools=(read,),

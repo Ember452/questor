@@ -38,7 +38,7 @@ def _make_loop(tmp: Path, turns, *, permission=None, cancel=None):
     return DefaultTurnLoop(
         provider=ScriptedProvider(turns),
         policy=ReActPolicy(),
-        permission=permission or DefaultPermissionEngine(read_only_tools=frozenset({"read"})),
+        permission=permission or DefaultPermissionEngine(),
         bus=InProcessEventBus(store),
         tool_for=_tool_for(reg),
         tools=(read,),
@@ -76,7 +76,7 @@ async def test_exactly_one_terminal_event(tmp_path: Path) -> None:
     loop = DefaultTurnLoop(
         provider=ScriptedProvider([_TURN_ANSWER]),
         policy=ReActPolicy(),
-        permission=DefaultPermissionEngine(read_only_tools=frozenset({"read"})),
+        permission=DefaultPermissionEngine(),
         bus=bus,
         tool_for=lambda n: {"read": read}.get(n),
         tools=(read,),

@@ -74,7 +74,7 @@ class CliSurface:
         return DefaultTurnLoop(
             provider=self.provider,
             policy=ReActPolicy(),
-            permission=DefaultPermissionEngine(read_only_tools=frozenset(self.registry)),
+            permission=DefaultPermissionEngine(),
             bus=bus,
             tool_for=self.registry.get,
             tools=tuple(self.registry.values()),

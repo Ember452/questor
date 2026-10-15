@@ -14,6 +14,7 @@ import asyncio
 import json
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -34,6 +35,8 @@ from questor.contracts.events import (
 )
 from questor.contracts.policy import PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
 from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort
+from questor.contracts.sandbox import Confinement, SandboxBackend, SandboxDescriptor
+from questor.contracts.shell_analysis import ShellAnalysis, ShellDialect, ShellParseStatus
 from questor.contracts.state_schema import (
     OPEN_TOOL_CALL_STATUSES,
     CancelReason,
@@ -44,7 +47,11 @@ from questor.contracts.state_schema import (
 )
 from questor.contracts.tool import Capability, Risk, Tool
 from questor.kernel.events import EventBus
+from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
 from questor.kernel.run_control import RunController
+from questor.kernel.shell_parse_posix import parse_posix_shell
+from questor.kernel.shell_parse_powershell import parse_powershell
+from questor.kernel.tool_arguments import extract_shell_commands
 from questor.state.checkpoint import open_tool_use_ids
 from questor.state.domain_state import Run
 from questor.state.reduce import reduce
@@ -102,6 +109,39 @@ class _ToolCtx:
     ) -> object:
         # P2 T10 前尚无 ArtifactStore；工具不得自拼落盘路径。
         raise NotImplementedError("ArtifactStorePort integration lands in P2 T10")
+
+
+def _none_descriptor() -> SandboxDescriptor:
+    return SandboxDescriptor(
+        backend=SandboxBackend.NONE,
+        confinement=Confinement.NONE,
+        fences_writes=False,
+        fences_network=False,
+        isolates_process_tree=False,
+        limitation="no sandbox backend available",
+    )
+
+
+def _analyze_shell(tool_spec: Tool, arguments: JsonObject) -> ShellAnalysis | None:
+    """只按 ToolSpec capability/name 选 dialect；不靠工具名字符串猜安全。"""
+    commands = extract_shell_commands(arguments)
+    if not commands:
+        return None
+    powershell = tool_spec.name.lower() in {"powershell", "pwsh"} or tool_spec.name.lower() == "bash" and False
+    analyses = [parse_powershell(command) if powershell else parse_posix_shell(command) for command in commands]
+    if any(analysis.status is not ShellParseStatus.PARSED for analysis in analyses):
+        return analyses[0]
+    segments = tuple(segment for analysis in analyses for segment in analysis.segments)
+    dialect = ShellDialect.POWERSHELL if powershell else ShellDialect.POSIX
+    read_paths = tuple(dict.fromkeys(path for analysis in analyses for path in analysis.read_paths))
+    write_paths = tuple(dict.fromkeys(path for analysis in analyses for path in analysis.write_paths))
+    return ShellAnalysis(
+        dialect=dialect,
+        status=ShellParseStatus.PARSED,
+        segments=segments,
+        read_paths=read_paths,
+        write_paths=write_paths,
+    )
 
 
 class DefaultTurnLoop:
@@ -337,11 +377,26 @@ class DefaultTurnLoop:
             return run
 
         run = await self._apply_command(controller, run, MarkToolValidated(run_id=run.run_id, tool_call_id=intent.tool_call_id or ""))
-        decision, reason = self.permission.evaluate(intent.name, intent.args)
-        if decision == "deny":
+        analysis = _analyze_shell(tool.spec, intent.args)
+        permission = replace(run.permission_ctx, workspace_root=str(self.workspace_root), cwd=str(self.workspace_root))
+        sandbox_descriptor = self.sandbox.describe() if self.sandbox is not None and hasattr(self.sandbox, "describe") else _none_descriptor()
+        outcome = self.permission.evaluate(
+            PermissionEvaluation(
+                tool_name=intent.name,
+                tool_spec=tool.spec,
+                args_status=call.args_status,
+                arguments=intent.args,
+                permission=permission,
+                sandbox=sandbox_descriptor,
+                shell_analysis=analysis,
+            )
+        )
+        decision = outcome.decision
+        reason = outcome.reason
+        if decision is PermissionDecision.DENY:
             run = await self._apply_command(controller, run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=reason))
             return run
-        if decision == "ask":
+        if decision is PermissionDecision.ASK:
             allowed = bool(self.approver) and await self.approver(intent.name, intent.args, reason)
             if not allowed:
                 run = await self._apply_command(controller, run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason="denied by approver"))
