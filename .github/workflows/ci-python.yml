@@ -9,15 +9,39 @@ on:
 permissions:
   contents: read
 
+# 同一 ref 上新提交自动取消仍在跑的旧 run。不加这段时，每个 push 的 run 都会各自跑到
+# 结束（卡死时即 6 小时默认上限），旧 run 堆积且白烧免费额度。
+concurrency:
+  group: ci-python-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # litellm 默认在 import 时去 raw.githubusercontent 拉 model cost map；runner 上会
+  # ConnectTimeout + 3 次重试后回落本地备份，白白几十秒并刷一堆告警。直接强制本地。
+  LITELLM_LOCAL_MODEL_COST_MAP: "True"
+
 jobs:
   # Independent, always-blocking (C15): does NOT depend on any change classifier,
   # so a language-only PR can never skip the layering/contract guards.
   boundaries:
-    runs-on: ubuntu-latest
+    # 钉住镜像（DeepCode 同样做法）：ubuntu-latest 将于 2026-10-19 静默迁移到 Ubuntu 26，
+    # 不能让 CI 环境在我们未主动升级时被改掉（本次故障就是“本地绿、runner 卡死”的环境差异型）。
+    runs-on: ubuntu-24.04
+    # 兜底：任何一步卡住都在 10 分钟内判红，而不是挂到 6 小时默认超时。
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - run: uv sync --all-groups
+        with:
+          # 按依赖清单缓存 ~/.cache/uv（hermes 做法）：uv sync 仍旧每次都跑，但从热缓存
+          # 解析/构建，不重复下载与重建 wheel。
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+      # --locked：同时安装锁定集合并断言 uv.lock 与 pyproject 未漂移（比 --frozen 更硬，
+      # --frozen 仅“不重锁”）。漂移时必须响亮地失败，而不是静默重新解析（假绿）。
+      - run: uv sync --locked --all-groups
       - name: Cold import (every layer)
         run: uv run python scripts/verify_p0.py
       - name: import-linter contracts
@@ -32,13 +56,32 @@ jobs:
         run: |
           uv run python scripts/check_protocol_schema.py --self-test
           uv run python scripts/check_protocol_schema.py --check
+      - name: Thread-leak guard (self-test proves it can go red)
+        run: uv run python scripts/check_thread_leak.py --self-test
 
   tests:
     needs: boundaries
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    # 兜底：曾经因 aiosqlite 非守护线程泄漏使 pytest step 永不结束，这里限时自停。
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - run: uv sync --all-groups
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+      - run: uv sync --locked --all-groups
+      # -v + 禁用 cache provider：卡死时日志能直接看出停在哪个测试（-q 下什么都不刷）。
+      # --timeout 由 pyproject 的 addopts 提供（单测卡死限时）；junitxml 供事后定位（DeepCode 做法）。
       - name: pytest
-        run: uv run pytest -q
+        run: uv run pytest -v --tb=short -p no:cacheprovider --durations=10 --junitxml=pytest-results.xml
+      # always()：红的 run 才最需要产物，绿的不需要。只留 7 天，不慢慢堆满额度。
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: pytest-results.xml
+          retention-days: 7
