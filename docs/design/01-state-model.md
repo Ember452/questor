@@ -164,3 +164,12 @@ StorePort→SQLite：`sessions / runs / messages(+content) / task_nodes / tool_c
 - **I5 mode/权限变更=Command、不回溯**：mode 属 `Command`走 reduce；**已发生的 tool_call 历史 decision 不重算**，只对**未来调用**生效（否则审计/回放的 decision 会漂移）。
 - **I6 TaskTree v1 只用森林**：父子层级即可；**DAG 跨节点依赖只预留、v2 再启用**（DAG 会暴涨 reduce 校验/调度/断点恢复复杂度）。
 - **I7 Event 不可反哺**：只有 Command 改状态（C5）；回滚只回 Domain_State、**已发 Event 不撒销**（C10）。
+
+## 13. 评审增补（R03/R06；均为 working-draft 未决带，不动已定接缝）
+- `Message` 加 `provider_state`（opaque、reducer 只搬运不解释，供跨 provider 断点续传）；summary/checkpoint 记录带**显式标记**（勿伪造成 user）；派生自 live 环境的不持久化。
+- **recovery_pointers 定为 `(seq_from, seq_to) + CoveredHash 锦`**（指向 events 单调序号区间，非字节偏移/非 UUID）；读前校验锦、历史漂移 **fail-closed**。
+- 权威判据："恢复永远从持久态出发，内存视图+事件账本=可丢弃投影"。
+- **两类游标**：per-run 逻辑 `seq`（after_seq 回放）+ 全局单调物理序（跨 run catch-up/watermark）（→ ADR-0011）。
+- Checkpoint：默认**写门截断到 closed_prefix**（durable 永不半 tool_use）、读时 repair 兜底；补悬空 user-turn 修复；投递幂等 claim；取消=冻结子树+保留 partial（`resumable`）。
+- TaskNode 加 `edge_kind(spawn|branch|delegate|reset|compact)/path/depth/resumable`、status 补 `waiting_children`；subagent 节点→独立 Run/Delegation 记录（外部句柄 TEXT 不 FK）；**DAG v1 严格森林、deps 仅读校验**。
+- §9 持久化写死：log 权威→**先 append 后更新 snapshot/index**→损坏回退重放；**单一 schema authority + 幂等 DDL + `BEGIN IMMEDIATE` 重建**；JSON 禁 NaN/Inf、时间 UTC tz-aware；大对象内容寻址去重；防 ABA 永不回收水位；task/runs 与 messages 故障隔离。
