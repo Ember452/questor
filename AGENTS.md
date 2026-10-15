@@ -49,7 +49,10 @@ alone** (they evolve). Priority: user instruction → §0 + [HARD-CONSTRAINTS](.
 
 ## 4.5 Reuse proven implementations — scan the sibling repos before you build
 When writing or executing any phase plan (`docs/plan/NN-*.md`), **before implementing a capability, scan
-the sibling projects under `project-main/`** (hermes-agent, wuu, DeepCode, CowAgent, MetaGPT, cordis, …):
+the **actual set of sibling repos currently under `project-main/`** — this is the source of truth, new
+additions auto-join, don't work off a hard-coded list. As of last refresh (2026-10-15) this covers 12
+repos: hermes-agent, wuu, DeepCode, CowAgent, MetaGPT, cordis, EvoFlow, autogen, crewAI, OpenManus,
+GenericAgent, Agent-S. **Re-list `project-main/` at plan time** (new repos appear over time):
 - **Scan thoroughly — all relevant repos, not a cursory few** (§0 applies). A feature often already exists,
   battle-tested, in one of them.
 - **If a peer has a proven / better implementation, adapt and reuse it** rather than writing fresh — lower
@@ -61,8 +64,10 @@ the sibling projects under `project-main/`** (hermes-agent, wuu, DeepCode, CowAg
 - **Frontend especially:** for the desktop/web UI (React/Svelte + TS, Tauri), strongly prefer **adapting
   existing UI code from the reference repos** over writing fresh — chat/streaming render, SSE event-subscribe
   client, settings/permission panels, code highlight/diff, sidecar-lifecycle UI mostly already exist and are
-  battle-tested. **DeepCode's Tauri v2 `desktop/web` + `src-tauri` is same-stack → first choice**; CowAgent/wuu
-  Electron frontends are adaptable to Tauri; hermes `web/`/`ui-tui/` for reference. Still keep the iron rule:
+  battle-tested. **Same-stack first choices: DeepCode (`desktop/web` React + `src-tauri` Rust Tauri v2) and
+  EvoFlow (`evopanel` Tauri + pnpm)**; GenericAgent desktop (tauri); Cow/wuu/hermes Electron frontends adaptable
+  to Tauri; hermes `web/`/`ui-tui/` and wuu `clients/` for reference. Re-check the repo list at plan time —
+  new UI-bearing repos may appear. Still keep the iron rule:
   **UI is a thin client that only consumes the event protocol — never sink business/state/validation into the
   shell** (C14/ADR-0007); preserve license + attribution.
 
