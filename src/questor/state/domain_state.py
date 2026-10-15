@@ -76,6 +76,11 @@ class PermissionCtx:
     denylist: frozenset[str] = frozenset()  # 不可被 rules/mode 覆盖的敏感路径
     approvals: tuple[ApprovalRequest, ...] = ()  # 每个 request 有独立幂等身份
     decisions: tuple[PermissionDecisionRecord, ...] = ()
+    workspace_root: str | None = None
+    cwd: str | None = None
+    approval_policy: str = "on_request"  # on_request | never
+    protect_sensitive_paths: bool = True
+    enforce_read_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)

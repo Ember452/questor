@@ -282,6 +282,11 @@ def _permission_to(p: PermissionCtx) -> dict[str, Any]:
         "denylist": sorted(p.denylist),
         "approvals": [_approval_to(a) for a in p.approvals],
         "decisions": [_decision_to(r) for r in p.decisions],
+        "workspace_root": p.workspace_root,
+        "cwd": p.cwd,
+        "approval_policy": p.approval_policy,
+        "protect_sensitive_paths": p.protect_sensitive_paths,
+        "enforce_read_only": p.enforce_read_only,
     }
 
 
@@ -292,6 +297,11 @@ def _permission_from(d: dict[str, Any]) -> PermissionCtx:
         denylist=frozenset(d.get("denylist", ())),
         approvals=tuple(_approval_from(a) for a in d.get("approvals", ())),
         decisions=tuple(_decision_from(r) for r in d.get("decisions", ())),
+        workspace_root=d.get("workspace_root"),
+        cwd=d.get("cwd"),
+        approval_policy=d.get("approval_policy", "on_request"),
+        protect_sensitive_paths=d.get("protect_sensitive_paths", True),
+        enforce_read_only=d.get("enforce_read_only", False),
     )
 
 
