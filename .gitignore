@@ -51,6 +51,7 @@ pytest-of-*/
 # Environments
 .env
 .env.*
+!.env.example
 .venv
 .venv/
 env/
@@ -133,3 +134,12 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# ---------------------------------------------------------------------------
+# Questor：本地调试 / 跑测试留下的临时输出（不提交）
+# ---------------------------------------------------------------------------
+pytest_live.txt
+pytest_live*.txt
+scratch/
+*.out
+*.pid
