@@ -79,8 +79,15 @@ jobs:
       - run: uv sync --locked --all-groups
       # -v + 禁用 cache provider：卡死时日志能直接看出停在哪个测试（-q 下什么都不刷）。
       # --timeout 由 pyproject 的 addopts 提供（单测卡死限时）；junitxml 供事后定位（DeepCode 做法）。
-      - name: pytest
-        run: uv run pytest -v --tb=short -p no:cacheprovider --durations=10 --junitxml=pytest-results.xml
+      # P2 起产 coverage baseline：只观测、不设 fail-under，避免把基线阶段变成虚假门槛。
+      - name: pytest with coverage baseline
+        run: |
+          uv run pytest -v --tb=short -p no:cacheprovider --durations=10 \
+            --junitxml=pytest-results.xml \
+            --cov=src/questor \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml
       # always()：红的 run 才最需要产物，绿的不需要。只留 7 天，不慢慢堆满额度。
       - name: Upload test results
         if: always()
@@ -88,4 +95,11 @@ jobs:
         with:
           name: pytest-results
           path: pytest-results.xml
+          retention-days: 7
+      - name: Upload coverage baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
           retention-days: 7

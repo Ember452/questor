@@ -58,6 +58,7 @@ desktop/
 ## 4. 测试 `tests/`
 - 单元测试随模块镜像目录；**任务级评测/回归网**单列（如 `tests/evals/`），改内核前必备（ROADMAP P10）。
 - CI 门禁：冷导入 + `import-linter` 分层守卫 + 单测 + 回归；外部事件契约快照 diff。
+- P2 起持续产 coverage baseline：branch coverage + `coverage.xml` artifact；此阶段不设全局 `fail-under`，先建立可比较基线，再按安全模块逐步抬门槛。
 
 ## 5. 命名/风格约定
 - 小写包名、动词/名词清晰的模块；跨层只暴露 Port/契约，实现细节不外泄到上层 `__init__`（HARD-CONSTRAINTS C1）。
