@@ -25,7 +25,7 @@ below.** This CLAUDE.md is only a pointer (kept for tools that read `CLAUDE.md` 
   [`docs/plan/_TEMPLATE.md`](./docs/plan/_TEMPLATE.md) whose **§0 peer-repo scan table must be filled before coding** (AGENTS §4.5).
 
 ## Decision history
-- `docs/adr/` — ADR-0001…0011 (why each hard-to-reverse choice was made).
+- `docs/adr/` — ADR-0001…0012 (why each hard-to-reverse choice was made).
 
 ## Precedence
 User instruction > `AGENTS.md §0` + `HARD-CONSTRAINTS` > `VISION`/`ROADMAP`/`design`/`adr` > this file.

@@ -44,9 +44,16 @@ uv run pytest           # 测试
 
 内层只依赖 `contracts` + 注入端口；`kernel` 不 import `policy/surfaces/providers` 具体实现；只有 `Command` 改状态、`Event` 不反哺；策略只读状态视图。CI（分层守卫/冷导入）会挡住越界。
 
-## 提交流程
+## 提交流程（分支策略见 [ADR-0012](./docs/adr/0012-branch-policy.md)）
 
-1. 从 `main` 切分支 → 2. 小步提交 → 3. 本地 `uv run ruff` + `uv run pytest` 绿 → 4. 开 PR（用模板）→ 5. 等 CI。
+**现阶段（pre-alpha，`.github/workflows` 未上线）—— A 案**：
+- **维护者可直接推 `main`**（小步、细粒度提交，推前本地跑 `uv run ruff` + `uv run pytest`）；GitHub 保留 main 保护规则并**有意允许管理员 bypass**。
+- **外部贡献者走 fork + PR**（用 PR 模板 + DoD 自检）。
+- 不得 force-push 到 `main`；不得绕过钩子（`--no-verify`）。
+
+**CI 上线后升级为 B 案**（触发条件：出现可当 required status check 的 blocking 门禁）：
+从 `main` 切分支 → 小步提交 → 开 PR（用模板）→ **required checks 绿才能合** → 并关闭管理员 bypass。
+
 Bug 用 issue 模板；安全漏洞**不要开公开 issue**，见 SECURITY.md。
 
 ## AI 辅助
