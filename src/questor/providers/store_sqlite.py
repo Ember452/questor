@@ -14,7 +14,7 @@ import json
 
 import aiosqlite
 
-from questor.contracts.common import JsonObject, utc_now
+from questor.contracts.common import JsonObject, thaw, utc_now
 from questor.contracts.ports import StorePort
 
 _SCHEMA = """
@@ -44,7 +44,7 @@ CREATE INDEX IF NOT EXISTS idx_cp_run ON checkpoints (run_id, seq);
 
 
 def _dumps(obj: object) -> str:
-    return json.dumps(obj, allow_nan=False, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(thaw(obj), allow_nan=False, separators=(",", ":"), ensure_ascii=False)
 
 
 class SQLiteStore(StorePort):
