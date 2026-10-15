@@ -31,12 +31,14 @@ packages = ["src/questor"]
 # ---------------------------------------------------------------------------
 [tool.ruff]
 target-version = "py313"
-line-length = 100
+line-length = 130
 src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "TID", "UP", "B"]
-ignore = ["E402"]
+# E501 (hard line length) is a soft guide here; the dataclass-heavy event/state
+# code reads better unwrapped. Semantic rules (F/I/TID/UP/B/E4/E7/E9) stay on.
+ignore = ["E402", "E501"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 # Absolute imports only → makes banned-api layering rules unambiguous.

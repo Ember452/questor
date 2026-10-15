@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from questor.contracts.common import JsonObject, utc_now
 from questor.contracts.errors import ErrorEntry
@@ -80,8 +80,63 @@ class RequestCompactHint:
     type: ClassVar[str] = "request_compact_hint"
 
 
+# ---- Kernel-internal commands (still Commands -> still via reduce; C2) ------
+@dataclass(frozen=True, slots=True)
+class AppendAssistantMessage:
+    run_id: str
+    turn: int
+    message: Message
+    type: ClassVar[str] = "append_assistant_message"
+
+
+@dataclass(frozen=True, slots=True)
+class AdvanceTurn:
+    run_id: str
+    turn: int
+    type: ClassVar[str] = "advance_turn"
+
+
+@dataclass(frozen=True, slots=True)
+class RecordToolResult:
+    run_id: str
+    tool_call_id: str
+    status: str  # success | error | critical_error
+    result: Any | None = None
+    display: Any | None = None
+    type: ClassVar[str] = "record_tool_result"
+
+
+@dataclass(frozen=True, slots=True)
+class MarkToolDenied:
+    run_id: str
+    tool_call_id: str
+    reason: str
+    type: ClassVar[str] = "mark_tool_denied"
+
+
+@dataclass(frozen=True, slots=True)
+class FinalizeRun:
+    run_id: str
+    status: str  # completed | failed
+    final: Message | None = None
+    usage: JsonObject | None = None
+    exit_reason: str | None = None
+    error: ErrorEntry | None = None
+    type: ClassVar[str] = "finalize_run"
+
+
 Command = (
-    SubmitMessage | ProposeAction | ResolveApproval | Cancel | WriteMemory | RequestCompactHint
+    SubmitMessage
+    | ProposeAction
+    | ResolveApproval
+    | Cancel
+    | WriteMemory
+    | RequestCompactHint
+    | AppendAssistantMessage
+    | AdvanceTurn
+    | RecordToolResult
+    | MarkToolDenied
+    | FinalizeRun
 )
 
 
@@ -175,6 +230,11 @@ __all__ = [
     "Cancel",
     "WriteMemory",
     "RequestCompactHint",
+    "AppendAssistantMessage",
+    "AdvanceTurn",
+    "RecordToolResult",
+    "MarkToolDenied",
+    "FinalizeRun",
     "Command",
     "Envelope",
     "EventType",
