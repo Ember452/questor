@@ -32,6 +32,9 @@ LAYER_RANK: dict[str, int] = {
     "config": 7,
     "observability": 7,
 }
+#: Cross-cutting layers: any layer may import these (they depend only on
+#: contracts and are read-only — STRUCTURE S7), so they never count as "outer".
+CROSS_CUTTING: frozenset[str] = frozenset({"config", "observability"})
 _ROOT_PKG = "questor"
 
 
@@ -78,6 +81,8 @@ def analyze_source(source: str, own_layer: str, path: str = "<string>") -> list[
     violations: list[str] = []
     own_rank = LAYER_RANK.get(own_layer, -1)
     for lineno, imported in _referenced_layers(tree):
+        if imported in CROSS_CUTTING:
+            continue
         if LAYER_RANK.get(imported, -1) > own_rank:
             violations.append(
                 f"{path}:{lineno}: layer '{own_layer}' must not import outer "
