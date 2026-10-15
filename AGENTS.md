@@ -82,6 +82,9 @@ A change is done only when, as applicable: it **compiles + passes tests + lints 
   only `Command` mutates, events append-only & internal-not-stored-as-external, permission/sandbox
   live in the Harness (C1–C13).
 - **A change is not done until its implied doc updates are made** (see §5.5).
+- **Peer-scan gate** (§4.5): before implementing any capability, the corresponding row in the phase's
+  `docs/plan/NN-*.md` §0 table must be filled (repos scanned + `file:line` + verdict). Unfilled = not ready
+to code. Template: `docs/plan/_TEMPLATE.md`.
 
 ## 5.5 Living Docs — maintain `docs/` as you code, don't defer
 Docs are the source of truth the *next* session reads; stale docs cause wrong work. Update or add
