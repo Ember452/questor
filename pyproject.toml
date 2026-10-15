@@ -6,6 +6,7 @@ dependencies = [
     "pydantic>=2",
     "immutables",
     "jsonschema",
+    "aiosqlite",
 ]
 
 [dependency-groups]

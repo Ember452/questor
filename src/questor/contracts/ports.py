@@ -60,6 +60,10 @@ class StorePort(Protocol):
 
     async def sequence_head(self, run_id: str) -> int: ...
 
+    async def save_checkpoint(self, checkpoint: JsonObject) -> None: ...
+
+    async def latest_checkpoint(self, run_id: str) -> JsonObject | None: ...
+
 
 @runtime_checkable
 class Clock(Protocol):
