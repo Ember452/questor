@@ -42,6 +42,7 @@ from questor.contracts.state_schema import (
 )
 from questor.contracts.tool import Capability, Risk, Tool
 from questor.kernel.events import EventBus
+from questor.kernel.run_control import RunController
 from questor.state.checkpoint import open_tool_use_ids
 from questor.state.domain_state import Run
 from questor.state.reduce import reduce
@@ -136,11 +137,29 @@ class DefaultTurnLoop:
         self.cancel_event = cancel_event or asyncio.Event()
 
     async def drive(self, run: Run, user_text: str) -> Run:
-        """驱动一次 Run 直到唯一终态：提交→（流式→定稿→询问策略→路由）循环。"""
+        """兼容 P1 入口：把 user text 也经 RunController，绝不在 loop 外偷偷 reduce。"""
+        controller = RunController(run)
         user_msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=user_text),), seq=len(run.context.items))
-        run, events = reduce(run, SubmitMessage(run_id=run.run_id, content=user_msg))
-        await self._emit(events)
+        await controller.submit(
+            SubmitMessage(run_id=run.run_id, content=user_msg),
+            source="legacy-drive",
+            idempotency_key=f"submit:{run.run_id}",
+        )
+        return await self.drive_controller(controller)
 
+    async def drive_controller(self, controller: RunController) -> Run:
+        """RunController 是 Command 的唯一串行入口；终态后关闭迟到写入。"""
+        try:
+            result = await self._drive_controller(controller)
+            controller.run = result
+            return result
+        finally:
+            if controller.run.status.is_terminal:
+                controller.close()
+
+    async def _drive_controller(self, controller: RunController) -> Run:
+        """驱动 controller 当前 Run 到唯一终态；Command 仅在安全点消费。"""
+        run = controller.run
         turn = 0
         started = time.monotonic()
         total_tokens = 0
@@ -149,11 +168,13 @@ class DefaultTurnLoop:
         repeat_count = 0
         empties = 0
         while True:
+            run = await self._consume_commands(controller, run)
+            if run.status.is_terminal:
+                return run
             if self.cancel_event.is_set():
                 run, events = reduce(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
+                controller.run = run
                 await self._emit(events)
-                return run
-            if run.status.is_terminal:
                 return run
             if run.budget.deadline_seconds is not None and (time.monotonic() - started) > run.budget.deadline_seconds:
                 return await self._fail(run, turn, ErrorKind.TIMEOUT, f"wall-clock deadline {run.budget.deadline_seconds}s exceeded", "deadline")
@@ -164,11 +185,13 @@ class DefaultTurnLoop:
 
             turn_start = run  # C10/X4 回滚点：本 turn 起始时的状态
             run, events = reduce(run, AdvanceTurn(run_id=run.run_id, turn=turn))
+            controller.run = run
             await self._emit(events)
 
             assistant_msg, usage = await self._stream_turn(run, turn)
             total_tokens += _token_total(usage)
             run, events = reduce(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
+            controller.run = run
             await self._emit(events)
             await self._checkpoint(run, "auto")
 
@@ -199,6 +222,7 @@ class DefaultTurnLoop:
                     continue  # stop-gate：尚有未闭合工具调用时拒绝过早 Finish
                 final = assistant_msg if has_text else None
                 run, events = reduce(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
+                controller.run = run
                 await self._emit(events)
                 return run
 
@@ -209,6 +233,16 @@ class DefaultTurnLoop:
                 if repeat_count > run.budget.repeat_tool_limit:
                     return await self._fail(run, turn, ErrorKind.INTERNAL, f"repeated identical tool call '{intent.name}' x{repeat_count}", "no_progress")
                 run = await self._handle_tool_call(run, intent)
+
+    async def _consume_commands(self, controller: RunController, run: Run) -> Run:
+        """按 FIFO 应用 inbox 中已到达的 Command；reduce 只在此处由 loop 调用。"""
+        for command in await controller.next_batch():
+            run, events = reduce(run, command)
+            controller.run = run
+            await self._emit(events)
+            if run.status.is_terminal:
+                return run
+        return run
 
     # ---- phase 辅助方法 ------------------------------------------------
     async def _stream_turn(self, run: Run, turn: int) -> tuple[Message, JsonObject]:
