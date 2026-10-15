@@ -1,9 +1,7 @@
-"""L0 tool contract: ``ToolSpec`` + ``Tool``/``ToolResult`` + ``ToolContext``
-(design/03; HARD C1/C4/C8/C9). The strategy only *proposes* a call; validation,
-permission, sandbox, timeout and accounting all live in the Harness.
-
-P0 fixes the interface shapes; the read tool implementation is P1 (T5). Tools
-must not import provider/store/sandbox/UI (C1).
+"""L0 工具契约：``ToolSpec`` + ``Tool``/``ToolResult`` + ``ToolContext``
+（design/03；HARD C1/C4/C8/C9）。策略只能"提议调用工具 X + 参数"，**校验/权限/沙箱/
+超时/记账全在 Harness**。P0 固定接口形状；read 的实现见 P1(T5)。工具绝不 import
+provider/store/sandbox/UI（C1）。
 """
 
 from __future__ import annotations
@@ -19,6 +17,8 @@ from questor.contracts.errors import ErrorEntry
 
 
 class Capability(StrEnum):
+    """工具能力类别，决定默认风险档与是否需要沙箱（design/03 §7）。"""
+
     READONLY = "readonly"
     WRITE = "write"
     EXEC = "exec"
@@ -27,6 +27,8 @@ class Capability(StrEnum):
 
 
 class Risk(StrEnum):
+    """默认风险等级；与 capability 共同决定沙箱档与权限默认决策。"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -34,25 +36,29 @@ class Risk(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ToolSpec:
+    """工具的注册规格（L0 契约，注册进 L3）。新增工具=加注册，改语义=契约变更。"""
+
     name: str
     description: str
-    params: JsonObject  # JSON-Schema for argument shape (validated by Harness, C8)
+    params: JsonObject  # 参数 JSON-Schema，Harness 据此做结构校验（C8）
     capability: Capability
     risk: Risk
-    read_only: bool = False  # authoritative flag; missing metadata => fail-closed
+    read_only: bool = False  # 权威布尔；缺 metadata 一律 fail-closed 视为非只读
     available: bool = True
-    parallel_safe: bool = False  # schema placeholder until P5 (ROADMAP §2.5)
-    approval_mode: str | None = None  # MCP: may only tighten (03 §11)
-    orchestrator: bool = False  # nested/sub-agent tool; not gated (03 §11)
-    barrier: bool = False  # exclusive within a batch
-    description_max_chars: int = 1024
+    parallel_safe: bool = False  # 仅 schema 占位，完整并行到 P5（ROADMAP §2.5）
+    approval_mode: str | None = None  # MCP：只收紧不放宽，unknown→deny（03 §11）
+    orchestrator: bool = False  # 嵌套/子代理工具：不参与 gate（03 §11）
+    barrier: bool = False  # 同批独占
+    description_max_chars: int = 1024  # 描述长度上限（防超长/注入面）
 
 
 @dataclass(frozen=True, slots=True)
 class ToolResult:
+    """工具返回：``result`` 给模型、``display`` 给人（卡片）。"""
+
     status: str  # success | error | critical_error
-    result: Any | None = None  # for the model
-    display: Any | None = None  # for the human (card)
+    result: Any | None = None
+    display: Any | None = None
     files: tuple[str, ...] = ()
     artifact: JsonObject | None = None
     error: ErrorEntry | None = None
@@ -60,10 +66,10 @@ class ToolResult:
 
 @runtime_checkable
 class ToolContext(Protocol):
-    """The *controlled* capabilities a tool may touch (design/03 §2, T1).
+    """交给工具的**受控**能力（design/03 §2；T1）。
 
-    No raw filesystem/vector handle. A tool may only *return* a ``ToolResult``;
-    it must never submit a Command or mutate Domain_State (T1 -> single writer)."""
+    不给裸文件系统/向量库句柄。工具只能返回 ``ToolResult``，绝不提交 Command 或改
+    Domain_State（T1 → 单写者）。"""
 
     workspace_root: PurePosixPath
 
@@ -71,19 +77,21 @@ class ToolContext(Protocol):
 
     def report_progress(self, message: str) -> None: ...
 
-    def emit_progress(self, payload: JsonObject) -> None: ...  # transient only
+    def emit_progress(self, payload: JsonObject) -> None: ...  # 仅瞬态观测事件
 
 
 class Tool(ABC):
-    spec: ToolSpec  # each concrete tool declares its own spec
+    """工具实现基类。每个具体工具声明自己的 ``spec``。"""
+
+    spec: ToolSpec
 
     @abstractmethod
     def available(self) -> bool:
-        """Dynamic availability (feature flag / missing credential => hide)."""
+        """动态可用性（特性开关/凭据缺失时隐藏）。"""
 
     @abstractmethod
     async def execute(self, args: JsonObject, ctx: ToolContext) -> ToolResult:
-        """Pure business logic; sandbox/permission/timeout wrap this in Harness."""
+        """纯业务逻辑；沙箱/权限/超时由 Harness 在其外层包裹（C8）。"""
 
 
 __all__ = [
