@@ -26,7 +26,8 @@ begin_turn(state)                         # 记账 turn 号、预算
  next turn (verdict)
 ```
 
-## 2. `_LoopState`（阶段间唯一接口，不可变）
+## 2. `_LoopState`（阶段间唯一接口；只对 Domain_State 持只读视图，自身可内部可变）
+> 不可变红线只针对 `Domain_State`（C2 评审 R01-G8）；`LoopState` 是 per-turn 临时态，**不持久、不进 checkpoint**，允许内部可变槽、以"每 phase 返回 verdict + 按名拷回"解耦。
 ```
 LoopState {
   run_id, turn, seq,
@@ -34,7 +35,7 @@ LoopState {
   pending_tool_calls[],       # 未闭合调用（配对/取消用）
   budget{max_turns,tokens,deadline},
   last_usage, retry_state,
-  cancel_reason: null|user|timeout|resource|safety,
+  cancel_reason: null|user|timeout|budget_exhausted|no_progress|safety|owner,   # 与 02 §5 统一；归因从记录派生、不从调用点臆测
   verdict: continue|return|break
 }
 ```
@@ -72,3 +73,27 @@ Provider 错误→ProviderPort/LiteLLM 重试/fallback；耗尽则 `run_failed`�
 - 压缩/护栏的具体阈值——留 P10 加固期调。
 
 > 五道接缝（00/01/02/03/04）到此齐全 → **达到 ROADMAP §0 的"可开发"门槛**。下一步：写 `docs/plan/01-*.md`（P1 详细计划）即可开工 P1。
+
+## 11. 落地补充（评审采纳）
+- **L1 策略输出=不可信意图**：非法工具名/参数→包成被拒 Command + error 事件，verdict=continue、错误回填上下文让下轮自纠，**绝不崩循环**。
+- **L2 两个状态别混**：`Domain_State`=权威持久可断点；`LoopState`=循环内部临时态，**不持久化、不进 checkpoint**。
+- **L3 只在 turn 边界压缩**：严禁 turn 中途（流式/工具运行中）触发压缩。
+- **L4 护栏阈值全配置化**：重复次数/空答重试/max_turns 进 `run.budget`，别硬编码。
+- **L5 部分失败语义（v1）**：并行部分工具失败→记 ledger + error_stack、任务继续；**仅全部致命才终止 run**。
+- **X1 检查点 × 并行（v1 取巧）**：**v1 直接关并行工具**，避开"多 pending 恢复"复杂度；启用并行时再补 `pending_tool_calls[]` 多条目回填。
+- **X4 策略异常隔离**：PolicyPort panic→捕获、回滚到 turn 前一致态、发 error 事件；**已发 delta/外部事件不撤回**（客户端须处理"半流后回滚"）。
+- **X3 COW 是语言级坑**：reduce 永远产新 `Domain_State`、禁原地 mutate；文档拦不住，**必须代码强制**（Python 尤险）。
+
+## 13. 评审增补（R01/R06/R08 落地细化；接缝不变，均为"填肉"）
+**终止与护栏**
+- **终止双向 + 梯度**（改 §3）：补第二半——可**拒绝过早 Finish**（仍有 pending tool_use 未闭合 / verify-on-stop / stall“说继续却没工具” / degenerate-final 碎片收尾 → 不 finalize，注入**有界 nudge** 续跑，候选答案留作耗尽兜底）；硬终止前插三级：预算 0.9→一次性 checkpoint 提示、wall-clock 80%→wrap-up 提示、耗尽→一次无工具 **grace call**→仍不收则**强制无工具总结**（注入临时 prompt→取总结→pop）。
+- **护栏拆/补**：重复检测拆"工具入参重复"vs"输出内容 runaway"（后者**流式途中**倍增间隔判停 + 完成分支加字符下限放行"用户要的重复"）；空答按 finish_reason 正常/异常 + usage 0输出 + 单次成本 + 是否有人等 分类；**补 idle/进度看门狗**（与绝对 deadline 正交、消费 `heartbeat` 作进展、休眠不计入）+ 会话级 turn 租约 TTL 兜底（加固期）。
+- **退款型重启封顶**：凡 refund 迭代预算的重启(redirect/fallback/压缩重建)按"距上次产出的重启数"封顶、收到响应即归零；另设外层逸出异常计数。
+**错误/流式（R08）**
+- **分类产结构化 verdict**：`retryable:bool` 升为 `{retryable, should_compress, should_fallback, should_rotate_credential}` + 稳定 `kind` 枚举；分类=**有序阶段优先级表**（先 memory-ceiling 于 overflow/usage-limit；oversized≠overflow；format_error 与 overflow 分栏；cause 链有界5层）；分类器可插拔 hook、失败 fail-to-builtin（**分类纯函数进 contracts、重试/fallback 编排归 Kernel → ADR-0010**）。
+- **fallback 边界**：primary 满预算、链每环一次；退避封顶=f(传输空闲超时)；**run 内粘、跨 run 复位、subagent 继承**；即时换链 vs 退避后换链两档；终态携**整链失败摘要** + `resumable:bool`。
+- **流式看门狗**：双超时(首 token / chunk 间)；连接池下**代际栅栏+退役即失效**；拿到 finish_reason 后卡住=teardown 不升级 run_failed；mid-stream 取消只留文本不留半 tool_use。
+- **Cancel 归因/传播**：reason 从记录派生、落 exit 标签与事件文案；扇出工具 worker + 递归子 agent、隔离到本执行线程；高并发用代际/claim 栅栏防误吞 abort；错误恢复不擦已接受 steer。
+**压缩（R06）**：§7 由单档升为**四档梯度**（L0 裁剪 / L1 摘要 / **L2 整体归档留指针=默认** / L2' 蒸馏进长期记忆）；recovery_pointer 形态见 01；**压缩时可选发 `MemoryWrite` Command → 06**；只在 turn 边界、策略仅 advisory。
+**契约（R07）**：§9 PolicyPort 用 wuu `loopdriver` 契约具体化（LoopPolicy/Gateway/Create-Resume + **版本门控 checkpoint**），细化见 05。
+**X1 取齐**：v1 串行、`parallel_safe` 占位→P5；启用并行时须 gate(reader/writer/饥饿/orchestrator 绕开) + 取消 poll 感知 + ledger 回填 pending（03 §8/02 §10）。
