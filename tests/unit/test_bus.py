@@ -1,4 +1,4 @@
-"""P1 T8 DoD — bus: persist durable, forward live-only, terminal uniqueness, version gate."""
+"""P1 T8 DoD —— 总线：durable 落库、live-only 转发、终态唯一、版本闸门。"""
 
 from __future__ import annotations
 
@@ -42,9 +42,13 @@ async def test_terminal_uniqueness_first_writer_wins() -> None:
 
 
 async def test_version_mismatch_yields_resync() -> None:
-    bus = InProcessEventBus(await SQLiteStore(":memory:").connect())
+    store = await SQLiteStore(":memory:").connect()
+    bus = InProcessEventBus(store)
     got = [e async for e in bus.subscribe("run_d", 0, expected_version=999)]
     assert [e.type for e in got] == ["resync_required"]
+    # 必须显式 close：aiosqlite 的工作线程是非守护线程，未 close 会永远阻塞在
+    # queue.get() 上，解释器退出时 threading._shutdown() join 它 → 进程永不退出（CI 卡死根因）。
+    await store.close()
 
 
 async def test_internal_only_event_not_forwarded_but_persisted() -> None:

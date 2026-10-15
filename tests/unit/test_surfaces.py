@@ -1,4 +1,4 @@
-"""P1 T10 DoD — CLI wiring + SSE frame shape + app routes (offline, Echo provider)."""
+"""P1 T10 DoD —— CLI 装配 + SSE 帧形状 + 应用路由（离线、Echo provider）。"""
 
 from __future__ import annotations
 
@@ -63,3 +63,6 @@ def test_create_app_has_routes() -> None:
     app = create_app(server)
     paths = {r.path for r in app.routes}
     assert {"/run", "/cancel/{run_id}", "/events/{run_id}"} <= paths
+    # 必须显式 close：store 被 server/app 的闭包循环引用，靠引用计数回收不到，
+    # 其 aiosqlite 非守护工作线程会在解释器退出时把 pytest 进程卡死（CI 卡死根因）。
+    asyncio.run(server.store.close())
