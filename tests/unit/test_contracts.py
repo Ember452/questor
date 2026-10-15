@@ -20,10 +20,12 @@ from questor.contracts.state_schema import (
     ApprovalRequest,
     ApprovalStatus,
     CancelReason,
+    ContentBlock,
     Message,
     Role,
     RunStatus,
     ToolArgsStatus,
+    ToolCall,
     ToolCallStatus,
 )
 from questor.contracts.tool import Capability
@@ -198,3 +200,45 @@ def test_permission_context_persists_pending_approvals() -> None:
     ctx = PermissionCtx(approvals=(request,))
     assert ctx.approvals[0].request_id == "apr-1"
     assert ctx.approvals[0].status is ApprovalStatus.PENDING
+
+
+def test_content_block_preserves_raw_malformed_tool_args() -> None:
+    block = ContentBlock(
+        type="tool_use",
+        tool_use_id="tc-bad",
+        name="write",
+        raw_input="{bad json",
+        args_status=ToolArgsStatus.INVALID,
+        args_error="unexpected character",
+    )
+    assert block.input is None
+    assert block.raw_input == "{bad json"
+    with pytest.raises(ValueError, match="bounded raw_input"):
+        ContentBlock(type="tool_use", tool_use_id="tc", args_status=ToolArgsStatus.INVALID)
+    with pytest.raises(ValueError, match="valid ContentBlock.input"):
+        ContentBlock(type="tool_use", tool_use_id="tc", args_status=ToolArgsStatus.VALID)
+
+
+def test_tool_call_carries_lifecycle_audit_metadata() -> None:
+    call = ToolCall(
+        tool_call_id="tc-1",
+        turn=2,
+        name="write",
+        args={"file_path": "notes.md"},
+        status=ToolCallStatus.AWAITING_APPROVAL,
+        args_status=ToolArgsStatus.VALID,
+        approval_request_id="apr-1",
+        permission_reason="write without OS fence requires confirmation",
+        permission_decided_by="user",
+        permission_warnings=("job object does not fence writes",),
+        capability="write",
+        risk="medium",
+        timeout_s=30.0,
+        sandbox_backend="job",
+        confinement="partial",
+        env_scrubbed=("OPENAI_API_KEY",),
+        artifact_refs=("artifact://sha",),
+    )
+    assert call.status is ToolCallStatus.AWAITING_APPROVAL
+    assert call.permission_warnings == ("job object does not fence writes",)
+    assert call.env_scrubbed == ("OPENAI_API_KEY",)

@@ -153,6 +153,9 @@ class ContentBlock:
     is_error: bool | None = None  # tool_result 的错误标志
     payload: dict[str, Any] | None = None  # image/file 的不透明载体
     provider_state: dict[str, Any] | None = None  # 不透明、reducer 只搬运不解释（R03 A-2）
+    raw_input: str | None = None  # provider 原始 args；非法 JSON 不得伪装成空参
+    args_status: ToolArgsStatus = ToolArgsStatus.MISSING
+    args_error: str | None = None  # 仅可解析性错误摘要，不保存未截断原文
 
     def __post_init__(self) -> None:
         # 深冻结 dict 叶，确保被 COW 共享的实例无法被就地篡改（HARD C2）。
@@ -161,6 +164,10 @@ class ContentBlock:
         object.__setattr__(
             self, "provider_state", freeze(self.provider_state) if self.provider_state is not None else None
         )
+        if self.args_status is ToolArgsStatus.VALID and self.input is None:
+            raise ValueError("valid ContentBlock.input must be a JSON object")
+        if self.args_status is ToolArgsStatus.INVALID and not self.raw_input:
+            raise ValueError("invalid tool args must retain a bounded raw_input summary")
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,6 +213,19 @@ class ToolCall:
     result: Any | None = None  # 给模型的返回
     display: Any | None = None  # 给人的展示（卡片）
     permission_decision: str | None = None
+    args_status: ToolArgsStatus = ToolArgsStatus.MISSING
+    raw_args_summary: str | None = None
+    approval_request_id: str | None = None
+    permission_reason: str | None = None
+    permission_decided_by: str | None = None
+    permission_warnings: tuple[str, ...] = ()
+    capability: str | None = None
+    risk: str | None = None
+    timeout_s: float | None = None
+    sandbox_backend: str | None = None
+    confinement: str | None = None
+    env_scrubbed: tuple[str, ...] = ()
+    artifact_refs: tuple[str, ...] = ()
     node_id: str | None = None
     seq_request: int | None = None  # 发起时占用的 durable seq
     seq_result: int | None = None  # 返回时占用的 durable seq
