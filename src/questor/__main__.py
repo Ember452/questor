@@ -1,17 +1,10 @@
-"""Entry point (Python sidecar start point in later phases).
+"""Entry point: launches the CLI terminal surface (the P1 interactive demo).
 
-In P0 there is **no runnable Agent behavior** by design (ROADMAP §1.5). Running
-this module only confirms the package is wired; the interactive loop arrives in
-P1 (``docs/plan/01-p1-minimal-loop.md``).
+Run with ``python -m questor``. The Python sidecar / Tauri launch point is added
+in later phases; for P1 this starts the terminal "ask one line, stream one answer".
 """
 
-from questor.version import __version__
-
-
-def main() -> int:
-    print(f"questor {__version__} (P0 interface skeleton — no runnable agent yet).")
-    return 0
-
+from questor.surfaces.cli import main
 
 if __name__ == "__main__":
     raise SystemExit(main())
