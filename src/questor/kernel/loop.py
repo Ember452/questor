@@ -367,7 +367,7 @@ class DefaultTurnLoop:
                 "seq": run.seq,
                 "turn": run.turn,
                 "kind": kind,
-                "state_digest": json.dumps(to_snapshot(run), ensure_ascii=False, default=str),
+                "state_digest": json.dumps(to_snapshot(run), ensure_ascii=False, default=str, allow_nan=False),
                 "pending": list(open_tool_use_ids(run.context.items)),
             }
         )

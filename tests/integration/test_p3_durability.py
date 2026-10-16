@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from questor.contracts.events import EVENT_SCHEMA_VERSION, Envelope, EventType
 from questor.contracts.state_schema import Budget
 from questor.kernel.events import LIVE_ONLY, InProcessEventBus
@@ -69,4 +71,26 @@ async def test_rebuild_run_is_idempotent(tmp_path) -> None:
     assert first is not None and second is not None
     assert first.seq == second.seq  # 稳定，不随重复恢复漂移
     assert await store.watermark() == head_before  # rebuild 只读，不追加事件
+    await store.close()
+
+
+async def test_checkpoint_snapshot_rejects_nan(tmp_path) -> None:
+    """C-卫生：快照 state_digest 序列化必须 allow_nan=False，NaN/Inf 不得泄入 blob（对齐事件 _dumps）。"""
+    from dataclasses import replace
+
+    from questor.contracts.common import freeze, new_id
+    from questor.contracts.state_schema import Budget, ContentBlock, Message, Role
+    from questor.kernel.loop import DefaultTurnLoop
+    from questor.policy.react_policy import ReActPolicy
+    from questor.providers.fake import EchoProvider
+    from questor.state.domain_state import Context, Run
+
+    store = await SQLiteStore(str(tmp_path / "nan.db")).connect()
+    bus = InProcessEventBus(store)
+    loop = DefaultTurnLoop(provider=EchoProvider(), policy=ReActPolicy(), permission=None, bus=bus, tool_for=lambda _n: None, store=store, workspace_root=tmp_path)
+    msg = Message(id=new_id("m"), role=Role.ASSISTANT, content=(ContentBlock(type="text", text="x", payload=freeze({"score": float("nan")})),), seq=0)
+    run = replace(Run(run_id="run_nan", budget=Budget()), context=Context(items=(msg,)))
+
+    with pytest.raises(ValueError):
+        await loop._checkpoint(run, "auto")  # NaN 必须拒写，而非写出非标准 JSON
     await store.close()
