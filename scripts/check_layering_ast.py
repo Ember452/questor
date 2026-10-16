@@ -37,6 +37,31 @@ LAYER_RANK: dict[str, int] = {
 CROSS_CUTTING: frozenset[str] = frozenset({"config", "observability"})
 _ROOT_PKG = "questor"
 
+#: 机械越权约束（T20）：某些能力必须根本不存在于某层，而不是靠"外层等级"间接挡。
+#: 键是层名，值是禁止被 import 的模块前缀（stdlib 或 questor 具体实现）。
+FORBIDDEN_IMPORTS: dict[str, tuple[str, ...]] = {
+    # 工具绝不自己 spawn 进程 / 直接依赖沙箱具体实现（进程/env 都在 L5 ProcessRunner）。
+    "capabilities": (
+        "subprocess",
+        "questor.providers.sandbox",
+        "questor.providers.process_runner",
+        "questor.providers._win_job",
+    ),
+    # surfaces 零业务：不碰 reduce、不碰 store 具体实现（经 Command Inbox / 注入 StorePort）。
+    "surfaces": (
+        "questor.state.reduce",
+        "questor.providers.store_sqlite",
+        "subprocess",
+    ),
+    # L0 词汇层只放数据与纯不变式，不碰 IO/网络/进程。
+    "contracts": (
+        "subprocess",
+        "socket",
+        "http",
+        "urllib",
+    ),
+}
+
 
 def _layer_of(module: str) -> str | None:
     """Return the questor sub-layer owning ``module`` (e.g. 'questor.kernel.x')."""
@@ -46,37 +71,32 @@ def _layer_of(module: str) -> str | None:
     return None
 
 
-def _referenced_layers(node: ast.AST) -> list[tuple[int, str]]:
-    """Yield (lineno, imported questor sub-layer) for a node, incl. dynamic ones."""
+def _referenced_modules(node: ast.AST) -> list[tuple[int, str]]:
+    """Yield (lineno, module_name) for every import this node makes, incl. dynamic ones."""
     found: list[tuple[int, str]] = []
     for child in ast.walk(node):
         if isinstance(child, ast.Import):
             for alias in child.names:
-                layer = _layer_of(alias.name)
-                if layer:
-                    found.append((child.lineno, layer))
-        elif isinstance(child, ast.ImportFrom) and child.module:
-            if child.level:  # relative import — normalized elsewhere; skip
-                continue
-            layer = _layer_of(child.module)
-            if layer:
-                found.append((child.lineno, layer))
+                found.append((child.lineno, alias.name))
+        elif isinstance(child, ast.ImportFrom) and child.module and not child.level:
+            found.append((child.lineno, child.module))
         elif isinstance(child, ast.Call):
             func = child.func
             dyn = (isinstance(func, ast.Attribute) and func.attr == "import_module") or (
                 isinstance(func, ast.Name) and func.id == "__import__"
             )
-            if dyn and child.args and isinstance(child.args[0], ast.Constant):
-                arg = child.args[0].value
-                if isinstance(arg, str):
-                    layer = _layer_of(arg)
-                    if layer:
-                        found.append((child.lineno, layer))
+            if dyn and child.args and isinstance(child.args[0], ast.Constant) and isinstance(child.args[0].value, str):
+                found.append((child.lineno, child.args[0].value))
     return found
 
 
+def _referenced_layers(node: ast.AST) -> list[tuple[int, str]]:
+    """Yield (lineno, imported questor sub-layer) for a node, incl. dynamic ones."""
+    return [(lineno, layer) for lineno, module in _referenced_modules(node) if (layer := _layer_of(module))]
+
+
 def analyze_source(source: str, own_layer: str, path: str = "<string>") -> list[str]:
-    """Return violation messages for imports of an OUTER layer from ``own_layer``."""
+    """Return violation messages for outer-layer imports and forbidden-module imports."""
     tree = ast.parse(source)
     violations: list[str] = []
     own_rank = LAYER_RANK.get(own_layer, -1)
@@ -87,6 +107,12 @@ def analyze_source(source: str, own_layer: str, path: str = "<string>") -> list[
             violations.append(
                 f"{path}:{lineno}: layer '{own_layer}' must not import outer "
                 f"layer '{imported}' (C1/C14)"
+            )
+    forbidden = FORBIDDEN_IMPORTS.get(own_layer, ())
+    for lineno, module in _referenced_modules(tree):
+        if any(module == bad or module.startswith(bad + ".") for bad in forbidden):
+            violations.append(
+                f"{path}:{lineno}: layer '{own_layer}' must not import '{module}' (T20 forbidden)"
             )
     return violations
 
@@ -105,14 +131,18 @@ def check(root: Path) -> tuple[list[str], int]:
 
 
 def self_test() -> int:
-    """Prove the guard flags a bad dynamic import and passes a good one."""
+    """Prove the guard flags a bad dynamic import, a forbidden import, and passes a good one."""
     bad = 'import importlib\nimportlib.import_module("questor.surfaces")\n'
+    forbidden = 'import subprocess\n'
+    surfaces_reduce = 'from questor.state.reduce import reduce\n'
     good = "from questor.contracts import events\n"
     bad_hits = analyze_source(bad, "kernel")
+    forbidden_hits = analyze_source(forbidden, "capabilities")
+    surfaces_hits = analyze_source(surfaces_reduce, "surfaces")
     good_hits = analyze_source(good, "kernel")
-    ok = bool(bad_hits) and not good_hits
-    print(f"self-test: bad-import flagged={bool(bad_hits)} clean-passed={not good_hits}")
-    for msg in bad_hits:
+    ok = bool(bad_hits) and bool(forbidden_hits) and bool(surfaces_hits) and not good_hits
+    print(f"self-test: dyn-import flagged={bool(bad_hits)} forbidden-caps flagged={bool(forbidden_hits)} surfaces-reduce flagged={bool(surfaces_hits)} clean-passed={not good_hits}")
+    for msg in (*bad_hits, *forbidden_hits, *surfaces_hits):
         print(f"  expected-red -> {msg}")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
