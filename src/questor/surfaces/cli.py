@@ -14,8 +14,16 @@ import sys
 import threading
 from pathlib import Path
 
+from questor.capabilities.tools.apply_patch import ApplyPatchTool
+from questor.capabilities.tools.bash import BashTool
+from questor.capabilities.tools.edit import EditTool
+from questor.capabilities.tools.glob import GlobTool
+from questor.capabilities.tools.grep import GrepTool
+from questor.capabilities.tools.ls import LsTool
+from questor.capabilities.tools.powershell import PowerShellTool
 from questor.capabilities.tools.read import ReadTool
 from questor.capabilities.tools.registry import ToolRegistry
+from questor.capabilities.tools.write import WriteTool
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
 from questor.contracts.ports import ProviderPort
@@ -73,6 +81,14 @@ def _settle(future: asyncio.Future[bool], value: bool) -> None:
         future.set_result(value)
 
 
+def _default_registry() -> ToolRegistry:
+    """P2 默认内置工具集（注册表只收 available() 为真的，缺 bash 的平台自动隐藏）。"""
+    registry = ToolRegistry()
+    for tool in (ReadTool(), WriteTool(), EditTool(), ApplyPatchTool(), LsTool(), GlobTool(), GrepTool(), BashTool(), PowerShellTool()):
+        registry.register(tool)
+    return registry
+
+
 class CliSurface:
     """把 provider/权限/工具/总线/存储装配成可跑的终端会话。"""
 
@@ -89,8 +105,7 @@ class CliSurface:
         self.system = system
         self.model = model
         self.read = ReadTool()
-        self.registry = ToolRegistry()
-        self.registry.register(self.read)
+        self.registry = _default_registry()
 
     def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
         """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。"""
