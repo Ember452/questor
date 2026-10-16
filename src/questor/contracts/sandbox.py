@@ -87,5 +87,20 @@ class SandboxPort(Protocol):
         cwd: str | None = None,
     ) -> tuple[str, ...]: ...
 
+    def wrap_shell(
+        self,
+        capability: str,
+        command: str,
+        *,
+        workspace_root: str | None = None,
+        cwd: str | None = None,
+    ) -> tuple[str, ...]:
+        """将** shell 命令串**包成受控 argv（design/03 §4）。
+
+        与 :meth:`wrap_argv` 严格分离：已有 argv 的任务不得为了“走沙箱”而把命令串拼回
+        一个 shell string（ADR-0017）。给不出承诺隔离的后端必须抛错，不得 passthrough。
+        """
+        ...
+
 
 __all__ = ["Confinement", "SandboxBackend", "SandboxDescriptor", "SandboxPort"]

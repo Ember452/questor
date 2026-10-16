@@ -46,6 +46,16 @@ class NullSandbox(SandboxPort):
     ) -> tuple[str, ...]:
         raise NotImplementedError("NullSandbox cannot wrap argv; capability floor must deny or ask before this is called")
 
+    def wrap_shell(
+        self,
+        capability: str,
+        command: str,
+        *,
+        workspace_root: str | None = None,
+        cwd: str | None = None,
+    ) -> tuple[str, ...]:
+        raise NotImplementedError("NullSandbox cannot wrap a shell command; the capability floor must deny or ask first")
+
 
 class WindowsJobSandbox(SandboxPort):
     """Windows Job Object：仅承诺进程树终止，不承诺文件系统写围栏。"""
@@ -80,6 +90,20 @@ class WindowsJobSandbox(SandboxPort):
         # Job assignment happens inside ProcessRunner; argv itself must not be
         # silently rewritten into an unconfined shell string.
         return argv
+
+    def wrap_shell(
+        self,
+        capability: str,
+        command: str,
+        *,
+        workspace_root: str | None = None,
+        cwd: str | None = None,
+    ) -> tuple[str, ...]:
+        """Job Object 只隔进程树，不隔文件/网络；把命令串拼回 shell 执行会失去 argv 边界。
+
+        因此不提供“壳层包装”便利：shell 工具必须自己给出结构化 argv（ADR-0017/0018）。
+        """
+        raise NotImplementedError("Windows Job Object does not wrap shell strings; pass a structured argv via wrap_argv instead")
 
 
 def detect_sandbox() -> SandboxPort:
@@ -142,6 +166,16 @@ class _UnimplementedSandbox(SandboxPort):
         cwd: str | None = None,
     ) -> tuple[str, ...]:
         raise NotImplementedError(f"{self._descriptor.backend.value} profile wrapping is not implemented yet")
+
+    def wrap_shell(
+        self,
+        capability: str,
+        command: str,
+        *,
+        workspace_root: str | None = None,
+        cwd: str | None = None,
+    ) -> tuple[str, ...]:
+        raise NotImplementedError(f"{self._descriptor.backend.value} shell wrapping is not implemented yet")
 
 
 __all__ = ["NullSandbox", "WindowsJobSandbox", "detect_sandbox"]
