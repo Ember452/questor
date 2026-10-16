@@ -75,6 +75,10 @@ jobs:
         run: |
           uv run python scripts/check_output_budgets.py --self-test
           uv run python scripts/check_output_budgets.py
+      - name: Replay-determinism guard (snapshot+tail == continuous reduce; P3 T16)
+        run: |
+          uv run python scripts/check_replay_determinism.py --self-test
+          uv run python scripts/check_replay_determinism.py
       - name: Secret/env-value projection guard (self-test proves it can go red)
         run: |
           uv run python scripts/check_secret_projection.py --self-test
