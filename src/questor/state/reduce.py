@@ -227,14 +227,46 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         return new, events
 
     if isinstance(command, FinalizeRun):
+        # 任何终态都必须先闭合还开着的 tool_use（C7/I1）。failed 分支以前直接落终态，
+        # 把未配对的 tool_use 留在 context；P3 做 resume/after_seq 续传时会被原样喂回 provider
+        # （Anthropic/OpenAI 强制 tool_use↔tool_result 成对，直接 4xx），所以在这一步就补上。
+        open_calls = _open_calls(run)
+        closed, extra_messages = _backfill_open_calls(run, note=f"run finished as {command.status} before this call completed")
+        ledger = replace(run.tool_ledger, calls=closed)
+        items = (*run.context.items, *extra_messages)
+        seq = run.seq
+        events: list[Envelope] = []
+        for call in open_calls:
+            seq += 1
+            events.append(_event(seq, run, None, EventType.TOOL_COMPLETED, {"tool_call_id": call.tool_call_id, "status": "cancelled"}))
         if command.status == "failed":
             stack = (*run.error_stack, command.error) if command.error else run.error_stack
-            new = replace(run, status=RunStatus.FAILED, error_stack=stack, completed_at=utc_now(), seq=run.seq + 1)
             err = {"code": command.error.kind.value, "message": command.error.message, "retryable": command.error.hints.retryable} if command.error else {}
-            return new, [_event(new.seq, new, new.turn, EventType.RUN_FAILED, {"error": err})]
-        items = (*run.context.items, command.final) if command.final is not None else run.context.items
-        new = replace(run, context=replace(run.context, items=items), status=RunStatus.COMPLETED, completed_at=utc_now(), seq=run.seq + 1)
-        return new, [_event(new.seq, new, new.turn, EventType.RUN_COMPLETED, {"usage": command.usage or {}, "exit_reason": command.exit_reason})]
+            seq += 1
+            events.append(_event(seq, run, run.turn, EventType.RUN_FAILED, {"error": err}))
+            new = replace(
+                run,
+                tool_ledger=ledger,
+                context=replace(run.context, items=items),
+                status=RunStatus.FAILED,
+                error_stack=stack,
+                completed_at=utc_now(),
+                seq=seq,
+            )
+            return new, events
+        if command.final is not None:
+            items = (*items, command.final)
+        seq += 1
+        events.append(_event(seq, run, run.turn, EventType.RUN_COMPLETED, {"usage": command.usage or {}, "exit_reason": command.exit_reason}))
+        new = replace(
+            run,
+            tool_ledger=ledger,
+            context=replace(run.context, items=items),
+            status=RunStatus.COMPLETED,
+            completed_at=utc_now(),
+            seq=seq,
+        )
+        return new, events
 
     # 未处理的 Command → 以 warning 拒绝（绝不崩循环，design/04 L1）。
     return run, [
@@ -340,15 +372,16 @@ def _append_tool_result(ctx: Context, tool_call_id: str, result: object, *, is_e
     return replace(ctx, items=(*ctx.items, msg))
 
 
-def _backfill_open_calls(run: Run) -> tuple[tuple[ToolCall, ...], tuple[Message, ...]]:
+def _backfill_open_calls(run: Run, *, note: str = "cancelled before completion") -> tuple[tuple[ToolCall, ...], tuple[Message, ...]]:
     """C7：用 cancelled 结果闭合每一个未完成的调用，保住配对不变式。
 
     取消不是普通工具 error：账本必须保留可区分事实，resume/审计才能判断进程被用户停止
-    而非业务失败（ADR-0016）。
+    而非业务失败（ADR-0016）。`note` 区分两种成因：用户取消 vs 落终态时尚未完成；
+    两者都是 cancelled 状态，但后者额外带运行终态说明，供回放与审计区分。
     """
     open_ids = {c.tool_call_id for c in _open_calls(run)}
     closed = tuple(
-        replace(c, status=ToolCallStatus.CANCELLED, result="cancelled before completion")
+        replace(c, status=ToolCallStatus.CANCELLED, result=note)
         if c.tool_call_id in open_ids
         else c
         for c in run.tool_ledger.calls
@@ -357,7 +390,7 @@ def _backfill_open_calls(run: Run) -> tuple[tuple[ToolCall, ...], tuple[Message,
         Message(
             id=new_id("msg"),
             role=Role.TOOL,
-            content=(ContentBlock(type="tool_result", tool_use_id=c.tool_call_id, text="cancelled", is_error=True),),
+            content=(ContentBlock(type="tool_result", tool_use_id=c.tool_call_id, text=note, is_error=True),),
             seq=len(run.context.items) + i,
         )
         for i, c in enumerate(_open_calls(run))
