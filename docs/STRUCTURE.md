@@ -84,7 +84,7 @@ desktop/
 - **S4 抽象 vs 实现分家**：`contracts/` 只放**抽象 Port 协议 + 数据模型**；`providers/capabilities/policy` 放具体实现。实现写进 contracts 会让"最稳定层"持续膨胀、破 C11。
 - **S5 进程边界（Tauri）**：Python Harness 是**独立 sidecar 进程**，Rust 壳与它**只经 HTTP+SSE 事件协议通信**，**严禁进程内直调 Python 函数**（否则破"Shell 只消费事件"铁律）。
 - **S6 surfaces 零业务**：`surfaces/`（HTTP/CLI/OpenAI 兼容）只做 Command 接收 + 事件协议转发/翻译；**不实现业务、不改 state**，一切写操作造 Command 送入 kernel 总线。
-- **S7 observability 依赖方向**：可被各层调用，但**只依赖 contracts**、不 import kernel/policy 实现；只读/上报，**不改状态**。
+- **S7 observability 依赖方向（双条，ADR-0027）**：① **调用方向**——可被各层调用（含 `kernel`→`observability`，AST 明文允许方向），只读/上报、**不改状态**；真正的红线只在**反向**（observability 不得 import 上层实现）。② **内核零依赖**——`observability/` 九个**内核文件**（`entry`/`scope`/`redact`/`exporter`/`sink_console`/`sink_file`/`bridge`/`pipeline`/`configure`）**零 `questor.*` 依赖、连 `contracts` 都不许**（保"将来抽包 = 纯机械搬目录"）；唯 `projection.py`（适配层）允许 import `questor.contracts`。故旧表述"只依赖 contracts"仅适用于适配层、不适用于内核（`grep 只依赖 contracts` 会误导抽包）。机械强制：`.importlinter` 第五契约（意图声明）+ `scripts/check_log_kernel_isolation.py` G-L1/G-L2（含 `--self-test`）。
 
 ## 8. 再次强调
 > 以上目录/命名是**便于阅读、可维护的常见大型开源布局**，不是必须照抄的硬约束。实际实现时按需要长什么样就长什么样；

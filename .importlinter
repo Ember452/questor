@@ -51,6 +51,37 @@ modules =
     questor.config
     questor.observability
 
+# Contract 5 (ADR-0027): the logging KERNEL (nine files) must be dependency-free
+# of every questor layer -- not even contracts -- so it stays an extractable,
+# publishable package ("extract = mechanically move the dir"). Only projection.py
+# (adaptation layer) may import questor.contracts, so it is NOT listed as a source
+# here. Intent declaration only: import-linter cannot catch dynamic imports, so the
+# mechanical backstop is scripts/check_log_kernel_isolation.py (G-L1/G-L2, self-test).
+# NOTE: modules appear here as of PR-B (blade 2) T2.2+; until then import-linter treats them as
+# unresolvable externals. Full 5-contract-green is asserted at T2.16 (all files exist).
+[importlinter:contract:log-kernel-independent]
+name = Logging kernel must not import any questor layer (extractable: zero deps, not even contracts)
+type = forbidden
+source_modules =
+    questor.observability.entry
+    questor.observability.scope
+    questor.observability.redact
+    questor.observability.exporter
+    questor.observability.sink_console
+    questor.observability.sink_file
+    questor.observability.bridge
+    questor.observability.pipeline
+    questor.observability.configure
+forbidden_modules =
+    questor.contracts
+    questor.state
+    questor.kernel
+    questor.capabilities
+    questor.policy
+    questor.providers
+    questor.surfaces
+    questor.config
+
 # NOTE: "surfaces must not import state.reduce" is enforced *directly* (non-transitively)
 # by scripts/check_layering_ast.py FORBIDDEN_IMPORTS. An import-linter `forbidden` contract
 # would be transitive and wrongly flag surfaces -> kernel -> reduce, which is a legitimate
