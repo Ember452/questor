@@ -259,8 +259,11 @@ class CliSurface:
 
 
 async def interactive(surface: CliSurface | None = None) -> int:
-    """REPL 循环：输一行、流式看答复；Ctrl-D 退出。store 由组合根（``__main__``）注入。"""
-    configure_logging()
+    """REPL 循环：输一行、流式看答复；Ctrl-D 退出。store 由组合根（``__main__``）注入。
+
+    日志装配责任已上移组合根（DESIGN §11）：本函数不再自调 ``configure_logging``；
+    直接调本函数的入口/测试需自行显式装配。
+    """
     surface = surface or CliSurface()
     print("questor CLI — type a message (Ctrl-D to exit).")
     while True:
@@ -276,7 +279,11 @@ async def interactive(surface: CliSurface | None = None) -> int:
 
 
 def main() -> int:
-    """CLI 入口：跑交互 REPL；Ctrl-C 退出码 130。"""
+    """独立模块入口（``python -m questor.surfaces.cli``）：跑交互 REPL；Ctrl-C 退出码 130。
+
+    与 ``__main__._amain`` 同为入口，各自显式装配日志（生产入口走 ``python -m questor``）。
+    """
+    configure_logging()
     try:
         return asyncio.run(interactive())
     except KeyboardInterrupt:
