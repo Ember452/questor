@@ -4,6 +4,9 @@ v2 起快照必须携带完整权威状态：task_tree、permission_ctx、approv
 生命周期字段、error_stack 与 context 压缩边界。不能再用默认 PermissionCtx 静默吞掉权限决策
 （ADR-0014/0016/0019）。
 
+v3 起 ``recovery_pointers`` 为 typed ``(seq_from, seq_to, covered_hash)``（ADR-0024）；读回前须校验
+covered_hash、历史漂移 fail-closed。v1/v2 旧值无锚且从无生产者，迁移为 ``()`` 而非伪造锚。
+
 JSON 叶是 ``immutables`` Map 的 thaw，从而可被序列化；未知版本 fail-closed，不猜测语义。
 """
 
@@ -15,6 +18,7 @@ from typing import Any
 
 from questor.contracts.common import freeze, thaw, utc_now
 from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints
+from questor.contracts.memory import RecoveryPointer
 from questor.contracts.state_schema import (
     ApprovalRequest,
     ApprovalStatus,
@@ -43,7 +47,7 @@ from questor.state.domain_state import (
     ToolLedger,
 )
 
-SNAPSHOT_VERSION = 2
+SNAPSHOT_VERSION = 3
 _MIN_SUPPORTED_VERSION = 1
 
 
@@ -374,7 +378,7 @@ def to_snapshot(run: Run) -> dict[str, Any]:
         "items": [_msg_to(m) for m in run.context.items],
         "compaction_floor": run.context.compaction_floor,
         "summary": run.context.summary,
-        "recovery_pointers": [list(pair) for pair in run.context.recovery_pointers],
+        "recovery_pointers": [{"seq_from": p.seq_from, "seq_to": p.seq_to, "covered_hash": p.covered_hash} for p in run.context.recovery_pointers],
         "task_nodes": [_node_to(n) for n in run.task_tree.nodes],
         "calls": [_call_to(c) for c in run.tool_ledger.calls],
         "checkpoints": [_cp_to(cp) for cp in run.checkpoints],
@@ -407,11 +411,13 @@ def from_snapshot(d: dict[str, Any]) -> Run:
     if version == 1:
         d = _migrate_v1(d)
     b = d.get("budget", {})
+    # v1/v2 快照的 recovery_pointers 无 covered_hash 锚、且从无生产者；迁移为 () 而非伪造锚（ADR-0024）。
+    raw_rp = d.get("recovery_pointers", ()) if version >= 3 else ()
     ctx = Context(
         items=tuple(_msg_from(m) for m in d.get("items", [])),
         compaction_floor=d.get("compaction_floor"),
         summary=d.get("summary"),
-        recovery_pointers=tuple(tuple(pair) for pair in d.get("recovery_pointers", ())),
+        recovery_pointers=tuple(RecoveryPointer(seq_from=p["seq_from"], seq_to=p["seq_to"], covered_hash=p["covered_hash"]) for p in raw_rp),
     )
     return Run(
         run_id=d["run_id"],

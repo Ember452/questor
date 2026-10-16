@@ -28,6 +28,10 @@
 | [0020](./0020-durable-write-gate-and-log-authority.md) | 耐久 checkpoint：完整快照 + 派发侧补齐 + log/snapshot 双权威 | ✅ |
 | [0021](./0021-cross-process-resume.md) | 跨进程续跑协议：快照+重放尾+回填修复+幂等 re-dispatch | ✅ |
 | [0022](./0022-dual-cursor-watermark.md) | 双游标物化到 StorePort：per-run 逻辑 seq + 全局物理 watermark | ✅ |
+| [0023](./0023-memory-subsystem-placement.md) | 记忆子系统定位：跨层独立子系统包 `memory/`（非 L7）；落库经独立 `MemoryStorePort`+`memory.db` | ✅ |
+| [0024](./0024-memory-contract-evolution.md) | 记忆契约演进：typed `WriteMemory` + `memory_written` 事件 + `recovery_pointers` covered_hash + 快照 v3 | ✅ |
+| [0025](./0025-memory-distill-atomicity.md) | Deep Dream 离线蒸馏的单写者边界与原子性纪律 | ✅ |
+| [0026](./0026-memory-retrieval-bounded-projection.md) | 混合检索栈（rank-normalize 融合/时间衰减/降级）与有界投影 | ✅ |
 
 ## 模板
 ```

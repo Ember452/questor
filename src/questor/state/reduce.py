@@ -35,7 +35,9 @@ from questor.contracts.events import (
     ResolveApproval,
     SetPermissionMode,
     SubmitMessage,
+    WriteMemory,
 )
+from questor.contracts.memory import source_for_write
 from questor.contracts.state_schema import (
     OPEN_TOOL_CALL_STATUSES,
     ApprovalRequest,
@@ -50,6 +52,10 @@ from questor.contracts.state_schema import (
 from questor.state.domain_state import Context, PermissionCtx, PermissionDecisionRecord, Run
 
 _OPEN_CALL = OPEN_TOOL_CALL_STATUSES
+
+#: 单条记忆写载荷的字节上限（承 ADR-0019 ToolResult 默认 16 KiB；超限 fail-closed 拒，
+#: 防长跑把 memory.db / event payload 撑爆。实现期可经配置覆盖，只增不改）。
+_MAX_MEMORY_WRITE_BYTES = 16 * 1024
 
 
 def _event(seq: int, run: Run, turn: int | None, etype: str, data: dict) -> Envelope:
@@ -207,6 +213,19 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
             "risk": command.risk,
             "args_summary": target.raw_args_summary or target.name,
         })]
+
+    if isinstance(command, WriteMemory):
+        # 记忆写：reduce 是纯状态机、不碰 IO（落库由 kernel 在消费点经注入 MemoryStorePort 完成）。
+        # ① 载荷有界校验（C18，超限 fail-closed 拒）；② 占一个 durable seq（design/02 §10）；
+        # ③ 发内部 memory_written 回执（有界 kind/chunk_count/source，**无原文**，DoD⑤）。
+        # 记忆正文绝不进 Domain_State（DoD⑤；至多由检索侧经白名单回注有界投影）。
+        payload = command.payload
+        if len(payload.text.encode("utf-8")) > _MAX_MEMORY_WRITE_BYTES:
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "memory write exceeds bound; rejected"})]
+        new = replace(run, seq=run.seq + 1)
+        return new, [
+            _event(new.seq, new, run.turn, EventType.MEMORY_WRITTEN, {"kind": payload.kind.value, "chunk_count": 1, "source": source_for_write(payload.kind).value})
+        ]
 
     if isinstance(command, Cancel):
         open_calls = _open_calls(run)

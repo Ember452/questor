@@ -1,4 +1,4 @@
-"""Snapshot v2：权限/任务树/错误栈不得在 checkpoint 中静默蒸发。"""
+"""Snapshot v2/v3：权限/任务树/错误栈不得静默蒸发；v3 recovery_pointers typed + 旧值无锚迁移。"""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import pytest
 
 from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints
+from questor.contracts.memory import RecoveryPointer
 from questor.contracts.state_schema import (
     ApprovalRequest,
     ApprovalStatus,
@@ -50,7 +51,7 @@ def _run() -> Run:
             items=(),
             compaction_floor=3,
             summary="earlier work",
-            recovery_pointers=((1, 3),),
+            recovery_pointers=(RecoveryPointer(seq_from=1, seq_to=3, covered_hash="anchor-abc"),),
         ),
         task_tree=TaskTree(nodes=(TaskNode(id="n1", title="task", kind=TaskKind.TASK, status=TaskStatus.ACTIVE, deps=("n2",)),)),
         tool_ledger=ToolLedger(
@@ -91,7 +92,7 @@ def _run() -> Run:
     )
 
 
-def test_snapshot_version_two_roundtrips_full_authority() -> None:
+def test_snapshot_roundtrips_full_authority() -> None:
     original = _run()
     payload = to_snapshot(original)
     assert payload["contract_version"] == SNAPSHOT_VERSION
@@ -116,3 +117,12 @@ def test_snapshot_v1_migrates_without_inventing_permission_history() -> None:
     assert restored.permission_ctx.mode == "default"
     assert restored.permission_ctx.approvals == ()
     assert restored.tool_ledger.calls[0].approval_request_id == "apr-1"
+
+
+def test_snapshot_v2_legacy_recovery_pointers_migrate_to_empty() -> None:
+    """v2 旧快照的 pair 形 recovery_pointers 无 covered_hash 锚 → 迁移为 ()，绝不伪造锚（ADR-0024）。"""
+    payload = to_snapshot(_run())
+    payload["contract_version"] = 2
+    payload["recovery_pointers"] = [[1, 3]]  # 旧 pair 形（v2），无锚
+    restored = from_snapshot(payload)
+    assert restored.context.recovery_pointers == ()

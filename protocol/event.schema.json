@@ -33,7 +33,8 @@
         "run_failed",
         "run_completed",
         "resync_required",
-        "warning"
+        "warning",
+        "memory_written"
       ]
     },
     "data": { "type": "object" }
@@ -57,7 +58,8 @@
     { "if": { "properties": { "type": { "const": "run_failed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/run_failed" } } } },
     { "if": { "properties": { "type": { "const": "run_completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/run_completed" } } } },
     { "if": { "properties": { "type": { "const": "resync_required" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/resync_required" } } } },
-    { "if": { "properties": { "type": { "const": "warning" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/warning" } } } }
+    { "if": { "properties": { "type": { "const": "warning" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/warning" } } } },
+    { "if": { "properties": { "type": { "const": "memory_written" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_written" } } } }
   ],
   "$defs": {
     "run_started": {
@@ -220,6 +222,18 @@
       "required": ["message"],
       "additionalProperties": false,
       "properties": { "message": { "type": "string", "maxLength": 8192 } }
+    },
+    "memory_written": {
+      "type": "object",
+      "required": ["kind", "chunk_count"],
+      "additionalProperties": false,
+      "description": "Bounded memory-write acknowledgement (ADR-0024/0026): condensed facts only, never raw text; oversized content is referenced via artifact_ref.",
+      "properties": {
+        "kind": { "type": "string", "enum": ["core", "daily", "distill"] },
+        "chunk_count": { "type": "integer", "minimum": 0 },
+        "source": { "type": ["string", "null"], "maxLength": 64 },
+        "artifact_ref": { "type": ["string", "null"], "maxLength": 128 }
+      }
     }
   }
 }

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from questor.contracts.common import JsonObject, edit_distance
 from questor.contracts.errors import ErrorEntry
+from questor.contracts.memory import MemoryScope, MemorySearchResult
 
 if TYPE_CHECKING:
     from questor.contracts.artifacts import ArtifactRef
@@ -108,6 +109,13 @@ class ToolContext(Protocol):
         kind: str,
         media_type: str = "text/plain",
     ) -> ArtifactRef: ...
+
+    async def memory_search(
+        self, query: str, *, k: int = 8, scope: MemoryScope | None = None
+    ) -> tuple[MemorySearchResult, ...]:
+        """经 Harness 持有的 MemoryStorePort 取**有界**检索命中（design/06 §0；C4）。
+
+        工具拿不到向量库/SQLite 裸句柄；无记忆后端时返回空、不抛。"""
 
 
 @dataclass(frozen=True, slots=True)

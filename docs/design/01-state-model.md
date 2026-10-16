@@ -178,7 +178,7 @@ StorePort→SQLite：`sessions / runs / messages(+content) / task_nodes / tool_c
 
 ## 13. 评审增补（R03/R06；均为 working-draft 未决带，不动已定接缝）
 - `Message` 加 `provider_state`（opaque、reducer 只搬运不解释，供跨 provider 断点续传）；summary/checkpoint 记录带**显式标记**（勿伪造成 user）；派生自 live 环境的不持久化。
-- **recovery_pointers 定为 `(seq_from, seq_to) + CoveredHash 锦`**（指向 events 单调序号区间，非字节偏移/非 UUID）；读前校验锦、历史漂移 **fail-closed**。
+- **recovery_pointers 定为 `(seq_from, seq_to) + CoveredHash 锦`**（指向 events 单调序号区间，非字节偏移/非 UUID）；读前校验锦、历史漂移 **fail-closed**。P4 定形为 typed `RecoveryPointer`、快照 schema **v2→v3**；**写锚生产者随压缩后置 P10**（`disable_compaction=True`），v1/v2 无锚旧值迁移为 `()`（ADR-0024）。
 - 权威判据："恢复永远从持久态出发，内存视图+事件账本=可丢弃投影"。
 - **两类游标**：per-run 逻辑 `seq`（after_seq 回放）+ 全局单调物理序（跨 run catch-up/watermark）（→ ADR-0011）。
 - Checkpoint：默认**写门截断到 closed_prefix**（durable 永不半 tool_use）、读时 repair 兜底；补悬空 user-turn 修复；投递幂等 claim；取消=冻结子树+保留 partial（`resumable`）。

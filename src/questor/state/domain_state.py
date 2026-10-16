@@ -16,6 +16,7 @@ from datetime import datetime
 
 from questor.contracts.common import require_aware, utc_now
 from questor.contracts.errors import ErrorEntry
+from questor.contracts.memory import RecoveryPointer
 from questor.contracts.state_schema import (
     ApprovalRequest,
     Budget,
@@ -36,7 +37,7 @@ class Context:
     items: tuple[Message, ...] = ()
     compaction_floor: int | None = None  # 已压缩区下界
     summary: str | None = None  # 对已压区的摘要
-    recovery_pointers: tuple[tuple[int, int], ...] = ()  # 指向被压原文的 (seq_from, seq_to) 区间；NOT filled until P4/P10（压缩）：当前无生产者，覆盖区间的 CoveredHash 校验锚点随压缩一同定义
+    recovery_pointers: tuple[RecoveryPointer, ...] = ()  # 指向被压原文区间的 typed 指针 (seq_from, seq_to, covered_hash)；P4 定形 + 读前 fail-closed，其生产者（压缩写锚）随 disable_compaction 后置 P10（ADR-0024）
 
 
 @dataclass(frozen=True, slots=True)

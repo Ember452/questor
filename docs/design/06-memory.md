@@ -16,6 +16,7 @@
 ## 2. 检索栈（混合）
 `向量(cosine) + 关键词(FTS5 unicode61 / trigram-CJK / LIKE 兜底)` → **rank-normalize 加权融合** → **时间衰减**(daily 半衰、core 常绿) → 可选 rerank → 命中热度 boost(默认关)。
 - 融合用 rank 归一(0,1]加权，**不是 RRF**；向量失败静默降级关键词，不抛。
+- **P4 实现现状（校正）**：关键词只有**两档**（unicode61→LIKE，CJK 靠 LIKE 命中）；**trigram-CJK 未实现→后置 P10**；无 embedding 时向量通道恒空、降级关键词-only。上表为**目标栈**，非全已落。
 
 ## 3. 压缩↔记忆桥（接 04 §7 四档梯度）
 - **L2 归档留指针**（默认，零信息丢）：`recovery_pointers=(seq_from,seq_to)+CoveredHash 锚、fail-closed`（01 §13）。
@@ -29,5 +30,7 @@
 - v1（P4）：三层文件真源 + 混合检索 + Deep Dream + 写收口 StorePort。
 - v1 后：rerank/热度、可恢复压缩完整判据、记忆审计。
 
-## 6. 待定（v0 后锁）
-chunk schema 精确字段、`CHUNKER_VERSION` 重建触发、时间衰减半衰期。
+## 6. 待定 / P4 落定
+- **已定形（P4）**：chunk schema = `MemoryChunk{id,scope,source,path,start_line,end_line,text,hash,embedding,metadata}`（`contracts/memory.py`）；`CHUNKER_VERSION=1`（切块策略变更触发 `sync` 全量重建）；时间衰减半衰期默认 30d（`MemoryStrategyConfig.half_life_days`，配置化）。`recovery_pointers` 定为 typed `(seq_from, seq_to, covered_hash)` + 读前 fail-closed（ADR-0024，快照 v3）。
+- **仍待定（后置）**：rerank / 命中热度 boost（默认关）；`covered_hash` 写锚生产者随压缩落地（P10）；artifact GC / 真源修剪（P10）；跨进程记忆 exactly-once（P9）。**向量 embedding 持久化（P10）**：`sync()` 全量重建会清空 `memory_chunks.embedding`（文件真源不存向量），且重建重排 chunk id——P4 无生产 embedding 路径、向量通道恒空降级关键词；P10 接 embedding 时须按**内容 hash** 重算/持久化，不能假设 sync 保留向量、也不能拿 chunk id 做稳定外键。
+- **口径修正（P4）**：§1“short→long 由压缩丢弃驱动”与 `disable_compaction=True` 冲突 → daily 生产者改为**显式 `WriteMemory` + run-完成边界 flush**（ADR-0025）；压缩→L2' 蒸馏桥只留接缝、活路 P10。

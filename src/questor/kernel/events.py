@@ -60,6 +60,7 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.RUN_COMPLETED: frozenset({"usage", "exit_reason"}),
     EventType.RESYNC_REQUIRED: frozenset({"reason", "expected", "current"}),
     EventType.WARNING: frozenset({"message"}),
+    EventType.MEMORY_WRITTEN: frozenset({"kind", "chunk_count", "source", "artifact_ref"}),
 }
 
 

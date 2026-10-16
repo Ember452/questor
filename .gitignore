@@ -145,3 +145,5 @@ scratch/
 *.pid
 # 本地一次性/临时脚本（下划线前缀 = scratch，不入库）
 scripts/_*
+# 本地 CLI 运行时数据：event-log store（state.db）+ 记忆库（memory.db / memory_store/），均不入库
+.questor/

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar, Protocol
 
 from questor.contracts.common import JsonObject
+from questor.contracts.memory import MemorySearchResult
 from questor.contracts.state_schema import Budget, Message, ToolCall
 from questor.contracts.tool import ToolSpec
 
@@ -28,6 +29,7 @@ class PolicyView:
     tool_results: tuple[ToolCall, ...] = ()
     tools: tuple[ToolSpec, ...] = ()
     budget: Budget = field(default_factory=Budget)
+    memory: tuple[MemorySearchResult, ...] = ()  # 有界检索命中只读投影（design/05 §1；C4：无裸句柄）
 
 
 @dataclass(frozen=True, slots=True)
