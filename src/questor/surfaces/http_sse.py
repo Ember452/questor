@@ -145,9 +145,13 @@ class EventServer:
             raise HTTPException(status_code=code, detail=receipt.reason)
         return receipt
 
-    async def stream(self, run_id: str, after_seq: int = 0):
-        """产出 SSE 帧：先重放 after_seq 之后、再跟实时，至终态停并清理 active run。"""
-        async for env in self.bus.subscribe(run_id, after_seq):
+    async def stream(self, run_id: str, after_seq: int = 0, *, expected_version: int | None = None):
+        """产出 SSE 帧：先（版本闸门后）重放 after_seq 之后、再跟实时，至终态停并清理 active run。
+
+        ``expected_version``（客户端契约版本）不匹配时，总线只发一条 ``resync_required`` 然后停，
+        绝不跨版本解码（C6；design/02 §10 版本闸门接消费者）。
+        """
+        async for env in self.bus.subscribe(run_id, after_seq, expected_version=expected_version):
             yield envelope_to_frame(env)
             if env.type in TERMINAL:
                 self.registry.unregister(run_id)
@@ -187,10 +191,12 @@ def create_app(server: EventServer) -> FastAPI:
 
     @app.get("/events/{run_id}")
     async def events(request: Request, run_id: str, after_seq: int = 0) -> EventSourceResponse:
-        """SSE 事件流；优先用 ``Last-Event-ID`` 头作续传游标。"""
+        """SSE 事件流；优先用 ``Last-Event-ID`` 头作续传游标，并接住客户端契约版本闸门。"""
         header = request.headers.get("last-event-id")
         if header and header.isdigit():
             after_seq = int(header)
-        return EventSourceResponse(server.stream(run_id, after_seq))
+        version_header = request.headers.get("x-questor-contract-version")
+        expected_version = int(version_header) if version_header and version_header.isdigit() else None
+        return EventSourceResponse(server.stream(run_id, after_seq, expected_version=expected_version))
 
     return app
