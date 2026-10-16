@@ -61,6 +61,7 @@ LoopState {
 ## 7. 压缩与 checkpoint（Kernel 拥有，I2/I4）
 - turn 边界按 token 压力触发**可恢复压缩**（改 context 区，产 summary + recovery_pointers）；策略只给 advisory hint。
 - turn 边界打**轻量快照**；恢复=最近快照 + 重放其后事件（ADR-0005）。
+- **P4 现状**：`disable_compaction=True`，压缩未启用；`recovery_pointers` typed 形状 + covered_hash 已定形（ADR-0024/快照 v3），压缩→L2' 蒸馏发 `MemoryWrite` 的活路与写锚生产者随压缩落地于 P10；记忆写入路径与 `memory/distill.py`（Deep Dream、run-完成 flush）已在 P4 就绪，daily 生产暂由显式 `WriteMemory` + run-完成 flush 承接（ADR-0025）。
 
 ## 8. 错误 / fallback
 Provider 错误→ProviderPort/LiteLLM 重试/fallback；耗尽则 `run_failed`（带 `retryable`）。全走 Command/reduce，状态不被撕裂。

@@ -20,7 +20,7 @@
 | **P1 最小可跑循环** | 单模型 + `read` 一个工具 + 流式 + 取消 | P0 | 终端里"问一句→流式答一句"，能中途取消且状态/事件一致 | [plan/01](./plan/01-p1-minimal-loop.md)；[交付报告](./delivery/P1-completion-report.md) ✅ |
 | **P2 工具 + 权限 lite** | 文件/shell 核心工具集 + 三态权限 + json-schema 校验 + capability floor | P1 | 危险操作触发 `ask`；`deny`/敏感路径不可越；非法参数被拒；审批/取消/超时幂等可恢复 | [plan/02](./plan/02-p2-tools-permission.md) ✅（ADR-0013-0019 已实现；[P2 交付报告](./delivery/P2-completion-report.md)；**已合入 main**：PR #19，`1f5c171`，2026-10-16） |
 | **P3 持久化 + 断点续传** | 事件溯源 + 快照 + resume | P2 | kill 进程后重启能续跑/回放；`after_seq` 重连不丢不重 | [plan/03](./plan/03-p3-persistence-resume.md) ✅（ADR-0020-0022 已实现；分支 `feat/p3-persistence-resume`：真 OS 进程 kill→`--resume` + 真 uvicorn SSE `after_seq` 重连实测通过） |
-| **P4 记忆 v1（灵魂）** | 短期 → 三层 + Deep Dream + 检索（详 `design/06-memory.md`） | P3 | 跨会话记住并检索到一件事；夜间蒸馏产出 | plan/04 |
+| **P4 记忆 v1（灵魂）** | 短期 → 三层 + Deep Dream + 检索（详 `design/06-memory.md`） | P3 | 跨会话记住并检索到一件事；夜间蒸馏产出 | [plan/04](./plan/04-memory-soul.md) ✅（ADR-0023~0026 已实现；分支 `feat/p4-memory-soul`：DoD①②③④⑤ 集成测试通过、405 passed；真 LLM/embedding 与压缩生产者后置 P10 标 UNVERIFIED） |
 | **P5 Skills / MCP** | 技能加载 + MCP 接入 | P3（仅适配器 stub 可早；完整需账本/持久化） | 丢一个 SKILL.md 即生效；挂一个 MCP server 出工具 | plan/05 |
 | **P6 多模态 / 语音** | 图/文件；语音**全走 LiteLLM** | P3 | 发图能识别；语音 ASR/TTS 通 | plan/06 |
 | **P7 桌面壳（Tauri）** | Web UI 订阅事件协议 | P1（可早接） | 桌面窗口跑通 P1-P4 全部能力，断线能重连 | plan/07 |
@@ -35,7 +35,7 @@
 - **P2**：v1 主干**串行工具**；`parallel_safe` 仅 schema 占位，**完整并行后置 P5**（R7）。
 - **P5**：进入条件以 **P3**（MCP 调用需账本/持久化）；早期可只做**适配器 stub**（R小文本）。
 - **P7**：“可早接”=**只做极简调试面板、仅消费外部事件协议**，**禁止把业务/状态/校验下沉到 Shell**（R1）。前端**尽量改造参考项目已有 UI 代码**（**同栈优先：DeepCode Tauri v2 `web`+`src-tauri` + EvoFlow `evopanel`(Tauri+pnpm)**；GenericAgent(tauri)、Cow/wuu/hermes 的 Electron 前端可迁 Tauri；hermes `web`/`ui-tui` 与 wuu `clients/` 参照），**仓库列表以 `project-main/` 目录当下为准、写计划前重看**，复用后仍守“瘦客户端、零业务下沉”（AGENTS §4.5）。
-- **P4**：记忆走 **Command→Reduce→StorePort**、算法作可插拔策略不耦合 Kernel；**依赖 P3、不提前做**（R3）。
+- **P4**：记忆走 **Command→Reduce→StorePort**、算法作可插拔策略不耦合 Kernel；**依赖 P3、不提前做**（R3）。**P4 落定修正**：① daily 生产者 = 显式 `WriteMemory` + run-完成边界 flush（压缩丢弃→L2' 蒸馏活路随 `disable_compaction=True` 后置 P10，ADR-0025）；② `PolicyView.memory` 自动填充会耦合进 L2 内核、违"换策略不动 loop"，故 P4 的 DoD④ 由可插拔 `MemoryStrategyConfig` + `memory_search` 工具承载，policy 仅作 L4 消费 `view.memory` 的接缝示例。
 - **P10**：横切 concern——**轻量可观测/错误栈从 P1 就落**；完整可恢复压缩、回归评测套件后期（R4）。
 - **契约占位在前期**：MCP/子agent/多模态的 ToolSpec/事件 type/state 字段，**P0-P2 先写 draft/unimplemented 占位**，别等 P5/P6 回头改 02/03 造成破坏性变更（R2）。
 

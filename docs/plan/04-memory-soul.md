@@ -135,3 +135,12 @@ T0 基线/worktree
 - **安全评审**：push / 开 PR 前按流程走 **L3 深度安全评审**（记忆涉及跨会话数据落库/检索投影，重点审 C4/C18 裸句柄与白名单外泄、`memory.db` 注入/路径逃逸、Deep Dream 只删不编）；CI `boundaries` 独立 blocking job 为真门禁。
 - **DoD 验收**：收尾以**可复现行为 + 真机测试**为准，不可复现项诚实标 UNVERIFIED、不用 fake 冒充真机/真模型；审计/验收证据文件只追加/就地标注、历史不回改。
 - **本会话限制**：`Agent` 子代理被禁用，三视角规划由编排者顺序自行完成（非独立多代理评审）；实现阶段应按能力**重新派发** `Search`/`CodeReview` 独立复核。
+
+## 11. 实现偏差回填（T0–T18 交付后，2026-10-16）
+- **进入条件更新**：P3 经 PR #21（merge commit `4ab9d91`）已合入 main；P4 从含 P3 的最新 main 切 `feat/p4-memory-soul`（隔离 worktree，detached→branch）。
+- **T17 实现方式修正（全局最优）**：未新建 `scripts/check_memory_layering.py`，而是**扩现有** `check_layering_ast.py`（加 memory 层 rank + `policy`/`surfaces`/`capabilities` 禁 import 具体 `store_memory_sqlite`），复用其 `--self-test`/fail-on-empty 引擎、且已在 CI `boundaries` blocking job 运行——避免重复 AST 走子、CI 覆盖自动。DoD③ 静态守卫等价达成。
+- **T15 口径修正（与 DoD④ 一致）**：`DefaultTurnLoop._ask_policy` 构造 `PolicyView` 时**不**自动填充 `view.memory`（否则把记忆检索耦合进 L2、违"换策略不动 loop"）。DoD④ 主证据由可插拔 `MemoryStrategyConfig`（T10）+ `memory_search` 工具（T12）承载；`MemoryAwareReActPolicy` 是 L4 消费 `view.memory` 的接缝示例。
+- **DoD① 的 daily 生产者**：按 ADR-0025 用显式 `WriteMemory` + run-完成 flush（不强启被后置 P10 的压缩），使 DoD② 有真实可测输入。
+- **covered_hash / 压缩**：typed `RecoveryPointer` + 快照 v3 + fail-closed 读校验已在 P4 定形；写锚**生产者**与四档压缩调优诚实后置 P10（`disable_compaction=True` 未动）。
+- **UNVERIFIED（未 fake）**：真 LLM Deep Dream 语义质量、真 embedding 召回质量、CJK trigram 真机效果、跨进程记忆 exactly-once（→P9）。
+- **交付质量门**：405 passed / 5 skipped；ruff clean、lint-imports 4 kept、AST 76 files/0 违规（含记忆规则 self-test 判红）、protocol 20 types lockstep、verify_p0 ALL PASS。ADR-0023~0026 与代码均按细粒度提交（逐任务/逐文件绿）。

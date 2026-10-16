@@ -53,6 +53,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Verified on the real platform**: cross-connection and OS-subprocess kill→`--resume` (`test_p3_kill_resume.py`, Windows); a real `uvicorn` + `httpx` SSE reconnect with `Last-Event-ID` proves `after_seq` no-loss/no-dup over an actual socket, closing the P2 audit §7 "跨真实 socket UNVERIFIED (uvicorn 未装)" item.
 - **New guard** `check_replay_determinism.py` (wired into the CI `boundaries` job): asserts `snapshot + tail-replay == continuous reduce` over fixtures, with a `--self-test` that proves it can go red + fail-on-empty; plus a durability guard that no durable event bypasses `store.append` while live-only never persists.
 
+### Added — P4 memory v1 / soul (`feat/p4-memory-soul`)
+- 记忆子系统 `src/questor/memory/`（与 `state/` 分离，ADR-0023）+ L0 `contracts/memory.py`：`MemoryChunk`/`MemorySearchResult`/typed `RecoveryPointer`/typed `MemoryWrite`/`MemoryStorePort`/`VectorBackend`/`MemoryStrategyConfig`。
+- 写记忆走 `Command→reduce→MemoryStorePort` 单写者路径（HARD C4/C16）：`reduce` 处理 `WriteMemory` → 内部 `memory_written` 事件（有界、**无原文**）→ kernel 在消费点 sink 落**独立 `memory.db`**；记忆正文绝不进 `Domain_State`（DoD⑤）。
+- `providers/store_memory_sqlite.py`：md 文件真源 + SQLite/FTS5 派生索引、单一 `_SCHEMA` authority + `meta(memory_schema_version)` fail-closed + `BEGIN IMMEDIATE`；与 event-log 分库故障隔离（R03 D-P1）。
+- 混合检索 `memory/{chunker,sync,search}.py`（ADR-0026）：markdown 感知切块 + 文件真源重建 + rank-normalize 加权融合（**非 RRF**）+ 时间衰减（daily 半衰、core 常绿）+ 无 embedding 静默降级关键词-only；`memory_search` 工具经 Harness 持有的 `MemoryStorePort`，策略/工具无裸句柄。
+- Deep Dream 离线蒸馏 + run-完成→daily flush（`memory/distill.py`，ADR-0025）：原子写 + 输入哈希去重 + 只删不编 + 空哨兵跳过；CLI `--dream` 入口（无密钥走确定性 heuristic fallback；真 LLM 蒸馏质量 UNVERIFIED）。composition root 注入 `SQLiteMemoryStore`。
+- 快照 schema **v2→v3**：`recovery_pointers` 定为 typed `(seq_from, seq_to, covered_hash)` + 读前 fail-closed；v1/v2 无锚旧值迁移为 `()`（不伪造锚，ADR-0024）。`covered_hash` **生产者**随 `disable_compaction=True` 后置 P10。
+- 事件协议 **19→20**：新增可选外部 type `memory_written`（bounded `kind/chunk_count/source/artifact_ref`），`check_protocol_schema` enum+$defs+branches+fixtures lockstep（只增不改）。
+- 策略 `policy/memory_policy.py`：记忆感知 ReAct 变体消费 `PolicyView.memory` 有界投影（L4 接缝示例、可插拔，不改 kernel）。
+- 守卫：`check_layering_ast.py` 扩记忆规则（memory=state peer、只依 contracts；`policy`/`surfaces`/`capabilities` 禁 import 具体 `store_memory_sqlite`），`--self-test` 判红；已在 CI `boundaries` blocking job 运行。记忆写/读旁路=0（reduce 唯一入口 + AST 守卫）。
+- 决策 ADR-0023~0026 + 阶段计划 `docs/plan/04-memory-soul.md`。质量门：405 passed / 5 skipped（DoD① 跨会话写入→检索命中、DoD② Deep Dream 产出、DoD③ 单写者、DoD④ 可插拔、DoD⑤ state/memory 分离 + evals 雏形）。UNVERIFIED：真 LLM/embedding 召回质量、CJK trigram 真机、完整四档压缩（→P10）、跨进程记忆 exactly-once（→P9）。
+
 ### Fixed (P2 adversarial audit round, 2026-10-16 — closes `docs/audit/P2-review-2026-10-15.md` NO-GO)
 All four blocking findings were reproduced by hand before fixing, and each is now pinned by a test:
 - **Tool panics escaped the kernel**: `loop.py` called `tool.execute()` with no shield, so a raising tool (or an unwired `ProcessRunner`/`ArtifactStore`) crashed the run and left the call stuck open. The Harness now wraps every tool call in `asyncio.wait_for` + `except Exception` → `ToolResult(status="error")`, while `CancelledError`/`KeyboardInterrupt`/`SystemExit` still propagate (`test_p2_tool_fault_isolation.py`).
