@@ -36,7 +36,6 @@ from questor.observability.logging import configure_logging, log_event
 from questor.policy.react_policy import ReActPolicy
 from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
-from questor.providers.store_sqlite import SQLiteStore
 from questor.state.domain_state import Run
 from questor.surfaces.approval import prompt_approval
 from questor.surfaces.run_registry import RunRegistry
@@ -100,9 +99,12 @@ class CliSurface:
         )
 
     async def run_once(self, text: str, *, on_delta=None) -> Run:  # noqa: ANN001
-        """跑一轮用户输入直到终态：用户文本与审批都以 Command 经 inbox 进入 loop。"""
-        store = await SQLiteStore(":memory:").connect()
-        bus = InProcessEventBus(store)
+        """跑一轮用户输入直到终态：用户文本与审批都以 Command 经 inbox 进入 loop。
+
+        单次 CLI run 不需跨进程重放，故用内存总线（不注入具体 store）；surfaces 不依赖
+        store 实现（S6/T20）。
+        """
+        bus = InProcessEventBus()
         cancel = asyncio.Event()
         run = Run(run_id=new_id("run"), budget=Budget())
         surface = self.registry.freeze_for_run(run.run_id)
@@ -110,8 +112,12 @@ class CliSurface:
         controller = RunController(run)
         registry = RunRegistry()
         registry.register(controller)
-        printer = asyncio.create_task(self._stream(bus, run.run_id, on_delta))
-        approver = asyncio.create_task(self._approve(bus, registry, run.run_id))
+        # 先同步挂上两个订阅队列（start drive 之前），保证不丢最早的 text_delta/approval_request；
+        # 单次 CLI run 不需跨进程重放，故不注入具体 store（surfaces 不依赖 store 实现，S6/T20）。
+        printer_queue = bus.add_subscriber(run.run_id)
+        approver_queue = bus.add_subscriber(run.run_id)
+        printer = asyncio.create_task(self._stream(printer_queue, on_delta))
+        approver = asyncio.create_task(self._approve(approver_queue, registry, run.run_id))
         try:
             msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
             await registry.submit(
@@ -122,16 +128,18 @@ class CliSurface:
             )
             final = await loop.drive_controller(controller)
         finally:
-            for task in (printer, approver):
+            # 两个消费者都会自然收到终态帧并退出（queue 里已有 terminal）；超时才强收。
+            _, still_pending = await asyncio.wait({printer, approver}, timeout=2.0)
+            for task in still_pending:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
-            await store.close()
         return final
 
-    async def _stream(self, bus: InProcessEventBus, run_id: str, on_delta) -> None:  # noqa: ANN001
-        """订阅事件流：text_delta 打印/回调，终态后换行退出。"""
-        async for env in bus.subscribe(run_id, 0):
+    async def _stream(self, queue: asyncio.Queue, on_delta) -> None:  # noqa: ANN001
+        """从预挂的订阅队列消费：text_delta 打印/回调，终态后换行退出。"""
+        while True:
+            env = await queue.get()
             log_event(env)
             if env.type == EventType.TEXT_DELTA:
                 piece = env.data.get("delta", "")
@@ -143,10 +151,11 @@ class CliSurface:
                 print()
                 return
 
-    async def _approve(self, bus: InProcessEventBus, registry: RunRegistry, run_id: str) -> None:
+    async def _approve(self, queue: asyncio.Queue, registry: RunRegistry, run_id: str) -> None:
         """监听 approval_request，只经 registry 提交 ResolveApproval；非交互 → deny（fail-closed）。"""
         interactive = sys_stdin_tty()
-        async for env in bus.subscribe(run_id, 0):
+        while True:
+            env = await queue.get()
             if env.type == EventType.APPROVAL_REQUEST:
                 request_id = env.data["request_id"]
                 if interactive:

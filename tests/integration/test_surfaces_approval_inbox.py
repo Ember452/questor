@@ -59,8 +59,9 @@ async def test_cli_approve_submits_deny_command_without_reducing(tmp_path: Path)
     bus = InProcessEventBus(None)
     surface = CliSurface(workspace_root=tmp_path)
 
-    # 先挂监听器（store=None 时只有 live 事件），再 emit approval_request。
-    listener = asyncio.create_task(surface._approve(bus, registry, run_id))
+    # 先同步挂上订阅队列，再启动监听（store=None 时只有 live 事件），然后 emit approval_request。
+    queue = bus.add_subscriber(run_id)
+    listener = asyncio.create_task(surface._approve(queue, registry, run_id))
     await asyncio.sleep(0)
     await bus.emit(
         Envelope(

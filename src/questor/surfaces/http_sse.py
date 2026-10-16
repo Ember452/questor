@@ -20,12 +20,12 @@ from sse_starlette.sse import EventSourceResponse
 from questor.contracts.common import new_id, thaw
 from questor.contracts.events import Cancel, Envelope, EventType, ResolveApproval, SetPermissionMode, SubmitMessage
 from questor.contracts.inbox import InboxReceipt
+from questor.contracts.ports import StorePort
 from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, Message, Role
 from questor.contracts.tool import RunToolSurface
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.run_control import RunController
-from questor.providers.store_sqlite import SQLiteStore
 from questor.state.domain_state import Run
 from questor.surfaces.approval import http_status_for_receipt
 from questor.surfaces.cli import CliSurface
@@ -57,7 +57,7 @@ def _receipt_response(receipt: InboxReceipt) -> JSONResponse:
 class EventServer:
     """持有端点共享的 store + bus + active run 的 Command Inbox 注册表。"""
 
-    def __init__(self, surface: CliSurface, store: SQLiteStore) -> None:
+    def __init__(self, surface: CliSurface, store: StorePort) -> None:
         self.surface = surface
         self.store = store
         self.bus = InProcessEventBus(store)
