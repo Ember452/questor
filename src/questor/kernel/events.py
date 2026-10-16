@@ -15,6 +15,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import datetime
 
 from questor.contracts.events import (
@@ -36,11 +37,46 @@ TERMINAL: frozenset[str] = frozenset({EventType.RUN_CANCELLED, EventType.RUN_FAI
 INTERNAL_ONLY: frozenset[str] = frozenset({"checkpoint_recorded", "reduce_rejected", "ledger_entry"})
 
 
+#: 每个对外事件的 data 白名单字段（design/02 §3/§5；ADR-0019）。只有列出的键才会
+#: 进入外部 Envelope：完整 args、abs path、env values、provider state 都不在白名单，默认不外发。
+#: 值为 ``None`` 表示该类型的 data 原样透传（仅用于尚未定形的 node_updated）。
+EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
+    EventType.RUN_STARTED: frozenset({"run_id"}),
+    EventType.TURN_STARTED: frozenset({"turn"}),
+    EventType.TEXT_DELTA: frozenset({"delta", "item_id"}),
+    EventType.REASONING_DELTA: frozenset({"delta"}),
+    EventType.MESSAGE_COMPLETED: frozenset({"message_id"}),
+    EventType.TOOL_STARTED: frozenset({"tool_call_id", "name", "capability", "risk", "args_summary"}),
+    EventType.TOOL_PROGRESS: frozenset({"message"}),
+    EventType.TOOL_COMPLETED: frozenset({"tool_call_id", "status"}),
+    EventType.APPROVAL_REQUEST: frozenset({"request_id", "tool_call_id", "name", "args_summary", "risk", "reason", "expires_at"}),
+    EventType.APPROVAL_RESOLVED: frozenset({"request_id", "tool_call_id", "decision", "decided_by", "resolved_at"}),
+    EventType.PERMISSION_MODE_CHANGED: frozenset({"mode", "changed_by", "effective_from_turn"}),
+    EventType.NODE_UPDATED: None,
+    EventType.USAGE_DELTA: frozenset({"input_tokens", "output_tokens", "total_tokens"}),
+    EventType.HEARTBEAT: frozenset(),
+    EventType.RUN_CANCELLED: frozenset({"reason"}),
+    EventType.RUN_FAILED: frozenset({"error"}),
+    EventType.RUN_COMPLETED: frozenset({"usage", "exit_reason"}),
+    EventType.RESYNC_REQUIRED: frozenset({"reason", "expected", "current"}),
+    EventType.WARNING: frozenset({"message"}),
+}
+
+
 def project(env: Envelope) -> Envelope | None:
-    """将内部事件投影为对外集；返回 ``None`` 表示不外发。"""
+    """将内部事件投影为对外集：丢弃内部类型，并按 per-type 白名单过滤 data 字段。"""
     if env.type in INTERNAL_ONLY:
         return None
-    return env
+    allowed = EXTERNAL_EVENT_FIELDS.get(env.type)
+    if allowed is None:
+        # 未知外部类型：错误类告警保留，其余静默忽略（C6）。
+        from questor.contracts.events import ERROR_CLASS_EVENT_TYPES
+
+        return env if env.type in ERROR_CLASS_EVENT_TYPES else None
+    if allowed == frozenset():
+        return replace(env, data={})
+    data = {k: v for k, v in env.data.items() if k in allowed}
+    return replace(env, data=data)
 
 
 class EventBus(ABC):
