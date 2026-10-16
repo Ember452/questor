@@ -8,10 +8,13 @@ kernel/policy 实现、绝不改状态（S7）。完整的 tracing/metrics/trace
 from __future__ import annotations
 
 import logging
+import sys
 
 from questor.contracts.events import Envelope, EventType
 
 _LOG = logging.getLogger("questor")
+
+_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
 # 各类事件的日志级别；错误类事件绝不静默（C6）。
 _LEVELS: dict[str, int] = {
@@ -25,8 +28,23 @@ _LEVELS: dict[str, int] = {
 
 
 def configure_logging(level: int = logging.INFO) -> None:
-    """为 CLI/sidecar 进程配置 basicConfig（幂等）。"""
-    logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s", force=False)
+    """装配 console sink：显式绑 **stderr**（不依赖 basicConfig 默认），幂等不叠 handler。
+
+    组合根唯一调用（DESIGN §11）；重复调用只调级别、不再新增 handler（DoD A④）。机器可读的
+    stdout 永不写日志（DoD A③）。
+    """
+    root = logging.getLogger()
+    existing = [h for h in root.handlers if isinstance(h, logging.StreamHandler) and getattr(h, "stream", None) is sys.stderr]
+    if existing:
+        for h in existing:
+            h.setLevel(level)
+        root.setLevel(level)
+        return
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter(_FORMAT))
+    handler.setLevel(level)
+    root.addHandler(handler)
+    root.setLevel(level)
 
 
 def log_event(env: Envelope) -> None:
