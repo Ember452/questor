@@ -223,6 +223,10 @@ class DefaultTurnLoop:
         try:
             result = await self._drive_controller(controller)
             controller.run = result
+            # 终态也落一个权威快照（completed/failed/cancelled）：否则对已结束的 run 重建
+            # 会拿到 turn 边界那个 status=running 的 stale 快照，resume 会重驱一轮（真实 LLM 冒烟发现）。
+            if result.status.is_terminal and self.store is not None:
+                await self._checkpoint(result, "final")
             return result
         finally:
             if controller.run.status.is_terminal:
@@ -231,7 +235,11 @@ class DefaultTurnLoop:
     async def _drive_controller(self, controller: RunController) -> Run:
         """驱动 controller 当前 Run 到唯一终态；Command 仅在安全点消费。"""
         run = controller.run
-        turn = 0
+        # resume：若从快照重建出仍有未闭合 tool_use（崩溃 mid-dispatch / 审批挂起），先在同一
+        # 安全点补齐或等待，再进入 provider-first 循环——否则会把半截 tool_use 喂回 provider
+        # （Anthropic/OpenAI 强制成对，直接 4xx）。新鲜 run 无 open 调用，此处即空操作（ADR-0021）。
+        run = await self._resume_settle_open_calls(controller, run)
+        turn = run.turn
         started = time.monotonic()
         total_tokens = 0
         faults = 0
@@ -353,7 +361,12 @@ class DefaultTurnLoop:
         return run
 
     async def _checkpoint(self, run: Run, kind: str) -> None:
-        """落一个 turn 边界快照供恢复（A1）。无 store 时为空操作。"""
+        """落一个稳态快照供恢复（A1）。无 store 时为空操作。
+
+        ``state_digest`` 是权威状态（含完整 ToolCall 账本）；``pending`` 存未闭合 tool_use id，
+        **仅供可观测/诊断用**——rebuild 的权威回退仍靠 ``state_digest`` 里的 ledger（不依赖此列），
+        它是“崩溃→重派窗口”的审计标记（A3）。
+        """
         if self.store is None:
             return
         await self.store.save_checkpoint(
@@ -363,7 +376,7 @@ class DefaultTurnLoop:
                 "seq": run.seq,
                 "turn": run.turn,
                 "kind": kind,
-                "state_digest": json.dumps(to_snapshot(run), ensure_ascii=False, default=str),
+                "state_digest": json.dumps(to_snapshot(run), ensure_ascii=False, default=str, allow_nan=False),
                 "pending": list(open_tool_use_ids(run.context.items)),
             }
         )
@@ -455,38 +468,48 @@ class DefaultTurnLoop:
                 ),
             )
 
+        # 工具是插件（C10）：它的 panic 与挂死都必须由 Harness 兜住，否则单写者循环会崩、
+        # tool_call 悬在 RUNNING 并留下无 tool_result 的配对破坏（I1/C7）。执行/配对/有界输出
+        # 统一交给 _execute_tool（普通 turn 与 resume 重派共用，design/03 §8 deadline 对所有工具生效）。
+        return await self._execute_tool(controller, run, tool, intent.tool_call_id or "", intent.args, intent.name)
+
+    async def _execute_tool(self, controller: RunController, run: Run, tool: Tool, tool_call_id: str, args: object, name: str) -> Run:
+        """执行工具并 settle 一条耐久结果（Harness 兜 panic/deadline，design/03 §8/C10）。
+
+        普通 turn（``_handle_tool_call``）与 resume 重派（``_resume_execute_call``）共用：先经 ctx
+        执行、deadline/panic 转结构化 error，再经 ``RecordToolResult`` 闭合配对、落 post_tool
+        checkpoint（ADR-0020/0021：先 append 耐久事件再写快照，把"崩溃→重跑一个工具"的窗口收到最小）。
+        """
         ctx = _ToolCtx(
             self.workspace_root,
             self.cancel_event,
-            tool_call_id=intent.tool_call_id or "",
+            tool_call_id=tool_call_id,
             cwd=self.workspace_root,
             run_id=run.run_id,
             process_runner=self.process_runner,
             artifact_store=self.artifact_store,
         )
-        # 工具是插件（C10）：它的 panic 与挂死都必须由 Harness 兜住，否则单写者循环会崩、
-        # tool_call 悬在 RUNNING 并留下无 tool_result 的配对破坏（I1/C7）。
-        # deadline 对**所有**工具生效，不只有 ProcessRunner 的 exec 工具（design/03 §8）。
         deadline = tool.spec.timeout_s or run.budget.tool_default_timeout_seconds
         try:
-            result = await asyncio.wait_for(tool.execute(intent.args, ctx), timeout=deadline)
+            result = await asyncio.wait_for(tool.execute(args, ctx), timeout=deadline)
         except TimeoutError:
             result = ToolResult(
                 status="timed_out",
-                result=f"tool '{intent.name}' exceeded its {deadline}s deadline set by the Harness",
-                display=f"{intent.name} timed out after {deadline}s",
+                result=f"tool '{name}' exceeded its {deadline}s deadline set by the Harness",
+                display=f"{name} timed out after {deadline}s",
             )
         except Exception as exc:  # noqa: BLE001 - 插件故障不得击穿内核（C10）
             # 只捕 Exception：CancelledError / KeyboardInterrupt / SystemExit 是 BaseException，
-            # 取消与进程级中断必须继续向上传递，不能被“吃成”一个工具 error。
+            # 取消与进程级中断必须继续向上传递，不能被"吃成"一个工具 error。
             result = ToolResult(
                 status="error",
-                result=f"tool '{intent.name}' raised {type(exc).__name__}: {exc}",
-                display=f"{intent.name} crashed",
+                result=f"tool '{name}' raised {type(exc).__name__}: {exc}",
+                display=f"{name} crashed",
             )
-        run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status=result.status, result=result.result, display=result.display))
+        run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=tool_call_id, status=result.status, result=result.result, display=result.display))
         controller.run = run
         await self._emit(events)
+        await self._checkpoint(run, "post_tool")  # 工具结果已落库 → 快照收窄在途窗口（ADR-0020）
         return run
 
     async def _apply_command(self, controller: RunController, run: Run, command: object) -> Run:
@@ -517,6 +540,7 @@ class DefaultTurnLoop:
                 expires_at=expires_at,
             ),
         )
+        await self._checkpoint(run, "pre_tool")  # 审批挂起是可跨重启续跑的稳态 → durable（ADR-0020/0021）
         deadline = time.monotonic() + timeout
         while True:
             def relevant(command: object) -> bool:
@@ -545,6 +569,73 @@ class DefaultTurnLoop:
                 )
             if call.status in {ToolCallStatus.DENIED, ToolCallStatus.CANCELLED}:
                 return run
+
+    async def _resume_settle_open_calls(self, controller: RunController, run: Run) -> Run:
+        """把快照里仍 OPEN 的工具调用补齐再继续（ADR-0021）。
+
+        - ``awaiting_approval``：等已存在的 request 被 Resolve/Expire/Cancel（不新建 request、不自动放行）。
+        - ``ready``/``running``：已批准或曾在跑 → 直接补执行一次（at-least-once；真 exactly-once 靠 P9 claim）。
+        - ``pending``/``validated``：崩溃在权限判定前 → **重走 ``_handle_tool_call``（含权限）**，
+          绝不绕过 ask（否则 resume 会把未批的危险写静默放行）。
+        完成后所有原 OPEN 调用都已闭合，再进入 provider-first 循环，配对得以保持。
+        """
+        for target_id in [c.tool_call_id for c in run.tool_ledger.calls if c.status in OPEN_TOOL_CALL_STATUSES]:
+            if run.status.is_terminal or self.cancel_event.is_set():
+                return run
+            call = next((c for c in run.tool_ledger.calls if c.tool_call_id == target_id), None)
+            if call is None or call.status not in OPEN_TOOL_CALL_STATUSES:
+                continue
+            if call.status is ToolCallStatus.AWAITING_APPROVAL:
+                run = await self._resume_wait_for_approval(controller, run, call)
+                call = next((c for c in run.tool_ledger.calls if c.tool_call_id == target_id), None)
+                if call is None:
+                    continue
+            if call.status in {ToolCallStatus.READY, ToolCallStatus.RUNNING}:
+                run = await self._resume_execute_call(controller, run, call)
+            elif call.status in {ToolCallStatus.PENDING, ToolCallStatus.VALIDATED}:
+                run = await self._handle_tool_call(controller, run, ProposeToolCall(name=call.name, args=dict(call.args), tool_call_id=target_id))
+        return run
+
+    async def _resume_wait_for_approval(self, controller: RunController, run: Run, call) -> Run:
+        """恢复挂起的审批：等已存在 request 的 Resolve/Expire/Cancel，不新建 request（ADR-0021）。"""
+        request_id = call.approval_request_id
+        approval = next((a for a in run.permission_ctx.approvals if a.request_id == request_id), None)
+        if approval is None or approval.expires_at <= utc_now():
+            # request 丢失或已过期：fail-closed 经 reduce 闭合，绝不静默放行。
+            return await self._apply_command(controller, run, ExpireApproval(run_id=run.run_id, request_id=request_id or ""))
+
+        def relevant(command: object) -> bool:
+            return isinstance(command, Cancel) or (
+                isinstance(command, ResolveApproval | ExpireApproval) and command.request_id == request_id
+            )
+
+        remaining = (approval.expires_at - utc_now()).total_seconds()
+        command = await controller.wait_for(relevant, timeout=max(0.001, remaining))
+        if command is None:
+            return await self._apply_command(controller, run, ExpireApproval(run_id=run.run_id, request_id=request_id))
+        return await self._apply_command(controller, run, command)
+
+    async def _resume_execute_call(self, controller: RunController, run: Run, call) -> Run:
+        """补执行一个已批准（ready）或曾在跑（running）的调用；仅在未 running 时补 MarkToolRunning。"""
+        tool = self._tool(call.name)
+        if tool is None:
+            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=call.tool_call_id, status="error", result=f"unknown tool '{call.name}' on resume"))
+            controller.run = run
+            await self._emit(events)
+            return run
+        if call.status is not ToolCallStatus.RUNNING:
+            run = await self._apply_command(
+                controller,
+                run,
+                MarkToolRunning(
+                    run_id=run.run_id,
+                    tool_call_id=call.tool_call_id,
+                    capability=tool.spec.capability.value,
+                    risk=tool.spec.risk.value,
+                    timeout_s=tool.spec.timeout_s or run.budget.tool_default_timeout_seconds,
+                ),
+            )
+        return await self._execute_tool(controller, run, tool, call.tool_call_id, dict(call.args), call.name)
 
     async def _emit(self, events: list[Envelope]) -> None:
         """把一批事件逐条交给总线（可持久的会落库、live-only 只转发）。"""

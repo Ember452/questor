@@ -25,12 +25,13 @@ from questor.capabilities.tools.registry import ToolRegistry
 from questor.capabilities.tools.write import WriteTool
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
-from questor.contracts.ports import ProviderPort
-from questor.contracts.state_schema import Budget, ContentBlock, Message, Role
+from questor.contracts.ports import ProviderPort, StorePort
+from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role
 from questor.contracts.tool import RunToolSurface
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.permissions import DefaultPermissionEngine
+from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.observability.logging import configure_logging, log_event
 from questor.policy.react_policy import ReActPolicy
@@ -74,11 +75,13 @@ class CliSurface:
         provider: ProviderPort | None = None,
         system: str | None = None,
         model: str = "echo",
+        store: StorePort | None = None,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
         self.system = system
         self.model = model
+        self.store = store
         self.read = ReadTool()
         self.registry = _default_registry()
 
@@ -92,6 +95,7 @@ class CliSurface:
             tool_for=surface.tool_for,
             tools=surface.tools,
             surface=surface,
+            store=self.store,
             workspace_root=self.workspace_root,
             model=self.model,
             system=self.system,
@@ -101,10 +105,11 @@ class CliSurface:
     async def run_once(self, text: str, *, on_delta=None) -> Run:  # noqa: ANN001
         """跑一轮用户输入直到终态：用户文本与审批都以 Command 经 inbox 进入 loop。
 
-        单次 CLI run 不需跨进程重放，故用内存总线（不注入具体 store）；surfaces 不依赖
-        store 实现（S6/T20）。
+        单次 CLI run 若注入了 store 则真实落库（事件 + turn 边界/审批/工具 checkpoint），
+        支撑 P3 跨进程 resume；无 store 时退回内存总线（不落库）。surfaces 只持 StorePort
+        抽象、不 import 具体 store 实现（S6/T20/C4）。
         """
-        bus = InProcessEventBus()
+        bus = InProcessEventBus(self.store)
         cancel = asyncio.Event()
         run = Run(run_id=new_id("run"), budget=Budget())
         surface = self.registry.freeze_for_run(run.run_id)
@@ -130,6 +135,46 @@ class CliSurface:
         finally:
             # 两个消费者都会自然收到终态帧并退出（queue 里已有 terminal）；超时才强收。
             _, still_pending = await asyncio.wait({printer, approver}, timeout=2.0)
+            for task in still_pending:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+        return final
+
+    async def resume(self, run_id: str) -> Run | None:
+        """从持久态续跑一个被 kill/重启的 run（P3 T12，ADR-0021）。
+
+        surfaces 零业务：只重建 + 把已存在的挂起审批经同一 Command Inbox 提交 + 交回
+        唯一 loop；真正的未闭合 tool_use 补齐/re-dispatch 由 kernel 的 loop 完成。无 store 无法续跑。
+        """
+        if self.store is None:
+            raise RuntimeError("resume needs a persistent StorePort (set CliSurface(store=...))")
+        run = await rebuild_run(self.store, run_id)
+        if run is None:
+            return None
+        bus = InProcessEventBus(self.store)
+        cancel = asyncio.Event()
+        tool_surface = self.registry.freeze_for_run(run.run_id)
+        loop = self._loop(bus, cancel, tool_surface)
+        controller = RunController(run)
+        interactive = sys_stdin_tty()
+        printer_queue = bus.add_subscriber(run.run_id)
+        printer = asyncio.create_task(self._stream(printer_queue, None))
+        for approval in run.permission_ctx.approvals:
+            if approval.status is ApprovalStatus.PENDING:
+                if interactive:
+                    decision = "allow" if await prompt_approval(approval.args_summary, "", approval.reason) else "deny"
+                else:
+                    decision = "deny"  # 非交互 fail-closed
+                await controller.submit(
+                    ResolveApproval(run_id=run.run_id, request_id=approval.request_id, decision=decision, decided_by="cli-resume"),
+                    source="cli",
+                    idempotency_key=approval.request_id,
+                )
+        try:
+            final = await loop.drive_controller(controller)
+        finally:
+            _, still_pending = await asyncio.wait({printer}, timeout=2.0)
             for task in still_pending:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -173,10 +218,10 @@ class CliSurface:
                 return
 
 
-async def interactive() -> int:
-    """REPL 循环：输一行、流式看答复；Ctrl-D 退出。"""
+async def interactive(surface: CliSurface | None = None) -> int:
+    """REPL 循环：输一行、流式看答复；Ctrl-D 退出。store 由组合根（``__main__``）注入。"""
     configure_logging()
-    surface = CliSurface()
+    surface = surface or CliSurface()
     print("questor CLI — type a message (Ctrl-D to exit).")
     while True:
         try:

@@ -36,7 +36,7 @@ class Context:
     items: tuple[Message, ...] = ()
     compaction_floor: int | None = None  # 已压缩区下界
     summary: str | None = None  # 对已压区的摘要
-    recovery_pointers: tuple[tuple[int, int], ...] = ()  # 指向被压原文的 (seq_from, seq_to) 区间
+    recovery_pointers: tuple[tuple[int, int], ...] = ()  # 指向被压原文的 (seq_from, seq_to) 区间；NOT filled until P4/P10（压缩）：当前无生产者，覆盖区间的 CoveredHash 校验锚点随压缩一同定义
 
 
 @dataclass(frozen=True, slots=True)

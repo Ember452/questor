@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from questor.contracts.events import Envelope, EventType
 from questor.kernel.events import InProcessEventBus
 from questor.providers.store_sqlite import SQLiteStore
@@ -59,4 +61,41 @@ async def test_internal_only_event_not_forwarded_but_persisted() -> None:
     assert await store.sequence_head("run_e") == 2  # both persisted internally
     got = [e async for e in bus.subscribe("run_e", 0)]
     assert [e.type for e in got] == ["run_completed"]  # projection drops the internal event
+    await store.close()
+
+
+async def test_seam_replay_then_live_no_gap_no_dup() -> None:
+    """P3 T15：先订阅后重放再跟实时缝合——无论事件落在重放侧还是实时侧，都按 seq 去重（不丢不重，design/02 §4）。"""
+    store = await SQLiteStore(":memory:").connect()
+    bus = InProcessEventBus(store)
+    # 订阅者尚未挂上：先持久化 durable 1、2。
+    await bus.emit(_env(1, "run_s", EventType.RUN_STARTED))
+    await bus.emit(_env(2, "run_s", EventType.MESSAGE_COMPLETED))
+
+    collected: list[int] = []
+
+    async def consume() -> None:
+        async for e in bus.subscribe("run_s", 0):
+            collected.append(e.seq)
+
+    task = asyncio.create_task(consume())
+    await asyncio.sleep(0)  # 让订阅者挂上并开始重放
+    await bus.emit(_env(3, "run_s", EventType.MESSAGE_COMPLETED))
+    await bus.emit(_env(4, "run_s", EventType.RUN_COMPLETED))  # 终态结束流
+    await asyncio.wait_for(task, timeout=5)
+    assert collected == [1, 2, 3, 4]  # 无缺口、无重复（即使 3/4 同时存在于 store 与队列）
+    await store.close()
+
+
+async def test_live_delta_interleaved_does_not_shift_durable_seam() -> None:
+    """P3 T15：live-only delta 穿插不占 durable seq，不破坏重放/实时缝合去重。"""
+    store = await SQLiteStore(":memory:").connect()
+    bus = InProcessEventBus(store)
+    await bus.emit(_env(1, "run_f", EventType.RUN_STARTED))
+    await bus.emit(_env(2, "run_f", EventType.TEXT_DELTA, delta="x"))  # live-only, not persisted
+    assert await store.sequence_head("run_f") == 1  # delta 不推进 durable head
+    it = bus.subscribe("run_f", 0)
+    first = await it.__anext__()  # 重放只给 durable（run_started）；live delta 不在历史里
+    assert first.type == "run_started"
+    await it.aclose()  # 无终态事件，显式关闭生成器避免挂在 queue.get
     await store.close()

@@ -52,9 +52,12 @@ class ProviderPort(Protocol):
 
 @runtime_checkable
 class StorePort(Protocol):
-    """append-only 事件日志 + 快照读写（design/01 §9；ADR-0005/0011）。
+    """append-only 事件日志 + 快照读写（design/01 §9；ADR-0005/0011/0020/0022）。
 
-    唯一持久化路径；策略不持裸句柄（C4）。"""
+    唯一持久化路径；策略不持裸句柄（C4）。P3 起承载两类游标：per-run 逻辑 ``seq``
+    （SSE ``after_seq`` 续传）与全局单调物理 ``gseq``（跨 run catch-up watermark，ADR-0011）。
+    新方法是 **纯增量**（不改既有签名/信封/关联键，C6）；仅在 resume/发现路径被调用。
+    """
 
     async def append(self, run_id: str, events: tuple[JsonObject, ...]) -> int: ...
 
@@ -67,6 +70,28 @@ class StorePort(Protocol):
     async def save_checkpoint(self, checkpoint: JsonObject) -> None: ...
 
     async def latest_checkpoint(self, run_id: str) -> JsonObject | None: ...
+
+    async def checkpoints(self, run_id: str, limit: int | None = None) -> list[JsonObject]:
+        """该 run 的快照列表，**按 seq 新→旧**返回（供 ``rebuild_run`` 逐一尝试、回退到次近完好快照）。"""
+        ...
+
+    async def watermark(self) -> int:
+        """当前全局物理序头部（无事件则 0）；跨 run catch-up 的水位基线。"""
+        ...
+
+    async def replay_global(
+        self, after_watermark: int, limit: int | None = None
+    ) -> list[JsonObject]:
+        """跨 run 重放全局 ``gseq > after_watermark`` 的事件，按全局序返回（携 run_id/seq）。"""
+        ...
+
+    async def checkpoint_seq(self, run_id: str) -> int | None:
+        """该 run 最近快照的 ``seq``（尾重放起点）；无快照返回 ``None``。"""
+        ...
+
+    async def list_unfinished_runs(self) -> tuple[str, ...]:
+        """从 log 派生非终态 run id（有事件但无终态事件）；供 ``--resume`` 枚举。"""
+        ...
 
 
 @runtime_checkable
