@@ -23,6 +23,14 @@ class PathResolution:
     error: str = ""
 
 
+#: 列举/递归搜索时跳过的目录名（噪音/巨大/易越界），design/03 §6 ls/glob/grep 共识。
+SKIP_DIR_NAMES: frozenset[str] = frozenset({".git", "node_modules", "__pycache__", ".venv", "dist", "build"})
+
+
+def is_skipped_dir(name: str) -> bool:
+    return name in SKIP_DIR_NAMES
+
+
 def _contained(candidate: Path, root: Path) -> bool:
     """candidate 是否落在 root 内（realpath 之后，跨平台大小写/分隔符归一）。"""
     try:
@@ -57,4 +65,4 @@ def resolve_in_workspace(
     return PathResolution(True, path=resolved)
 
 
-__all__ = ["PathResolution", "resolve_in_workspace"]
+__all__ = ["PathResolution", "SKIP_DIR_NAMES", "is_skipped_dir", "resolve_in_workspace"]
