@@ -46,6 +46,15 @@ def _log_level_from_env() -> int:
     return getattr(logging, os.environ.get("QUESTOR_LOG_LEVEL", "INFO").upper(), logging.INFO)
 
 
+def _model_from_env() -> str:
+    """模型名取自 ``QUESTOR_MODEL``（缺省回落离线 ``"echo"``）；env 读取属组合根职责（DESIGN §11）。
+
+    必须在此透传给 ``CliSurface.model``：否则 surface 用缺省 "echo"，经 loop → ``ProviderRequest.model``
+    在 litellm 的 ``request.model or self.model`` 里以非空真值 "echo" 覆盖 ``LiteLLMProvider`` 自带的
+    ``QUESTOR_MODEL``，模型名就到不了真实供应商（P4 复审发现的接线缺陷）。"""
+    return os.environ.get("QUESTOR_MODEL") or "echo"
+
+
 class _HeuristicDistiller:
     """无密钥离线 fallback 蒸馏器：**合并**现有 core + 近期 daily 的非标题行去重回写（单调不回退）。
 
@@ -82,7 +91,7 @@ async def _amain(argv: list[str]) -> int:
                 f"input_hash={str(result.get('input_hash', ''))[:12]}"
             )
             return 0
-        surface = CliSurface(store=store, memory_store=memory)
+        surface = CliSurface(store=store, memory_store=memory, model=_model_from_env())
         if argv and argv[0] == "--list":
             unfinished = await store.list_unfinished_runs()
             for run_id in unfinished:

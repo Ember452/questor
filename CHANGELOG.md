@@ -107,10 +107,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   之前（fail-on-empty；已验证“拆掉关卡即判红”）。
 - 测试：`tests/integration/test_pairing_gate_and_provider_fault.py`（10）+ `tests/unit/test_provider_error_classification.py`（8），
   先红后绿（修前同文件 7 条集成测试中 6 条全红、包含“非法历史真的被发出去了”这一直接证据；仅“取消优先”当时已绿）。
-  质量门：**440 passed / 5 skipped**；ruff clean；lint-imports 4 kept；AST 76 files/0 违规且 self-test 判红；
+  质量门：**443 passed / 5 skipped**（已含 PR #123 的 3 条；单独本分支基于旧 main 时 440）；ruff clean；lint-imports 4 kept；AST 76 files/0 违规且 self-test 判红；
   protocol 20 types lockstep；replay/output/secret/thread 守卫全绿；`verify_p0` ALL PASS。端到端在 `CliSurface.run_once`
   层面复验：一轮 `ls`+`read` + 严格网关判 400 的 provider → `completed`、两次 stream 均无悬空、异常不再穿出。
   UNVERIFIED：真 key 下 litellm 具体异常类型与 `status_code` 载体（版本相关）。
+
+### Fixed (composition-root model wiring — `QUESTOR_MODEL` 到不了真实供应商, 2026-10-16)
+实地复现：配 `QUESTOR_MODEL` 后 CLI 仍未打到 DeepSeek。
+- **组合根未透传 model**：`__main__._amain` 以 `CliSurface(store=…, memory_store=…)` 生成 surface，缺省 `model="echo"`。该 "echo" 经 `loop` → `ProviderRequest.model` 在 `litellm_adapter` 的 `request.model or self.model` 里以非空真值覆盖了 `LiteLLMProvider` 自带的 `QUESTOR_MODEL`，模型名到不了真实供应商。修复：组合根新增 `_model_from_env()`（读 `QUESTOR_MODEL`、缺省回落 "echo"，与 `_store_path`/`_log_level_from_env` 同为 env 收口点，DESIGN §11），显式传入 `CliSurface(model=…)`。`test_composition_root_model.py` 跑真实组合根（替换 `interactive` 捕获 surface、真 SQLiteStore、不联网）锁死：有 env → 透传、无 env → 回落、且 `surface.model` 必落到 `ProviderRequest.model`。质量门：**425 passed / 5 skipped**。
 
 ### Fixed (log assembly coverage — PR-A / 日志刀 1, 2026-10-16)
 补齐 `docs/log/DESIGN.md` §11 点名的"最严重装配缺口"（纯缺陷，不动契约/分层）：
