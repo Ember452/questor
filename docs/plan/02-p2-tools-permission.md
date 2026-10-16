@@ -1039,3 +1039,5 @@ docs: record p2 deviations and license ledger
 - **文档反向漂移**：把八步求值次序正式写进 `design/03` **§3.1**（带 `floor_applied` 对应表），修正四处引用不存在的 `§11 八步` 的 docstring，并在 **ADR-0014 追加“实现回填”**说明 denylist 曾经的假控制面与现在的确切语义（不回改原始决策）。
 
 **复验结果（2026-10-16 Windows 本机）**：`pytest` **345 passed / 5 skipped**（新增 18 条测试）、branch coverage **87%**；`ruff` clean；`lint-imports` 4 kept；AST 66 files 0 violation 且 self-test 新增 package-import 项 PASS；`check_output_budgets` self-test 现在 `broken-primitive-caught=True`；其余守卫全绿。仍 UNVERIFIED：seatbelt/bwrap 实机、POSIX 受控子进程执行、真网络 LLM/ SSE、多 agent inbox、`security-ci + pip-audit`。
+
+**落地**：上述修复连同全部 P2 工作（含 CI 触发器收窄 `ec0123f`）经 **PR #19 合入 main**（merge commit `1f5c171`，2026-10-16）。上文复验基线（345 passed / 87%）即合入时点的最终实测；后续演进自 P3 另起计划。

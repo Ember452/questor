@@ -101,6 +101,7 @@ Checkpoint { cp_id, seq, turn, kind: auto|manual|pre_tool|post_tool|pre_compact,
 - **续传**：客户端带 `after_seq` → 服务端从最近 `cp` 起重放 `seq>after` 的事件；`cp` 之前的状态直接取快照。
 - **快照节奏**：turn 边界必打（单步接口的天然一致点）；重工具/压缩前后各一个。
 - **恢复不变式**：恢复时先扫 `pending_tool_calls` 补合成 tool_result，再续跑。
+- **P3 落定**（详见 [ADR-0020](../adr/0020-durable-write-gate-and-log-authority.md) / [ADR-0021](../adr/0021-cross-process-resume.md)）：默认**写门截断**——落 checkpoint 前把持久化 `items` 截到 `closed_prefix`，durable 永不持半 `tool_use`；`pending_tool_calls` 只在窄窗口非空，读时 repair 兜底。续跑 = `rebuild_run`（最近快照 + 重放 `seq>cp.seq` 耐久尾 + 回填 + 闭过期审批）交回唯一 loop，仅对仍 OPEN 的调用幂等 re-dispatch。
 
 ## 6. 权限上下文 PermissionCtx（决策②，一等）
 ```
@@ -144,6 +145,7 @@ run.error_stack: ErrorEntry[]
 ## 9. 持久化映射（设计级，非最终 DDL）
 StorePort→SQLite：`sessions / runs / messages(+content) / task_nodes / tool_calls / checkpoints / events(append) / permission_rules`。
 - `events` **append-only** + `seq` 索引 → 支撑续传/回放。
+- **P3 落定**（详见 [ADR-0020](../adr/0020-durable-write-gate-and-log-authority.md) / [ADR-0022](../adr/0022-dual-cursor-watermark.md)）：`event_log` 为**唯一权威**，落库顺序固定 **先 append 耐久事件（`BEGIN IMMEDIATE` 原子）→ 再写 snapshot**；快照损坏由 log 重放回退。物化**两类游标**：per-run 逻辑 `seq`（SSE `after_seq`）+ 全局单调物理 `gseq`（跨 run catch-up watermark）；单一 schema authority + 幂等 DDL + `meta(store_schema_version)` 未知版本 fail-closed。
 - 记忆(三层/Deep Dream)是**另一套**（长期知识），不进本运行态；本 run 只持有 context 与指针。
 
 ## 10. 四条决策 → 状态落点（自检）

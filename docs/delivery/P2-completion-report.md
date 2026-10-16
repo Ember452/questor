@@ -2,6 +2,7 @@
 
 > 目的：读完后能讲清"P2 到底交付了什么能力、权限/审批/沙箱/进程/投影的真实接缝长什么样、和 plan/02 有哪些偏差、还剩哪些诚实边界"。
 > 口径：以**仓库当下代码 + 实测命令输出**为准。判据来自 [`docs/plan/02-p2-tools-permission.md`](../plan/02-p2-tools-permission.md) §5 DoD、[`docs/ROADMAP.md`](../ROADMAP.md)、ADR-0013…0019。
+> 落地状态：**已合入 main**（PR #19，merge commit `1f5c171`，2026-10-16）——ADR-0012 B 案首次全流程走通：功能分支 → PR → required checks 绿 → merge commit。
 
 ---
 
@@ -41,7 +42,7 @@ P2 的 ROADMAP 判据——"危险操作触发 `ask`；`deny`/敏感路径不可
 | T20 守卫+CI | scripts/CI | AST forbidden-import + output-budget + secret-projection 三守卫（各带 --self-test 可判红）；CI 拆为 `tests-posix` / `tests-windows` 两条平台分相 job（原计 matrix，因 job 级 `if` 看不到 `matrix` 上下文会整文件非法而拆） | `scripts/check_*.py` `.github/workflows/ci-python.yml` |
 | T21 DoD | tests | 端到端"全接线" loop DoD（写 ask→执行/拒绝、floor、敏感 deny、非法参数、真机 PowerShell 删除） | `tests/integration/test_p2_dod.py` |
 
-**实测复核（Windows 本机）**：`pytest` **345 passed / 5 skipped**、branch coverage **87%**、`ruff` 全绿、`lint-imports` **4 kept / 0 broken**、`check_layering_ast`（66 files, 0 violation）+ `check_protocol_schema`（19 types lockstep）+ `check_output_budgets` + `check_secret_projection` + `check_thread_leak` 全部 `--self-test` PASS、`verify_p0` ALL PASS。分支相对 main **80+ commits**、测试文件 **52** 个。
+**实测复核（Windows 本机）**：`pytest` **345 passed / 5 skipped**、branch coverage **87%**、`ruff` 全绿、`lint-imports` **4 kept / 0 broken**、`check_layering_ast`（66 files, 0 violation）+ `check_protocol_schema`（19 types lockstep）+ `check_output_budgets` + `check_secret_projection` + `check_thread_leak` 全部 `--self-test` PASS、`verify_p0` ALL PASS。合并时点累计 **80+ commits**、测试文件 **52** 个。
 
 **GitHub CI（ubuntu-24.04）首跑暴露的两个真 bug**——本地全绿全部没报出来，是 CI 的价值所在：
 1. `surfaces/approval.py`：审批超时后事件循环已关，reader 线程回调 `call_soon_threadsafe` 抛 `RuntimeError: Event loop is closed`（已改 `_safe_settle` + 两条可证伪测试）。
@@ -103,7 +104,7 @@ P2 的 ROADMAP 判据——"危险操作触发 `ask`；`deny`/敏感路径不可
 - **跨真实 socket 的 SSE 重连**：进程内 async transport 验证，未做 uvicorn/浏览器级断连重连。
 - **多 agent / 远程 Command inbox**：P8/P9。
 - **`security-ci + pip-audit` lane**：依 STRUCTURE `[P#]` 纪律，待有对外攻击面时再铺。
-- **coverage 仍非阻断**：86% branch 为观测基线，未设 `--cov-fail-under` 门槛（基线阶段不造虚假闸）。
+- **coverage 仍非阻断**：87% branch 为观测基线，未设 `--cov-fail-under` 门槛（基线阶段不造虚假闸）。
 
 ---
 
