@@ -1,7 +1,7 @@
 # Questor 计划 3（P3）· 持久化 + 断点续传 · 开发计划（已实施）
 
 > 用途：P3 的开工基线、任务分解与收尾回填。
-> 阶段口径：[`ROADMAP.md`](../ROADMAP.md) §1(P3)/§1.5；工程红线：[`HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md) C1–C18。
+> 阶段口径：[`ROADMAP.md`](../ROADMAP.md) §1(P3)/§1.5；工程红线：[`HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md) C1–C18（本阶段验收时至 C18；现全集至 **C19**，见 [ADR-0028](../adr/0028-pairing-gate-and-provider-fault-normalization.md)）。
 > 契约：[`design/01`](../design/01-state-model.md) §5/§9/§12/§13、[`design/02`](../design/02-event-protocol.md) §4/§10、[`design/04`](../design/04-turn-loop.md) §7；决策：[`adr/0005`](../adr/0005-state-storage.md)/[`0011`](../adr/0011-seq-semantics.md) + 本阶段新增 [`adr/0020`](../adr/0020-durable-write-gate-and-log-authority.md)/[`0021`](../adr/0021-cross-process-resume.md)/[`0022`](../adr/0022-dual-cursor-watermark.md)；实扒：[`references/R03`](../references/R03-state-persistence.md)。
 > 分支：`feat/p3-persistence-resume`（基于已合入 main 的 P2 `1f5c171`）。
 

@@ -156,7 +156,7 @@ P0 已产八层包骨架 + 分层三防线 + 冷导入/CI；P1 仅在 `pyproject
 ### T9 事件溯源存储 + checkpoint（`providers/store_sqlite.py`，依赖 T2/T3/T8）
 - 改造 DeepCode `event_repository.py`：`event_log(run_id, seq, type, turn, item_id?, payload_json, ts)`；`append` 用 `COALESCE(MAX(seq),0)+1 WHERE run_id`（per-run 逻辑 seq）+ `UNIQUE(run_id,seq)` + `idx_replay(run_id,seq)`；`replay(run_id, after_seq, through?, limit)` = `WHERE seq>after ORDER BY seq`（= `after_seq` 续传）；`sequence_head` + 全局物理 `rowid` 水位（双游标 ADR-0011）。
 - 写序：**先 append log（原子）→ 再更新 snapshot/index；snapshot 缺/损坏→由 log 重放**（01 §13/R03 B-2，log 是唯一真相）。`BEGIN IMMEDIATE` 落单写者（C2）。JSON 禁 NaN/Inf、时间 UTC tz-aware（R03 B-P3）。
-- checkpoint：turn 边界轻量快照（投影+指针，I4）+ `_closed_prefix` **写门**（durable 永不半 tool_use，R03 C-1）；恢复 = 最近快照 + 重放其后事件（ADR-0005）+ 悬空 user-turn 兜底。
+- checkpoint：turn 边界轻量快照（投影+指针，I4）+ `_closed_prefix` **写门**（durable 永不半 tool_use，R03 C-1）；恢复 = 最近快照 + 重放其后事件（ADR-0005）+ 悬空 user-turn 兜底。（**实现期修正**：P3 发现截断与 HITL 续跑冲突，最终不截断、改“完整快照 + 派发侧补齐”，`closed_prefix` 仅用于识别在途集——见 [ADR-0020](../adr/0020-durable-write-gate-and-log-authority.md)/plan/03 §6；配对由进入 provider 前的 settle 保证，每次回发前的关卡见 [ADR-0028](../adr/0028-pairing-gate-and-provider-fault-normalization.md)。）
 → verify:kill-重启从 checkpoint 续跑；`after_seq` 重放不丢不重；损坏 snapshot 回退重放。
 
 ### T10 L6 传输面：CLI + 本地 HTTP+SSE（`surfaces/`，依赖 T7/T8/T9）
@@ -188,7 +188,7 @@ P0 已产八层包骨架 + 分层三防线 + 冷导入/CI；P1 仅在 `pyproject
 3. **SSE 断线 + `after_seq` 续传不丢不重**（集成测试证）；
 4. **简单 checkpoint 断点恢复**：kill 进程重启能续跑/回放（无并行）；
 5. **终端「问一句→流式答一句」、中途可取消且状态/事件一致**（手工复现，非模糊声明）；
-6. **质量门**：冷导入 + import-linter/ruff/AST 守卫绿 + 单测+集成过 + **不违任一 C1–C15 红线**。
+6. **质量门**：冷导入 + import-linter/ruff/AST 守卫绿 + 单测+集成过 + **不违任一 C1–C15 红线**。（注：本项验收时红线全集仅至 C15；现全集见 `HARD-CONSTRAINTS` 至 **C19**，P1 代码在 C16–C19 下亦已复验——见 §11.1。）
 
 ---
 

@@ -2,7 +2,7 @@
 
 > 用途：P2 的开工基线与任务分解。  
 > 修订依据：2026-10-15 对抗评审 + ADR-0013-0019。  
-> 母文档：[`VISION.md`](../VISION.md)；阶段口径：[`ROADMAP.md`](../ROADMAP.md)；工程红线：[`HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md) C1-C18。  
+> 母文档：[`VISION.md`](../VISION.md)；阶段口径：[`ROADMAP.md`](../ROADMAP.md)；工程红线：[`HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md) C1-C18（本阶段验收时至 C18；现全集至 **C19**，见 [ADR-0028](../adr/0028-pairing-gate-and-provider-fault-normalization.md)）。  
 > 契约：[`design/00`](../design/00-layering.md)-[`04`](../design/04-turn-loop.md)；决策：[`adr/0013`](../adr/0013-run-command-inbox.md)-[`0019`](../adr/0019-bounded-artifact-projection.md)。  
 > 本文取代原 plan/02 中以下旧口径：POSIX bash 代表 Windows DoD、full_auto 可越过无写围栏、审批仅阻塞回调、工具直接 spawn、artifact 失败回原文、投影 identity、PermissionCtx 与引擎双配置。
 
@@ -966,6 +966,9 @@ docs: record p2 deviations and license ledger
 ---
 
 ## 13. 实现偏差回填
+
+> **状态更正（2026-10-16）**：下方引言是**规划期原文**；P2 已实现并合入 main（PR #19，merge `1f5c171`），
+> 实际回填已落在本节 §13.1–§13.3 与 [`delivery/P2-completion-report.md`](../delivery/P2-completion-report.md)。
 
 当前本文件是**修订基线，尚未实现**。T0-T21 执行后在此记录：
 1. 实际文件结构与本文差异；

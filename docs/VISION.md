@@ -86,7 +86,10 @@
 
 ## 8. 当前进度与待决
 
-- **已完成设计文档**（`docs/design/`）：`00-layering.md`（八层与边界）、`01-state-model.md`（L1 核心状态，working draft）、`HARD-CONSTRAINTS.md`（工程红线 C1-C12 + 分布式天花板）。
-- **下一步**：`02-event-protocol.md`（事件协议）→ `03-tool-interface.md` → `04-turn-loop.md` → 汇总 SPEC → 实现计划。
+> **进度真源是 [`ROADMAP.md`](./ROADMAP.md) §1**（逐阶段 ✅/进行中 + 交付报告链接）；本节只留指向，不另存一份状态。
+
+- **设计文档已定稿**（`docs/design/`）：`00-layering`、`01-state-model`、`02-event-protocol`、`03-tool-interface`、`04-turn-loop`、`05-policy`、`06-memory`、`HARD-CONSTRAINTS`（工程红线 **C1–C19** + 分布式天花板；每阶段新增的红线随 ADR 落册）。
+- **实现进度**：P0–P4 已交付并合入（ADR-0001…0028；**0027 为日志骨架刀 2 预留**）。日志可观测骨架（刀 2）排在 P5 开工前，详 [`log/PLAN.md`](./log/PLAN.md)。
 - **设计骨架已定**：四条前置决策已拍（单步接口/权限三态+可插拔沙箱/HTTP+SSE 统传输/任务树预留森林）；存储走事件溯源为主。
-- **待你拍**：v1 边界（记忆/多模态/语音/多agent 哪些进第一版、哪些后做）。
+  注：“单步接口”指 **PolicyPort 每 turn 只出一个意图**；provider 自己在一轮里发多个 tool_call 属同一意图源的多个调用，回发前由内核串行全部闭合（[ADR-0028](./adr/0028-pairing-gate-and-provider-fault-normalization.md) / HARD C19），不破单步契约。
+- **待拍（产品口径）**：v1 边界中多模态/语音/多 agent 哪些进第一版——对应 ROADMAP §1 的 P6/P8 行，进入前均需先记 ADR（§5）。
