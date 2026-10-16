@@ -170,6 +170,7 @@ P0 已产八层包骨架 + 分层三防线 + 冷导入/CI；P1 仅在 `pyproject
 → verify:故意返回不存在工具名 → 不崩、产 error、下一轮继续。
 
 ### T12 轻量可观测/错误栈（`observability/`，依赖 T2/T8）
+> **兑现状态（2026-10-16，日志刀 1 PR-A）：部分兑现**——装配缺口（`configure_logging` 覆盖四入口、`questor.bus` 报总线故障、console 绑 stderr）已由 `docs/log/PLAN.md` PR-A 补齐；**脱敏/节流/白名单/文件面/双通道汇流**随 PR-B（刀 2，`docs/log/DESIGN.md` 全套骨架、对抗评审门后）。规格真源已迁至 `docs/log/DESIGN.md`（原 `ErrorEntry` 路线由 `LogEntry` 中间表示取代，见 DESIGN D3）。
 - 结构化日志 + `ErrorEntry` envelope 汇总（`layer∈{kernel,tool,provider,persist}`）+ 事件流即观测面；**只依赖 contracts、只读、不改状态**(S7)；热路径打点带节流窗（R08 E-P3）。
 → verify:observability import kernel/policy 实现被禁；错误事件载荷脱敏（不记凭据，R08 E-6）。
 

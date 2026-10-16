@@ -111,16 +111,23 @@ class InProcessEventBus(EventBus):
             self._closed.add(env.run_id)
 
         if env.type not in LIVE_ONLY and self._store is not None:
-            await self._store.append(
-                env.run_id,
-                ({"seq": env.seq, "type": env.type, "turn": env.turn, "data": dict(env.data), "ts": env.ts.isoformat()},),
-            )
+            try:
+                await self._store.append(
+                    env.run_id,
+                    ({"seq": env.seq, "type": env.type, "turn": env.turn, "data": dict(env.data), "ts": env.ts.isoformat()},),
+                )
+            except Exception as exc:  # noqa: BLE001 - 持久化失败出声后上冒：数据丢失不可静默吞，保持既有致命语义
+                _log.warning("bus persist failed run=%s seq=%s: %s", env.run_id, env.seq, exc)
+                raise
 
         projected = project(env)
         if projected is None:
             return
         for queue in self._subs.get(env.run_id, ()):
-            queue.put_nowait(projected)
+            try:
+                queue.put_nowait(projected)
+            except asyncio.QueueFull:  # 背压丢帧：慢消费者可 resync，出声但不拖垮 loop（DoD A②）
+                _log.warning("bus subscriber queue full, dropped frame run=%s seq=%s", env.run_id, env.seq)
         if env.type in TERMINAL:
             self._subs.pop(env.run_id, None)  # run 已结束：释放订阅队列（防泄漏）。
             # 保留 _closed：它是“抑制本 run 后续任何终态”的记忆（C13），只存短 run id。

@@ -17,11 +17,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sys
 from pathlib import Path
 
 from questor.memory.distill import DistillOutcome, deep_dream
+from questor.observability.logging import configure_logging
 from questor.providers.store_memory_sqlite import SQLiteMemoryStore
 from questor.providers.store_sqlite import SQLiteStore
 from questor.surfaces.cli import CliSurface, interactive
@@ -37,6 +39,11 @@ def _memory_db_path() -> str:
 
 def _memory_root() -> str:
     return os.environ.get("QUESTOR_MEMORY_ROOT", str(Path.cwd() / ".questor" / "memory_store"))
+
+
+def _log_level_from_env() -> int:
+    """日志级别取自 ``QUESTOR_LOG_LEVEL``（默认 INFO）；env 读取属组合根职责，内核不读 env（DESIGN §11）。"""
+    return getattr(logging, os.environ.get("QUESTOR_LOG_LEVEL", "INFO").upper(), logging.INFO)
 
 
 class _HeuristicDistiller:
@@ -59,6 +66,9 @@ class _HeuristicDistiller:
 
 
 async def _amain(argv: list[str]) -> int:
+    # 日志装配上移至组合根唯一入口（刀1 缺陷修复）：覆盖 REPL/--resume/--list/--dream
+    # 四入口——此前仅 ``interactive()`` 配置，崩溃恢复的 ``--resume`` 裸奔无日志（DESIGN §11）。
+    configure_logging(level=_log_level_from_env())
     path = _store_path()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     store = await SQLiteStore(path).connect()
