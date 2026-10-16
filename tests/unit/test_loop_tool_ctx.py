@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from pathlib import Path
 
 from questor.contracts.process import ProcessRequest, ProcessResult
@@ -32,7 +33,8 @@ def test_run_process_merges_declared_env_names(tmp_path: Path) -> None:
     runner = _RecordingRunner()
     ctx = _ToolCtx(tmp_path, asyncio.Event(), run_id="run1", process_runner=runner)
     ctx.declare_env_passthrough("TENOR_API_KEY")
-    req = ProcessRequest(capability=Capability.EXEC, argv=(str(Path("C:/Windows/System32/where.exe")),), cwd=tmp_path, timeout_s=5, declared_env_names=("PATH",))
+    # argv[0] 必须是绝对路径：用 sys.executable（两平台都绝对），不能硬编码 Windows 路径。
+    req = ProcessRequest(capability=Capability.EXEC, argv=(sys.executable,), cwd=tmp_path, timeout_s=5, declared_env_names=("PATH",))
     result = asyncio.run(ctx.run_process(req))
     assert result.exit_code == 0
     assert runner.last is not None
@@ -49,7 +51,7 @@ def test_put_artifact_uses_store_and_run_id(tmp_path: Path) -> None:
 
 def test_run_process_without_runner_raises(tmp_path: Path) -> None:
     ctx = _ToolCtx(tmp_path, asyncio.Event())
-    req = ProcessRequest(capability=Capability.EXEC, argv=("C:/x",), cwd=tmp_path, timeout_s=1)
+    req = ProcessRequest(capability=Capability.EXEC, argv=(sys.executable,), cwd=tmp_path, timeout_s=1)
     try:
         asyncio.run(ctx.run_process(req))
     except RuntimeError as exc:
