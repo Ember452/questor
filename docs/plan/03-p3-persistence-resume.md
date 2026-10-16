@@ -21,14 +21,14 @@
 
 | 能力 | 扫描仓（`file:line`） | 结论 | 复用/改造 · 许可 |
 |---|---|---|---|
-| 事件溯源 log 权威 + 派生 index | DeepCode `core/persistence/store.py:1-24`；`event_repository.py:21-122` | 改造 | log 权威、先 append 后 snapshot、损坏回退（ADR-0020） |
+| 事件溯源 log 权威 + 派生 index | DeepCode `core/sessions/store.py:1-24`；`core/persistence/event_repository.py:21-122` | 改造 | log 权威、先 append 后 snapshot、损坏回退（ADR-0020） |
 | 双游标（per-run seq + 全局 watermark） | DeepCode `event_repository.py:21-56,89-112`；wuu 全局 HeadSeq | 改造 | `event_log.gseq` + `watermark`/`replay_global`（ADR-0011/0022） |
 | checkpoint 写门截断 closed_prefix | CowAgent `step_writer.py:53-64,128-144` | 部分采纳 | closed_prefix 用于识别在途集，不截断 durable（HITL 需保留，见 §6 偏差） |
 | 悬空 user-turn 修复 | hermes `hermes_state_rewind.py:67-71` | 自写 | 本项目 reduce 形状不同；rebuild 未闭合调用经 reduce 回填 |
 | 恢复不重复副作用 = 幂等投递 claim | hermes `hermes_state_common.py:582-609`；wuu `claimAgentResultDelivery` | 改造（轻量） | v1 以 tool_call_id + seq_result + OPEN 状态判重派；完整 claim 留 P9 |
-| append 按稳定 uid 去重 | CowAgent `step_writer.py:22-25`；DeepCode `transcript.py:82-100` | 改造 | message.id/tool_call_id 幂等键；submit 键 `submit:{run_id}:{turn}` |
+| append 按稳定 uid 去重 | CowAgent `step_writer.py:22-25`；DeepCode `core/sessions/transcript.py:82-100` | 改造 | message.id/tool_call_id 幂等键；submit 键 `submit:{run_id}:{turn}` |
 | JSON 禁 NaN/Inf + tz-aware UTC | DeepCode `serde.py:10-45` | 复用（已实现） | store `_dumps`、`require_aware` 已落实 |
-| schema 单一 authority + 幂等 DDL + BEGIN IMMEDIATE | hermes `hermes_state_schema.py:1348-1367,801-816` | 改造 | `_SCHEMA` 唯一 authority + `meta(store_schema_version)` fail-closed |
+| schema 单一 authority + 幂等 DDL + BEGIN IMMEDIATE | hermes `hermes_state_schema.py:1348-1365`、`801-816` | 改造 | `_SCHEMA` 唯一 authority + `meta(store_schema_version)` fail-closed |
 
 > 前端能力（无：P3 不含 UI）。桌面订阅 + SSE 重连的 UI 侧在 P7；P3 只保证服务端 `after_seq`/resync 契约在真 socket 成立。
 
@@ -91,3 +91,15 @@
 - 偏差回填 ADR：ADR-0020/0021/0022（本阶段新增决策）。
 - 更新：ROADMAP §1(P3 ✅)/§1.5；CHANGELOG `[Unreleased]` Added — P3。
 - 集成方式：P3 分支待走 PR（远端 main 强制 PR，ADR-0012 B 案）；本仓 agent 无网络，PR 由维护者在 GitHub 侧创建。
+
+## 7. 对抗审计（`docs/audit/P3-review-2026-10-16.md`）闭合记录
+
+逐项独立复核后的处置（接受/纠正）：
+- **A1/G1（快照回退未建 + 注释谎称）→ 已修**：`rebuild_run` 现按新→旧逐一尝试快照、损坏项回退次近完好快照、**无一完好则 fail-closed 抛 `NoIntactCheckpointError`**（无快照才返回 `None`）；`store_sqlite` 头注释改为"快照权威状态、损坏回退次近完好快照"。**架构纠偏**：审计 §6-1 方案 (a)"从 `event_log` reduce 重建 Domain_State"与 **C5** 冲突（log 存的是输出事件/投影，不可反哺状态），故采用 (b) 回退完好快照 + fail-closed，未采用 (a)。测试：`test_rebuild_falls_back_to_previous_intact_checkpoint`、`test_rebuild_fail_closed_when_all_checkpoints_corrupt`。
+- **B1（真 socket 测试不 hermetic）→ 已修**：httpx 客户端 `trust_env=False` + 子进程 `NO_PROXY` loopback，不再被系统代理劫成 502。
+- **C-卫生（快照缺 `allow_nan=False`）→ 已修**：`_checkpoint` 序列化加 `allow_nan=False`；`test_checkpoint_snapshot_rejects_nan` 钉住。
+- **E2（版本闸门无消费者）→ 已修**：`EventServer.stream`/`/events` 透传 `X-Questor-Contract-Version` 到总线；`test_http_stream_version_gate_emits_resync_then_stops` 钉住。
+- **A2/E1（`recovery_pointers` 无生产者/缺 CoveredHash/未标后置）→ 已标注**：`domain_state` 明确 `NOT filled until P4/P10（压缩）`，CoveredHash 校验锚点随压缩定义。
+- **A3（`pending` 列写了不读）→ 已标注**：`_checkpoint` 说明 `pending` 仅供诊断/审计，权威回退靠快照 ledger。
+- **F1/F2/F3（peer-scan 路径/行号）→ 已修**：`store.py`→`core/sessions/store.py`；`transcript.py`→`core/sessions/transcript.py`；`hermes_state_schema.py:1348-1367`→`1348-1365`。
+- **审计 check #6（`driver_id`/`driver_version`）→ 显式后置**：非 P3 声称项；属策略/驱动版本化（design/05 可插拔），归 **P9**。`contract_version` 已在快照 round-trip fail-closed（`snapshot.py`），store `meta` 版本闸门已建。

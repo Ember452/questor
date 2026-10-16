@@ -357,7 +357,12 @@ class DefaultTurnLoop:
         return run
 
     async def _checkpoint(self, run: Run, kind: str) -> None:
-        """落一个 turn 边界快照供恢复（A1）。无 store 时为空操作。"""
+        """落一个稳态快照供恢复（A1）。无 store 时为空操作。
+
+        ``state_digest`` 是权威状态（含完整 ToolCall 账本）；``pending`` 存未闭合 tool_use id，
+        **仅供可观测/诊断用**——rebuild 的权威回退仍靠 ``state_digest`` 里的 ledger（不依赖此列），
+        它是“崩溃→重派窗口”的审计标记（A3）。
+        """
         if self.store is None:
             return
         await self.store.save_checkpoint(
