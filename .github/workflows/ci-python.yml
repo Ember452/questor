@@ -1,18 +1,23 @@
 name: ci-python
 
 on:
+  # 所有分支的 push 都跑守卫（不只 main）：功能分支未建 PR 时也能拿到 CI 证据，
+  # 避免“本地绿 = 认为没问题”的假信心。与 pull_request 重复触发的开销由下面的
+  # concurrency 同一组自动取消来吸收。
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# 同一 ref 上新提交自动取消仍在跑的旧 run。不加这段时，每个 push 的 run 都会各自跑到
+# 同一分支上新提交自动取消仍在跑的旧 run。不加这段时，每个 push 的 run 都会各自跑到
 # 结束（卡死时即 6 小时默认上限），旧 run 堆积且白烧免费额度。
+# group 用“分支名”而不是 github.ref：PR 事件的 ref 是 refs/pull/N/merge、分支 push 是
+# refs/heads/…，两者归同一组后，“同分支 push + 已开 PR” 只会跑最新一个，不双份烧分钟数。
 concurrency:
-  group: ci-python-${{ github.ref }}
+  group: ci-python-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 env:
@@ -79,6 +84,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-2022]
+    # Windows runner 分钟单价高于 Linux（私有仓库还计费），所以：**功能分支的纯 push
+    # 只跑 ubuntu leg**；Windows 真机 leg 在 PR、workflow_dispatch 和已合入 main 时跑——
+    # 即“合并前必验 Windows”，不每天为它付双倍钱。
+    if: >-
+      github.event_name != 'push'
+      || github.ref == 'refs/heads/main'
+      || matrix.os == 'ubuntu-24.04'
     runs-on: ${{ matrix.os }}
     # 兜底：曾经因 aiosqlite 非守护线程泄漏使 pytest step 永不结束，这里限时自停。
     timeout-minutes: 15
