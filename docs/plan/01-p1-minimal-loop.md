@@ -266,3 +266,26 @@ P0 已产八层包骨架 + 分层三防线 + 冷导入/CI；P1 仅在 `pyproject
 - 流式看门狗双超时、idle-progress 看门狗、POSIX/PowerShell shell 命令解析、跨机/多进程一致性：分别后置到 P2/P10；P1 不做。
 
 **未改的结论**：能力面仍守 §2.5 串行最小集（无并行/MCP/子 agent），审计 scope-drift 核验亦确认未越界；真实 LiteLLM 端到端与跨真实 HTTP 的 SSE 断连重连仍 **UNVERIFIED**（无 key / 环境无 uvicorn），列入 §7 未覆盖项。
+
+### 11.1 追加回填（2026-10-16，真机崩溃核验 → **ADR-0028**）
+
+用户真实使用中“模型一轮发 ≥2 个 tool_call”→ provider 400 → **CLI 进程带 traceback 直接退出、run 不落终态**。
+本节只追加、不改上方 2026-10-15 的审计结论：
+
+- **T4「错误归一为 `ErrorEntry`(01 §8)」当时只做了形状、未接线**：`ErrorLayer.PROVIDER` 生产路径 0 使用、
+  `ProviderPort.stream` 唯一调用点裸奔、src 内 `FORMAT_ERROR`/retry 零生产者。本轮落下：
+  `contracts/errors.py::classify_provider_error`（ADR-0010 的纯函数）+ kernel 边界捕获→`run_failed`。
+- **T4「满预算重试」字面未执行（故意）**：本轮不自动重试——先有关卡/分类，重试编排才有意义；退避/fallback
+  链/凭据池按 §1.2 后置表仍归 P10。400 配对违规已钉为 **不可重试**，否则届时会把同一个确定性错误打满预算。
+- **DoD §5-2 的“三条异常路径不崩”事实上不够**：provider 故障必须并列为**第四条**。本轮已补进
+  `HARD-CONSTRAINTS` **C19**（机制强制，不靠自觉）；§5-2 保留原文作为当时的验收基线，不回改。
+- **turn 粒度变更（已走 ADR，属本阶段行为修正、非能力越界）**：一条 assistant 里的 N 个 tool_use 在同一
+  次回发前**串行**闭合（仍不启用并行，§2.5 口径不变）。因此 `repeat_tool_limit` 仅覆盖策略提议路径，
+  关卡补执行不计入重复签名；总 turn 数不增。
+- **同片雷区两个额外缺陷**（本轮一并修）：① stop-gate 的 `continue` 同样带悬空回发；② 被
+  `AppendAssistantMessage` 拒收的 assistant 会经 `FinalizeRun(final=…)` **走私回 context**，留下一条永不配对
+  的 tool_use 且因 `completed` 不进 `--list`/resume。现均 fail-closed 出声。
+- **改名（ADR-0021 的派发函数）**：`_resume_settle_open_calls` → **`_settle_open_calls`**（resume 入口与
+  每-turn 关卡两个安全点共用；行为逐字不变）。上方 A2 项里“拒绝过早 Finish”的机制保留，仅回发前多了关卡。
+- 测试：`tests/integration/test_pairing_gate_and_provider_fault.py`（10）、`tests/unit/test_provider_error_classification.py`（8）。
+  真网关异常形状（litellm 版本相关的 `status_code` 载体）仍 **UNVERIFIED**（无 key）。
