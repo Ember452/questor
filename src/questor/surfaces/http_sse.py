@@ -20,6 +20,7 @@ from questor.contracts.common import new_id, thaw
 from questor.contracts.events import Cancel, Envelope, EventType, ResolveApproval, SetPermissionMode, SubmitMessage
 from questor.contracts.inbox import InboxStatus
 from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, Message, Role
+from questor.contracts.tool import RunToolSurface
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.run_control import RunController
@@ -55,19 +56,20 @@ class EventServer:
         self.bus = InProcessEventBus(store)
         self.registry = RunRegistry()
 
-    def _loop(self, cancel: asyncio.Event) -> DefaultTurnLoop:
-        """复用 surface 的装配，但挂到本服务共享的 bus 上。"""
-        return self.surface._loop(self.bus, cancel)
+    def _loop(self, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
+        """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。"""
+        return self.surface._loop(self.bus, cancel, surface)
 
     async def start_run(self, text: str, run_id: str | None = None) -> str:
         """后台启动一次 run（用户文本经 SubmitMessage Command 进入 inbox）。"""
         run_id = run_id or new_id("run")
         run = Run(run_id=run_id, budget=Budget())
+        tool_surface = self.surface.registry.freeze_for_run(run_id)
         controller = RunController(run)
         self.registry.register(controller)
         msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
         await self.registry.submit(run_id, SubmitMessage(run_id=run_id, content=msg), source="http", idempotency_key=f"submit:{run_id}")
-        task = asyncio.create_task(self._loop(asyncio.Event()).drive_controller(controller))
+        task = asyncio.create_task(self._loop(asyncio.Event(), tool_surface).drive_controller(controller))
         self.registry.set_task(run_id, task)
         return run_id
 

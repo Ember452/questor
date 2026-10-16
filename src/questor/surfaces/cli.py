@@ -15,10 +15,12 @@ import threading
 from pathlib import Path
 
 from questor.capabilities.tools.read import ReadTool
+from questor.capabilities.tools.registry import ToolRegistry
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
 from questor.contracts.ports import ProviderPort
 from questor.contracts.state_schema import Budget, ContentBlock, Message, Role
+from questor.contracts.tool import RunToolSurface
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.permissions import DefaultPermissionEngine
@@ -87,17 +89,19 @@ class CliSurface:
         self.system = system
         self.model = model
         self.read = ReadTool()
-        self.registry_tools = {self.read.spec.name: self.read}
+        self.registry = ToolRegistry()
+        self.registry.register(self.read)
 
-    def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event) -> DefaultTurnLoop:
-        """组装一个面向本次会话的 turn 循环（当前只注册 read）。"""
+    def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
+        """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。"""
         return DefaultTurnLoop(
             provider=self.provider,
             policy=ReActPolicy(),
             permission=DefaultPermissionEngine(),
             bus=bus,
-            tool_for=self.registry_tools.get,
-            tools=tuple(self.registry_tools.values()),
+            tool_for=surface.tool_for,
+            tools=surface.tools,
+            surface=surface,
             workspace_root=self.workspace_root,
             model=self.model,
             system=self.system,
@@ -109,8 +113,9 @@ class CliSurface:
         store = await SQLiteStore(":memory:").connect()
         bus = InProcessEventBus(store)
         cancel = asyncio.Event()
-        loop = self._loop(bus, cancel)
         run = Run(run_id=new_id("run"), budget=Budget())
+        surface = self.registry.freeze_for_run(run.run_id)
+        loop = self._loop(bus, cancel, surface)
         controller = RunController(run)
         registry = RunRegistry()
         registry.register(controller)
