@@ -152,3 +152,10 @@ T0 基线/worktree
 - **§6-4 D③命名测试**：新增 `test_p4_memory_single_writer.py`。
 - **§6-6 source**：`memory_written.source` 用真实 `MemorySource`（`contracts.memory.source_for_write`）。
 - **§6-5 `PolicyView.memory` 生产者 backlog**：loop 有意不自动填充 `view.memory`（以免耦合 L2、DoD④）——**归属记 P5/P7 backlog**：若将来做"检索自动注入 prompt"，由一个 harness 侧只读分支预取器填入有界投影，而非写死进 `DefaultTurnLoop`。在此之前 `MemoryAwareReActPolicy` 是消费 `view.memory` 的待定接缝示例（生产路径 `view.memory` 为空）。
+
+## 13. 全链路复查（记忆之外；2026-10-16）
+实跑了 `python -m questor`（REPL→run→flush→daily→`--dream`→core）、`--list`、`--resume`、全守卫 self-test + fail-on-empty、冷导入、静态扇。新发现：
+- **[已修] `--dream` heuristic 蒸馏器只喂 daily → 每次重写 core 会丢更早的既有精华**。修：`_HeuristicDistiller` 合并"现有 core + 近期 daily"（单调不回退），`test_heuristic_distiller.py` 钉住。
+- **[P7 backlog] HTTP/SSE 面（`EventServer`）绕开 `run_once`/`resume` 直接 `surface._loop(...).drive` → 不触发 run-完成 flush、无 `POST /runs/{id}/memory` 写路由**。P4 组合根只起 CLI、未起 HTTP（`create_app` 仅测试用），故非 P4 live bug；但 P7 sidecar 起 HTTP 时必须镜像 CLI 的 flush + 经 inbox 的 `WriteMemory` 路由（否则 HTTP 驱动的记忆只有读侧）。
+- **[语义说明] run-完成 flush 沉淀的是"最终 assistant 回答"、非用户"记住 X"原话**（episodic = agent 产出）。逐字记住需 P5 显式 `WriteMemory` 路由（当前唯一生产写者是自动 flush）。
+- **[非 P4、仅记录] `cli.py` 顶层 import `LiteLLMProvider` → 每次 import CLI 触发一次 litellm cost-map 网络抓取（超时回落本地）**：P1 既有，可延迟 import 后置清理。
