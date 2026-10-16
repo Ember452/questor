@@ -10,6 +10,7 @@ from questor.capabilities.tools.read import ReadTool
 class _Ctx:
     def __init__(self, root: Path, cancelled: bool = False) -> None:
         self.workspace_root = root
+        self.cwd = root
         self._cancelled = cancelled
 
     def is_cancelled(self) -> bool:

@@ -1,6 +1,7 @@
-"""L6 HTTP + SSE 事件服务（ADR-0007；design/02 §4）。P1 T10。
+"""L6 HTTP + SSE 事件服务（ADR-0007/0013；design/02 §4）。P1 T10 + P2 T13。
 
-零业务逻辑（STRUCTURE S6）：端点只把 Command*提交*进 loop、把事件流*投影*成 SSE。
+零业务逻辑（STRUCTURE S6）：端点只把 Command（提交/审批/改权限/取消）*投进*该 run 的
+Command Inbox，再把事件流*投影*成 SSE。绝不直接 reduce。
 续传是一等能力：``GET /events/{run_id}`` 遵从 ``Last-Event-ID``/``after_seq``，先经 store
 重放 durable 尾、再跟实时，每帧带 ``id: <seq>``。
 
@@ -12,17 +13,23 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from questor.contracts.common import new_id, thaw
-from questor.contracts.events import Envelope, EventType
-from questor.contracts.state_schema import Budget
+from questor.contracts.events import Cancel, Envelope, EventType, ResolveApproval, SetPermissionMode, SubmitMessage
+from questor.contracts.inbox import InboxReceipt
+from questor.contracts.ports import StorePort
+from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, Message, Role
+from questor.contracts.tool import RunToolSurface
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
-from questor.providers.store_sqlite import SQLiteStore
+from questor.kernel.run_control import RunController
 from questor.state.domain_state import Run
+from questor.surfaces.approval import http_status_for_receipt
 from questor.surfaces.cli import CliSurface
+from questor.surfaces.run_registry import RunRegistry
 
 # 终态事件集：流式跟到这些即停。
 TERMINAL = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
@@ -42,58 +49,116 @@ def envelope_to_frame(env: Envelope) -> dict:
     return {"id": str(env.seq), "event": env.type, "data": envelope_to_json(env)}
 
 
-class EventServer:
-    """持有端点共享的 store + bus + 在飞 run 的取消位。"""
+def _receipt_response(receipt: InboxReceipt) -> JSONResponse:
+    """把 receipt 变成带映射状态码的 JSON 响应（<400 才会到这里，>=400 已在 _checked 抛）。"""
+    return JSONResponse(status_code=http_status_for_receipt(receipt), content={"status": receipt.status.value, "reason": receipt.reason})
 
-    def __init__(self, surface: CliSurface, store: SQLiteStore) -> None:
+
+class EventServer:
+    """持有端点共享的 store + bus + active run 的 Command Inbox 注册表。"""
+
+    def __init__(self, surface: CliSurface, store: StorePort) -> None:
         self.surface = surface
         self.store = store
         self.bus = InProcessEventBus(store)
-        self._cancels: dict[str, asyncio.Event] = {}
+        self.registry = RunRegistry()
 
-    def _loop(self, run_id: str, cancel: asyncio.Event) -> DefaultTurnLoop:
-        """复用 surface 的装配，但挂到本服务共享的 bus 上。"""
-        return self.surface._loop(self.bus, cancel)
+    def _loop(self, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
+        """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。"""
+        return self.surface._loop(self.bus, cancel, surface)
 
     async def start_run(self, text: str, run_id: str | None = None) -> str:
-        """后台启动一次 run，立即返回 run_id（事件经 /events 拉取）。"""
+        """后台启动一次 run（用户文本经 SubmitMessage Command 进入 inbox）。"""
         run_id = run_id or new_id("run")
-        cancel = asyncio.Event()
-        self._cancels[run_id] = cancel
         run = Run(run_id=run_id, budget=Budget())
-        asyncio.create_task(self._loop(run_id, cancel).drive(run, text))
+        tool_surface = self.surface.registry.freeze_for_run(run_id)
+        controller = RunController(run)
+        self.registry.register(controller)
+        msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
+        await self.registry.submit(run_id, SubmitMessage(run_id=run_id, content=msg), source="http", idempotency_key=f"submit:{run_id}")
+        task = asyncio.create_task(self._loop(asyncio.Event(), tool_surface).drive_controller(controller))
+        self.registry.set_task(run_id, task)
         return run_id
 
-    def cancel(self, run_id: str) -> None:
-        """置该 run 的取消位；loop 在下一个安全点经 Cancel Command 收尾。"""
-        event = self._cancels.get(run_id)
-        if event is not None:
-            event.set()
+    async def resolve_approval(self, run_id: str, request_id: str, decision: str) -> InboxReceipt:
+        """把审批决策投进该 run 的 inbox；返回 receipt（>=400 的映射码直接抛 HTTPException）。"""
+        if decision not in {"allow", "deny"}:
+            raise HTTPException(status_code=400, detail="decision must be allow or deny")
+        return self._checked(
+            await self.registry.submit(
+                run_id,
+                ResolveApproval(run_id=run_id, request_id=request_id, decision=decision, decided_by="http_client"),
+                source="http",
+                idempotency_key=request_id,
+            )
+        )
+
+    async def set_permission_mode(self, run_id: str, mode: str, changed_by: str = "http_client") -> InboxReceipt:
+        """改未来调用的权限模式；同样只经 inbox。"""
+        if mode not in {"default", "plan", "full_auto"}:
+            raise HTTPException(status_code=400, detail="invalid permission mode")
+        return self._checked(
+            await self.registry.submit(
+                run_id,
+                SetPermissionMode(run_id=run_id, mode=mode, changed_by=changed_by),
+                source="http",
+                idempotency_key=f"mode:{run_id}:{mode}",
+            )
+        )
+
+    async def cancel(self, run_id: str) -> InboxReceipt:
+        """请求取消某 run（Cancel Command 经 inbox 在安全点收尾）。"""
+        return self._checked(
+            await self.registry.submit(
+                run_id,
+                Cancel(run_id=run_id, reason=CancelReason.USER),
+                source="http",
+                idempotency_key=f"cancel:{run_id}",
+            )
+        )
+
+    @staticmethod
+    def _checked(receipt: InboxReceipt) -> InboxReceipt:
+        """receipt 映射的 HTTP 码 >=400 时抛 HTTPException（surface 不碰 reduce，只据 receipt 说话）。"""
+        code = http_status_for_receipt(receipt)
+        if code >= 400:
+            raise HTTPException(status_code=code, detail=receipt.reason)
+        return receipt
 
     async def stream(self, run_id: str, after_seq: int = 0):
-        """产出 SSE 帧：先重放 after_seq 之后、再跟实时，至终态停并清理取消位。"""
+        """产出 SSE 帧：先重放 after_seq 之后、再跟实时，至终态停并清理 active run。"""
         async for env in self.bus.subscribe(run_id, after_seq):
             yield envelope_to_frame(env)
             if env.type in TERMINAL:
-                self._cancels.pop(run_id, None)
+                self.registry.unregister(run_id)
                 return
 
 
 def create_app(server: EventServer) -> FastAPI:
-    """构建 FastAPI 应用：``/run``、``/cancel/{run_id}``、``/events/{run_id}``。"""
+    """构建 FastAPI 应用：run/cancel/approve/permissions/events 全部只投 Command 或投事件。"""
     app = FastAPI(title="questor", version="0.1.0")
 
     @app.post("/run")
     async def run(payload: dict) -> dict:
-        """受理一轮：后台起 run，返回 run_id。"""
         run_id = await server.start_run(payload.get("text", ""), payload.get("run_id"))
         return {"run_id": run_id}
 
+    @app.post("/runs/{run_id}/cancel")
+    async def cancel_run(run_id: str) -> JSONResponse:
+        return _receipt_response(await server.cancel(run_id))
+
+    # 兼容 P1 端点。
     @app.post("/cancel/{run_id}")
-    async def cancel(run_id: str) -> dict:
-        """请求取消某 run。"""
-        server.cancel(run_id)
-        return {"cancelled": run_id}
+    async def cancel_legacy(run_id: str) -> JSONResponse:
+        return _receipt_response(await server.cancel(run_id))
+
+    @app.post("/runs/{run_id}/approvals/{request_id}/resolve")
+    async def resolve(run_id: str, request_id: str, payload: dict) -> JSONResponse:
+        return _receipt_response(await server.resolve_approval(run_id, request_id, payload.get("decision", "")))
+
+    @app.post("/runs/{run_id}/permissions")
+    async def permissions(run_id: str, payload: dict) -> JSONResponse:
+        return _receipt_response(await server.set_permission_mode(run_id, payload.get("mode", "")))
 
     @app.get("/events/{run_id}")
     async def events(request: Request, run_id: str, after_seq: int = 0) -> EventSourceResponse:

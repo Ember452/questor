@@ -43,7 +43,7 @@ def _loop(provider, *, policy=None, budget=None, store=None, tmp=None):
     return DefaultTurnLoop(
         provider=provider,
         policy=policy or ReActPolicy(),
-        permission=DefaultPermissionEngine(read_only_tools=frozenset({"read"})),
+        permission=DefaultPermissionEngine(),
         bus=InProcessEventBus(store),
         tool_for=lambda name: read if name == "read" else None,
         tools=(read,),

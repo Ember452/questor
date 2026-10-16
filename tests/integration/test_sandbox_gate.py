@@ -10,14 +10,19 @@ from pathlib import Path
 
 from questor.contracts.common import new_id
 from questor.contracts.ports import StreamChunk
+from questor.contracts.sandbox import Confinement, SandboxBackend, SandboxDescriptor
 from questor.contracts.state_schema import Budget, RunStatus, ToolCallStatus
 from questor.contracts.tool import Capability, Risk, Tool, ToolContext, ToolResult, ToolSpec
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
-from questor.kernel.permissions import DefaultPermissionEngine, PermissionMode
+from questor.kernel.permissions import DefaultPermissionEngine
 from questor.policy.react_policy import ReActPolicy
 from questor.providers.fake import ScriptedProvider
-from questor.state.domain_state import Run
+from questor.state.domain_state import PermissionCtx, Run
+
+
+def _full_auto_run() -> Run:
+    return Run(run_id=new_id("run"), budget=Budget(max_turns=5), permission_ctx=PermissionCtx(mode="full_auto"))
 
 
 class _ExecTool(Tool):
@@ -57,14 +62,14 @@ async def test_exec_denied_without_sandbox(tmp_path: Path) -> None:
     loop = DefaultTurnLoop(
         provider=ScriptedProvider([_turn("tc_e"), _ANSWER]),
         policy=ReActPolicy(),
-        permission=DefaultPermissionEngine(mode=PermissionMode.FULL_AUTO),  # permission allows
+        permission=DefaultPermissionEngine(),  # 模式由 Run.permission_ctx 提供，引擎不保存配置
         bus=InProcessEventBus(None),
         tool_for=lambda name: tool if name == "bash" else None,
         tools=(tool,),
         sandbox=None,  # no backend -> the loop's fail-closed gate must deny
         workspace_root=tmp_path,
     )
-    run = await loop.drive(Run(run_id=new_id("run"), budget=Budget(max_turns=5)), "list files")
+    run = await loop.drive(_full_auto_run(), "list files")
     call = next(c for c in run.tool_ledger.calls if c.name == "bash")
     assert call.status is ToolCallStatus.DENIED
     assert "fail-closed" in str(call.result)
@@ -74,6 +79,16 @@ async def test_exec_denied_without_sandbox(tmp_path: Path) -> None:
 
 async def test_exec_allowed_with_capable_sandbox(tmp_path: Path) -> None:
     class _GoodSandbox:
+        def describe(self) -> SandboxDescriptor:
+            return SandboxDescriptor(
+                backend=SandboxBackend.SEATBELT,
+                confinement=Confinement.FULL,
+                fences_writes=True,
+                fences_network=True,
+                isolates_process_tree=True,
+                limitation="full test sandbox",
+            )
+
         def fences_writes(self) -> bool:
             return True
 
@@ -83,20 +98,20 @@ async def test_exec_allowed_with_capable_sandbox(tmp_path: Path) -> None:
         def isolates_process_tree(self) -> bool:
             return True
 
-        def wrap_argv(self, capability, argv):  # pragma: no cover - unused in P1
+        def wrap_argv(self, capability, argv):  # noqa: ANN001, ANN201
             return argv
 
     tool = _ExecTool()
     loop = DefaultTurnLoop(
         provider=ScriptedProvider([_turn("tc_e2"), _ANSWER]),
         policy=ReActPolicy(),
-        permission=DefaultPermissionEngine(mode=PermissionMode.FULL_AUTO),
+        permission=DefaultPermissionEngine(),
         bus=InProcessEventBus(None),
         tool_for=lambda name: tool if name == "bash" else None,
         tools=(tool,),
         sandbox=_GoodSandbox(),  # capable backend -> not denied by the gate
         workspace_root=tmp_path,
     )
-    run = await loop.drive(Run(run_id=new_id("run"), budget=Budget(max_turns=5)), "list files")
+    run = await loop.drive(_full_auto_run(), "list files")
     call = next(c for c in run.tool_ledger.calls if c.name == "bash")
     assert call.status is ToolCallStatus.SUCCESS

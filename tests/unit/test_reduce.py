@@ -79,7 +79,7 @@ def test_cancel_backfills_open_calls_and_one_terminal() -> None:
     run, _ = reduce(run, AppendAssistantMessage(run_id=run.run_id, turn=1, message=_assistant_toolcall("tc_1")))
     new, events = reduce(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
     assert new.status is RunStatus.CANCELLED
-    assert new.tool_ledger.calls[0].status is ToolCallStatus.ERROR  # backfilled
+    assert new.tool_ledger.calls[0].status is ToolCallStatus.CANCELLED  # backfilled
     terminals = [e for e in events if e.type in {"run_cancelled", "run_completed", "run_failed"}]
     assert len(terminals) == 1
     # seqs must be unique + strictly increasing, and Run.seq == the last one

@@ -1,6 +1,12 @@
 name: ci-python
 
 on:
+  # push 只触发 main（合并后的最终验证，此时 tests-windows 也会跑）。
+  # 功能分支一律走 PR（ADR-0012 B 案），验证由 pull_request run 承担。
+  # 千万别把 push 扩到全分支再靠 concurrency 去重：被取消的 push run 仍会
+  # 上报同名 check，而 GitHub 对 required checks 按“同一 commit 上全部聚合”
+  # 判定，任一 cancelled 即视为 failing——PR 三 job 全绿 merge 按钮也照样灰死
+  # （2026-10-16 实测踩坑，详见 ADR-0012 修正条目）。
   push:
     branches: [main]
   pull_request:
@@ -9,10 +15,15 @@ on:
 permissions:
   contents: read
 
-# 同一 ref 上新提交自动取消仍在跑的旧 run。不加这段时，每个 push 的 run 都会各自跑到
-# 结束（卡死时即 6 小时默认上限），旧 run 堆积且白烧免费额度。
+# 同一分支上新提交自动取消仍在跑的旧 run。不加这段时，连续 push 的 run 都会各自
+# 跑到结束（卡死时即 6 小时默认上限），旧 run 堆积且白烧免费额度。
+# group 用“分支名”而不是 github.ref：PR 事件的 ref 是 refs/pull/N/merge、push 到 main
+# 是 refs/heads/main。push 已收窄到 main，两类事件天然不同组；按分支名归组仍能防住
+# 同一分支连续 push 的 run 堆积。
+# 注意：cancel 只省分钟数，不消除 check——被取消 run 的 check 仍会上报并参与
+# required checks 聚合判定，所以重复触发必须从触发器层面避免（见 on.push 注释）。
 concurrency:
-  group: ci-python-${{ github.ref }}
+  group: ci-python-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 env:
@@ -60,14 +71,28 @@ jobs:
         run: |
           uv run python scripts/check_protocol_schema.py --self-test
           uv run python scripts/check_protocol_schema.py --check
+      - name: Output-budget invariant guard (self-test proves it can go red)
+        run: |
+          uv run python scripts/check_output_budgets.py --self-test
+          uv run python scripts/check_output_budgets.py
+      - name: Secret/env-value projection guard (self-test proves it can go red)
+        run: |
+          uv run python scripts/check_secret_projection.py --self-test
+          uv run python scripts/check_secret_projection.py
       - name: Thread-leak guard (self-test proves it can go red)
         run: uv run python scripts/check_thread_leak.py --self-test
 
-  tests:
+  # P2 T20：平台分相真机跑 shell 工具的 DoD —— Windows 真 PowerShell、Ubuntu 真 bash；
+  # 缺平台时对应测试自行 skip（不 fake 冒充覆盖）。
+  #
+  # 为什么是两个并列 job、而不是一个 `strategy.matrix.os` job 加 job 级 `if`：
+  # job 级 `if` 表达式里 **matrix 上下文不可用**（引用会使整个 workflow 文件注册失败，
+  # 一条 run 都不会创建）。拆成两个 job 后，条件只用 `github.*`，受支持且 check 名固定。
+  tests-posix:
     needs: boundaries
     runs-on: ubuntu-24.04
     # 兜底：曾经因 aiosqlite 非守护线程泄漏使 pytest step 永不结束，这里限时自停。
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -79,13 +104,57 @@ jobs:
       - run: uv sync --locked --all-groups
       # -v + 禁用 cache provider：卡死时日志能直接看出停在哪个测试（-q 下什么都不刷）。
       # --timeout 由 pyproject 的 addopts 提供（单测卡死限时）；junitxml 供事后定位（DeepCode 做法）。
-      - name: pytest
-        run: uv run pytest -v --tb=short -p no:cacheprovider --durations=10 --junitxml=pytest-results.xml
+      # P2 起产 coverage baseline：只观测、不设 fail-under，避免把基线阶段变成虚假门槛。
+      # 单行写法：同一个 run step 要在 ubuntu(bash) 与 windows(powershell) 都能跑，不用行连接符。
+      - name: pytest with coverage baseline
+        run: uv run pytest -v --tb=short -p no:cacheprovider --durations=10 --junitxml=pytest-results.xml --cov=src/questor --cov-branch --cov-report=term-missing --cov-report=xml:coverage.xml
       # always()：红的 run 才最需要产物，绿的不需要。只留 7 天，不慢慢堆满额度。
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-results
+          name: pytest-results-posix
           path: pytest-results.xml
+          retention-days: 7
+      - name: Upload coverage baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-posix
+          path: coverage.xml
+          retention-days: 7
+
+  # Windows runner 分钟单价高于 Linux（私有仓库还计费），所以：**push 到 main 之外不跑这个 job**；
+  # Windows 真机 leg 只在 PR、workflow_dispatch 和已合入 main 时跑——即“合并前必验 Windows”。
+  # 这行 if 同时是防御：若将来有人把 push 触发扩回全分支，Windows leg 也不会被白白烧掉。
+  # 两个 job 的 steps 故意保持一致，改一个要同步改另一个。
+  tests-windows:
+    needs: boundaries
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+      - run: uv sync --locked --all-groups
+      - name: pytest with coverage baseline
+        run: uv run pytest -v --tb=short -p no:cacheprovider --durations=10 --junitxml=pytest-results.xml --cov=src/questor --cov-branch --cov-report=term-missing --cov-report=xml:coverage.xml
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results-windows
+          path: pytest-results.xml
+          retention-days: 7
+      - name: Upload coverage baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-windows
+          path: coverage.xml
           retention-days: 7

@@ -13,7 +13,9 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
+from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -26,40 +28,65 @@ from questor.contracts.events import (
     Cancel,
     Envelope,
     EventType,
+    ExpireApproval,
     FinalizeRun,
     MarkToolDenied,
+    MarkToolRunning,
+    MarkToolValidated,
     RecordToolResult,
+    RequestApproval,
+    ResolveApproval,
     SubmitMessage,
 )
 from questor.contracts.policy import PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
 from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort
+from questor.contracts.sandbox import Confinement, SandboxBackend, SandboxDescriptor
+from questor.contracts.shell_analysis import ShellAnalysis, ShellDialect, ShellParseStatus
 from questor.contracts.state_schema import (
     OPEN_TOOL_CALL_STATUSES,
     CancelReason,
     ContentBlock,
     Message,
     Role,
+    ToolArgsStatus,
+    ToolCallStatus,
 )
-from questor.contracts.tool import Capability, Risk, Tool
+from questor.contracts.tool import RunToolSurface, Tool, ToolResult, ToolSpec
 from questor.kernel.events import EventBus
+from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
+from questor.kernel.run_control import RunController
+from questor.kernel.shell_parse_posix import parse_posix_shell
+from questor.kernel.shell_parse_powershell import parse_powershell
+from questor.kernel.tool_arguments import extract_shell_commands
 from questor.state.checkpoint import open_tool_use_ids
 from questor.state.domain_state import Run
 from questor.state.reduce import reduce
 from questor.state.snapshot import to_snapshot
 
-Approver = Callable[[str, JsonObject, str], Awaitable[bool]]
-
-#: 必须被沙箱隔离的能力；无可用后端时一律 deny（fail-closed，design/03 §10 T4——
-#: “降级只会更安全、不会更松”）。
-_SANDBOXED_CAPABILITIES = frozenset({Capability.EXEC, Capability.WRITE, Capability.NETWORK})
-
 
 class _ToolCtx:
     """交给工具的具体 :class:`ToolContext`——只暴露受控能力。"""
 
-    def __init__(self, workspace_root: Path, cancel_event: asyncio.Event) -> None:
+    def __init__(
+        self,
+        workspace_root: Path,
+        cancel_event: asyncio.Event,
+        *,
+        tool_call_id: str = "",
+        cwd: Path | None = None,
+        run_id: str = "",
+        process_runner: object | None = None,
+        artifact_store: object | None = None,
+    ) -> None:
         self.workspace_root = workspace_root
+        self.cwd = cwd or workspace_root
+        self.tool_call_id = tool_call_id
+        self.run_id = run_id
+        self._process_runner = process_runner
+        self._artifact_store = artifact_store
         self._cancel = cancel_event
+        # T11/T12 前只记录声明；真正的 ProcessRunner 必须读取此列表并执行 provider credential 过滤。
+        self._declared_env_names: set[str] = set()
 
     def is_cancelled(self) -> bool:
         """供长任务轮询的安全取消点。"""
@@ -70,6 +97,65 @@ class _ToolCtx:
 
     def emit_progress(self, payload: JsonObject) -> None:  # pragma: no cover - 观测钩子
         pass
+
+    def declare_env_passthrough(self, name: str) -> None:
+        """记录工具显式请求的环境变量名；值不在此保存（ADR-0018）。"""
+        self._declared_env_names.add(name)
+
+    async def run_process(self, request: object) -> object:
+        """把工具的结构化进程请求交给 Harness-owned runner（合并已声明 env 名）。
+
+        未接入 runner 时报错（不默默 spawn）：capability 层绝不自持 spawn 能力（C1/C8）。
+        """
+        if self._process_runner is None:
+            raise RuntimeError("no ProcessRunner wired into ToolContext")
+        merged = replace(request, declared_env_names=tuple(dict.fromkeys((*request.declared_env_names, *self._declared_env_names))))  # type: ignore[attr-defined]
+        return await self._process_runner.run(merged)
+
+    async def put_artifact(
+        self,
+        content: bytes,
+        *,
+        kind: str,
+        media_type: str = "text/plain",
+    ) -> object:
+        """把工具全文输出交给 ArtifactStore（内容寻址、路径不由工具拼接）。"""
+        if self._artifact_store is None:
+            raise RuntimeError("no ArtifactStore wired into ToolContext")
+        return await self._artifact_store.put_bytes(content, run_id=self.run_id, kind=kind, media_type=media_type)
+
+
+def _none_descriptor() -> SandboxDescriptor:
+    return SandboxDescriptor(
+        backend=SandboxBackend.NONE,
+        confinement=Confinement.NONE,
+        fences_writes=False,
+        fences_network=False,
+        isolates_process_tree=False,
+        limitation="no sandbox backend available",
+    )
+
+
+def _analyze_shell(tool_spec: ToolSpec, arguments: JsonObject) -> ShellAnalysis | None:
+    """只按 ToolSpec capability/name 选 dialect；不靠工具名字符串猜安全。"""
+    commands = extract_shell_commands(arguments)
+    if not commands:
+        return None
+    powershell = tool_spec.name.lower() in {"powershell", "pwsh"}
+    analyses = [parse_powershell(command) if powershell else parse_posix_shell(command) for command in commands]
+    if any(analysis.status is not ShellParseStatus.PARSED for analysis in analyses):
+        return analyses[0]
+    segments = tuple(segment for analysis in analyses for segment in analysis.segments)
+    dialect = ShellDialect.POWERSHELL if powershell else ShellDialect.POSIX
+    read_paths = tuple(dict.fromkeys(path for analysis in analyses for path in analysis.read_paths))
+    write_paths = tuple(dict.fromkeys(path for analysis in analyses for path in analysis.write_paths))
+    return ShellAnalysis(
+        dialect=dialect,
+        status=ShellParseStatus.PARSED,
+        segments=segments,
+        read_paths=read_paths,
+        write_paths=write_paths,
+    )
 
 
 class DefaultTurnLoop:
@@ -84,12 +170,14 @@ class DefaultTurnLoop:
         bus: EventBus,
         tool_for: Callable[[str], Tool | None],
         tools: tuple[Tool, ...] = (),
+        surface: RunToolSurface | None = None,
         sandbox: SandboxPort | None = None,
+        process_runner: object | None = None,
+        artifact_store: object | None = None,
         store: StorePort | None = None,
         workspace_root: Path | None = None,
         model: str = "",
         system: str | None = None,
-        approver: Approver | None = None,
         cancel_event: asyncio.Event | None = None,
     ) -> None:
         self.provider = provider
@@ -98,20 +186,51 @@ class DefaultTurnLoop:
         self.bus = bus
         self.tool_for = tool_for
         self.tools = tools
+        self.surface = surface
         self.sandbox = sandbox
+        self.process_runner = process_runner
+        self.artifact_store = artifact_store
         self.store = store
         self.workspace_root = workspace_root or Path.cwd()
         self.model = model
         self.system = system
-        self.approver = approver
         self.cancel_event = cancel_event or asyncio.Event()
 
-    async def drive(self, run: Run, user_text: str) -> Run:
-        """驱动一次 Run 直到唯一终态：提交→（流式→定稿→询问策略→路由）循环。"""
-        user_msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=user_text),), seq=len(run.context.items))
-        run, events = reduce(run, SubmitMessage(run_id=run.run_id, content=user_msg))
-        await self._emit(events)
+    def _tool(self, name: str) -> Tool | None:
+        """工具解析优先走冻结 surface（run 内工具面不变），否则走兼容入口。"""
+        if self.surface is not None:
+            return self.surface.tool_for(name)
+        return self.tool_for(name)
 
+    def _specs(self) -> tuple[ToolSpec, ...]:
+        if self.surface is not None:
+            return self.surface.specs
+        return tuple(t.spec for t in self.tools)
+
+    async def drive(self, run: Run, user_text: str) -> Run:
+        """兼容 P1 入口：把 user text 也经 RunController，绝不在 loop 外偷偷 reduce。"""
+        controller = RunController(run)
+        user_msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=user_text),), seq=len(run.context.items))
+        await controller.submit(
+            SubmitMessage(run_id=run.run_id, content=user_msg),
+            source="legacy-drive",
+            idempotency_key=f"submit:{run.run_id}",
+        )
+        return await self.drive_controller(controller)
+
+    async def drive_controller(self, controller: RunController) -> Run:
+        """RunController 是 Command 的唯一串行入口；终态后关闭迟到写入。"""
+        try:
+            result = await self._drive_controller(controller)
+            controller.run = result
+            return result
+        finally:
+            if controller.run.status.is_terminal:
+                controller.close()
+
+    async def _drive_controller(self, controller: RunController) -> Run:
+        """驱动 controller 当前 Run 到唯一终态；Command 仅在安全点消费。"""
+        run = controller.run
         turn = 0
         started = time.monotonic()
         total_tokens = 0
@@ -120,11 +239,13 @@ class DefaultTurnLoop:
         repeat_count = 0
         empties = 0
         while True:
+            run = await self._consume_commands(controller, run)
+            if run.status.is_terminal:
+                return run
             if self.cancel_event.is_set():
                 run, events = reduce(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
+                controller.run = run
                 await self._emit(events)
-                return run
-            if run.status.is_terminal:
                 return run
             if run.budget.deadline_seconds is not None and (time.monotonic() - started) > run.budget.deadline_seconds:
                 return await self._fail(run, turn, ErrorKind.TIMEOUT, f"wall-clock deadline {run.budget.deadline_seconds}s exceeded", "deadline")
@@ -135,11 +256,13 @@ class DefaultTurnLoop:
 
             turn_start = run  # C10/X4 回滚点：本 turn 起始时的状态
             run, events = reduce(run, AdvanceTurn(run_id=run.run_id, turn=turn))
+            controller.run = run
             await self._emit(events)
 
             assistant_msg, usage = await self._stream_turn(run, turn)
             total_tokens += _token_total(usage)
             run, events = reduce(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
+            controller.run = run
             await self._emit(events)
             await self._checkpoint(run, "auto")
 
@@ -170,6 +293,7 @@ class DefaultTurnLoop:
                     continue  # stop-gate：尚有未闭合工具调用时拒绝过早 Finish
                 final = assistant_msg if has_text else None
                 run, events = reduce(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
+                controller.run = run
                 await self._emit(events)
                 return run
 
@@ -179,12 +303,22 @@ class DefaultTurnLoop:
                 repeat_sig = sig
                 if repeat_count > run.budget.repeat_tool_limit:
                     return await self._fail(run, turn, ErrorKind.INTERNAL, f"repeated identical tool call '{intent.name}' x{repeat_count}", "no_progress")
-                run = await self._handle_tool_call(run, intent)
+                run = await self._handle_tool_call(controller, run, intent)
+
+    async def _consume_commands(self, controller: RunController, run: Run) -> Run:
+        """按 FIFO 应用 inbox 中已到达的 Command；reduce 只在此处由 loop 调用。"""
+        for command in await controller.next_batch():
+            run, events = reduce(run, command)
+            controller.run = run
+            await self._emit(events)
+            if run.status.is_terminal:
+                return run
+        return run
 
     # ---- phase 辅助方法 ------------------------------------------------
     async def _stream_turn(self, run: Run, turn: int) -> tuple[Message, JsonObject]:
         """跑一轮流式：逐块 emit live delta、累积文本/工具参/用量，定稿为一条 assistant 消息。"""
-        request = ProviderRequest(model=self.model, messages=run.context.items, tools=tuple(t.spec for t in self.tools), system=self.system)
+        request = ProviderRequest(model=self.model, messages=run.context.items, tools=self._specs(), system=self.system)
         text_parts: list[str] = []
         usage: JsonObject = {}
         calls: dict[int, dict] = {}
@@ -207,8 +341,7 @@ class DefaultTurnLoop:
         if text_parts:
             blocks.append(ContentBlock(type="text", text="".join(text_parts)))
         for index in sorted(calls):
-            slot = calls[index]
-            blocks.append(ContentBlock(type="tool_use", tool_use_id=slot["id"] or new_id("tc"), name=slot["name"], input=_parse_args(slot["args"])))
+            blocks.append(_finish_tool_use(index, calls[index]))
         msg = Message(id=new_id("msg"), role=Role.ASSISTANT, content=tuple(blocks), seq=len(run.context.items))
         return msg, usage
 
@@ -237,67 +370,181 @@ class DefaultTurnLoop:
 
     def _ask_policy(self, run: Run) -> tuple[object, bool]:
         """返回 ``(intent, faulted)``；策略异常被隔离（X4），绝不崩整个 run。"""
-        view = PolicyView(context=run.context.items, tool_results=run.tool_ledger.calls, tools=tuple(t.spec for t in self.tools), budget=run.budget)
+        view = PolicyView(context=run.context.items, tool_results=run.tool_ledger.calls, tools=self._specs(), budget=run.budget)
         try:
             return self.policy.propose_action(view), False
         except Exception:  # noqa: BLE001 - 策略故障绝不得打断循环
             return None, True
 
-    async def _handle_tool_call(self, run: Run, intent: ProposeToolCall) -> Run:
-        """工具路由：未知工具/deny/审批拒/参数非法/无沙箱 → 分别回写错误或 denied；否则执行并回填。"""
-        tool = self.tool_for(intent.name)
-        if tool is None:
-            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=f"unknown tool '{intent.name}'"))
+    async def _handle_tool_call(self, controller: RunController, run: Run, intent: ProposeToolCall) -> Run:
+        """工具路由：args→schema→validated→permission→sandbox→execute。"""
+        call = next((c for c in run.tool_ledger.calls if c.tool_call_id == intent.tool_call_id), None)
+        if call is None:
+            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result="missing tool_use ledger entry"))
+            controller.run = run
+            await self._emit(events)
+            return run
+        if call.args_status is not ToolArgsStatus.VALID:
+            reason = call.permission_reason or "invalid or missing tool arguments"
+            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=f"invalid json arguments: {reason}"))
+            controller.run = run
             await self._emit(events)
             return run
 
-        decision, reason = self.permission.evaluate(intent.name, intent.args)
-        if decision == "deny":
-            run, events = reduce(run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=reason))
+        tool = self._tool(intent.name)
+        if tool is None:
+            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=_unknown_tool_message(intent.name, self._specs(), self.surface)))
+            controller.run = run
             await self._emit(events)
             return run
-        if decision == "ask":
-            allowed = bool(self.approver) and await self.approver(intent.name, intent.args, reason)
-            if not allowed:
-                run, events = reduce(run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason="denied by approver"))
-                await self._emit(events)
-                return run
 
         error = _schema_error(tool.spec.params, intent.args)
         if error is not None:
             run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=error))
+            controller.run = run
             await self._emit(events)
             return run
 
-        # 能力/风险 fail-closed 闸：需沙箱的能力若无可能力后端 → DENIED，绝不裸执行（03 §10 T4；C9）。
-        # 置于权限判定之后，以免把显式 allow 降级为裸执行。
-        deny_reason = self._sandbox_denial(tool)
-        if deny_reason is not None:
-            run, events = reduce(run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=deny_reason))
-            await self._emit(events)
+        run = await self._apply_command(controller, run, MarkToolValidated(run_id=run.run_id, tool_call_id=intent.tool_call_id or ""))
+        analysis = _analyze_shell(tool.spec, intent.args)
+        permission = replace(run.permission_ctx, workspace_root=str(self.workspace_root), cwd=str(self.workspace_root))
+        sandbox_descriptor = self.sandbox.describe() if self.sandbox is not None and hasattr(self.sandbox, "describe") else _none_descriptor()
+        outcome = self.permission.evaluate(
+            PermissionEvaluation(
+                tool_name=intent.name,
+                tool_spec=tool.spec,
+                args_status=call.args_status,
+                arguments=intent.args,
+                permission=permission,
+                sandbox=sandbox_descriptor,
+                shell_analysis=analysis,
+            )
+        )
+        decision = outcome.decision
+        reason = outcome.reason
+        if decision is PermissionDecision.DENY:
+            run = await self._apply_command(controller, run, MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=reason))
             return run
+        if decision is PermissionDecision.ASK:
+            run = await self._handle_ask(controller, run, tool, intent, outcome)
+            call = next(c for c in run.tool_ledger.calls if c.tool_call_id == intent.tool_call_id)
+            if call.status in {ToolCallStatus.DENIED, ToolCallStatus.CANCELLED} or run.status.is_terminal:
+                return run
+            if call.status is not ToolCallStatus.RUNNING:
+                run = await self._apply_command(
+                    controller,
+                    run,
+                    MarkToolRunning(
+                        run_id=run.run_id,
+                        tool_call_id=intent.tool_call_id or "",
+                        capability=tool.spec.capability.value,
+                        risk=tool.spec.risk.value,
+                        timeout_s=tool.spec.timeout_s or run.budget.tool_default_timeout_seconds,
+                    ),
+                )
+        else:
+            run = await self._apply_command(
+                controller,
+                run,
+                MarkToolRunning(
+                    run_id=run.run_id,
+                    tool_call_id=intent.tool_call_id or "",
+                    capability=tool.spec.capability.value,
+                    risk=tool.spec.risk.value,
+                    timeout_s=tool.spec.timeout_s or run.budget.tool_default_timeout_seconds,
+                ),
+            )
 
-        ctx = _ToolCtx(self.workspace_root, self.cancel_event)
-        result = await tool.execute(intent.args, ctx)
+        ctx = _ToolCtx(
+            self.workspace_root,
+            self.cancel_event,
+            tool_call_id=intent.tool_call_id or "",
+            cwd=self.workspace_root,
+            run_id=run.run_id,
+            process_runner=self.process_runner,
+            artifact_store=self.artifact_store,
+        )
+        # 工具是插件（C10）：它的 panic 与挂死都必须由 Harness 兜住，否则单写者循环会崩、
+        # tool_call 悬在 RUNNING 并留下无 tool_result 的配对破坏（I1/C7）。
+        # deadline 对**所有**工具生效，不只有 ProcessRunner 的 exec 工具（design/03 §8）。
+        deadline = tool.spec.timeout_s or run.budget.tool_default_timeout_seconds
+        try:
+            result = await asyncio.wait_for(tool.execute(intent.args, ctx), timeout=deadline)
+        except TimeoutError:
+            result = ToolResult(
+                status="timed_out",
+                result=f"tool '{intent.name}' exceeded its {deadline}s deadline set by the Harness",
+                display=f"{intent.name} timed out after {deadline}s",
+            )
+        except Exception as exc:  # noqa: BLE001 - 插件故障不得击穿内核（C10）
+            # 只捕 Exception：CancelledError / KeyboardInterrupt / SystemExit 是 BaseException，
+            # 取消与进程级中断必须继续向上传递，不能被“吃成”一个工具 error。
+            result = ToolResult(
+                status="error",
+                result=f"tool '{intent.name}' raised {type(exc).__name__}: {exc}",
+                display=f"{intent.name} crashed",
+            )
         run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status=result.status, result=result.result, display=result.display))
+        controller.run = run
         await self._emit(events)
         return run
 
-    def _sandbox_denial(self, tool: Tool) -> str | None:
-        """当工具需要的隔离后端给不了时，返回一个 deny 理由。"""
-        spec = tool.spec
-        needs = spec.capability in _SANDBOXED_CAPABILITIES or spec.risk is Risk.HIGH
-        if not needs:
-            return None
-        if self.sandbox is None:
-            return f"no sandbox backend available for {spec.capability.value}/{spec.risk.value} tool (fail-closed)"
-        if spec.capability is Capability.WRITE and not self.sandbox.fences_writes():
-            return "sandbox cannot fence writes for a write tool (fail-closed)"
-        if spec.capability is Capability.NETWORK and not self.sandbox.fences_network():
-            return "sandbox cannot fence network for a network tool (fail-closed)"
-        if spec.capability is Capability.EXEC and not self.sandbox.isolates_process_tree():
-            return "sandbox cannot isolate the process tree for an exec tool (fail-closed)"
-        return None
+    async def _apply_command(self, controller: RunController, run: Run, command: object) -> Run:
+        """内部 helper：所有 lifecycle transition 都先落 authority，再 emit。"""
+        run, events = reduce(run, command)  # type: ignore[arg-type]
+        controller.run = run
+        await self._emit(events)
+        return run
+
+    async def _handle_ask(self, controller: RunController, run: Run, tool: Tool, intent: ProposeToolCall, outcome: object) -> Run:
+        """ask → durable approval request → inbox/timeout；绝不阻塞回调。"""
+        target = next(c for c in run.tool_ledger.calls if c.tool_call_id == intent.tool_call_id)
+        request_id = new_id("apr")
+        timeout = run.budget.approval_timeout_seconds
+        expires_at = utc_now() + timedelta(seconds=timeout)
+        args_summary = getattr(outcome, "args_summary", target.name)
+        reason = getattr(outcome, "reason", "approval required")
+        run = await self._apply_command(
+            controller,
+            run,
+            RequestApproval(
+                run_id=run.run_id,
+                tool_call_id=intent.tool_call_id or "",
+                request_id=request_id,
+                args_summary=args_summary,
+                risk=target.risk or tool.spec.risk.value,
+                reason=reason,
+                expires_at=expires_at,
+            ),
+        )
+        deadline = time.monotonic() + timeout
+        while True:
+            def relevant(command: object) -> bool:
+                return isinstance(command, Cancel) or (
+                    isinstance(command, ResolveApproval | ExpireApproval) and command.request_id == request_id
+                )
+
+            command = await controller.wait_for(relevant, timeout=max(0.001, deadline - time.monotonic()))
+            if command is None:
+                return await self._apply_command(controller, run, ExpireApproval(run_id=run.run_id, request_id=request_id))
+            if isinstance(command, Cancel):
+                return await self._apply_command(controller, run, command)
+            run = await self._apply_command(controller, run, command)
+            call = next(c for c in run.tool_ledger.calls if c.tool_call_id == (intent.tool_call_id or ""))
+            if call.status is ToolCallStatus.READY:
+                return await self._apply_command(
+                    controller,
+                    run,
+                    MarkToolRunning(
+                        run_id=run.run_id,
+                        tool_call_id=intent.tool_call_id or "",
+                        capability=tool.spec.capability.value,
+                        risk=tool.spec.risk.value,
+                        timeout_s=tool.spec.timeout_s or run.budget.tool_default_timeout_seconds,
+                    ),
+                )
+            if call.status in {ToolCallStatus.DENIED, ToolCallStatus.CANCELLED}:
+                return run
 
     async def _emit(self, events: list[Envelope]) -> None:
         """把一批事件逐条交给总线（可持久的会落库、live-only 只转发）。"""
@@ -334,6 +581,66 @@ def _parse_args(raw: str) -> JsonObject:
         return json.loads(raw) if raw else {}
     except json.JSONDecodeError:
         return {}
+
+
+def _bounded_raw_args(raw: str) -> str:
+    """保留有界原始参数；不保存可能含密钥的无界文本（ADR-0019）。"""
+    return raw[:4096]
+
+
+def _finish_tool_use(index: int, slot: dict) -> ContentBlock:
+    """把 provider 分片定稿成 tool_use，同时区分 valid/invalid/missing args。"""
+    raw = slot["args"]
+    if not raw:
+        return ContentBlock(
+            type="tool_use",
+            tool_use_id=slot["id"] or new_id("tc"),
+            name=slot["name"],
+            raw_input="",
+            args_status=ToolArgsStatus.MISSING,
+            args_error="provider sent no tool arguments",
+        )
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return ContentBlock(
+            type="tool_use",
+            tool_use_id=slot["id"] or new_id("tc"),
+            name=slot["name"],
+            raw_input=_bounded_raw_args(raw),
+            args_status=ToolArgsStatus.INVALID,
+            args_error=exc.msg,
+        )
+    if not isinstance(parsed, dict):
+        return ContentBlock(
+            type="tool_use",
+            tool_use_id=slot["id"] or new_id("tc"),
+            name=slot["name"],
+            raw_input=_bounded_raw_args(raw),
+            args_status=ToolArgsStatus.INVALID,
+            args_error="tool arguments must be a JSON object",
+        )
+    return ContentBlock(
+        type="tool_use",
+        tool_use_id=slot["id"] or new_id("tc"),
+        name=slot["name"],
+        input=parsed,
+        raw_input=_bounded_raw_args(raw),
+        args_status=ToolArgsStatus.VALID,
+    )
+
+
+def _unknown_tool_message(name: str, specs, surface: object | None = None) -> str:  # noqa: ANN001
+    """静态候选只提示，不扩工具面（03 §6；P2 T14）。"""
+    candidates: tuple[str, ...] = ()
+    if surface is not None and hasattr(surface, "candidates"):
+        candidates = surface.candidates(name)  # type: ignore[attr-defined]
+    else:
+        names = [spec.name for spec in specs]
+        candidates = tuple(n for n in names if name[:2] and (n.startswith(name[:2]) or name[:2] in n))[:3]
+    if candidates:
+        return f"unknown tool '{name}'; did you mean: {', '.join(candidates)}?"
+    return f"unknown tool '{name}'"
 
 
 def _schema_error(params: JsonObject, args: JsonObject) -> str | None:

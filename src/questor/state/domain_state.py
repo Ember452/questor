@@ -17,6 +17,7 @@ from datetime import datetime
 from questor.contracts.common import require_aware, utc_now
 from questor.contracts.errors import ErrorEntry
 from questor.contracts.state_schema import (
+    ApprovalRequest,
     Budget,
     CancelReason,
     Checkpoint,
@@ -60,16 +61,26 @@ class PermissionDecisionRecord:
     decision: str  # allow | ask | deny
     decided_by: str  # rule | user
     at: datetime = field(default_factory=utc_now)
+    request_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class PermissionCtx:
-    """三态权限上下文（design/01 §6；决策/求值在 kernel，这里只存状态）。"""
+    """三态权限上下文（design/01 §6；决策/求值在 kernel，这里只存状态）。
+
+    ADR-0014：`mode/rules/denylist/approvals` 都是权威状态，不另在引擎里存一份配置。
+    """
 
     mode: str = "default"  # default | plan | full_auto
     rules: tuple[PermissionRule, ...] = ()
     denylist: frozenset[str] = frozenset()  # 不可被 rules/mode 覆盖的敏感路径
+    approvals: tuple[ApprovalRequest, ...] = ()  # 每个 request 有独立幂等身份
     decisions: tuple[PermissionDecisionRecord, ...] = ()
+    workspace_root: str | None = None
+    cwd: str | None = None
+    approval_policy: str = "on_request"  # on_request | never
+    protect_sensitive_paths: bool = True
+    enforce_read_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)

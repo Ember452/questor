@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 from questor.contracts.common import JsonObject
+from questor.contracts.sandbox import SandboxDescriptor, SandboxPort
 from questor.contracts.state_schema import Message
 from questor.contracts.tool import ToolSpec
 
@@ -84,22 +85,6 @@ class IdGenerator(Protocol):
     def new(self, prefix: str) -> str: ...
 
 
-@runtime_checkable
-class SandboxPort(Protocol):
-    """执行隔离 + 能力探针（design/03 §4；C9/T4）。
-
-    ``fences_*`` 报告后端**真正**隔离了什么；能力缺失时内核 fail-closed（exec/high→deny）
-    而非裸执行。"""
-
-    def fences_writes(self) -> bool: ...
-
-    def fences_network(self) -> bool: ...
-
-    def isolates_process_tree(self) -> bool: ...
-
-    def wrap_argv(self, capability: str, argv: tuple[str, ...]) -> tuple[str, ...]: ...
-
-
 __all__ = [
     "ProviderRequest",
     "StreamChunk",
@@ -107,5 +92,6 @@ __all__ = [
     "StorePort",
     "Clock",
     "IdGenerator",
+    "SandboxDescriptor",
     "SandboxPort",
 ]

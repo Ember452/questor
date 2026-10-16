@@ -46,13 +46,12 @@ uv run pytest           # 测试
 
 ## 提交流程（分支策略见 [ADR-0012](./docs/adr/0012-branch-policy.md)）
 
-**现阶段（pre-alpha，`.github/workflows` 未上线）—— A 案**：
-- **维护者可直接推 `main`**（小步、细粒度提交，推前本地跑 `uv run ruff` + `uv run pytest`）；GitHub 保留 main 保护规则并**有意允许管理员 bypass**。
-- **外部贡献者走 fork + PR**（用 PR 模板 + DoD 自检）。
+**现阶段（自 2026-10-16 起）—— B 案**（分支策略切换记录见 ADR-0012 末尾）：
+- **一律走分支 + PR**：从 `main` 切分支 → 小步细粒度提交 → 开 PR（用模板 + DoD 自检）→ **required checks 绿才能合**；维护者也不再直推 `main`。
+- 内部可先保持“单人无 reviewer 自批合并”；门禁靠的是 **CI 的 blocking job**（`boundaries`：分层守卫 / 冷导入 / 协议漂移 / 守卫 self-test），不是人工 review。
 - 不得 force-push 到 `main`；不得绕过钩子（`--no-verify`）。
 
-**CI 上线后升级为 B 案**（触发条件：出现可当 required status check 的 blocking 门禁）：
-从 `main` 切分支 → 小步提交 → 开 PR（用模板）→ **required checks 绿才能合** → 并关闭管理员 bypass。
+> 诚实边界：GitHub 侧把 `boundaries` 设为 required status check、并关掉“管理员绕过”这两项设置需维护者手动完成（见 ADR-0012 切换记录）。在该设置落地前，不直推 `main` 是靠约定而非强制——不要把它当成“技术上拦得住”。
 
 Bug 用 issue 模板；安全漏洞**不要开公开 issue**，见 SECURITY.md。
 

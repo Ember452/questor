@@ -975,3 +975,67 @@ docs: record p2 deviations and license ledger
 5. approval timeout 的真实调度实现；
 6. PowerShell 5.1 vs pwsh 7 差异；
 7. 任何被 ADR 否决后又被现实证明必须调整的决策（必须新增/修订 ADR）。
+
+---
+
+## 13.1 已实现批次（2026-10-15 → 2026-10-16；分支 `feat/p2-foundation-hitl`，覆盖 T1-T13）
+
+本轮**只做到 T1-T13 基础架构与 HITL**，T14-T21 尚未开始。以下为实现对本文的偏差与实况：
+
+- **实现范围**：覆盖率非阻断基线 + T1 契约 + T2 versioned snapshot + T3 RunController/Command Inbox + T4 五层校验/raw args + T5 arg-key+Shell IR + T6 POSIX parser + T7 PowerShell parser + T8 PermissionCtx 纯引擎 + T9 SandboxDescriptor/capability floor + T10 ArtifactStore/输出预算 + T11 env safety + T12 ProcessRunner + T13 HITL 生命周期与 surfaces 只提交 Command。全量 `pytest` 246 passed，coverage 86%（branch），六守卫全绿，protocol 19 types lockstep。
+- **PermissionDecision/Outcome 下沉 L0**：本文把 outcome 记在 kernel；实现改为 `contracts/permission.py` 放 `PermissionDecision`/`PermissionOutcome` 纯数据，避免 `capability_floor` 与 `permission_policy` import 环。属 additive，不改 wire 契约。
+- **Windows Job Object 落地口径**：`AssignProcessToJobObject` 在子进程已继承其它 job 时返回 error 5。实现按本文 T9/ADR-0015 的“给不了围栏绝不静默裸跑”原则，Job 分配失败时**不谎报 full**，仍维持 partial descriptor，并在超时时用 `taskkill /F /T` 兜底杀进程树；真实 Windows PowerShell 父子进程超时清理有 `test_p2_process_timeout_tree.py` 实机验证（非 fake）。
+- **approval 事件订阅依赖 durable store**：`approval_request` 是 durable 事件。`store=None` 的进程内总线只 fan-out live 帧，晚挂的订阅者会漏；外部审批（SSE/HTTP/CLI `_approve`）必须依赖 store 重放。测试据此改用带 store 的总线，符合生产语义。
+- **permission warnings 尚未落 ToolCall**：capability floor 的 warning 目前只进入权限返回值与日志，未写进 `ToolCall.permission_warnings`/投影。留待 T17 字段级投影统一处理（不阻塞 T13 DoD）。
+- **未做（本批次当时后置，现已由 §13.2 完成）**：T14 ToolRegistry、T15 文件工具、T16 bash/powershell 工具实例、T17 per-type protocol schema/投影、T18 surfaces 产品化端点细化、T19 resume 完整化、T20 新守卫扩规则、T21 端到端 DoD。`security-ci + pip-audit` 仍依 STRUCTURE `[P#]` 纪律待有对外攻击面后铺。
+
+---
+
+## 13.2 T14–T21 完成批次（2026-10-16；同分支 `feat/p2-foundation-hitl`）
+
+本批次把 P2 做到**完整**（T14–T21），并回填相对本文的偏差与实况：
+
+- **实现范围**：T14 `ToolRegistry` + L0 `RunToolSurface`（run 内冻结快照、description sanitize/长度界、误名候选提示，loop/surfaces 全面接入）；T15 文件工具（共享 `_paths` containment + `read`/`write`/`edit`/`apply_patch`/`ls`/`glob`/`grep`）；T16 `bash`/`powershell` 只经 `ctx.run_process`，并把真实 `ProcessRunner`/`ArtifactStore` 接进 `ToolContext`；T17 字段级 protocol schema（per-type `$defs`+`if/then`）+ per-type 投影白名单 + 守卫扩 per-type 覆盖；T18 `surfaces/approval.py`（receipt→HTTP 映射 + 唯一生命周期 TTY pump）+ CLI/HTTP 收口；T19 `resume_run` 经 reduce 闭合过期审批；T20 三条新守卫 + CI 平台分相 job（原计 matrix，因 job 级 `if` 看不到 `matrix` 上下文而拆为两 job，见下）；T21 端到端 DoD。
+- **`RunToolSurface` 下沉 L0**：`freeze_for_run` 的快照类型放 `contracts/tool.py` 而非 L3，避免 L2 kernel import L3 capabilities（否则违反分层）；`edit_distance` 纯函数放 `contracts/common.py`。属实现分层修正，不改 wire 契约。
+- **投影即白名单净化**：`project()` 从“仅滤内部类型”升级为“按 `EXTERNAL_EVENT_FIELDS` 逐类型只保留白名单键”。因此本文 §13.1 遗留的“permission warnings 未落 ToolCall/投影”仍成立且**不影响安全**——warning 属内部观测，本就不在对外白名单；把它写进 `ToolCall.permission_warnings` 并作为可选 additive 字段外发，是 UX 增强，明确后置到 P3（需先扩 ADR/契约再实现，遵循“先改 ADR 再改码”）。`ToolCall.sandbox_backend/confinement` 同理未在 `MarkToolRunning` 处填充（结果映射回账本留 P3 与 durable resume 一并做）。
+- **surfaces 去具体 store**：T20 的 AST forbidden 规则要求 surfaces 不 import `state.reduce` 与 store 具体实现；据此把 `cli.run_once` 改为不注入具体 store（单次进程内 run 用内存总线），并**在 start drive 前同步挂订阅队列**，消除 store=None 时“晚订阅漏早期事件”的竞态。`http_sse.EventServer` 的 store 参数改为 `StorePort` 抽象（具体 SQLiteStore 由调用方/后续 L7 shell 注入）。
+- **surfaces-no-reduce 只做 AST、不做 import-linter**：import-linter `forbidden` 是**传递**的，会误报 `surfaces → kernel → reduce`（合法的装配路径）。故该约束由 `check_layering_ast.py` 以“直接 import”语义机械强制（非传递），`.importlinter` 内以注释显式说明，不新增会假红的契约。
+- **`check_output_budgets.py` 语义**：本文原把它列为“静态 payload 尺寸检查”。实现取更**可证伪**的口径：对真实有界原语做不变式检查（budget 全正、`preview_bytes` 含多字节边界不超限、超限走 artifact 不落内联），并 `--self-test` 证明“原语若失效即判红”。静态尺寸扫描易给出假信心，故不采用。
+- **T20 “CI 矩阵”→ 两条分相 job**（本文 §T20/§R-F 写的是 matrix）：初版确实写成 `strategy.matrix.os` + job 级 `if` 区分平台，但 **job 级 `if` 表达式里 `matrix` 上下文不可用**，GitHub 因此判定整个 workflow 文件非法、**一条 run 都不创建**（本地 PyYAML 解析通过，给不了任何信号——这正是“本地绿≠对”的又一例）。现改为并列 `tests-posix` / `tests-windows` 两个 job，门控条件只用 `github.*`；代价是 steps 有意重复、需同步维护，换来的是固定 check 名与可验证的语法。
+- **CI 首跑（Linux runner）暴露的两件真事**（本地 Windows 全绿都没报出来）：
+  1. **`surfaces/approval.py` 线程回调 bug**：worker 线程的 `loop.call_soon_threadsafe` 写在 `try` 外面，审批超时后循环已关 → 迟到的按键从 daemon 线程抛 `RuntimeError: Event loop is closed`（Linux 上表现为 `PytestUnhandledThreadExceptionWarning`）。已改为 `_safe_settle()` 吞掉“循环已关闭”（丢弃迟到决策正是“超时即 deny”的语义），并补两条可证伪测试：一条直接测 `_safe_settle`，一条用 `threading.excepthook` 端到端重现（修复前本地就能复现同样异常）。
+  2. **§5.2 POSIX 真机验收未达成**（不是测试写错，是能力缺口的真实反映）：`providers/sandbox.py` 里只有 Windows Job 的 `wrap_argv` 有实现，seatbelt/bwrap 是 `_UnimplementedSandbox`（raise），NullSandbox 也 raise——即 **POSIX 今天根本不能受控跑子进程**（ADR-0015 已声明后置）。原测试只按 `shutil.which("powershell")` 判平台，而 **GitHub ubuntu runner 装了 `pwsh`**，于是该 skip 的没 skip，又拿 `NullSandbox` 当真跑后端 → 4 条红。现改为**探测真能力**（`detect_sandbox().wrap_argv` 能不能用）：不能就明确 skip 并报原因；同时新增一条**所有平台都跑**的断言：后端包不住时必须回结构化 error 且绝不落到执行（fail-closed 本身被测试锁定）。另加两条 POSIX 分相“防回归”断言：一旦将来 wrapping 实现，它们会红，提醒同步放开真机验收与 ADR-0015。
+- **T21 DoD 覆盖口径**：`test_p2_dod.py` 跑“全接线” loop（真实引擎 + capability floor + registry + inbox）验证头部判据（写 ask→allow 执行 / 写 ask→deny run 续跑 / full_auto 不越 exec 下限 / 敏感路径 full_auto 仍 deny / 非法参数 execute 前拒 / Windows 真机 PowerShell 删除需审批并真删）。§5.1 其余条目（并发 resolve×cancel、approval timeout 迟到拒绝、>1MiB artifact、schema required/type 越界、apply_patch 原子）已由 T4/T10/T13/T15 各自 integration/unit 覆盖，DoD 不重复堆叠，避免脆弱重言。
+- **质量门实况**：
+  - Windows 本机：`pytest` 317 passed / 5 skipped；branch coverage 85%；`ruff` clean；`lint-imports` 4 kept；`check_layering_ast`（66 files, 0 violation）+ self-test PASS；`check_protocol_schema` 19 types lockstep + self-test PASS；`check_output_budgets` self-test PASS；`check_secret_projection` self-test PASS；`verify_p0` ALL PASS；`check_thread_leak` self-test PASS。
+  - GitHub CI（ubuntu-24.04，commit `0e63d66`）：首跑 **6 failed / 308 passed / 2 skipped**，即上述两件真事；修复后待重新验证。注意本地全绿挡不住这两个问题，**不要把“本地绿”当验收结论**。
+- **仍标 UNVERIFIED（诚实，非缺陷）**：seatbelt/bwrap 在 Windows 的实机运行；**POSIX 受控子进程执行整体未实现**（§5.2 的 bash 真机验收因此只到“描述符/拒绝路径”层面，`rm -rf` 真实语料需在 Linux CI 跑通的项延到 wrapping 落地后）；真实 LiteLLM 网络端到端（无 key）；跨真实 socket 的 HTTP SSE 重连（此处为进程内 async transport，不冒充网络真跑）；多 agent/远程 Command inbox（P8/P9）；`security-ci + pip-audit` lane 待有对外攻击面时铺。
+- **P2 达成判定**：§5.1 **Windows 主验收**的三条判据（危险操作触发 `ask`；`deny`/敏感路径不可越；非法参数被拒）已由**真实 shell/文件工具 + 真实审批闭环 + 端到端 DoD** 证明，不再只是 fake/内部测试层面。**§5.2 POSIX 真机运行未达成**（受控子进程的 POSIX wrapping 本身未实现，属 ADR-0015 已声明的后置项，不是漏测）。因此 P2 结论按平台分栏：**Windows = 达成，POSIX = 描述符/拒绝路径达成、真机执行待后续**。
+- **TDD 流程偏差**：T1/T2 部分契约测试与实现同批提交，未逐个先跑红；从 T3 起严格 RED→GREEN，并为 T1/T2 补了可证伪的生命周期/snapshot/审批/幂等回归用例。
+- **交付方式**：远端 main 已启用 “must be made through a pull request”；本批次全程走 `feat/p2-foundation-hitl` 分支逐任务 commit/push，未直推 main。
+
+---
+
+## 13.3 P2 审计闭环（2026-10-16；回应 `docs/audit/P2-review-2026-10-15.md`）
+
+该审计给出 **NO-GO（有条件）**，列出 4 条阻断项。**我逐条亲手复现，4 条全部属实，无异议**；本轮已全部修复：
+
+| 审计项 | 复现证据 | 修法 | 锁住它的测试 |
+|---|---|---|---|
+| #1 工具 panic 不兜底（C10/design/03 §8） | `loop.py` 仅策略处有 `except Exception`；`tool.execute` 裸奔 | `asyncio.wait_for` + `except Exception` → `ToolResult(status="error")`；BaseException（取消/中断）仍向上抛 | `test_p2_tool_fault_isolation.py::test_tool_panic_becomes_error_result_and_run_survives` |
+| #2 `FinalizeRun` 不回填 open tool_use（C7/I1） | 实跑：终态后 `status=pending`、无 `tool_result` | failed/completed 均先 `_backfill_open_calls(note=…)` 并连续取号 | `test_reduce_finalize_pairing.py`（3 条，含 seq 唯一与“无 open 调用时不多产事件”） |
+| #3 flag 簇不展开 → `sed -ni` 误判只读 | 实跑：`all_read_only=True, write=()`；写 `-n -i` 却正确 | `_flag_forms()` 把 `-ni`/`-i.bak`/`--in-place=x` 展开后比对写形式集合 | `test_bundled_short_flags_are_expanded` + `test_same_semantics_regardless_of_flag_spacing` |
+| #4 `PermissionCtx.denylist` 假控制面（ADR-0014） | 实跑：denylist 含该路径时 `full_auto` 仍 `ALLOW` | 新增第 4 步 `_denylisted()`（`configured-denylist`），与内置默认取并集、不可取消默认 | `test_configured_denylist_denies_even_under_full_auto` 等 4 条 |
+
+另主动修了审计列为“应修/建议”、但我认为不该拖到 P3 的项：
+
+- **#7 deadline 武装**：文件工具不过 ProcessRunner，`spec.timeout_s` 以前只是记录——实测一个 `sleep(30)` 的只读工具跑满 30s 还报 success，即 §5-6 描述的“挂死工具卡住单写者循环”。现在 Harness 对**每个**工具武装 deadline。
+- **`TIMED_OUT` 状态以前从不产生**（审计未点名）：`process_to_tool_result` 把超时压成 `"error"`，账本无法区分“被杀”与“业务失败”。现超时统一产 `status="timed_out"`；不新增第 20 个事件类型，投影为 `tool_completed{status:"timed_out"}`。
+- **#5 三条未验分支**：`enforce_read_only`、`protected-root` 各有正反用例；**Windows 链跳由 UNVERIFIED 变实测**——用 `mklink /J` 真建 junction（只接受目录目标），containment 正确拒绝（注：`Path.resolve()` 在 Windows 确实跟随 junction，这是实测得到而非推定）。
+- **#6 / E1**：`check_output_budgets --self-test` 以前只能自证绿；现注入“全文直通”的失效原语并断言必须报 problem（C15 的“守卫能判红”）。同时修了它自身 `_preview_bounds` 不接收注入参数的结构问题。
+- **E2**：AST 守卫对 `from questor import surfaces` 这种包级导入漏判（module 只到 `questor` → layer None）；现已把导入名补成完整模块路径参与判定，self-test 加了对应红样本。
+- **#5-5 `wrap_shell` 缺失**：design/03 §4 承诺的接缝现在存在于 `SandboxPort`，并在**所有**后端抛 NotImplemented；`test_sandbox_backends.py` 钉住“任何后端不得把 shell 串原样返回”。这不是空有签名：它把 ADR-0017 “不得把命令串拼回 shell 伪装成 argv” 变成可测的。
+- **#5-3 / 死字段**：`parallel_safe`/`orchestrator`/`barrier` 逐项标 `NOT enforced until P5/P8`，`available` 字段明写“动态可用性唯一真源是 `Tool.available()`”；`envelope_for_text` 保留（guard 在用），但进程侧 preview 改用合法 UTF-8 前缀切法，不再在多字节字符中间开刀。
+- **文档反向漂移**：把八步求值次序正式写进 `design/03` **§3.1**（带 `floor_applied` 对应表），修正四处引用不存在的 `§11 八步` 的 docstring，并在 **ADR-0014 追加“实现回填”**说明 denylist 曾经的假控制面与现在的确切语义（不回改原始决策）。
+
+**复验结果（2026-10-16 Windows 本机）**：`pytest` **345 passed / 5 skipped**（新增 18 条测试）、branch coverage **87%**；`ruff` clean；`lint-imports` 4 kept；AST 66 files 0 violation 且 self-test 新增 package-import 项 PASS；`check_output_budgets` self-test 现在 `broken-primitive-caught=True`；其余守卫全绿。仍 UNVERIFIED：seatbelt/bwrap 实机、POSIX 受控子进程执行、真网络 LLM/ SSE、多 agent inbox、`security-ci + pip-audit`。
