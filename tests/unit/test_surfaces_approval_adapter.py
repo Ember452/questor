@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 
 from questor.contracts.inbox import InboxReceipt, InboxStatus
+from questor.surfaces import approval
 from questor.surfaces.approval import http_status_for_receipt, prompt_approval
 
 
@@ -55,3 +57,46 @@ async def test_prompt_approval_reader_error_denies(monkeypatch) -> None:
 
     assert await prompt_approval("a", "bash", "r", input_fn=boom) is False
     await asyncio.sleep(0)  # 让回调有机会运行，无残留断言
+
+
+class _DeadLoop:
+    """模拟已关闭的事件循环：`call_soon_threadsafe` 会报 `Event loop is closed`。"""
+
+    def call_soon_threadsafe(self, *_args, **_kwargs) -> None:
+        raise RuntimeError("Event loop is closed")
+
+
+def test_safe_settle_swallows_closed_loop() -> None:
+    """超时后迟到的按键不得从 reader 线程抛异常（Linux CI 曾报 PytestUnhandledThreadException）。"""
+    approval._safe_settle(_DeadLoop(), object(), True)  # 不得抛出
+
+
+def test_late_keystroke_after_loop_close_does_not_leak_thread_exception(monkeypatch) -> None:
+    """端到端重现：timeout 返回 + loop 已关 + 线程随后送达 → 不能在线程里留未处理异常。"""
+    monkeypatch.setattr(approval, "_stdin_is_tty", lambda: True)
+    gate = threading.Event()
+
+    def slow(_prompt: str) -> str:
+        gate.wait(timeout=2)
+        return "y"
+
+    loop = asyncio.new_event_loop()
+    try:
+        assert loop.run_until_complete(prompt_approval("a", "bash", "r", timeout=0.01, input_fn=slow)) is False
+    finally:
+        loop.close()
+
+    records: list[object] = []
+    previous = threading.excepthook
+    threading.excepthook = lambda args: records.append(args)
+    try:
+        gate.set()
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            time.sleep(0.02)
+            if records:
+                break
+    finally:
+        threading.excepthook = previous
+
+    assert records == []

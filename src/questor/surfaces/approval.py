@@ -56,7 +56,7 @@ async def prompt_approval(args_summary: str, name: str, reason: str, *, timeout:
             value = answer.strip().lower() in _ACCEPT
         except BaseException:  # noqa: BLE001 - 读 stdin 失败一律视为拒绝
             value = False
-        loop.call_soon_threadsafe(_settle, future, value)
+        _safe_settle(loop, future, value)
 
     threading.Thread(target=worker, daemon=True).start()
     if timeout is None:
@@ -65,6 +65,19 @@ async def prompt_approval(args_summary: str, name: str, reason: str, *, timeout:
         return await asyncio.wait_for(future, timeout=timeout)
     except TimeoutError:
         return False  # 超时不复活：迟到的按键会被丢弃（daemon 线程），决策已定为 deny
+
+
+def _safe_settle(loop: asyncio.AbstractEventLoop, future: asyncio.Future[bool], value: bool) -> None:
+    """把 reader 线程的结果送回事件循环；**循环已关闭则静默丢弃**。
+
+    超时/取消后本协程已返回，事件循环可能随后关掉。此时迟到的按键不得从 daemon
+    线程里抛出未处理异常（会污染进程、并在 pytest 下报 PytestUnhandledThreadException）；
+    丢弃它正是“超时即 deny”的设计本身。
+    """
+    try:
+        loop.call_soon_threadsafe(_settle, future, value)
+    except RuntimeError:
+        return  # loop closed / 已取消：迟到的决策丢弃，fail-closed 已生效
 
 
 def _settle(future: asyncio.Future[bool], value: bool) -> None:
