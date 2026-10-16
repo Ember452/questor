@@ -215,6 +215,24 @@ def _is_path_dynamic(token: str) -> bool:
     return "$" in token or "`" in token or "\x00" in token
 
 
+def _flag_forms(token: str) -> frozenset[str]:
+    """一个 flag 的**全部可能形式**：整串、长选项去 `=value`、短簇逐字符。
+
+    `sed -ni` 是 `-n` + `-i`（in-place 写），`-i.bak` 是带附着值的 `-i`；只比对整串会
+    把两者都归成“非写形式”，而拆开写（`-n -i`）却被识别——安全判定不得取决于用户
+    敲不敲空格。方向是宁多拆不误放：多拆只会多要一次审批（ask），不拆则可能静默改写文件。
+    """
+    forms = {token}
+    if token.startswith("--"):
+        forms.add(token.split("=", 1)[0])
+        return frozenset(forms)
+    if token.startswith("-") and len(token) > 2:
+        body = token[1:].split("=", 1)[0]
+        forms.add(f"-{body}")  # -i.bak -> -i（单字母 + 附着值）
+        forms.update(f"-{char}" for char in body if char.isalpha())  # -ni -> -n -i
+    return frozenset(forms)
+
+
 def _unwrap(tokens: Sequence[str]) -> tuple[str | None, tuple[str, ...]]:
     if not tokens:
         return None, ()
@@ -353,7 +371,9 @@ def _parse_segment(tokens: Sequence[str]) -> ShellSegment | ShellAnalysis:
                 write_paths.append(token.removeprefix("of="))
 
     write_flags = _WRITE_FORM_FLAGS.get(program, frozenset())
-    has_write_flag = any(flag.split("=", 1)[0] in write_flags for flag in flags)
+    # 先把 `-ni` / `-i.bak` / `--in-place=x` 展开成所有可能形式再比对，否则簇写形式会漏判只读。
+    flag_forms = {form for flag in flags for form in _flag_forms(flag)}
+    has_write_flag = bool(write_flags) and bool(flag_forms & write_flags)
     destructive = program in _WRITE_PROGRAMS or bool(write_paths) or has_write_flag
 
     if program in _WRITE_PROGRAMS:

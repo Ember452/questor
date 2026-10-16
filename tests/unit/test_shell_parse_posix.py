@@ -85,3 +85,28 @@ def test_unparsable_unbalanced_quote_is_not_read_only() -> None:
     analysis = parse_posix_shell('cat "unclosed')
     assert analysis.status is ShellParseStatus.UNPARSABLE
     assert analysis.all_read_only is False
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        # 短 flag 簇必须拆开：“同一命令的两种写法不得得出不同安全判定”。
+        # `sed -ni` = `-n` + `-i`（in-place 写），旧实现拿整串比 flag → 误判只读。
+        ("sed -ni 's/a/b/' file", "ask"),
+        ("sed -i.bak 's/a/b/' file", "ask"),
+        ("sort -bo out.txt in.txt", "ask"),
+        # 不含写形式的簇不得误报：拆开后仍应是只读。
+        ("sed -ne 'p' file", "read_only"),
+        ("sort -bu in.txt", "read_only"),
+        ("grep -rn TODO .", "read_only"),
+        ("ls -laR .", "read_only"),
+    ],
+)
+def test_bundled_short_flags_are_expanded(command: str, expected: str) -> None:
+    assert _category(parse_posix_shell(command)) == expected, command
+
+
+def test_same_semantics_regardless_of_flag_spacing() -> None:
+    """拆开写与合并写必须同一判定——否则安全判定取决于用户敲不敲空格。"""
+    assert _category(parse_posix_shell("sed -ni 's/a/b/' f")) == _category(parse_posix_shell("sed -n -i 's/a/b/' f"))
+    assert _category(parse_posix_shell("sort -bo out in")) == _category(parse_posix_shell("sort -b -o out in"))
