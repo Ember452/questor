@@ -63,7 +63,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - 事件协议 **19→20**：新增可选外部 type `memory_written`（bounded `kind/chunk_count/source/artifact_ref`），`check_protocol_schema` enum+$defs+branches+fixtures lockstep（只增不改）。
 - 策略 `policy/memory_policy.py`：记忆感知 ReAct 变体消费 `PolicyView.memory` 有界投影（L4 接缝示例、可插拔，不改 kernel）。
 - 守卫：`check_layering_ast.py` 扩记忆规则（memory=state peer、只依 contracts；`policy`/`surfaces`/`capabilities` 禁 import 具体 `store_memory_sqlite`），`--self-test` 判红；已在 CI `boundaries` blocking job 运行。记忆写/读旁路=0（reduce 唯一入口 + AST 守卫）。
-- 决策 ADR-0023~0026 + 阶段计划 `docs/plan/04-memory-soul.md`。质量门：405 passed / 5 skipped（DoD① 跨会话写入→检索命中、DoD② Deep Dream 产出、DoD③ 单写者、DoD④ 可插拔、DoD⑤ state/memory 分离 + evals 雏形）。UNVERIFIED：真 LLM/embedding 召回质量、CJK trigram 真机、完整四档压缩（→P10）、跨进程记忆 exactly-once（→P9）。
+- 决策 ADR-0023~0026 + 阶段计划 `docs/plan/04-memory-soul.md`。质量门：405 passed / 5 skipped（DoD① 跨会话写入→检索命中、DoD② Deep Dream 产出、DoD③ 单写者、DoD④ 可插拔、DoD⑤ state/memory 分离 + evals 雏形）。UNVERIFIED：真 LLM/embedding 召回质量、trigram-CJK 未实现（后置 P10）、完整四档压缩（→P10）、跨进程记忆 exactly-once（→P9）。
+
+### Fixed (P4 adversarial audit round, 2026-10-16 — closes `docs/audit/P4-review-2026-10-16.md` CONDITIONAL GO)
+对抗审计发现两处"文档宣称≠代码现实"+ 三处小问题，均已复核并修复：
+- **写生产者未接线（阻断记忆可用性）**：`flush_run_to_daily` 无生产调用者、产品无 `WriteMemory` 触发器。修复：`CliSurface.run_once` 在 run 完成边界 best-effort 调 `flush_run_to_daily`（经 `MemoryStorePort` 收口、不进热 loop、`run_id` 幂等、失败仅告警），episodic→daily→Deep Dream 链在产品中真能跑；新增 `test_p4_memory_flush.py` 走真实 loop（非手动 inbox）证写→检索。
+- **trigram 档位谎报**：代码只有 unicode61→LIKE 两档，`store:13` 过期注释 + ADR-0026/design-06/plan 宣"三档"。修复：全部改为"两档实现、trigram-CJK 未实现→后置 P10"、删过期注释。
+- **`memory_written.source`** 误用 `kind.value` → 抽 `contracts.memory.source_for_write`（L0，store/reduce 共用），emit 真实 `MemorySource`。
+- **Deep Dream 无界重试**：ADR-0025 宣"transient 重试 3 次"却无实现。修复：`_call_distill` 有界重试、耗尽上抛（不静默吞）；测试 transient×2→第3次成功 + 耗尽抛。
+- **D③ 命名测试缺失**：补 `test_p4_memory_single_writer.py`（加载 AST 守卫断 capabilities/policy/surfaces 直连具体 store 判红）。`PolicyView.memory` 无生产填充者（loop 有意不填以免耦合）→ plan §11 记 P5/P7 backlog。
+- 复跑质量门：**412 passed / 5 skipped**（+7 审计修复测试），全守卫 self-test 判红、protocol 20 types lockstep、lint-imports 4 kept。
 
 ### Fixed (P2 adversarial audit round, 2026-10-16 — closes `docs/audit/P2-review-2026-10-15.md` NO-GO)
 All four blocking findings were reproduced by hand before fixing, and each is now pinned by a test:

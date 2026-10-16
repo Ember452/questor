@@ -9,9 +9,10 @@
 原子追加到 memory root 下的 md（core→MEMORY.md、daily/distill→memory/<date>.md），再索进
 ``memory_chunks`` + FTS5；守 I3：只写浓缩文本、绝不写 delta。
 
-诚实边界（UNVERIFIED）：P4 无真 embedding（CI 无 key）→ 向量列可为空、检索**降级关键词-only、
-不抛**（ADR-0026）。混合融合 / 时间衰减 / trigram-CJK 由 ``memory`` 子系统在 T9/T10 精化，本适配器
-先落存储骨架 + 幂等写 + 关键词查询。``aiosqlite`` 只在此 import（ruff banned-api 对 providers/* 豁免）。
+关键词检索只有**两档**：FTS5 unicode61 → LIKE 兜底（CJK 靠 LIKE 命中）；**trigram-CJK 未实现、后置 P10**
+（本仓 `memory_chunks_fts` 仅 `tokenize=unicode61`）。诚实边界（UNVERIFIED）：P4 无真 embedding（CI 无 key）
+→ 向量列可为空、检索**降级关键词-only、不抛**（ADR-0026）；混合融合 / 时间衰减由 ``memory`` 子系统提供。
+``aiosqlite`` 只在此 import（ruff banned-api 对 providers/* 豁免）。
 """
 
 from __future__ import annotations

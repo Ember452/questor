@@ -15,7 +15,7 @@
 | 情节记忆（daily 流水、写入收口） | hermes `agent/memory_manager.py:391,599,747,854`（`MemoryManager`/`sync_all`/`commit_session_boundary_async`/`on_memory_write`）；CowAgent `agent/memory/manager.py:244,319`（`add_memory`/`sync`） | 改造 | hermes "会话边界异步 flush" 直接映射 P4 的 **run-完成→daily** 生产者（替代被后置 P10 的压缩 flush）；写全收口、模型不拿裸句柄 = C4 实证 |
 | 语义记忆 / Deep Dream 蒸馏 | CowAgent `agent/memory/summarizer.py:178-182,262,511-648`（`_dream_*_prompt`/`flush_from_messages`/`deep_dream(lookback_days)`）；hermes 夜间定时蒸馏（`cron` auto-distillation，`website/.../userStories.json:3343`） | 改造 | Cow `deep_dream` 的 **原子写+输入 hash 去重+只删不编+空哨兵跳过** 全盘采纳；调度器（cron）非本阶段（hermes 靠 cron 插件，归 P8/cron），P4 只做**离线批入口** `--dream` |
 | 向量检索（cosine、可插拔后端） | CowAgent `agent/memory/vector_backend.py:40-63,104-178`（`VectorBackend` upsert/delete/search + SQLite cosine）；crewAI `lib/crewai/src/crewai/memory/storage/lancedb_storage.py`/`qdrant_edge_storage.py`、`memory/recall_flow.py:58`；MetaGPT `metagpt/memory/memory_storage.py:61`（`search_similar(k=4)`） | 改造 | 采纳 Cow `VectorBackend` 抽象同款切 Questor `MemoryStorePort`；**embedding 缺省静默降级关键词-only**（Cow `manager.py:181-201`），真 embedding provider 标 UNVERIFIED（CI 无 key） |
-| 全文检索（FTS5/CJK） | CowAgent `agent/memory/storage.py:898-951,953-1010`（unicode61→trigram-CJK→LIKE 三档降级、BM25）；R06 §2.2 | 改造 | 照 Cow 三档降级设计 Questor `memory/search.py`；CJK trigram 真机效果标 UNVERIFIED |
+| 全文检索（FTS5/CJK） | CowAgent `agent/memory/storage.py:898-951,953-1010`（unicode61→trigram-CJK→LIKE 三档降级、BM25）；R06 §2.2 | 改造（部分） | **P4 实现两档 unicode61→LIKE**（CJK 靠 LIKE 命中）；**trigram-CJK 未实现→后置 P10**（peer 有三档，本仓未落，**非"已实现待验"**） |
 | 混合融合 + 时间衰减 | CowAgent `agent/memory/manager.py:723,742,658`（`_rank_normalize`/`_merge_results`/`_compute_temporal_decay` half_life=30d） | 改造 | design/06 §2 已定 **rank-normalize 加权、非 RRF**；daily 半衰、core 常绿。rerank/热度 boost **默认关、后置** |
 | 记忆写入幂等（去重/重试） | CowAgent `agent/memory/summarizer.py:288-344`（claim-then-commit in-flight/flushed 两套、失败可重试）；DeepCode `core/sessions/store.py:1-24`（index 派生可重建） | 改造 | 移植"输入 hash 去重 + 失败释放回可重试"纪律；落 `memory/distill.py` 与 daily flush |
 | 记忆压缩 & 恢复指针 CoveredHash | wuu `internal/agent/compaction_note.go:20-21,88-92,211-212`（`CompactionNote{CoveredMessages,CoveredHash}`、`validCompactionNote` 读前校验 fail-closed）；hermes `conversation_compression_archive.py`（active=0 归档不物删）；R06 §4.2 | 改造 | P3 审计 E1 已把 `recovery_pointers` 的 CoveredHash 锚标"随压缩定义、后置 P4/P10"。**P4 只定义 typed `(seq_from,seq_to,covered_hash)` + fail-closed 读校验 + 快照 v3**，其**生产者**（压缩触发）随 `disable_compaction=True` 留 P10，不提前强接活路 |
@@ -142,5 +142,13 @@ T0 基线/worktree
 - **T15 口径修正（与 DoD④ 一致）**：`DefaultTurnLoop._ask_policy` 构造 `PolicyView` 时**不**自动填充 `view.memory`（否则把记忆检索耦合进 L2、违"换策略不动 loop"）。DoD④ 主证据由可插拔 `MemoryStrategyConfig`（T10）+ `memory_search` 工具（T12）承载；`MemoryAwareReActPolicy` 是 L4 消费 `view.memory` 的接缝示例。
 - **DoD① 的 daily 生产者**：按 ADR-0025 用显式 `WriteMemory` + run-完成 flush（不强启被后置 P10 的压缩），使 DoD② 有真实可测输入。
 - **covered_hash / 压缩**：typed `RecoveryPointer` + 快照 v3 + fail-closed 读校验已在 P4 定形；写锚**生产者**与四档压缩调优诚实后置 P10（`disable_compaction=True` 未动）。
-- **UNVERIFIED（未 fake）**：真 LLM Deep Dream 语义质量、真 embedding 召回质量、CJK trigram 真机效果、跨进程记忆 exactly-once（→P9）。
-- **交付质量门**：405 passed / 5 skipped；ruff clean、lint-imports 4 kept、AST 76 files/0 违规（含记忆规则 self-test 判红）、protocol 20 types lockstep、verify_p0 ALL PASS。ADR-0023~0026 与代码均按细粒度提交（逐任务/逐文件绿）。
+- **UNVERIFIED（未 fake）**：真 LLM Deep Dream 语义质量、真 embedding 召回质量、跨进程记忆 exactly-once（→P9）。**trigram-CJK 未实现→后置 P10**（属"未实现"，非 UNVERIFIED）。
+- **交付质量门**：412 passed / 5 skipped；ruff clean、lint-imports 4 kept、AST 76 files/0 违规（含记忆规则 self-test 判红）、protocol 20 types lockstep、verify_p0 ALL PASS。ADR-0023~0026 与代码均按细粒度提交（逐任务/逐文件绿）。
+
+## 12. 对抗审计修复轮（`docs/audit/P4-review-2026-10-16.md` CONDITIONAL GO → 闭合）
+- **§6-1 写生产者**：`CliSurface.run_once` run 完成边界 best-effort 调 `flush_run_to_daily`（经 `MemoryStorePort`、不进热 loop、`run_id` 幂等、失败仅告警）；`test_p4_memory_flush.py` 走真实 loop 证写→检索（非手动 inbox）。
+- **§6-2/§4-B trigram**：代码只两档→ ADR-0026/design-06/plan §0/CHANGELOG/`store:13` 全部改口径为"两档 + trigram-CJK 未实现→后置 P10"。
+- **§6-3 重试**：`_call_distill` 有界重试 transient、耗尽上抛（不静默吞），配测试。
+- **§6-4 D③命名测试**：新增 `test_p4_memory_single_writer.py`。
+- **§6-6 source**：`memory_written.source` 用真实 `MemorySource`（`contracts.memory.source_for_write`）。
+- **§6-5 `PolicyView.memory` 生产者 backlog**：loop 有意不自动填充 `view.memory`（以免耦合 L2、DoD④）——**归属记 P5/P7 backlog**：若将来做"检索自动注入 prompt"，由一个 harness 侧只读分支预取器填入有界投影，而非写死进 `DefaultTurnLoop`。在此之前 `MemoryAwareReActPolicy` 是消费 `view.memory` 的待定接缝示例（生产路径 `view.memory` 为空）。
