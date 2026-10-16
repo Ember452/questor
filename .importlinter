@@ -50,3 +50,8 @@ type = independence
 modules =
     questor.config
     questor.observability
+
+# NOTE: "surfaces must not import state.reduce" is enforced *directly* (non-transitively)
+# by scripts/check_layering_ast.py FORBIDDEN_IMPORTS. An import-linter `forbidden` contract
+# would be transitive and wrongly flag surfaces -> kernel -> reduce, which is a legitimate
+# composition path -- so it is deliberately NOT expressed as an import-linter contract here.
