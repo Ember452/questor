@@ -60,14 +60,28 @@ jobs:
         run: |
           uv run python scripts/check_protocol_schema.py --self-test
           uv run python scripts/check_protocol_schema.py --check
+      - name: Output-budget invariant guard (self-test proves it can go red)
+        run: |
+          uv run python scripts/check_output_budgets.py --self-test
+          uv run python scripts/check_output_budgets.py
+      - name: Secret/env-value projection guard (self-test proves it can go red)
+        run: |
+          uv run python scripts/check_secret_projection.py --self-test
+          uv run python scripts/check_secret_projection.py
       - name: Thread-leak guard (self-test proves it can go red)
         run: uv run python scripts/check_thread_leak.py --self-test
 
+  # P2 T20：平台矩阵真机跑 shell 工具的 DoD —— Windows 真 PowerShell、Ubuntu 真 bash；
+  # 缺平台时对应测试自行 skip（不 fake 冒充覆盖）。fail-fast: false 让两平台各自报红/绿。
   tests:
     needs: boundaries
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
     # 兜底：曾经因 aiosqlite 非守护线程泄漏使 pytest step 永不结束，这里限时自停。
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -81,25 +95,21 @@ jobs:
       # --timeout 由 pyproject 的 addopts 提供（单测卡死限时）；junitxml 供事后定位（DeepCode 做法）。
       # P2 起产 coverage baseline：只观测、不设 fail-under，避免把基线阶段变成虚假门槛。
       - name: pytest with coverage baseline
-        run: |
-          uv run pytest -v --tb=short -p no:cacheprovider --durations=10 \
-            --junitxml=pytest-results.xml \
-            --cov=src/questor \
-            --cov-branch \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml
+        # 单行写法：同一个 run step 要在 ubuntu(bash) 与 windows(powershell) 都能跑，
+        # 反斜杠/反引号续行跨 shell 不一致，故不用任何行连接符。
+        run: uv run pytest -v --tb=short -p no:cacheprovider --durations=10 --junitxml=pytest-results.xml --cov=src/questor --cov-branch --cov-report=term-missing --cov-report=xml:coverage.xml
       # always()：红的 run 才最需要产物，绿的不需要。只留 7 天，不慢慢堆满额度。
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-results
+          name: pytest-results-${{ matrix.os }}
           path: pytest-results.xml
           retention-days: 7
       - name: Upload coverage baseline
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: coverage-report-${{ matrix.os }}
           path: coverage.xml
           retention-days: 7
