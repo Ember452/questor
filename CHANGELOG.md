@@ -42,7 +42,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `bash`/`powershell` tools built only on `ctx.run_process` (no spawn in capabilities); CLI registry now exposes the full P2 tool set; loop wires a real `ProcessRunner` + `ArtifactStore` into `ToolContext`.
 - Field-level protocol: `protocol/event.schema.json` gains per-type `$defs` + `if/then` (required fields, bounded strings, `additionalProperties:false`); projection enforces a per-type outbound whitelist (full args / abs path / env values / provider state never leave).
 - HITL checkpoint resume: `resume_run` restores awaiting-approval state and closes due approvals via `ExpireApproval` (permission/approval state cannot silently evaporate on restart).
-- New machine guards (each with `--self-test` that goes red): AST forbidden-import rules (capabilities/surfaces/contracts), output-budget invariant guard, secret/env-value projection guard; CI runs them and adds a Windows/POSIX `pytest` matrix so PowerShell vs bash DoD is exercised on the real platform (skip-when-absent, never faked).
+- New machine guards (each with `--self-test` that goes red): AST forbidden-import rules (capabilities/surfaces/contracts), output-budget invariant guard, secret/env-value projection guard; CI runs them and adds platform-split `tests-posix` / `tests-windows` jobs so PowerShell vs bash DoD is exercised on the real platform (skip-when-absent, never faked) — Windows only on PR/dispatch/main to keep its runner minutes down.
 - P2 end-to-end DoD test drives a fully-wired loop (engine + capability floor + registry + Command Inbox) for the headline dangerous-op flows.
 
 ### Fixed (P0/P1 adversarial audit, 2026-10-15)

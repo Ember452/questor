@@ -36,7 +36,7 @@ P2 的 ROADMAP 判据——"危险操作触发 `ask`；`deny`/敏感路径不可
 | T17 投影 | L2/protocol | per-type `$defs`+`if/then` schema + `EXTERNAL_EVENT_FIELDS` 白名单净化投影 + 守卫扩 per-type 覆盖 | `kernel/events.py` `protocol/event.schema.json` |
 | T18 surfaces | L6 | `surfaces/approval.py`（receipt→HTTP + 唯一生命周期 TTY pump）；HTTP 端点映射 404/409/429/200/202 | `surfaces/approval.py` `http_sse.py` `cli.py` |
 | T19 resume | L2 | `resume_run` 恢复 awaiting 状态并经 reduce 闭合过期审批（权限/审批不蒸发） | `kernel/recovery.py` |
-| T20 守卫+CI | scripts/CI | AST forbidden-import + output-budget + secret-projection 三守卫（各带 --self-test 可判红）；CI Windows/POSIX pytest 矩阵 | `scripts/check_*.py` `.github/workflows/ci-python.yml` |
+| T20 守卫+CI | scripts/CI | AST forbidden-import + output-budget + secret-projection 三守卫（各带 --self-test 可判红）；CI 拆为 `tests-posix` / `tests-windows` 两条平台分相 job（原计 matrix，因 job 级 `if` 看不到 `matrix` 上下文会整文件非法而拆） | `scripts/check_*.py` `.github/workflows/ci-python.yml` |
 | T21 DoD | tests | 端到端"全接线" loop DoD（写 ask→执行/拒绝、floor、敏感 deny、非法参数、真机 PowerShell 删除） | `tests/integration/test_p2_dod.py` |
 
 **实测复核（报告撰写时于 Windows 本机亲自跑）**：`pytest` **316 passed**、branch coverage **86%**、`ruff` 全绿、`lint-imports` **4 kept / 0 broken**、`check_layering_ast`（66 files, 0 violation）+ `check_protocol_schema`（19 types lockstep）+ `check_output_budgets` + `check_secret_projection` + `check_thread_leak` 全部 `--self-test` PASS、`verify_p0` ALL PASS。分支相对 main **70 commits**、测试文件 **49** 个。

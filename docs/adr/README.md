@@ -17,7 +17,7 @@
 | [0009](./0009-policy-pluggable.md) | 策略可插拔：run 内快照冻结、热替换=新 run、AB 按 fingerprint | ✅ |
 | [0010](./0010-error-classification-layer.md) | 错误分类=纯函数进 contracts、重试/fallback 编排=Kernel | ✅ |
 | [0011](./0011-seq-semantics.md) | seq 语义：per-run 逻辑序 + 全局物理序（两游标） | ✅ |
-| [0012](./0012-branch-policy.md) | 分支/推送策略：pre-alpha 维护者直推 main；CI required check 上线后转 PR | ✅ |
+| [0012](./0012-branch-policy.md) | 分支/推送策略：**2026-10-16 已切换到 B = 全量 branch + PR**（门禁是 CI blocking job，非人工 review） | ✅ |
 | [0013](./0013-run-command-inbox.md) | Run 级 Command Inbox：外部审批/取消/模式变更均经 Kernel 串行入口 | ✅ |
 | [0014](./0014-permission-context-authoritative.md) | PermissionCtx 唯一真源；权限引擎改纯函数 | ✅ |
 | [0015](./0015-sandbox-capability-floors.md) | OS capability floor 高于 mode；无写围栏不得静默放行 | ✅ |
