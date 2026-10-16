@@ -155,3 +155,70 @@ def test_permission_outcome_produces_redacted_args_summary() -> None:
     outcome = evaluate_permission(_evaluation(args={"path": "C:\\Users\\me\\.env", "content": "x" * 5000}))
     assert outcome.args_summary != str(outcome.arguments) if hasattr(outcome, "arguments") else True
     assert ".env" in outcome.args_summary or "redacted" in outcome.args_summary.lower()
+
+
+def test_configured_denylist_denies_even_under_full_auto(tmp_path) -> None:
+    """ADR-0014：`PermissionCtx.denylist` 是真控制面——加进去的路径必须生效，且不可被 mode 放宽。"""
+    permission = PermissionCtx(mode="full_auto", denylist=frozenset({"secrets/tokens.txt"}), cwd=str(tmp_path))
+    outcome = evaluate_permission(_evaluation(args={"file_path": "secrets/tokens.txt", "content": "x"}, permission=permission))
+    assert outcome.decision is PermissionDecision.DENY
+    assert outcome.floor_applied == "configured-denylist"
+
+
+def test_denylist_is_unaffected_by_mode_when_write_is_normally_allowed(tmp_path) -> None:
+    """同一条未入 denylist 的路径在 full_auto 下仍应 ALLOW——证明上面的 DENY 来自 denylist 本身。"""
+    permission = PermissionCtx(mode="full_auto", denylist=frozenset({"secrets/tokens.txt"}), cwd=str(tmp_path))
+    allowed = evaluate_permission(_evaluation(args={"file_path": "src/app.py", "content": "x"}, permission=permission))
+    assert allowed.decision is PermissionDecision.ALLOW
+
+
+def test_denylist_glob_matches_case_insensitively(tmp_path) -> None:
+    """跳平台：模式与路径都经 normcase 后比对（大小写不敏感）。"""
+    permission = PermissionCtx(denylist=frozenset({"*.key"}), cwd=str(tmp_path))
+    outcome = evaluate_permission(_evaluation(args={"file_path": "SECRETS/Server.KEY", "content": "x"}, permission=permission))
+    assert outcome.decision is PermissionDecision.DENY
+
+
+def test_built_in_sensitive_defaults_still_deny_with_empty_denylist(tmp_path) -> None:
+    """内置默认不可因 denylist 为空而失效（两者取并集，不可移除）。"""
+    permission = PermissionCtx(mode="full_auto", cwd=str(tmp_path))
+    assert permission.denylist == frozenset()
+    outcome = evaluate_permission(_evaluation(args={"file_path": ".env", "content": "SECRET=1"}, permission=permission))
+    assert outcome.decision is PermissionDecision.DENY
+
+
+def test_enforce_read_only_denies_mutating_tool_and_rules_cannot_loosen(tmp_path) -> None:
+    """读上限预设执行测试（此前 `enforce_read_only=True` 从未被任何用例置位）。"""
+    permission = PermissionCtx(
+        mode="full_auto",
+        cwd=str(tmp_path),
+        enforce_read_only=True,
+        rules=(PermissionRule(id="r1", tool_pattern="write", argument_pattern="*", action="allow"),),
+    )
+    outcome = evaluate_permission(_evaluation(args={"file_path": "src/app.py", "content": "x"}, permission=permission))
+    assert outcome.decision is PermissionDecision.DENY
+    assert outcome.floor_applied == "read-only-limit"
+
+
+def test_enforce_read_only_still_allows_readonly_tools(tmp_path) -> None:
+    permission = PermissionCtx(mode="default", cwd=str(tmp_path), enforce_read_only=True)
+    outcome = evaluate_permission(
+        _evaluation(tool_name="read", spec=_spec(name="read", read_only=True), args={"file_path": "a.txt"}, permission=permission)
+    )
+    assert outcome.decision is PermissionDecision.ALLOW
+
+
+def test_protected_root_file_denied_via_its_own_step(tmp_path) -> None:
+    """`mcp.json` 不命中内置敏感名单，只能靠 protected-root 那一步拦住——验证该步真在跑。"""
+    permission = PermissionCtx(mode="default", cwd=str(tmp_path))
+    outcome = evaluate_permission(_evaluation(args={"file_path": "mcp.json", "content": "{}"}, permission=permission))
+    assert outcome.decision is PermissionDecision.DENY
+    assert outcome.floor_applied == "protected-root"
+
+
+def test_protected_root_denied_even_under_full_auto(tmp_path) -> None:
+    """workspace 内能控制 Agent 能力的文件（config.json/mcp.json）不可被 mode 放宽。"""
+    permission = PermissionCtx(mode="full_auto", cwd=str(tmp_path))
+    outcome = evaluate_permission(_evaluation(args={"file_path": "config.json", "content": "{}"}, permission=permission))
+    assert outcome.decision is PermissionDecision.DENY
+    assert outcome.floor_applied == "protected-root"

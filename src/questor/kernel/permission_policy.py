@@ -1,4 +1,4 @@
-"""L2 纯权限求值（ADR-0006/0014；design/03 §11）。
+"""L2 纯权限求值（ADR-0006/0014；design/03 §3.1 八步）。
 
 引擎自身没有配置：mode/rules/denylist/approval policy 全从权威 PermissionCtx 读取。
 这样 `SetPermissionMode` 改 Domain_State 后，下一次调用必然看到新模式（ADR-0014）。
@@ -80,6 +80,37 @@ def _path_matches(raw: str, cwd: Path) -> tuple[bool, bool]:
     )
     protected_root = any(fnmatch.fnmatch(basename, pattern) for pattern in PROTECTED_IN_ROOTS)
     return sensitive, protected_root
+
+
+def _normalized_form(raw: str, cwd: Path) -> str:
+    """用于模式匹配的归一形式：展开 `~`/环境变量、转正斜杠、小写；realpath 失败退回字面路径。"""
+    candidate = Path(os.path.expandvars(os.path.expanduser(raw)))
+    candidate = candidate if candidate.is_absolute() else cwd / candidate
+    try:
+        candidate = candidate.resolve()
+    except OSError:  # 不可解析（包括还不存在的写入目标）时用字面路径继续匹配
+        pass
+    return str(candidate).replace("\\", "/").lower()
+
+
+def _denylisted(candidate_paths: tuple[str, ...], *, cwd: Path, denylist: frozenset[str]) -> str | None:
+    """命中配置侧 denylist 的路径；denylist 为空时返回 ``None``。
+
+    与内置敏感默认取**并集**：两者都不可被 rules/mode 推翻，且配置项不能用来取消内置默认
+    （ADR-0014）。匹配形式：字面相对路径、归一绝对路径、文件名；模式可用 glob，也可写成
+    子串（如 `secrets/tokens.txt`）。
+    """
+    if not denylist:
+        return None
+    patterns = [str(pattern).replace("\\", "/").lower() for pattern in denylist if str(pattern).strip()]
+    for raw in candidate_paths:
+        base = raw.replace("\\", "/").lower().rsplit("/", 1)[-1]
+        forms = {raw.replace("\\", "/").lower(), _normalized_form(raw, cwd), base}
+        for pattern in patterns:
+            has_wildcard = any(char in pattern for char in "*?[")
+            if any(fnmatch.fnmatch(form, pattern) or (not has_wildcard and pattern in form) for form in forms):
+                return raw
+    return None
 
 
 def _candidate_paths(evaluation: PermissionEvaluation) -> tuple[str, ...]:
@@ -178,7 +209,7 @@ def _apply_approval_mode(outcome: PermissionOutcome, spec: ToolSpec, permission:
 
 
 def evaluate_permission(evaluation: PermissionEvaluation) -> PermissionOutcome:
-    """执行 design/03 §11 八步；非法参数与敏感路径先于 rules/mode。"""
+    """执行 design/03 §3.1 的八步；非法参数、敏感/受保护路径与 denylist 先于 rules/mode。"""
     summary = _summarize_arguments(evaluation)
     cwd = Path(evaluation.permission.cwd or Path.cwd())
     paths = _candidate_paths(evaluation)
@@ -211,6 +242,18 @@ def evaluate_permission(evaluation: PermissionEvaluation) -> PermissionOutcome:
                 floor_applied="protected-root",
                 candidate_paths=paths,
             )
+
+    # 配置侧 denylist 与 `protect_sensitive_paths` 相互独立：后者管内置默认，前者是显式意图，
+    # 不因开关关闭而失效（也不得用来取消内置默认）。
+    denied_by_config = _denylisted(paths, cwd=cwd, denylist=evaluation.permission.denylist)
+    if denied_by_config is not None:
+        return PermissionOutcome(
+            decision=PermissionDecision.DENY,
+            reason=f"Access to '{denied_by_config}' is blocked by PermissionCtx.denylist (non-overridable by rules or mode).",
+            args_summary=summary,
+            floor_applied="configured-denylist",
+            candidate_paths=paths,
+        )
 
     if evaluation.permission.enforce_read_only and not evaluation.tool_spec.read_only:
         return PermissionOutcome(
