@@ -65,6 +65,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - 守卫：`check_layering_ast.py` 扩记忆规则（memory=state peer、只依 contracts；`policy`/`surfaces`/`capabilities` 禁 import 具体 `store_memory_sqlite`），`--self-test` 判红；已在 CI `boundaries` blocking job 运行。记忆写/读旁路=0（reduce 唯一入口 + AST 守卫）。
 - 决策 ADR-0023~0026 + 阶段计划 `docs/plan/04-memory-soul.md`。质量门：405 passed / 5 skipped（DoD① 跨会话写入→检索命中、DoD② Deep Dream 产出、DoD③ 单写者、DoD④ 可插拔、DoD⑤ state/memory 分离 + evals 雏形）。UNVERIFIED：真 LLM/embedding 召回质量、trigram-CJK 未实现（后置 P10）、完整四档压缩（→P10）、跨进程记忆 exactly-once（→P9）。
 
+### Fixed (log assembly coverage — PR-A / 日志刀 1, 2026-10-16)
+补齐 `docs/log/DESIGN.md` §11 点名的"最严重装配缺口"（纯缺陷，不动契约/分层）：
+- **四入口日志裸奔**：`configure_logging` 此前只在 `interactive()` 里调，崩溃恢复最该有日志的 `--resume`（及 `--list`/`--dream`）无 handler → INFO 全丢。修复：装配上移组合根 `__main__._amain` 起手，读 `QUESTOR_LOG_LEVEL`（默认 INFO），覆盖 REPL/`--resume`/`--list`/`--dream` 四入口（`test_log_assembly_coverage.py` 真子进程断言 `--resume` stderr 有 questor 行）。
+- **`questor.bus` 死 logger**：`kernel/events.py` 定义 `_log` 却零调用，订阅者队列溢出与持久化失败无人报。修复：`emit()` 溢出→出声丢帧、持久化失败→出声后上冒（数据丢失不静默吞）（`test_bus_failures_voiced.py`）。
+- **console sink 显式绑 stderr**：`configure_logging` 不再依赖 `basicConfig` 默认，显式 `StreamHandler(sys.stderr)`、幂等不叠 handler、永不污染机器可读 stdout（`test_configure_logging_idempotent.py`，DoD A③/A④）。
+- 落 `docs/log/{DESIGN,PLAN}.md`（设计定稿 + 刀 1/刀 2 实施计划）；`plan/01` T12 标"部分兑现"。脱敏/节流/白名单/文件面/双通道汇流随 PR-B（刀 2，对抗评审门后）。
+
 ### Fixed (P4 adversarial audit round, 2026-10-16 — closes `docs/audit/P4-review-2026-10-16.md` CONDITIONAL GO)
 对抗审计发现两处"文档宣称≠代码现实"+ 三处小问题，均已复核并修复：
 - **写生产者未接线（阻断记忆可用性）**：`flush_run_to_daily` 无生产调用者、产品无 `WriteMemory` 触发器。修复：`CliSurface.run_once` 在 run 完成边界 best-effort 调 `flush_run_to_daily`（经 `MemoryStorePort` 收口、不进热 loop、`run_id` 幂等、失败仅告警），episodic→daily→Deep Dream 链在产品中真能跑；新增 `test_p4_memory_flush.py` 走真实 loop（非手动 inbox）证写→检索。
