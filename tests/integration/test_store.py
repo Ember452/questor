@@ -53,3 +53,70 @@ async def test_store_requires_connect() -> None:
 
     with pytest.raises(RuntimeError):
         await S(":memory:").append("run_x", ({"type": "t", "data": {}},))
+
+
+# ---- P3 T4/T5: dual cursor watermark + cross-run catch-up + resume discovery (ADR-0011/0022) ----
+
+
+async def test_watermark_is_global_monotonic_across_runs(store) -> None:
+    # per-run logical seq restarts at 1; the global physical watermark grows monotonically across runs.
+    assert await store.watermark() == 0
+    await store.append("run_a", ({"type": "run_started", "data": {}}, {"type": "message_completed", "data": {}}))
+    await store.append("run_b", ({"type": "run_started", "data": {}},))
+    assert await store.sequence_head("run_a") == 2 and await store.sequence_head("run_b") == 1  # per-run isolated
+    assert await store.watermark() == 3  # 3 durable events total, global order
+
+
+async def test_replay_global_catchup_across_runs(store) -> None:
+    await store.append("run_a", ({"type": "run_started", "data": {}},))
+    mark = await store.watermark()  # 1
+    await store.append("run_b", ({"type": "run_started", "data": {}}, {"type": "turn_started", "data": {}}))
+    rows = await store.replay_global(after_watermark=mark)
+    # catch-up returns exactly the events written after the watermark, across both runs, in gseq order
+    assert [r["run_id"] for r in rows] == ["run_b", "run_b"]
+    assert [r["gseq"] for r in rows] == [2, 3]
+    assert all(r["gseq"] > mark for r in rows)
+
+
+async def test_replay_exposes_gseq(store) -> None:
+    await store.append("run_a", ({"type": "run_started", "data": {}},))
+    row = (await store.replay("run_a", after_seq=0))[0]
+    assert "gseq" in row and row["gseq"] >= 1
+
+
+async def test_list_unfinished_runs_derives_from_log(store) -> None:
+    await store.append("run_open", ({"type": "run_started", "data": {}}, {"type": "tool_completed", "data": {}}))
+    await store.append("run_done", ({"type": "run_started", "data": {}}, {"type": "run_completed", "data": {}}))
+    unfinished = await store.list_unfinished_runs()
+    assert "run_open" in unfinished
+    assert "run_done" not in unfinished  # log has a terminal event -> not resumable
+
+
+async def test_checkpoint_seq(store) -> None:
+    assert await store.checkpoint_seq("run_e") is None
+    await store.save_checkpoint(
+        {"cp_id": "cp_1", "run_id": "run_e", "seq": 7, "turn": 3, "kind": "auto", "state_digest": "{}", "pending": []}
+    )
+    assert await store.checkpoint_seq("run_e") == 7
+
+
+async def test_schema_version_fail_closed(tmp_path) -> None:
+    from questor.providers.store_sqlite import SQLiteStore, StoreSchemaVersionError
+
+    path = str(tmp_path / "db.sqlite")
+    s = await SQLiteStore(path).connect()
+    await s.append("run_a", ({"type": "run_started", "data": {}},))
+    await s.close()
+
+    reopened = await SQLiteStore(path).connect()  # same version -> opens fine
+    assert await reopened.watermark() == 1
+    await reopened.close()
+
+    # simulate a DB written by a newer, unknown schema version -> must refuse to half-read
+    import aiosqlite
+
+    async with aiosqlite.connect(path) as con:
+        await con.execute("UPDATE meta SET value = '99999' WHERE key = 'store_schema_version'")
+        await con.commit()
+    with pytest.raises(StoreSchemaVersionError):
+        await SQLiteStore(path).connect()
