@@ -51,7 +51,7 @@ from questor.contracts.state_schema import (
     ToolArgsStatus,
     ToolCallStatus,
 )
-from questor.contracts.tool import Tool
+from questor.contracts.tool import RunToolSurface, Tool, ToolSpec
 from questor.kernel.events import EventBus
 from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
 from questor.kernel.run_control import RunController
@@ -122,12 +122,12 @@ def _none_descriptor() -> SandboxDescriptor:
     )
 
 
-def _analyze_shell(tool_spec: Tool, arguments: JsonObject) -> ShellAnalysis | None:
+def _analyze_shell(tool_spec: ToolSpec, arguments: JsonObject) -> ShellAnalysis | None:
     """只按 ToolSpec capability/name 选 dialect；不靠工具名字符串猜安全。"""
     commands = extract_shell_commands(arguments)
     if not commands:
         return None
-    powershell = tool_spec.name.lower() in {"powershell", "pwsh"} or tool_spec.name.lower() == "bash" and False
+    powershell = tool_spec.name.lower() in {"powershell", "pwsh"}
     analyses = [parse_powershell(command) if powershell else parse_posix_shell(command) for command in commands]
     if any(analysis.status is not ShellParseStatus.PARSED for analysis in analyses):
         return analyses[0]
@@ -156,6 +156,7 @@ class DefaultTurnLoop:
         bus: EventBus,
         tool_for: Callable[[str], Tool | None],
         tools: tuple[Tool, ...] = (),
+        surface: RunToolSurface | None = None,
         sandbox: SandboxPort | None = None,
         store: StorePort | None = None,
         workspace_root: Path | None = None,
@@ -169,12 +170,24 @@ class DefaultTurnLoop:
         self.bus = bus
         self.tool_for = tool_for
         self.tools = tools
+        self.surface = surface
         self.sandbox = sandbox
         self.store = store
         self.workspace_root = workspace_root or Path.cwd()
         self.model = model
         self.system = system
         self.cancel_event = cancel_event or asyncio.Event()
+
+    def _tool(self, name: str) -> Tool | None:
+        """工具解析优先走冻结 surface（run 内工具面不变），否则走兼容入口。"""
+        if self.surface is not None:
+            return self.surface.tool_for(name)
+        return self.tool_for(name)
+
+    def _specs(self) -> tuple[ToolSpec, ...]:
+        if self.surface is not None:
+            return self.surface.specs
+        return tuple(t.spec for t in self.tools)
 
     async def drive(self, run: Run, user_text: str) -> Run:
         """兼容 P1 入口：把 user text 也经 RunController，绝不在 loop 外偷偷 reduce。"""
@@ -287,7 +300,7 @@ class DefaultTurnLoop:
     # ---- phase 辅助方法 ------------------------------------------------
     async def _stream_turn(self, run: Run, turn: int) -> tuple[Message, JsonObject]:
         """跑一轮流式：逐块 emit live delta、累积文本/工具参/用量，定稿为一条 assistant 消息。"""
-        request = ProviderRequest(model=self.model, messages=run.context.items, tools=tuple(t.spec for t in self.tools), system=self.system)
+        request = ProviderRequest(model=self.model, messages=run.context.items, tools=self._specs(), system=self.system)
         text_parts: list[str] = []
         usage: JsonObject = {}
         calls: dict[int, dict] = {}
@@ -339,7 +352,7 @@ class DefaultTurnLoop:
 
     def _ask_policy(self, run: Run) -> tuple[object, bool]:
         """返回 ``(intent, faulted)``；策略异常被隔离（X4），绝不崩整个 run。"""
-        view = PolicyView(context=run.context.items, tool_results=run.tool_ledger.calls, tools=tuple(t.spec for t in self.tools), budget=run.budget)
+        view = PolicyView(context=run.context.items, tool_results=run.tool_ledger.calls, tools=self._specs(), budget=run.budget)
         try:
             return self.policy.propose_action(view), False
         except Exception:  # noqa: BLE001 - 策略故障绝不得打断循环
@@ -360,9 +373,9 @@ class DefaultTurnLoop:
             await self._emit(events)
             return run
 
-        tool = self.tool_for(intent.name)
+        tool = self._tool(intent.name)
         if tool is None:
-            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=_unknown_tool_message(intent.name, self.tools)))
+            run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=_unknown_tool_message(intent.name, self._specs(), self.surface)))
             controller.run = run
             await self._emit(events)
             return run
@@ -577,9 +590,14 @@ def _finish_tool_use(index: int, slot: dict) -> ContentBlock:
     )
 
 
-def _unknown_tool_message(name: str, tools: tuple[Tool, ...]) -> str:
-    """静态候选只提示，不扩工具面（03 §6；P2 T4）。"""
-    candidates = [tool.spec.name for tool in tools if tool.spec.name.startswith(name[:2]) or name[:2] in tool.spec.name][:3]
+def _unknown_tool_message(name: str, specs, surface: object | None = None) -> str:  # noqa: ANN001
+    """静态候选只提示，不扩工具面（03 §6；P2 T14）。"""
+    candidates: tuple[str, ...] = ()
+    if surface is not None and hasattr(surface, "candidates"):
+        candidates = surface.candidates(name)  # type: ignore[attr-defined]
+    else:
+        names = [spec.name for spec in specs]
+        candidates = tuple(n for n in names if name[:2] and (n.startswith(name[:2]) or name[:2] in n))[:3]
     if candidates:
         return f"unknown tool '{name}'; did you mean: {', '.join(candidates)}?"
     return f"unknown tool '{name}'"
