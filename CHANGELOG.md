@@ -65,6 +65,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - 守卫：`check_layering_ast.py` 扩记忆规则（memory=state peer、只依 contracts；`policy`/`surfaces`/`capabilities` 禁 import 具体 `store_memory_sqlite`），`--self-test` 判红；已在 CI `boundaries` blocking job 运行。记忆写/读旁路=0（reduce 唯一入口 + AST 守卫）。
 - 决策 ADR-0023~0026 + 阶段计划 `docs/plan/04-memory-soul.md`。质量门：405 passed / 5 skipped（DoD① 跨会话写入→检索命中、DoD② Deep Dream 产出、DoD③ 单写者、DoD④ 可插拔、DoD⑤ state/memory 分离 + evals 雏形）。UNVERIFIED：真 LLM/embedding 召回质量、trigram-CJK 未实现（后置 P10）、完整四档压缩（→P10）、跨进程记忆 exactly-once（→P9）。
 
+### Fixed (多 tool_call 配对崩溃 — ADR-0028, 2026-10-16)
+真机复现并逐段核验：模型一轮返回 ≥2 个 tool_call 时，串行循环只执行第一条就回发下一次请求，历史留下
+悬空 tool_call → provider `400 …must be followed by tool messages…` → **异常穿出 `drive_controller`、整个 CLI
+进程带 traceback 退出、run 不落任何终态**。
+- **回发前配对关卡（新硬约束 C19）**：全仓唯一的 `ProviderPort.stream` 调用点（`kernel/loop.py::_stream_turn`）
+  内先跑 `_ensure_paired_history`：一条 assistant 里**所有**未应答 tool_use 串行闭合才允许下一次请求（仍不启用
+  并行，ROADMAP §2.5 口径不变）。判据取 **context 侧** `open_tool_use_ids` 而非账本 OPEN 集合——实测存在
+  “context 有悬空、ledger 无条目”的分叉，账本驱动的回填盖不住。不可调和 → fail-closed 落 `run_failed(format_error)`
+  且**一次都不发**（不靠投影层合成假 tool_result 骗过协议，那会把 ledger/context 分叉制度化）。
+- **provider 故障归一（plan/01 T4、design/01 §8、ADR-0010 首次真接线）**：新增 `contracts/errors.py::
+  classify_provider_error` 纯函数（不 import provider/litellm；状态码 → 消息 `Error code: NNN` → 有序模式表 →
+  fail-closed UNKNOWN，自己绝不抛），kernel 边界捕获 `Exception` → `_fail_with_entry` 落唯一终态；BaseException
+  （取消/中断）继续上抛。**400 配对违规钉为不可重试**：否则 P10 接上退避重试会把同一确定性错误打满预算。
+  本轮不自动重试（退避/fallback 链/凭据池仍归 P10）。
+- **stop-gate 同源路径**：策略给 `SuggestFinish` 而账本仍有 OPEN 调用时的 `continue`，实测会反复带悬空历史回发
+  直到 max_turns（白烧 3 轮预算）；现由同一关卡收掉。
+- **被拒收消息的 durable 泄漏**：重复 `tool_use_id` 被 `AppendAssistantMessage` 整条拒收后，loop 仍把本地消息
+  当已落库定稿，经 `FinalizeRun(final=…)` **走私回 context**，留下一条永不配对的 tool_use 且因 `completed` 不进
+  `--list`/resume（比崩更难查）。现改为“未产 `message_completed` 即出声”→ `run_failed`。
+- **取消优先**：关卡不得为补配对而继续执行未跑调用；实测取消后 `provider.stream` 不新增、落单调用作
+  `cancelled` 回填、`error_stack` 保持空（R01 F8：取消绝不进重试分类）。
+- **关卡不改变“谁能跑”**：补执行仍走完整权限/floor/参数校验。实测关卡补执行一个 none 后端的 write 时
+  **真的发出 `approval_request`**（理由为 write capability floor）→ 无人决策超时 fail-closed deny、目标文件不落盘；
+  非法参数的落单调用也回 error 结果闭合配对。
+- **复用不新写**：ADR-0021 的 `_resume_settle_open_calls` 改名 `_settle_open_calls`（resume 入口与关卡两个安全点共用，
+  行为逐字不变）。`docs/log/{DESIGN,PLAN}.md`、`plan/01`、`plan/03` 同步注记。
+- peer-scan（AGENTS §4.5）：位置采纳 CowAgent `agent/protocol/agent_stream.py:1604-1608`；**拒** CowAgent
+  `message_utils.py:21-120` 的合成 tool_result 抹平（事件溯源下会分叉）；分类器形状改造自 hermes
+  `agent/error_surface.py` + `error_classifier.py`（MIT © Nous Research，已就地注 provenance）。
+- 机械守卫：新增源码级测试——全仓 `self.provider.stream(` 调用点必须唯一且在 `kernel/loop.py`、关卡必在请求
+  之前（fail-on-empty；已验证“拆掉关卡即判红”）。
+- 测试：`tests/integration/test_pairing_gate_and_provider_fault.py`（10）+ `tests/unit/test_provider_error_classification.py`（8），
+  先红后绿（修前同文件 7 条集成测试中 6 条全红、包含“非法历史真的被发出去了”这一直接证据；仅“取消优先”当时已绿）。
+  质量门：**440 passed / 5 skipped**；ruff clean；lint-imports 4 kept；AST 76 files/0 违规且 self-test 判红；
+  protocol 20 types lockstep；replay/output/secret/thread 守卫全绿；`verify_p0` ALL PASS。端到端在 `CliSurface.run_once`
+  层面复验：一轮 `ls`+`read` + 严格网关判 400 的 provider → `completed`、两次 stream 均无悬空、异常不再穿出。
+  UNVERIFIED：真 key 下 litellm 具体异常类型与 `status_code` 载体（版本相关）。
+
 ### Fixed (log assembly coverage — PR-A / 日志刀 1, 2026-10-16)
 补齐 `docs/log/DESIGN.md` §11 点名的"最严重装配缺口"（纯缺陷，不动契约/分层）：
 - **四入口日志裸奔**：`configure_logging` 此前只在 `interactive()` 里调，崩溃恢复最该有日志的 `--resume`（及 `--list`/`--dream`）无 handler → INFO 全丢。修复：装配上移组合根 `__main__._amain` 起手，读 `QUESTOR_LOG_LEVEL`（默认 INFO），覆盖 REPL/`--resume`/`--list`/`--dream` 四入口（`test_log_assembly_coverage.py` 真子进程断言 `--resume` stderr 有 questor 行）。
