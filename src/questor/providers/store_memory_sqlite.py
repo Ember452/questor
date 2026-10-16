@@ -410,6 +410,78 @@ class SQLiteMemoryStore(MemoryStorePort):
             await db.execute("DELETE FROM memory_chunks_fts WHERE id = ?", (cid,))
             await db.execute("DELETE FROM memory_chunks WHERE id = ?", (cid,))
 
+    def _abs(self, rel_path: str) -> str:
+        """将相对 memory root 的路径解为绝对；**拒绝越界**（path traversal / 符号链逃逸 fail-closed）。"""
+        norm = os.path.normpath(rel_path).replace("\\", "/")
+        if os.path.isabs(norm) or norm.startswith("..") or ".." in norm.split("/"):
+            raise ValueError(f"memory path escapes root: {rel_path!r}")
+        root_abs = os.path.abspath(self.memory_root)
+        full = os.path.abspath(os.path.join(root_abs, norm))
+        if os.path.commonpath([root_abs, full]) != root_abs:
+            raise ValueError(f"memory path escapes root: {rel_path!r}")
+        return full
+
+    async def read_memory_text(self, rel_path: str) -> str:
+        full = self._abs(rel_path)
+        if not os.path.exists(full):
+            return ""
+        with open(full, encoding="utf-8") as fh:
+            return fh.read()
+
+    async def list_memory_paths(self) -> tuple[str, ...]:
+        return tuple(sorted(self._scan_source_files()))
+
+    async def write_memory_text(self, rel_path: str, content: str, *, idempotency_key: str) -> JsonObject:
+        """原子全量重写真源 md（Deep Dream 重写 core）；``idempotency_key`` 命中则 no-op。
+
+        不自动索引；调用方随后 ``sync`` 从文件重建。越界路径 fail-closed（``_abs``）。"""
+        full = self._abs(rel_path)
+        db = self._dbp()
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await db.execute("SELECT path FROM write_ledger WHERE idempotency_key = ?", (idempotency_key,))
+            if await cur.fetchone() is not None:
+                await db.execute("COMMIT")
+                return {"path": rel_path, "idempotent": True}
+            _atomic_write_text(full, content)
+            await db.execute(
+                "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,0,0,0,?)",
+                (idempotency_key, _rel(self.memory_root, full), utc_now().isoformat()),
+            )
+            await db.execute("COMMIT")
+        except BaseException:
+            await db.execute("ROLLBACK")
+            raise
+        return {"path": rel_path, "idempotent": False}
+
+    async def append_memory_text(self, rel_path: str, content: str, *, idempotency_key: str) -> JsonObject:
+        """原子追加到真源 md（run-完成→daily flush、梦境日记）；幂等、只写浓缩不写 delta。
+
+        不自动索引；调用方随后 ``sync`` 重建。越界 fail-closed。"""
+        full = self._abs(rel_path)
+        db = self._dbp()
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await db.execute("SELECT path FROM write_ledger WHERE idempotency_key = ?", (idempotency_key,))
+            if await cur.fetchone() is not None:
+                await db.execute("COMMIT")
+                return {"path": rel_path, "idempotent": True}
+            existing = ""
+            if os.path.exists(full):
+                with open(full, encoding="utf-8") as fh:
+                    existing = fh.read()
+            sep = "" if (not existing or existing.endswith("\n")) else "\n"
+            _atomic_write_text(full, existing + sep + content)
+            await db.execute(
+                "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,0,0,0,?)",
+                (idempotency_key, _rel(self.memory_root, full), utc_now().isoformat()),
+            )
+            await db.execute("COMMIT")
+        except BaseException:
+            await db.execute("ROLLBACK")
+            raise
+        return {"path": rel_path, "idempotent": False}
+
 
 def _bound_snippet(text: str, *, max_bytes: int = _SNIPPET_MAX_BYTES) -> str:
     """有界片段：按 UTF-8 字节上限截断且不切断多字节字符（HARD C18/ADR-0019）。"""

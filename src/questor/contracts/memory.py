@@ -236,6 +236,27 @@ class MemoryStorePort(Protocol):
         """归档/删除索引条目（rotation 等）；真源文件的修剪后置 P10。"""
         ...
 
+    # ---- 离线维护路径（Deep Dream / run-边界 flush；ADR-0025：同一收口、无旁路）----
+    async def read_memory_text(self, rel_path: str) -> str:
+        """读一个真源 md 文件内容（相对 memory root）；不存在返回空串。越界路径 fail-closed。"""
+        ...
+
+    async def list_memory_paths(self) -> tuple[str, ...]:
+        """列出真源 md 文件的相对路径（供离线蒸馏定位 core/daily）。"""
+        ...
+
+    async def write_memory_text(self, rel_path: str, content: str, *, idempotency_key: str) -> JsonObject:
+        """**原子全量重写**一个真源 md（Deep Dream 重写 core）；``idempotency_key`` 命中则 no-op（claim-then-commit）。
+
+        写后不自动索引；调用方经 :meth:`sync` 从文件重建派生索引（文件为真源）。越界路径 fail-closed。"""
+        ...
+
+    async def append_memory_text(self, rel_path: str, content: str, *, idempotency_key: str) -> JsonObject:
+        """**原子追加**到真源 md（run-完成→daily flush、梦境日记）；``idempotency_key`` 命中则 no-op、失败可重试。
+
+        只写浓缩文本、绝不写 delta（design/06 I3）。越界路径 fail-closed。"""
+        ...
+
 
 __all__ = [
     "MemoryScope",
