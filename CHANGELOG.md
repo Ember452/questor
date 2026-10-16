@@ -6,9 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed (文档对齐 / dead-pointer 清除，附 ADR-0028 同分支)
+扫描并修掉会让下一位读者走错路的文档漂移（**不改任何阶段结论、不回改历史验收判据**，只加“当时至 Cxx”型注记）：
+- **死链**：`AGENTS.md`（仓库根）的 `./design/HARD-CONSTRAINTS.md`、`./VISION.md`、`./ROADMAP.md` 与 `../CONTRIBUTING.md` 均指不到目标（真源在 `docs/`）——`AGENTS.md` 本身要求“读链接后的文档、不要凭记忆工作”，链接断则规则书自相矛盾；`CLAUDE.md` 同步修两条同类死链。
+- **红线范围漂移**：`AGENTS.md`/`CLAUDE.md` 仍写 C1–C13、`VISION.md` §8 仍写 C1-C12；已统一至 **C1–C19**。已完成阶段的 `plan/02`/`plan/03`/`plan/04` 与 `plan/01` DoD 保留原文并加“本阶段验收时至 Cxx”注记（历史判据不回改）；`plan/_TEMPLATE.md` 的自检范围从 C15 抬到 C19，使 P5 开工时不会漏新红线。
+- **与 ADR-0020 矛盾的旧口径**：`design/01` 两处（§5 “P3 落定”、§13 Checkpoint 行）仍写“默认**写门截断**到 `closed_prefix`”——该方案在实现期已被修正为“完整快照 + 派发侧补齐”（截断会抹掉 `awaiting_approval` 续跑稳态）；已改为实况并保留修正出处。`plan/01` T9 同步就地标注。
+- **陈旧进度块**：`VISION.md` §8 仍说“下一步：02→03→04 设计文档”（早已全部定稿）；改为指向 **ROADMAP §1 为进度真源** + 当前 P0–P4 已交付，并就地解释“单步接口”与 ADR-0028 多调用关卡不矛盾。`plan/02` §13 开头仍写“尚未实现”而 §13.1–13.3 已回填——加状态更正。
+- **ADR 计数**：`CLAUDE.md` 仍写 ADR-0001…0012、CHANGELOG 仍写 …0019 → 均改为 0028 并注明 0027 预留。
+- 审计/交付报告（`docs/audit/*`、`docs/delivery/*`）是**时间点证据**，按纪律不回改（包括其引用的旧行号/旧函数名）。
+
 ### Added
 - 设计文档体系：VISION、ROADMAP、STRUCTURE、design（分层/状态/事件/工具/循环/策略/记忆/工程红线）。
-- 架构决策记录 ADR-0001…0019。
+- 架构决策记录 ADR-0001…0028（阶段新增见下方各段；0027 为日志骨架刀 2 预留，索引见 `docs/adr/README.md`）。
 - 外部参考扫描报告 R01–R09（docs/references）。
 - 仓库治理：README、LICENSE、CONTRIBUTING、SECURITY、CODE_OF_CONDUCT、.github 模板与 dependabot、工程卫生配置。
 - 阶段计划：`docs/plan/02-p2-tools-permission.md`（P2 工具 + 权限 lite；按 2026-10-15 对抗审计全面修订，固化 Command Inbox、PermissionCtx 单一真源、capability floor、审批生命周期、Shell IR、ProcessRunner、有界 Artifact 与字段级投影）。
