@@ -71,6 +71,10 @@ class StorePort(Protocol):
 
     async def latest_checkpoint(self, run_id: str) -> JsonObject | None: ...
 
+    async def checkpoints(self, run_id: str, limit: int | None = None) -> list[JsonObject]:
+        """该 run 的快照列表，**按 seq 新→旧**返回（供 ``rebuild_run`` 逐一尝试、回退到次近完好快照）。"""
+        ...
+
     async def watermark(self) -> int:
         """当前全局物理序头部（无事件则 0）；跨 run catch-up 的水位基线。"""
         ...

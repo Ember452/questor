@@ -3,8 +3,10 @@
 我按 DeepCode 验证过的模式自写的实现（见 R03/R10）：
 - **两类游标**（ADR-0011/0022）：per-run 逻辑 ``seq``（``SSE after_seq`` 续传，
   ``COALESCE(MAX(seq),0)+1 WHERE run_id``）+ 全局单调物理 ``gseq``（跨 run catch-up watermark）。
-- **log 权威 + append-before-snapshot**（ADR-0020）：耐久事件先经 ``BEGIN IMMEDIATE`` 原子落
-  ``event_log``，再由调用方写 ``checkpoints``；``event_log`` 是唯一真相，快照损坏可由重放回退。
+- **log 权威（事件）+ 快照权威（状态）**（ADR-0020）：耐久事件先经 ``BEGIN IMMEDIATE`` 原子落
+  ``event_log``，再由调用方写 ``checkpoints``。``event_log`` 是耐久**事件**的唯一真相（客户端重放 + 审计）；
+  权威**状态**由快照承载——``rebuild_run`` 从**最近完好快照**重建、损坏则**回退次近完好快照**、无一完好则
+  fail-closed 抛错（输出事件是投影，**不可 reduce 回灌状态**，C5）。
 - **单一 schema authority + 幂等 DDL + 版本 fail-closed**（R03 E-P1/ADR-0022）：``meta`` 表存
   ``store_schema_version``；读到比本仓能解的更新 → 显式 ``StoreSchemaVersionError``，绝不半重建。
 - **非终态发现**：``list_unfinished_runs`` 由 ``event_log`` 是否含终态事件派生（log 权威，不靠旁记 status）。
@@ -240,23 +242,31 @@ class SQLiteStore(StorePort):
 
     async def latest_checkpoint(self, run_id: str) -> JsonObject | None:
         """返回该 run seq 最大的 checkpoint（供 resume 取最近快照）；无则 None。"""
-        cur = await self._dbp().execute(
-            "SELECT cp_id, run_id, seq, turn, kind, state_digest, pending, ts FROM checkpoints WHERE run_id = ? ORDER BY seq DESC LIMIT 1",
-            (run_id,),
-        )
-        row = await cur.fetchone()
-        if row is None:
-            return None
-        return {
-            "cp_id": row[0],
-            "run_id": row[1],
-            "seq": row[2],
-            "turn": row[3],
-            "kind": row[4],
-            "state_digest": row[5],
-            "pending": json.loads(row[6]),
-            "ts": row[7],
-        }
+        rows = await self.checkpoints(run_id, limit=1)
+        return rows[0] if rows else None
+
+    async def checkpoints(self, run_id: str, limit: int | None = None) -> list[JsonObject]:
+        """该 run 快照列表，**按 seq 新→旧**；供 ``rebuild_run`` 逐一尝试完好快照、跳过损坏项。"""
+        sql = "SELECT cp_id, run_id, seq, turn, kind, state_digest, pending, ts FROM checkpoints WHERE run_id = ? ORDER BY seq DESC"
+        params: tuple = (run_id,)
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = (run_id, limit)
+        cur = await self._dbp().execute(sql, params)
+        rows = await cur.fetchall()
+        return [
+            {
+                "cp_id": r[0],
+                "run_id": r[1],
+                "seq": r[2],
+                "turn": r[3],
+                "kind": r[4],
+                "state_digest": r[5],
+                "pending": json.loads(r[6]) if r[6] else [],
+                "ts": r[7],
+            }
+            for r in rows
+        ]
 
     async def checkpoint_seq(self, run_id: str) -> int | None:
         """该 run 最近快照的 seq（尾重放起点）；无快照返回 None。"""

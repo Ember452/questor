@@ -8,8 +8,11 @@ InProcessEventBus + DefaultTurnLoop 全接线；OS 级真杀见 test_p3_kill_res
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import timedelta
 from pathlib import Path
+
+import pytest
 
 from questor.contracts.common import new_id, utc_now
 from questor.contracts.events import (
@@ -38,7 +41,7 @@ from questor.kernel.durability import resume_and_drive
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.permission_policy import PermissionEvaluation, PermissionOutcome
-from questor.kernel.recovery import rebuild_run, resume_run
+from questor.kernel.recovery import NoIntactCheckpointError, rebuild_run, resume_run
 from questor.kernel.run_control import RunController
 from questor.policy.react_policy import ReActPolicy
 from questor.providers.fake import ScriptedProvider
@@ -218,4 +221,29 @@ async def test_resume_unknown_run_returns_none(tmp_path: Path) -> None:
     tool = _RecordingTool(tmp_path)
     loop = _build_loop(tmp_path, tool, store)
     assert await resume_and_drive(loop, store, "nope") is None
+    await store.close()
+
+
+async def test_rebuild_falls_back_to_previous_intact_checkpoint(tmp_path: Path) -> None:
+    """A1：最新快照损坏时回退次近完好快照（权威状态靠快照，不靠 reduce 回灌输出事件，C5）。"""
+    store = await SQLiteStore(str(tmp_path / "fb.db")).connect()
+    run = Run(run_id="run_fb", budget=Budget())
+    await store.append("run_fb", ({"type": "run_started", "data": {}},))
+    await store.save_checkpoint({"cp_id": "cp1", "run_id": "run_fb", "seq": 1, "turn": 0, "kind": "auto", "state_digest": json.dumps(to_snapshot(run)), "pending": []})
+    # 一个更新的、损坏的快照（latest_checkpoint 会先取到它）。
+    await store.save_checkpoint({"cp_id": "cp9", "run_id": "run_fb", "seq": 9, "turn": 0, "kind": "auto", "state_digest": "{not valid json", "pending": []})
+
+    rebuilt = await rebuild_run(store, "run_fb")  # 必须跳过 cp9、用 cp1
+    assert rebuilt is not None and rebuilt.run_id == "run_fb"
+    await store.close()
+
+
+async def test_rebuild_fail_closed_when_all_checkpoints_corrupt(tmp_path: Path) -> None:
+    """A1：有快照但全部损坏 → fail-closed 抛错，绝不静默当"未知 run"。无快照才返回 None。"""
+    store = await SQLiteStore(str(tmp_path / "bad.db")).connect()
+    await store.save_checkpoint({"cp_id": "cpX", "run_id": "run_bad", "seq": 3, "turn": 0, "kind": "auto", "state_digest": "{corrupt", "pending": []})
+    with pytest.raises(NoIntactCheckpointError):
+        await rebuild_run(store, "run_bad")
+    # 真无快照（未知/未落库）仍是 None，不是抛错。
+    assert await rebuild_run(store, "run_never") is None
     await store.close()
