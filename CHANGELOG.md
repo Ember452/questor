@@ -65,6 +65,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - 守卫：`check_layering_ast.py` 扩记忆规则（memory=state peer、只依 contracts；`policy`/`surfaces`/`capabilities` 禁 import 具体 `store_memory_sqlite`），`--self-test` 判红；已在 CI `boundaries` blocking job 运行。记忆写/读旁路=0（reduce 唯一入口 + AST 守卫）。
 - 决策 ADR-0023~0026 + 阶段计划 `docs/plan/04-memory-soul.md`。质量门：405 passed / 5 skipped（DoD① 跨会话写入→检索命中、DoD② Deep Dream 产出、DoD③ 单写者、DoD④ 可插拔、DoD⑤ state/memory 分离 + evals 雏形）。UNVERIFIED：真 LLM/embedding 召回质量、trigram-CJK 未实现（后置 P10）、完整四档压缩（→P10）、跨进程记忆 exactly-once（→P9）。
 
+### Fixed (composition-root model wiring — `QUESTOR_MODEL` 到不了真实供应商, 2026-10-16)
+实地复现：配 `QUESTOR_MODEL` 后 CLI 仍未打到 DeepSeek。
+- **组合根未透传 model**：`__main__._amain` 以 `CliSurface(store=…, memory_store=…)` 生成 surface，缺省 `model="echo"`。该 "echo" 经 `loop` → `ProviderRequest.model` 在 `litellm_adapter` 的 `request.model or self.model` 里以非空真值覆盖了 `LiteLLMProvider` 自带的 `QUESTOR_MODEL`，模型名到不了真实供应商。修复：组合根新增 `_model_from_env()`（读 `QUESTOR_MODEL`、缺省回落 "echo"，与 `_store_path`/`_log_level_from_env` 同为 env 收口点，DESIGN §11），显式传入 `CliSurface(model=…)`。`test_composition_root_model.py` 跑真实组合根（替换 `interactive` 捕获 surface、真 SQLiteStore、不联网）锁死：有 env → 透传、无 env → 回落、且 `surface.model` 必落到 `ProviderRequest.model`。质量门：**425 passed / 5 skipped**。
+
 ### Fixed (log assembly coverage — PR-A / 日志刀 1, 2026-10-16)
 补齐 `docs/log/DESIGN.md` §11 点名的"最严重装配缺口"（纯缺陷，不动契约/分层）：
 - **四入口日志裸奔**：`configure_logging` 此前只在 `interactive()` 里调，崩溃恢复最该有日志的 `--resume`（及 `--list`/`--dream`）无 handler → INFO 全丢。修复：装配上移组合根 `__main__._amain` 起手，读 `QUESTOR_LOG_LEVEL`（默认 INFO），覆盖 REPL/`--resume`/`--list`/`--dream` 四入口（`test_log_assembly_coverage.py` 真子进程断言 `--resume` stderr 有 questor 行）。
