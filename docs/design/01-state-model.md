@@ -68,6 +68,7 @@ TaskNode {
 ```
 - **写**：Kernel 调度器（由策略提交的"计划意图"命令归约而来）。**读**：策略(决定下一步)/UI(展示进度)/断点。
 - **与单步接口的关系**：策略每 turn 读森林 + 上下文，返回**一个**意图（做哪个节点/调哪个工具/收尾）；Kernel 执行、回填 node、发事件。计划是"多步"的，接口是"单步"的，二者靠这棵树解耦。
+  - **注（ADR-0028 / HARD C19）**：单步契约只约束 **PolicyPort**。provider 自己在一轮里发的 N 个 `tool_call` 属**同一意图源的多个调用**，回发前由内核关卡串行全部闭合（仍不启用并行，完整 gate → P5）。因此“一个 turn 窗口可执行多个工具”不违单步接口，也不改变“谁能跑”（权限/floor/审批照走）。
 
 ## 4. 工具调用账本 ToolLedger
 每次工具调用一条，可审计、可重放、可关联事件。
@@ -100,8 +101,11 @@ Checkpoint { cp_id, seq, turn, kind: auto|manual|pre_tool|post_tool|pre_compact,
 ```
 - **续传**：客户端带 `after_seq` → 服务端从最近 `cp` 起重放 `seq>after` 的事件；`cp` 之前的状态直接取快照。
 - **快照节奏**：turn 边界必打（单步接口的天然一致点）；重工具/压缩前后各一个。
-- **恢复不变式**：恢复时先扫 `pending_tool_calls` 补合成 tool_result，再续跑。
-- **P3 落定**（详见 [ADR-0020](../adr/0020-durable-write-gate-and-log-authority.md) / [ADR-0021](../adr/0021-cross-process-resume.md)）：默认**写门截断**——落 checkpoint 前把持久化 `items` 截到 `closed_prefix`，durable 永不持半 `tool_use`；`pending_tool_calls` 只在窄窗口非空，读时 repair 兜底。续跑 = `rebuild_run`（最近快照 + 重放 `seq>cp.seq` 耐久尾 + 回填 + 闭过期审批）交回唯一 loop，仅对仍 OPEN 的调用幂等 re-dispatch。
+- **恢复不变式**：进入 provider 前先把未闭合 `tool_use` 补齐（**实派执行/等待审批，不合成假结果**）再续跑——
+  实现为 `kernel/loop.py::_settle_open_calls`（ADR-0021）；原案“扫 `pending_tool_calls` 补合成 tool_result”已被
+  ADR-0020/0021 修正为“完整快照 + 派发侧补齐”。ADR-0028 把同一机制从 resume 入口**扩到每次回发前**
+  （配对关卡；判据取 context 侧 `open_tool_use_ids`，因为账本驱动的回填盖不住“context 有、ledger 无”的悬空）。
+- **P3 落定（实现期修正，详见 [ADR-0020](../adr/0020-durable-write-gate-and-log-authority.md) / [ADR-0021](../adr/0021-cross-process-resume.md)）**：checkpoint 落**完整权威快照**（含未闭合 `tool_use` 与其 `pending_tool_calls`、`awaiting_approval` 审批），**不截断** `context.items`——截断会抹掉必须跨重启续跑的审批稳态（`test_p2_hitl_resume` 断其存活）。`closed_prefix`/`open_tool_use_ids` 只用于**识别在途集**，不作写门截断。配对由**派发侧补齐**保证：进入 provider 前在同一安全点 settle 所有未闭合调用（resume 入口 + 每次回发前的关卡，ADR-0028）。续跑 = `rebuild_run`（最近快照 + `seq` 对齐 `sequence_head` + 闭过期审批）交回唯一 loop，仅对仍 OPEN 的调用幂等 re-dispatch。
 
 ## 6. 权限上下文 PermissionCtx（决策②，一等）
 ```
@@ -141,6 +145,9 @@ ErrorEntry { seq, at_turn, layer(kernel/tool/provider/persist), code, message,
 run.error_stack: ErrorEntry[]
 ```
 - 各阶段 catch → 归一成本 envelope；重试/fallback 读 `retryable`；终态失败时最后一条进 `run_failed` 事件的 `data.error`。
+- **接线现状**：provider 故障域于 **ADR-0028** 落地（`contracts/errors.py::classify_provider_error` 纯函数 +
+  `kernel/loop.py` 在唯一 `ProviderPort.stream` 调用点捕获→`run_failed`）。此前 `ErrorLayer.PROVIDER` 在生产
+  路径 0 使用、本条只停留在纸面；退避重试/fallback 编排仍归 P10（design/04 §8）。
 
 ## 9. 持久化映射（设计级，非最终 DDL）
 StorePort→SQLite：`sessions / runs / messages(+content) / task_nodes / tool_calls / checkpoints / events(append) / permission_rules`。
@@ -181,6 +188,6 @@ StorePort→SQLite：`sessions / runs / messages(+content) / task_nodes / tool_c
 - **recovery_pointers 定为 `(seq_from, seq_to) + CoveredHash 锦`**（指向 events 单调序号区间，非字节偏移/非 UUID）；读前校验锦、历史漂移 **fail-closed**。P4 定形为 typed `RecoveryPointer`、快照 schema **v2→v3**；**写锚生产者随压缩后置 P10**（`disable_compaction=True`），v1/v2 无锚旧值迁移为 `()`（ADR-0024）。
 - 权威判据："恢复永远从持久态出发，内存视图+事件账本=可丢弃投影"。
 - **两类游标**：per-run 逻辑 `seq`（after_seq 回放）+ 全局单调物理序（跨 run catch-up/watermark）（→ ADR-0011）。
-- Checkpoint：默认**写门截断到 closed_prefix**（durable 永不半 tool_use）、读时 repair 兜底；补悬空 user-turn 修复；投递幂等 claim；取消=冻结子树+保留 partial（`resumable`）。
+- Checkpoint：落**完整快照**、**不截断**（原案“写门截断到 closed_prefix”已由 [ADR-0020](../adr/0020-durable-write-gate-and-log-authority.md) 就地修正为“完整快照 + 派发侧补齐”；`closed_prefix` 仅识别在途集）；配对靠进入 provider 前 settle 未闭合调用保证（ADR-0021 + ADR-0028 关卡）；补悬空 user-turn 修复；投递幂等 claim；取消=冻结子树+保留 partial（`resumable`）。
 - TaskNode 加 `edge_kind(spawn|branch|delegate|reset|compact)/path/depth/resumable`、status 补 `waiting_children`；subagent 节点→独立 Run/Delegation 记录（外部句柄 TEXT 不 FK）；**DAG v1 严格森林、deps 仅读校验**。
 - §9 持久化写死：log 权威→**先 append 后更新 snapshot/index**→损坏回退重放；**单一 schema authority + 幂等 DDL + `BEGIN IMMEDIATE` 重建**；JSON 禁 NaN/Inf、时间 UTC tz-aware；大对象内容寻址去重；防 ABA 永不回收水位；task/runs 与 messages 故障隔离。

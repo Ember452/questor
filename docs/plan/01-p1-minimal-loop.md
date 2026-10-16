@@ -156,7 +156,7 @@ P0 已产八层包骨架 + 分层三防线 + 冷导入/CI；P1 仅在 `pyproject
 ### T9 事件溯源存储 + checkpoint（`providers/store_sqlite.py`，依赖 T2/T3/T8）
 - 改造 DeepCode `event_repository.py`：`event_log(run_id, seq, type, turn, item_id?, payload_json, ts)`；`append` 用 `COALESCE(MAX(seq),0)+1 WHERE run_id`（per-run 逻辑 seq）+ `UNIQUE(run_id,seq)` + `idx_replay(run_id,seq)`；`replay(run_id, after_seq, through?, limit)` = `WHERE seq>after ORDER BY seq`（= `after_seq` 续传）；`sequence_head` + 全局物理 `rowid` 水位（双游标 ADR-0011）。
 - 写序：**先 append log（原子）→ 再更新 snapshot/index；snapshot 缺/损坏→由 log 重放**（01 §13/R03 B-2，log 是唯一真相）。`BEGIN IMMEDIATE` 落单写者（C2）。JSON 禁 NaN/Inf、时间 UTC tz-aware（R03 B-P3）。
-- checkpoint：turn 边界轻量快照（投影+指针，I4）+ `_closed_prefix` **写门**（durable 永不半 tool_use，R03 C-1）；恢复 = 最近快照 + 重放其后事件（ADR-0005）+ 悬空 user-turn 兜底。
+- checkpoint：turn 边界轻量快照（投影+指针，I4）+ `_closed_prefix` **写门**（durable 永不半 tool_use，R03 C-1）；恢复 = 最近快照 + 重放其后事件（ADR-0005）+ 悬空 user-turn 兜底。（**实现期修正**：P3 发现截断与 HITL 续跑冲突，最终不截断、改“完整快照 + 派发侧补齐”，`closed_prefix` 仅用于识别在途集——见 [ADR-0020](../adr/0020-durable-write-gate-and-log-authority.md)/plan/03 §6；配对由进入 provider 前的 settle 保证，每次回发前的关卡见 [ADR-0028](../adr/0028-pairing-gate-and-provider-fault-normalization.md)。）
 → verify:kill-重启从 checkpoint 续跑；`after_seq` 重放不丢不重；损坏 snapshot 回退重放。
 
 ### T10 L6 传输面：CLI + 本地 HTTP+SSE（`surfaces/`，依赖 T7/T8/T9）
@@ -188,7 +188,7 @@ P0 已产八层包骨架 + 分层三防线 + 冷导入/CI；P1 仅在 `pyproject
 3. **SSE 断线 + `after_seq` 续传不丢不重**（集成测试证）；
 4. **简单 checkpoint 断点恢复**：kill 进程重启能续跑/回放（无并行）；
 5. **终端「问一句→流式答一句」、中途可取消且状态/事件一致**（手工复现，非模糊声明）；
-6. **质量门**：冷导入 + import-linter/ruff/AST 守卫绿 + 单测+集成过 + **不违任一 C1–C15 红线**。
+6. **质量门**：冷导入 + import-linter/ruff/AST 守卫绿 + 单测+集成过 + **不违任一 C1–C15 红线**。（注：本项验收时红线全集仅至 C15；现全集见 `HARD-CONSTRAINTS` 至 **C19**，P1 代码在 C16–C19 下亦已复验——见 §11.1。）
 
 ---
 
@@ -266,3 +266,26 @@ P0 已产八层包骨架 + 分层三防线 + 冷导入/CI；P1 仅在 `pyproject
 - 流式看门狗双超时、idle-progress 看门狗、POSIX/PowerShell shell 命令解析、跨机/多进程一致性：分别后置到 P2/P10；P1 不做。
 
 **未改的结论**：能力面仍守 §2.5 串行最小集（无并行/MCP/子 agent），审计 scope-drift 核验亦确认未越界；真实 LiteLLM 端到端与跨真实 HTTP 的 SSE 断连重连仍 **UNVERIFIED**（无 key / 环境无 uvicorn），列入 §7 未覆盖项。
+
+### 11.1 追加回填（2026-10-16，真机崩溃核验 → **ADR-0028**）
+
+用户真实使用中“模型一轮发 ≥2 个 tool_call”→ provider 400 → **CLI 进程带 traceback 直接退出、run 不落终态**。
+本节只追加、不改上方 2026-10-15 的审计结论：
+
+- **T4「错误归一为 `ErrorEntry`(01 §8)」当时只做了形状、未接线**：`ErrorLayer.PROVIDER` 生产路径 0 使用、
+  `ProviderPort.stream` 唯一调用点裸奔、src 内 `FORMAT_ERROR`/retry 零生产者。本轮落下：
+  `contracts/errors.py::classify_provider_error`（ADR-0010 的纯函数）+ kernel 边界捕获→`run_failed`。
+- **T4「满预算重试」字面未执行（故意）**：本轮不自动重试——先有关卡/分类，重试编排才有意义；退避/fallback
+  链/凭据池按 §1.2 后置表仍归 P10。400 配对违规已钉为 **不可重试**，否则届时会把同一个确定性错误打满预算。
+- **DoD §5-2 的“三条异常路径不崩”事实上不够**：provider 故障必须并列为**第四条**。本轮已补进
+  `HARD-CONSTRAINTS` **C19**（机制强制，不靠自觉）；§5-2 保留原文作为当时的验收基线，不回改。
+- **turn 粒度变更（已走 ADR，属本阶段行为修正、非能力越界）**：一条 assistant 里的 N 个 tool_use 在同一
+  次回发前**串行**闭合（仍不启用并行，§2.5 口径不变）。因此 `repeat_tool_limit` 仅覆盖策略提议路径，
+  关卡补执行不计入重复签名；总 turn 数不增。
+- **同片雷区两个额外缺陷**（本轮一并修）：① stop-gate 的 `continue` 同样带悬空回发；② 被
+  `AppendAssistantMessage` 拒收的 assistant 会经 `FinalizeRun(final=…)` **走私回 context**，留下一条永不配对
+  的 tool_use 且因 `completed` 不进 `--list`/resume。现均 fail-closed 出声。
+- **改名（ADR-0021 的派发函数）**：`_resume_settle_open_calls` → **`_settle_open_calls`**（resume 入口与
+  每-turn 关卡两个安全点共用；行为逐字不变）。上方 A2 项里“拒绝过早 Finish”的机制保留，仅回发前多了关卡。
+- 测试：`tests/integration/test_pairing_gate_and_provider_fault.py`（10）、`tests/unit/test_provider_error_classification.py`（8）。
+  真网关异常形状（litellm 版本相关的 `status_code` 载体）仍 **UNVERIFIED**（无 key）。

@@ -5,8 +5,9 @@ Behavioral and operating rules for anyone (human or AI) working in this repo. Th
 
 Authoritative project content lives in `docs/` — this file is the always-on rulebook, not a copy of
 the design. **Read the linked docs for the current truth; never work from memory or from this file
-alone** (they evolve). Priority: user instruction → §0 + [HARD-CONSTRAINTS](./design/HARD-CONSTRAINTS.md)
-→ [VISION](./VISION.md)/[ROADMAP](./ROADMAP.md)/design/adr → elsewhere.
+alone** (they evolve). Priority: user instruction → §0 + [HARD-CONSTRAINTS](./docs/design/HARD-CONSTRAINTS.md)
+→ [VISION](./docs/VISION.md)/[ROADMAP](./docs/ROADMAP.md)/[design](./docs/design)/[adr](./docs/adr) → elsewhere.
+<!-- 本文件在仓库根，文档真源在 docs/：链接必须带 ./docs/，否则点开不到。 -->
 
 ---
 
@@ -74,13 +75,13 @@ GenericAgent, Agent-S. **Re-list `project-main/` at plan time** (new repos appea
 ## 5. Quality Bar (Definition of Done) — never "looks done", only "verifiably works"
 A change is done only when, as applicable: it **compiles + passes tests + lints clean + cold-imports
 (`uv run python -c "import <mod>")` + violates no HARD-CONSTRAINT boundary**, and the relevant
-**Phase DoD in [ROADMAP](./ROADMAP.md)** is met (a manually reproducible behavior, not a vague claim).
+**Phase DoD in [ROADMAP](./docs/ROADMAP.md)** is met (a manually reproducible behavior, not a vague claim).
 - Respect the phase's **prototype scope** (ROADMAP §2.5): e.g. P1 is serial, no parallel/MCP/subagent.
 - Follow the design contracts in `docs/design/`; any deviation → update the doc + (order/scope changes)
   file an ADR (ROADMAP §5). New fields/params: additive only (HARD-CONSTRAINTS C6/C11).
 - Enforce the red lines with *mechanism*, not discipline: single-writer, read-only state view (COW),
   only `Command` mutates, events append-only & internal-not-stored-as-external, permission/sandbox
-  live in the Harness (C1–C13).
+  live in the Harness (C1–C19).
 - **A change is not done until its implied doc updates are made** (see §5.5).
 - **Peer-scan gate** (§4.5): before implementing any capability, the corresponding row in the phase's
   `docs/plan/NN-*.md` §0 table must be filled (repos scanned + `file:line` + verdict). Unfilled = not ready
@@ -102,7 +103,7 @@ Docs are the source of truth the *next* session reads; stale docs cause wrong wo
 
 ## 5.6 Code Comments — standardized, **in Chinese**
 Identifiers, log messages and API names stay English, but **all code comments and docstrings are written in
-Chinese**. Detailed conventions live in [`CONTRIBUTING.md`](../CONTRIBUTING.md)（注释规范）; minimum bar:
+Chinese**. Detailed conventions live in [`CONTRIBUTING.md`](./CONTRIBUTING.md)（注释规范）; minimum bar:
 - **File/module header**: one-line responsibility + which layer (L0–L7) it belongs to + what it may import.
 - **Docstring (Chinese) on every public class / Port / function**: what it does, how to use it, dependencies,
   invariants / pre-post conditions, and **failure semantics**.

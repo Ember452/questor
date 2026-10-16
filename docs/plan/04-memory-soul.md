@@ -59,7 +59,7 @@
 ## 3. 契约与红线自检
 
 - **触分层/契约？□是 → 先 ADR（T1–T4 已在任何代码前）**：分层定位(0023)/契约演进(0024)/蒸馏单写者(0025)/检索投影(0026)。
-- **逐条 C1–C18**：C1/C14 记忆子系统包边界 + `lint-imports`/ruff banned-api/AST 三守卫（T17）；C2/C5/C13 写=`WriteMemory`→reduce、Event 不反哺、delta 不持久、记忆正文不进 `Domain_State`（T11）；C4 读写经 Harness 持有 `MemoryStorePort`、策略无裸句柄（T5/T10/T12/T17）；C6 外部事件**只新增可选 `memory_written`**、不改既有 type/关联键/终止序（T6，protocol diff 守）；C11 接缝先 ADR、字段 v0 后锁；C18 记忆写入/检索命中进 prompt/事件前 size cap + artifact + 字段级白名单（T4/T11/T12）；C16 surfaces 只 `submit`、不直 reduce（T14）。无违反，例外均已 ADR。
+- **逐条 C1–C18（本阶段验收时的红线全集；现全集至 C19，见 ADR-0028）**：C1/C14 记忆子系统包边界 + `lint-imports`/ruff banned-api/AST 三守卫（T17）；C2/C5/C13 写=`WriteMemory`→reduce、Event 不反哺、delta 不持久、记忆正文不进 `Domain_State`（T11）；C4 读写经 Harness 持有 `MemoryStorePort`、策略无裸句柄（T5/T10/T12/T17）；C6 外部事件**只新增可选 `memory_written`**、不改既有 type/关联键/终止序（T6，protocol diff 守）；C11 接缝先 ADR、字段 v0 后锁；C18 记忆写入/检索命中进 prompt/事件前 size cap + artifact + 字段级白名单（T4/T11/T12）；C16 surfaces 只 `submit`、不直 reduce（T14）。无违反，例外均已 ADR。
 - **事件协议只增不改**：仅加 1 个可选外部 type + `data` 可选字段；`check_protocol_schema --self-test` 能判红；未知 type 静默忽略（error 类除外）。
 - **快照版本兼容**：schema v2→v3（加 `covered_hash`）；`rebuild_run`/`from_snapshot` 未知版本 fail-closed + v2→v3 幂等迁移（复用 P3 `contract_version` 闸门，不重复造）。
 - **与 P3 复用不重造**：`rebuild/after_seq/双游标 gseq/store schema 版本闸门/check_replay_determinism` 直接继承；`memory.db` 用同款"单一 `_SCHEMA` authority + 幂等 DDL + `BEGIN IMMEDIATE`"，但**独立库**（故障隔离）。

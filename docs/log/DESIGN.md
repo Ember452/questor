@@ -125,9 +125,13 @@ def bind(**kv: str | int | float | bool | None) -> Iterator[None]:
 1. **不是 `bind(run_id, turn)` 两个固定槽**。P8 子 agent 要 `parent_run_id`/`agent_id`/`task_path`，P10 tracing 要 `trace_id`/`span_id`。固定槽意味着将来改**已发布签名**（破坏性变更）。加键语义下，这些都是新增一个键。
 2. **`contextvar` + task 作用域**（D6）。一个进程并发多个 run 时，每个 run 的 bind 只影响自己的 task 树——这是 `asyncio.create_task` 的既有语义，无需自建锁。
 3. **落点只有两处，都在 `DefaultTurnLoop._drive_controller`**：
-   - `_resume_settle_open_calls` 之后（覆盖新鲜 run 与 resume 两条路）→ `bind(run_id=run.run_id)`
+   - `_settle_open_calls` 之后（覆盖新鲜 run 与 resume 两条路）→ `bind(run_id=run.run_id)`
+     （2026-10-16 注：该函数原名 `_resume_settle_open_calls`，ADR-0028 改为中性名，因为它是
+     resume 入口与“回发前配对关卡”共用的派发函数；本设计的 bind 位置语义不变）
    - `while True` 内 `turn += 1` 之后 → `bind(turn=turn)`，**每轮从 loop 自己的权威局部变量重盖章**
    选这里而不选 surfaces 的原因：`_drive_controller` 是**六条现存路径的唯一出口**（CLI 首发/CLI resume/HTTP 建 run/HTTP resume/legacy/`resume_and_drive` 两分支），且 P8 编排、P9 OpenAI 兼容 API 也必须经过它。放 loop = 新入口默认正确；放 surfaces = 每个新入口都要记得 bind。
+   与 ADR-0028 关卡的关系：关卡（`_stream_turn` 内的 `_ensure_paired_history`）可能在**当前 turn 窗口内**
+   串行补执行多个工具，而它跑在 `turn += 1` 之后——所以带内 `turn` 盖章仍覆盖得到，无需新增 bind 点。
 4. `turn` 每轮重盖章 ⇒ 号不可能漂移。这比"手工在 N 个地方 bind 一次"强，因为后者随代码演进必然漏点。
 5. `seq` **不在带内**（带内代码不知道 seq），只在带外投影里由 `Envelope.seq` 带上。
 

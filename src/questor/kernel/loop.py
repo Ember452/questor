@@ -1,11 +1,16 @@
-"""L2 turn 循环（design/04；HARD C7/C8/C10）。P1 = 单模型、串行工具。
+"""L2 turn 循环（design/04；HARD C7/C8/C10/C19）。P1 = 单模型、串行工具。
 
 ``DefaultTurnLoop`` 把一次 Run 驱动到唯一终态。它是*纯机制*：从不 import 具体
 策略/工具/传输面——那些以 ``contracts`` 的 Port/回调注入（C1/C14）。所有状态变更走
 ``reduce``（单写者）；delta 直发事件流、永不落库。
 
+两条不许坏的接缝（ADR-0028）：
+- **回发前配对关卡**：本模块是全仓唯一 ``ProviderPort.stream`` 调用点，关卡就长在这个调用点
+  里——串行执行工具不变，但一条 assistant 里所有未答 tool_use 必须先闭合才允许下一次请求。
+- **provider 故障边界**：外部错误归一 ``run_failed``（带 kind/retryable），绝不穿出 loop。
+
 恪守的 phase 范围（ROADMAP §2.5）：仅串行工具（``parallel_safe`` 只是 schema 占位）、
-单模型，且取消/deny/非法意图三条路径绝不得崩。
+单模型；取消/deny/非法意图/provider 故障四条路径均不得崩宿主进程。
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from questor.contracts.common import JsonObject, new_id, thaw, utc_now
-from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints
+from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints, classify_provider_error
 from questor.contracts.events import (
     AdvanceTurn,
     AppendAssistantMessage,
@@ -252,7 +257,9 @@ class DefaultTurnLoop:
         # resume：若从快照重建出仍有未闭合 tool_use（崩溃 mid-dispatch / 审批挂起），先在同一
         # 安全点补齐或等待，再进入 provider-first 循环——否则会把半截 tool_use 喂回 provider
         # （Anthropic/OpenAI 强制成对，直接 4xx）。新鲜 run 无 open 调用，此处即空操作（ADR-0021）。
-        run = await self._resume_settle_open_calls(controller, run)
+        # 保留这个入口点而不只依赖循环内关卡：它在 ``turn += 1`` 之前，所以被 kill 的 run
+        # 不会为了补一个已批准的工具而多花一轮预算（ADR-0021 测过的行为，ADR-0028 不改）。
+        run = await self._settle_open_calls(controller, run)
         turn = run.turn
         started = time.monotonic()
         total_tokens = 0
@@ -281,11 +288,33 @@ class DefaultTurnLoop:
             controller.run = run
             await self._emit(events)
 
-            assistant_msg, usage = await self._stream_turn(run, turn)
+            run, assistant_msg, usage = await self._stream_turn(controller, run, turn)
+            if assistant_msg is None:
+                # 本轮没向 provider 发出请求，或请求已失败并归一：run 已终态就直接交回；
+                # 非终态只可能是关卡期间被取消——回循环顶走 Cancel→reduce（C7），
+                # 绝不在这条支路里造第二套终止路径（C13 恰一终态）。
+                if run.status.is_terminal:
+                    return run
+                continue
             total_tokens += _token_total(usage)
             run, events = reduce(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
             controller.run = run
             await self._emit(events)
+            if not any(env.type == EventType.MESSAGE_COMPLETED for env in events):
+                # reduce **拒收**了这条 assistant（重复 tool_use_id）：Domain_State 没长。此时必须
+                # 出声——不能继续把本地 ``assistant_msg`` 当已落库的定稿：实测它会被后面的
+                # ``FinalizeRun(final=…)`` 原样写回 context，留下一条永远没有 tool_result 的悬空
+                # tool_use，且因终态而不进 ``--list``/resume（ADR-0028，比崩更难查）。
+                entry = ErrorEntry(
+                    kind=ErrorKind.FORMAT_ERROR,
+                    layer=ErrorLayer.PROVIDER,
+                    message="assistant message rejected by state: duplicate tool_use id in provider answer",
+                    at_turn=turn,
+                    hints=RecoveryHints(),
+                    cause="AppendAssistantMessageRejected",
+                    timestamp=utc_now(),
+                )
+                return await self._fail_with_entry(run, turn, entry, "provider_protocol_error")
             await self._checkpoint(run, "auto")
 
             if run.budget.max_tokens is not None and total_tokens > run.budget.max_tokens:
@@ -344,8 +373,64 @@ class DefaultTurnLoop:
         return run
 
     # ---- phase 辅助方法 ------------------------------------------------
-    async def _stream_turn(self, run: Run, turn: int) -> tuple[Message, JsonObject]:
-        """跑一轮流式：逐块 emit live delta、累积文本/工具参/用量，定稿为一条 assistant 消息。"""
+    async def _stream_turn(self, controller: RunController, run: Run, turn: int) -> tuple[Run, Message | None, JsonObject]:
+        """回发前唯一关卡 + provider 故障边界（ADR-0028；HARD C19）。
+
+        顺序固定为“先配齐、后请求”：本方法是全仓唯一的 ``ProviderPort.stream`` 调用点，
+        关卡写在调用点内部 = 任何路径（含 stop-gate、resume、未来第二个策略）都无法带着
+        悬空 tool_call 回发。串行执行本身不变（不启用并行，ROADMAP §2.5）。
+
+        返回 ``(run, assistant_msg, usage)``；``assistant_msg is None`` 表示本轮**未发出**请求
+        （关卡已将 run 推到终态、期间被取消、或 provider 故障已归一 failed）。
+        失败语义：本函数不向上抛 provider 异常（取消/KeyboardInterrupt 等 BaseException 除外）。
+        """
+        run = await self._ensure_paired_history(controller, run, turn)
+        if run.status.is_terminal or self.cancel_event.is_set():
+            return run, None, {}
+        try:
+            message, usage = await self._consume_stream(run, turn)
+        except Exception as exc:  # noqa: BLE001 - provider 是外部故障域：归一成终态，不得打穿宿主进程（C10 对称面）
+            # 只捕 Exception：CancelledError / KeyboardInterrupt / SystemExit 属 BaseException，
+            # 取消与进程级中断必须继续传递，不能被“吃”成一个 run_failed（同 _execute_tool 纪律）。
+            return await self._fail_with_entry(run, turn, classify_provider_error(exc, at_turn=turn), "provider_error"), None, {}
+        return run, message, usage
+
+    async def _ensure_paired_history(self, controller: RunController, run: Run, turn: int) -> Run:
+        """把上一条 assistant 里**所有**未应答的 tool_use 闭合，否则不允许回发（I1/C7/C19）。
+
+        为什么判据取 context 侧 ``open_tool_use_ids`` 而不是账本的 OPEN 集合：回填/重派只能处理
+        “有 OPEN 条目”的调用，而实测存在“context 有悬空 tool_use、ledger 里根本没条目”的分裂态
+        （ADR-0028）。以**真正要发出去的形状**为准才拦得住，provider 校验的就是这条规则。
+
+        执行委托 ADR-0021 的 ``_settle_open_calls``（resume 入口与本题共用一套机制）：
+        pending/validated 重走权限、awaiting_approval 等现有 request，绝不绕过 ask。
+        不可调和（补执行后仍悬空）→ fail-closed 落 failed 并点名 id，**一次都不发**：
+        宁可为一个带缺陷的历史报错终止，也不能靠合成 tool_result 骗过协议（ADR-0028 被否方案 B）。
+        """
+        if not open_tool_use_ids(run.context.items):
+            return run
+        run = await self._settle_open_calls(controller, run)
+        if run.status.is_terminal or self.cancel_event.is_set():
+            return run  # 取消/终态优先：剩下的悬空由 Cancel/FinalizeRun 的回填分支闭合（C7）
+        still_open = open_tool_use_ids(run.context.items)
+        if still_open:
+            entry = ErrorEntry(
+                kind=ErrorKind.FORMAT_ERROR,
+                layer=ErrorLayer.KERNEL,
+                message=f"unpaired tool_use in durable history cannot be settled before the next provider request: {list(still_open)}",
+                at_turn=turn,
+                hints=RecoveryHints(),
+                cause="PairingGate",
+                timestamp=utc_now(),
+            )
+            return await self._fail_with_entry(run, turn, entry, "pairing_violation")
+        return run
+
+    async def _consume_stream(self, run: Run, turn: int) -> tuple[Message, JsonObject]:
+        """跑一轮流式：逐块 emit live delta、累积文本/工具参/用量，定稿为一条 assistant 消息。
+
+        失败语义：不自己捕获异常——由 ``_stream_turn`` 的统一边界归一（免得分类漏在多处）。
+        """
         request = ProviderRequest(model=self.model, messages=run.context.items, tools=self._specs(), system=self.system)
         text_parts: list[str] = []
         usage: JsonObject = {}
@@ -374,8 +459,18 @@ class DefaultTurnLoop:
         return msg, usage
 
     async def _fail(self, run: Run, turn: int, kind: ErrorKind, message: str, exit_reason: str) -> Run:
-        """以 failed 终态优雅收尾（归一化 ErrorEntry 入栈）。"""
+        """以 failed 终态优雅收尾（归一化 ErrorEntry 入栈）。内核自身故障走这条（layer=KERNEL）。"""
         err = ErrorEntry(kind=kind, layer=ErrorLayer.KERNEL, message=message, at_turn=turn, hints=RecoveryHints(), timestamp=utc_now())
+        return await self._fail_with_entry(run, turn, err, exit_reason)
+
+    async def _fail_with_entry(self, run: Run, turn: int, err: ErrorEntry, exit_reason: str) -> Run:
+        """用**已归一**的 ErrorEntry 落 failed 终态（provider/关卡故障按各自 layer/kind/hint 出声）。
+
+        为什么另开一条：``_fail`` 把 layer 写死 KERNEL，会把 provider 故障误报成内核 bug；
+        design/01 §8 要求 envelope 能定位子系统，ADR-0010 的 ``retryable``/``should_compress``
+        也必须原样带到 ``run_failed``，否则客户端与 P10 的重试编排无从决策。
+        配对：``FinalizeRun`` 分支自带未闭合调用回填，failed 路径同样不破 I1/C7。
+        """
         run, events = reduce(run, FinalizeRun(run_id=run.run_id, status="failed", error=err, exit_reason=exit_reason))
         await self._emit(events)
         return run
@@ -591,14 +686,18 @@ class DefaultTurnLoop:
             if call.status in {ToolCallStatus.DENIED, ToolCallStatus.CANCELLED}:
                 return run
 
-    async def _resume_settle_open_calls(self, controller: RunController, run: Run) -> Run:
-        """把快照里仍 OPEN 的工具调用补齐再继续（ADR-0021）。
+    async def _settle_open_calls(self, controller: RunController, run: Run) -> Run:
+        """把所有仍 OPEN 的工具调用补齐（ADR-0021；ADR-0028 后为一函数两用）。
 
         - ``awaiting_approval``：等已存在的 request 被 Resolve/Expire/Cancel（不新建 request、不自动放行）。
         - ``ready``/``running``：已批准或曾在跑 → 直接补执行一次（at-least-once；真 exactly-once 靠 P9 claim）。
         - ``pending``/``validated``：崩溃在权限判定前 → **重走 ``_handle_tool_call``（含权限）**，
           绝不绕过 ask（否则 resume 会把未批的危险写静默放行）。
         完成后所有原 OPEN 调用都已闭合，再进入 provider-first 循环，配对得以保持。
+
+        两个安全点共用本函数：① resume 入口（崩溃/审批挂起重建后）；② 每次回发前的配对关卡
+        （``_ensure_paired_history``）。原名带 ``resume_`` 前缀会让“循环内不得调用”的误读发生，
+        故 ADR-0028 将其改名为中性名（行为逐字不变）。
         """
         for target_id in [c.tool_call_id for c in run.tool_ledger.calls if c.status in OPEN_TOOL_CALL_STATUSES]:
             if run.status.is_terminal or self.cancel_event.is_set():

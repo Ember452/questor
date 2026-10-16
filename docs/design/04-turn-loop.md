@@ -52,6 +52,11 @@ LoopState {
 ## 5. 工具轮
 - `parallel_safe` 的多个调用可并发预取；否则按序执行。每个都过 权限→校验→沙箱→超时（工具 03）。
 - 失败≠崩溃：分类可重试/致命，喂回策略下轮自纠；错误进 `error_stack`。
+- **P2–P4 现状 + ADR-0028 修正**：串行执行不变（`parallel_safe` 仍是 schema 占位，真并发→P5），但
+  **一条 assistant 里的 N 个 tool_use 必须在同一次回发前串行闭合**：循环不再“执行一条就回发”，而是由
+  provider 调用点的配对关卡先把剩下 N-1 条补齐（含权限/floor、不绕过 ask）。否则 OpenAI/Anthropic 兼容网关
+  直接 400（实测曾把 CLI 进程带 traceback 打崩）。关卡副作用：一个 turn 窗口可执行多个工具、`tool_started`
+  变密、`repeat_tool_limit` 仅覆盖策略提议路径（关卡路径不经过策略，故不计入重复签名计数）。
 
 ## 6. 护栏（loop guards，wuu/Cow 经验）
 - **重复检测**：同工具同参连续 N 次→中断；空响应→有界重试/兜底文案。
@@ -65,6 +70,14 @@ LoopState {
 
 ## 8. 错误 / fallback
 Provider 错误→ProviderPort/LiteLLM 重试/fallback；耗尽则 `run_failed`（带 `retryable`）。全走 Command/reduce，状态不被撕裂。
+
+- **已接线（ADR-0028，2026-10-16）**：provider 异常在 `kernel/loop.py::_stream_turn` 边界被接住，交
+  `contracts/errors.py::classify_provider_error`（ADR-0010 的“分类=纯函数进 contracts”首次真接线）归一为
+  `ErrorEntry(layer=provider, kind, retryable/should_compress)`，再经 `FinalizeRun(failed)` 落唯一终态。
+  BaseException（取消/中断）不在此拦。配对关卡也在此：不可调和的悬空历史→`run_failed(format_error)` 且**一次都不发**。
+- **仍后置（不用 fake 冒充）**：退避重试/fallback 链/凭据池/全量 hint 优先级表→P10（plan/01 §1.2）；本轮
+  **不自动重试**，`retryable` 目前只经 `run_failed.error.retryable` 给客户端决策。400 配对违规已钉死为
+  **不可重试**：否则 P10 接上重试会把同一个确定性错误原样打满预算。
 
 ## 9. 与"可插拔策略"的关系
 策略=注册进循环的一个 `PolicyPort` 实现（默认进程内）。**新增/灰度/换 ReAct→ToT 不动本循环**（这是"变更域隔离"的兑现点，00 §3.2）。

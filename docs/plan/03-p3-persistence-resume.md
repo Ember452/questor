@@ -1,7 +1,7 @@
 # Questor 计划 3（P3）· 持久化 + 断点续传 · 开发计划（已实施）
 
 > 用途：P3 的开工基线、任务分解与收尾回填。
-> 阶段口径：[`ROADMAP.md`](../ROADMAP.md) §1(P3)/§1.5；工程红线：[`HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md) C1–C18。
+> 阶段口径：[`ROADMAP.md`](../ROADMAP.md) §1(P3)/§1.5；工程红线：[`HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md) C1–C18（本阶段验收时至 C18；现全集至 **C19**，见 [ADR-0028](../adr/0028-pairing-gate-and-provider-fault-normalization.md)）。
 > 契约：[`design/01`](../design/01-state-model.md) §5/§9/§12/§13、[`design/02`](../design/02-event-protocol.md) §4/§10、[`design/04`](../design/04-turn-loop.md) §7；决策：[`adr/0005`](../adr/0005-state-storage.md)/[`0011`](../adr/0011-seq-semantics.md) + 本阶段新增 [`adr/0020`](../adr/0020-durable-write-gate-and-log-authority.md)/[`0021`](../adr/0021-cross-process-resume.md)/[`0022`](../adr/0022-dual-cursor-watermark.md)；实扒：[`references/R03`](../references/R03-state-persistence.md)。
 > 分支：`feat/p3-persistence-resume`（基于已合入 main 的 P2 `1f5c171`）。
 
@@ -52,7 +52,7 @@
 - [x] **T6–T7** `test_store.py`：双游标、跨 run catch-up、schema 版本判红、崩溃重开一致性。
 - [x] **T8–T9** `kernel/loop.py`：稳态补点 `auto`/`pre_tool`/`post_tool` checkpoint；抽 `_execute_tool`（普通 turn 与 resume 共用）。
 - [x] **T10** `kernel/recovery.py::rebuild_run`：快照 + seq 对齐 head + 闭过期审批；`resume_run` 薄封装后兼容。
-- [x] **T11** `kernel/durability.py::resume_and_drive` + loop `_resume_settle_open_calls`/`_resume_wait_for_approval`/`_resume_execute_call`：幂等 re-dispatch（AWAITING 等原 request、READY/RUNNING 补执行、PENDING/VALIDATED 重走权限）。
+- [x] **T11** `kernel/durability.py::resume_and_drive` + loop `_resume_settle_open_calls`/`_resume_wait_for_approval`/`_resume_execute_call`：幂等 re-dispatch（AWAITING 等原 request、READY/RUNNING 补执行、PENDING/VALIDATED 重走权限）。（**2026-10-16 追加注记**：`_resume_settle_open_calls` 已由 ADR-0028 改名为 `_settle_open_calls`，因为 resume 入口与“回发前配对关卡”两个安全点共用它；行为逐字不变。）
 - [x] **T12** surfaces：`__main__` 组合根注入 `SQLiteStore`（surfaces 不 import 具体 store）；`CliSurface(store=…)` 常规路径落库 + `resume`；CLI `--resume`/`--list`；HTTP `POST /runs/{id}/resume`（经 RunController 注册回 inbox）。
 - [x] **T13** `test_p3_kill_resume.py`：跨连接 + OS 子进程 kill→`--resume`，断言未批危险写不落盘。
 - [x] **T14–T15** `test_p3_sse_reconnect.py`（真 socket）+ `test_bus.py` 缝合去重/ delta 不占 durable seq；dev 依赖加 `uvicorn`+`httpx`。
@@ -81,7 +81,7 @@
 | 风险 | 触发 | 缓解 |
 |---|---|---|
 | resume 重跑有副作用工具 | 崩溃在 result 落库与 post_tool 快照之间 | at-least-once：仅重派仍 OPEN 的调用；三处稳态补点把窗口收到"至多重跑一个工具"；真 exactly-once（claim/lease）后置 P9 |
-| resume 绕过权限 | 直接执行未批准的 PENDING 调用 | `_resume_settle_open_calls` 对 PENDING/VALIDATED 强制重走 `_handle_tool_call`（含权限/floor），测试断言无人批准即 deny、目标文件不落盘 |
+| resume 绕过权限 | 直接执行未批准的 PENDING 调用 | `_resume_settle_open_calls`（现名 `_settle_open_calls`，ADR-0028）对 PENDING/VALIDATED 强制重走 `_handle_tool_call`（含权限/floor），测试断言无人批准即 deny、目标文件不落盘 |
 | 半 tool_use 喂回 provider | 快照含未闭合调用且未补齐 | provider-first 循环前 `turn = run.turn` 后先 settle 所有 OPEN；`check_replay_determinism` + 配对断言守 |
 | 真 socket 测试在 CI 不稳定 | 端口/时序竞态 | 本机必真跑；固定 loopback + 就绪轮询；起不来则 `skip` 标 UNVERIFIED，不 fake |
 

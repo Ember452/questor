@@ -42,7 +42,8 @@ async def rebuild_run(store: StorePort, run_id: str, *, now: datetime | None = N
     3. 仍 pending 但已过期的审批经 ``ExpireApproval`` 显式闭合（不静默蒸发/复活）。
 
     未闭合 tool_use 的补齐/re-dispatch 是驱动职责，留交 ``resume_and_drive``→loop 的
-    ``_resume_settle_open_calls``（保证进入 provider 前配对完整）。**无任何 checkpoint 返回 ``None``**
+    ``_settle_open_calls``（保证进入 provider 前配对完整；ADR-0028 前该函数名为
+    ``_resume_settle_open_calls``，行为未变）。**无任何 checkpoint 返回 ``None``**
     （未知/未落库的 run）；**有 checkpoint 但全部损坏 → 抛 ``NoIntactCheckpointError``（fail-closed）**。
     权威状态只从快照重建，不回灌输出事件（C5）。
     """
