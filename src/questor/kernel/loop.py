@@ -74,10 +74,16 @@ class _ToolCtx:
         *,
         tool_call_id: str = "",
         cwd: Path | None = None,
+        run_id: str = "",
+        process_runner: object | None = None,
+        artifact_store: object | None = None,
     ) -> None:
         self.workspace_root = workspace_root
         self.cwd = cwd or workspace_root
         self.tool_call_id = tool_call_id
+        self.run_id = run_id
+        self._process_runner = process_runner
+        self._artifact_store = artifact_store
         self._cancel = cancel_event
         # T11/T12 前只记录声明；真正的 ProcessRunner 必须读取此列表并执行 provider credential 过滤。
         self._declared_env_names: set[str] = set()
@@ -97,8 +103,14 @@ class _ToolCtx:
         self._declared_env_names.add(name)
 
     async def run_process(self, request: object) -> object:
-        # P2 T12 前尚无 ProcessRunner adapter；调用它说明工具越过了当前能力阶段。
-        raise NotImplementedError("ProcessRunnerPort integration lands in P2 T12")
+        """把工具的结构化进程请求交给 Harness-owned runner（合并已声明 env 名）。
+
+        未接入 runner 时报错（不默默 spawn）：capability 层绝不自持 spawn 能力（C1/C8）。
+        """
+        if self._process_runner is None:
+            raise RuntimeError("no ProcessRunner wired into ToolContext")
+        merged = replace(request, declared_env_names=tuple(dict.fromkeys((*request.declared_env_names, *self._declared_env_names))))  # type: ignore[attr-defined]
+        return await self._process_runner.run(merged)
 
     async def put_artifact(
         self,
@@ -107,8 +119,10 @@ class _ToolCtx:
         kind: str,
         media_type: str = "text/plain",
     ) -> object:
-        # P2 T10 前尚无 ArtifactStore；工具不得自拼落盘路径。
-        raise NotImplementedError("ArtifactStorePort integration lands in P2 T10")
+        """把工具全文输出交给 ArtifactStore（内容寻址、路径不由工具拼接）。"""
+        if self._artifact_store is None:
+            raise RuntimeError("no ArtifactStore wired into ToolContext")
+        return await self._artifact_store.put_bytes(content, run_id=self.run_id, kind=kind, media_type=media_type)
 
 
 def _none_descriptor() -> SandboxDescriptor:
@@ -158,6 +172,8 @@ class DefaultTurnLoop:
         tools: tuple[Tool, ...] = (),
         surface: RunToolSurface | None = None,
         sandbox: SandboxPort | None = None,
+        process_runner: object | None = None,
+        artifact_store: object | None = None,
         store: StorePort | None = None,
         workspace_root: Path | None = None,
         model: str = "",
@@ -172,6 +188,8 @@ class DefaultTurnLoop:
         self.tools = tools
         self.surface = surface
         self.sandbox = sandbox
+        self.process_runner = process_runner
+        self.artifact_store = artifact_store
         self.store = store
         self.workspace_root = workspace_root or Path.cwd()
         self.model = model
@@ -442,6 +460,9 @@ class DefaultTurnLoop:
             self.cancel_event,
             tool_call_id=intent.tool_call_id or "",
             cwd=self.workspace_root,
+            run_id=run.run_id,
+            process_runner=self.process_runner,
+            artifact_store=self.artifact_store,
         )
         result = await tool.execute(intent.args, ctx)
         run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status=result.status, result=result.result, display=result.display))
