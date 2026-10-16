@@ -98,3 +98,20 @@ def validate_json_object(value: Any, name: str) -> None:
 def enum_value(value: Enum | str) -> str:
     """把 StrEnum 或字符串统一取其 ``.value``（序列化/比较用）。"""
     return value.value if isinstance(value, Enum) else str(value)
+
+
+def edit_distance(a: str, b: str) -> int:
+    """Levenshtein 距离（纯函数，无 IO）：供工具误名候选提示共用。"""
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+    previous = list(range(len(b) + 1))
+    for i, ca in enumerate(a, start=1):
+        current = [i]
+        for j, cb in enumerate(b, start=1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (ca != cb)))
+        previous = current
+    return previous[-1]
