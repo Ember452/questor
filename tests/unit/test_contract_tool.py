@@ -62,4 +62,7 @@ def test_tool_context_protocol_requires_harness_seams() -> None:
         async def put_artifact(self, content, *, kind, media_type="text/plain") -> object:  # noqa: ANN001
             return object()
 
+        async def memory_search(self, query, *, k=8, scope=None):  # noqa: ANN001
+            return ()
+
     assert isinstance(_Ctx(), ToolContext)
