@@ -247,3 +247,17 @@ async def test_rebuild_fail_closed_when_all_checkpoints_corrupt(tmp_path: Path) 
     # 真无快照（未知/未落库）仍是 None，不是抛错。
     assert await rebuild_run(store, "run_never") is None
     await store.close()
+
+
+async def test_rebuild_fail_closed_on_incompatible_snapshot_version(tmp_path: Path) -> None:
+    """§6-4：contract_version 比本仓可解的更新 → rebuild 必须 fail-closed 拒续跑，绝不静默半重建。"""
+    from questor.contracts.state_schema import Budget
+
+    store = await SQLiteStore(str(tmp_path / "ver.db")).connect()
+    blob = json.loads(json.dumps(to_snapshot(Run(run_id="run_ver", budget=Budget()))))
+    blob["contract_version"] = 999  # 未来的、本仓不可解的快照 schema 版本
+    await store.save_checkpoint({"cp_id": "cpV", "run_id": "run_ver", "seq": 1, "turn": 0, "kind": "auto", "state_digest": json.dumps(blob), "pending": []})
+
+    with pytest.raises(NoIntactCheckpointError):  # SnapshotVersionError 被归入"无一完好"→ fail-closed
+        await rebuild_run(store, "run_ver")
+    await store.close()

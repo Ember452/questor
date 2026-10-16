@@ -102,4 +102,4 @@
 - **A2/E1（`recovery_pointers` 无生产者/缺 CoveredHash/未标后置）→ 已标注**：`domain_state` 明确 `NOT filled until P4/P10（压缩）`，CoveredHash 校验锚点随压缩定义。
 - **A3（`pending` 列写了不读）→ 已标注**：`_checkpoint` 说明 `pending` 仅供诊断/审计，权威回退靠快照 ledger。
 - **F1/F2/F3（peer-scan 路径/行号）→ 已修**：`store.py`→`core/sessions/store.py`；`transcript.py`→`core/sessions/transcript.py`；`hermes_state_schema.py:1348-1367`→`1348-1365`。
-- **审计 check #6（`driver_id`/`driver_version`）→ 显式后置**：非 P3 声称项；属策略/驱动版本化（design/05 可插拔），归 **P9**。`contract_version` 已在快照 round-trip fail-closed（`snapshot.py`），store `meta` 版本闸门已建。
+- **审计 check #6（`driver_id`/`driver_version`）→ 版本闸门已测试钉住，驱动身份显式后置**：`contract_version` 不兼容的快照由 `rebuild_run` fail-closed（`test_rebuild_fail_closed_on_incompatible_snapshot_version` 钉住）；`driver_id`/`driver_version` 属策略/驱动版本化（design/05 可插拔），归 **P9**，不在 P3 塑假字段（避免审计反对的"假扩展位"）。
