@@ -31,11 +31,13 @@ from questor.contracts.memory import (
     MemorySearchResult,
     MemorySource,
     MemoryStorePort,
+    MemoryStrategyConfig,
     MemoryWrite,
     MemoryWriteKind,
     VectorBackend,
 )
 from questor.memory.chunker import CHUNKER_VERSION
+from questor.memory.search import decay_factor, fuse
 from questor.memory.sync import build_chunks
 
 #: 记忆库 DDL 版本；读到更高版本即 fail-closed（不猜测半升级表形，承 ADR-0022）。
@@ -153,9 +155,11 @@ def _cosine(a: tuple[float, ...] | list[float], b: list[float]) -> float | None:
 class SQLiteMemoryStore(MemoryStorePort):
     """MemoryStorePort 的 SQLite 适配器（文件真源 + 派生索引）。用前先 ``await connect()``。"""
 
-    def __init__(self, db_path: str = ":memory:", memory_root: str = "memory_store") -> None:
+    def __init__(self, db_path: str = ":memory:", memory_root: str = "memory_store", config: MemoryStrategyConfig | None = None) -> None:
         self.db_path = db_path
         self.memory_root = memory_root
+        # 检索旋钮可插拔（DoD④）：换 config 即换融合/衰减行为，不动 kernel。
+        self.config = config or MemoryStrategyConfig()
         self._db: aiosqlite.Connection | None = None
         self.vector: SQLiteVectorBackend | None = None
 
@@ -290,48 +294,83 @@ class SQLiteMemoryStore(MemoryStorePort):
         scope: MemoryScope | None = None,
         query_embedding: tuple[float, ...] | None = None,
     ) -> tuple[MemorySearchResult, ...]:
-        """T8：关键词 FTS5（unicode61），非法/空查询回退 LIKE。向量+融合+时间衰减由 memory 子系统在 T10 叠加。"""
+        """混合检索：关键词(FTS5/LIKE) + 向量(cosine) → rank-normalize 融合 → 时间衰减（ADR-0026）。
+
+        无 ``query_embedding`` / 向量后端不可用 → 自然降级关键词-only（不抛）。片段按 config
+        ``snippet_max_bytes`` 有界（HARD C18/ADR-0019）。融合/衰减纯函数住在 memory/search.py。"""
+        cfg = self.config
+        wide = max(k * 3, k)
+        keyword_ids, by_id = await self._keyword_candidates(query, scope=scope, limit=wide)
+        vector_ids: list[str] = []
+        if query_embedding is not None and self.vector is not None:
+            for cid, _score in await self.vector.search(query_embedding, k=wide):
+                if cid not in by_id:
+                    row = await self._fetch_chunk(cid)
+                    if row is None or (scope is not None and row["scope"] != scope.value):
+                        continue
+                    by_id[cid] = row
+                elif scope is not None and by_id[cid]["scope"] != scope.value:
+                    continue
+                vector_ids.append(cid)
+        fused = fuse(keyword_ids, vector_ids, cfg)
+        now = utc_now()
+        results = [
+            MemorySearchResult(
+                path=by_id[cid]["path"],
+                start_line=by_id[cid]["start_line"],
+                end_line=by_id[cid]["end_line"],
+                score=fused[cid] * decay_factor(by_id[cid]["path"], cfg, now),
+                snippet=_bound_snippet(by_id[cid]["text"], max_bytes=cfg.snippet_max_bytes),
+                source=MemorySource(by_id[cid]["source"]),
+                scope=MemoryScope(by_id[cid]["scope"]),
+            )
+            for cid in fused
+        ]
+        results.sort(key=lambda r: r.score, reverse=True)
+        return tuple(results[:k])
+
+    async def _keyword_candidates(self, query: str, *, scope: MemoryScope | None, limit: int) -> tuple[list[str], dict[str, dict]]:
+        """FTS5 unicode61 命中（best-first），空结果回退 LIKE；返回 (有序 id, id→行)。"""
         db = self._dbp()
         scope_sql = "AND mc.scope = ?" if scope is not None else ""
-        params: tuple[Any, ...] = (query,) if scope is None else (query, scope.value)
+        params: tuple[Any, ...] = (query, *([scope.value] if scope is not None else []), limit)
         try:
             cur = await db.execute(
                 f"SELECT mc.id, mc.source, mc.scope, mc.path, mc.start_line, mc.end_line, mc.text "
                 f"FROM memory_chunks_fts f JOIN memory_chunks mc ON mc.id = f.id "
-                f"WHERE memory_chunks_fts MATCH ? {scope_sql} LIMIT ?",
-                (*params, k),
+                f"WHERE memory_chunks_fts MATCH ? {scope_sql} ORDER BY bm25(memory_chunks_fts) LIMIT ?",
+                params,
             )
             rows = await cur.fetchall()
-            if not rows and query_embedding is None:
-                # unicode61 未命中（如纯 CJK）→ LIKE 兜底（trigram-CJK 精化后置 T10）。
-                rows = await self._like_fallback(query, k=k, scope=scope)
+            if not rows:
+                rows = await self._like_rows(query, scope=scope, limit=limit)
         except aiosqlite.OperationalError:
-            rows = await self._like_fallback(query, k=k, scope=scope)
-        results: list[MemorySearchResult] = []
-        for i, r in enumerate(rows):
-            results.append(
-                MemorySearchResult(
-                    path=r[3],
-                    start_line=r[4],
-                    end_line=r[5],
-                    score=1.0 / (i + 1),  # T8 名次占位分；T10 rank-normalize 融合替换
-                    snippet=_bound_snippet(r[6]),
-                    source=MemorySource(r[1]),
-                    scope=MemoryScope(r[2]),
-                )
-            )
-        return tuple(results)
+            rows = await self._like_rows(query, scope=scope, limit=limit)
+        by_id: dict[str, dict] = {}
+        ids: list[str] = []
+        for r in rows:
+            by_id[r[0]] = {"id": r[0], "source": r[1], "scope": r[2], "path": r[3], "start_line": r[4], "end_line": r[5], "text": r[6]}
+            ids.append(r[0])
+        return ids, by_id
 
-    async def _like_fallback(self, query: str, *, k: int, scope: MemoryScope | None) -> list:
+    async def _like_rows(self, query: str, *, scope: MemoryScope | None, limit: int) -> list:
         db = self._dbp()
         scope_sql = "AND scope = ?" if scope is not None else ""
-        params: tuple[Any, ...] = (f"%{query}%", k) if scope is None else (f"%{query}%", scope.value, k)
+        params: tuple[Any, ...] = (f"%{query}%", *([scope.value] if scope is not None else []), limit)
         cur = await db.execute(
-            f"SELECT id, source, scope, path, start_line, end_line, text FROM memory_chunks "
-            f"WHERE text LIKE ? {scope_sql} LIMIT ?",
+            f"SELECT id, source, scope, path, start_line, end_line, text FROM memory_chunks WHERE text LIKE ? {scope_sql} LIMIT ?",
             params,
         )
         return list(await cur.fetchall())
+
+    async def _fetch_chunk(self, chunk_id: str) -> dict | None:
+        cur = await self._dbp().execute(
+            "SELECT id, source, scope, path, start_line, end_line, text FROM memory_chunks WHERE id = ?", (chunk_id,)
+        )
+        r = await cur.fetchone()
+        if r is None:
+            return None
+        return {"id": r[0], "source": r[1], "scope": r[2], "path": r[3], "start_line": r[4], "end_line": r[5], "text": r[6]}
 
     def _scan_source_files(self) -> dict[str, str]:
         """扫 memory root 下的 md 真源→ ``{相对path: 文本}``；跳过隐藏/临时文件（如 ``.memtmp_``）。"""
