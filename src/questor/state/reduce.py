@@ -37,6 +37,7 @@ from questor.contracts.events import (
     SubmitMessage,
     WriteMemory,
 )
+from questor.contracts.memory import source_for_write
 from questor.contracts.state_schema import (
     OPEN_TOOL_CALL_STATUSES,
     ApprovalRequest,
@@ -223,7 +224,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
             return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "memory write exceeds bound; rejected"})]
         new = replace(run, seq=run.seq + 1)
         return new, [
-            _event(new.seq, new, run.turn, EventType.MEMORY_WRITTEN, {"kind": payload.kind.value, "chunk_count": 1, "source": payload.kind.value})
+            _event(new.seq, new, run.turn, EventType.MEMORY_WRITTEN, {"kind": payload.kind.value, "chunk_count": 1, "source": source_for_write(payload.kind).value})
         ]
 
     if isinstance(command, Cancel):

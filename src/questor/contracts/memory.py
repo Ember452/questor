@@ -50,6 +50,20 @@ class MemoryWriteKind(StrEnum):
     DISTILL = "distill"
 
 
+#: 写 kind → 记忆 source 层（distill 浓缩固化进 daily，design/06 §3）。L0 词汇映射，
+#: 供 ``reduce``（发 memory_written 事件）与 store（落库）共用，避免 kind/source 语义漂移。
+_WRITE_KIND_TO_SOURCE: dict[MemoryWriteKind, MemorySource] = {
+    MemoryWriteKind.CORE: MemorySource.CORE,
+    MemoryWriteKind.DAILY: MemorySource.DAILY,
+    MemoryWriteKind.DISTILL: MemorySource.DAILY,
+}
+
+
+def source_for_write(kind: MemoryWriteKind) -> MemorySource:
+    """把 ``MemoryWrite`` 的写意图 kind 映射为真实记忆 ``source`` 层（emit 事件/落库共用）。"""
+    return _WRITE_KIND_TO_SOURCE[kind]
+
+
 @dataclass(frozen=True, slots=True)
 class MemoryChunk:
     """索引里的一条记忆片段（派生投影；文件/md 才是真源，design/06 §0）。
@@ -262,6 +276,7 @@ __all__ = [
     "MemoryScope",
     "MemorySource",
     "MemoryWriteKind",
+    "source_for_write",
     "MemoryChunk",
     "MemorySearchResult",
     "RecoveryPointer",

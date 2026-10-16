@@ -21,6 +21,7 @@ def test_write_memory_emits_bounded_ack_without_text() -> None:
     ev = events[0]
     assert ev.type == EventType.MEMORY_WRITTEN
     assert ev.data["kind"] == "daily"
+    assert ev.data["source"] == "daily"  # §6-6：source 是真实 MemorySource（非 kind.value）
     assert "SECRET-TEXT-MUST-NOT-LEAK" not in str(ev.data)  # DoD⑤：事件不含原文
     assert new.context.items == run.context.items  # 记忆正文不进 Domain_State
     assert new.context.recovery_pointers == run.context.recovery_pointers

@@ -35,6 +35,7 @@ from questor.contracts.memory import (
     MemoryWrite,
     MemoryWriteKind,
     VectorBackend,
+    source_for_write,
 )
 from questor.memory.chunker import CHUNKER_VERSION
 from questor.memory.search import decay_factor, fuse
@@ -45,13 +46,6 @@ MEMORY_SCHEMA_VERSION = 1
 
 #: T8 阶段的兜底片段上限；T10 起由 ``MemoryStrategyConfig.snippet_max_bytes`` 覆盖。
 _SNIPPET_MAX_BYTES = 2048
-
-#: 写 kind → 记忆 source 层（distill 浓缩固化进 daily 检索层，design/06 §3）。
-_KIND_TO_SOURCE: dict[MemoryWriteKind, MemorySource] = {
-    MemoryWriteKind.CORE: MemorySource.CORE,
-    MemoryWriteKind.DAILY: MemorySource.DAILY,
-    MemoryWriteKind.DISTILL: MemorySource.DAILY,
-}
 
 # 单一 schema authority、幂等 DDL。memory_chunks=派生索引；FTS5 独立内容表（手删手加）；
 # embedding 以 JSON 文本存（NULL → 无向量、降级关键词）；write_ledger=claim-then-commit 幂等账。
@@ -247,7 +241,7 @@ class SQLiteMemoryStore(MemoryStorePort):
         start = len(prior_lines) + 1
         end = len(new_lines)
         rel = _rel(self.memory_root, path)
-        source = _KIND_TO_SOURCE[write.kind]
+        source = source_for_write(write.kind)
         chunk = MemoryChunk(
             id=hashlib.md5(f"{rel}:{start}:{end}:{write.text}".encode()).hexdigest(),
             scope=write.scope,
