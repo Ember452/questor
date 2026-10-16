@@ -7,12 +7,12 @@ provider/store/sandbox/UI（C1）。
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from questor.contracts.common import JsonObject
+from questor.contracts.common import JsonObject, edit_distance
 from questor.contracts.errors import ErrorEntry
 
 if TYPE_CHECKING:
@@ -105,6 +105,46 @@ class ToolContext(Protocol):
     ) -> ArtifactRef: ...
 
 
+@dataclass(frozen=True, slots=True)
+class RunToolSurface:
+    """某 run 冻结到的工具面快照（L0，使 L2 kernel 不必 import L3 注册表）。"""
+
+    tools: tuple[Tool, ...]
+    specs: tuple[ToolSpec, ...]
+    _by_name: dict[str, Tool] = field(default_factory=dict, compare=False, hash=False)
+
+    def tool_for(self, name: str) -> Tool | None:
+        return self._by_name.get(name)
+
+    def get(self, name: str) -> Tool | None:
+        return self._by_name.get(name)
+
+    def names(self) -> tuple[str, ...]:
+        return tuple(spec.name for spec in self.specs)
+
+    def candidates(self, name: str) -> tuple[str, ...]:
+        """误名静态候选（只提示不扩工具面）：前缀/包含/小编辑距离。"""
+        target = name.lower()
+        if not target:
+            return ()
+        scored: list[tuple[int, str]] = []
+        for spec in self.specs:
+            low = spec.name.lower()
+            if low == target:
+                score = 0
+            elif low.startswith(target) or target.startswith(low):
+                score = 1
+            elif target in low or low in target:
+                score = 2
+            elif edit_distance(target, low) <= max(2, len(target) // 3):
+                score = 3
+            else:
+                continue
+            scored.append((score, spec.name))
+        scored.sort()
+        return tuple(n for _, n in scored[:3])
+
+
 class Tool(ABC):
     """工具实现基类。每个具体工具声明自己的 ``spec``。"""
 
@@ -125,5 +165,6 @@ __all__ = [
     "ToolSpec",
     "ToolResult",
     "ToolContext",
+    "RunToolSurface",
     "Tool",
 ]
