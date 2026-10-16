@@ -100,9 +100,15 @@
 - **为什么**：没有唯一状态转移，UI 重连与 resume 会猜；没有载荷上限，长跑会把内存、SQLite、prompt 与 SSE 同时拖垮。
 - **强制**：ToolCall 状态机、approval request 表、字段级协议 schema、事件 payload 长度断言、artifact 写失败返回有界 error。
 
+## C19 回发前配对关卡 + provider 故障不得崩宿主进程（ADR-0028）
+- **约束**：任何一次 `ProviderPort.stream` 请求前，`Domain_State` 的 `context` 必须**完全配对**（每个 `tool_use` 都有对应 `tool_result`）；不可调和时 fail-closed 落 `run_failed`，**不得发出非法历史**。provider 侧异常必须在 kernel 边界经 `contracts` 纯分类器归一 `ErrorEntry`（`layer=provider` + 正确 `retryable`），**绝不允许穿出 turn 循环**；取消/KeyboardInterrupt/SystemExit 等 BaseException 必须继续上抛，不得被“吃”成 run_failed。
+- **为什么**：串行“一轮一个工具”碰上模型“一轮多个 tool_calls”会在历史里留下悬空 tool_call，OpenAI/Anthropic 兼容网关直接 400；当时该异常无人接，**把整个 CLI 进程带 traceback 打崩、run 不落任何终态**（用户侧不可恢复、事件账本不可解释）。配对是线上协议硬约束，不能靠“模型当轮不并行”赌运气。
+- **强制**：关卡写在**全仓唯一**的 provider 调用点内部（`kernel/loop.py::_stream_turn`）；判据取 context 侧 `state/checkpoint.py::open_tool_use_ids`（账本驱动的回填盖不住“context 有、ledger 无”的分叉）；补执行复用 ADR-0021 的 `_settle_open_calls`（含权限/floor，绝不绕过 ask）；`tests/integration/test_pairing_gate_and_provider_fault.py` 含源码级“调用点唯一且关卡在请求前”的 fail-on-empty 守卫。
+- **不是并行通行证**：本条只保证“发出前成对”，执行仍严格串行；reader/writer gate 与真并发属 P5（ROADMAP §2.5）。
+
 ## 天花板（诚实标注，别当免费）
 "扩事件协议就能到分布式"是错觉。**跨机**的**状态排序、租约、exactly-once、部分失败恢复**是独立的硬骨头（hermes `hermes_state_*`、wuu `agentcontrol` 就在啃）。本架构*容许*演进到那，但那一跳要单独设计，别写进"只是加事件"。
 
 ## 与三份文档的挂点
 - 每条 C 对应到 `00-layering` 的某条边界 / `01-state-model` 的某字段；CI 规则清单待实现阶段落进 `pyproject`（ruff/import-linter/契约快照测试）。
-- 评审口径：任何 PR 触发 C1-C12 之一 = 打回，附本文件对应条目。
+- 评审口径：任何 PR 触发 C1-C19 之一 = 打回，附本文件对应条目。
