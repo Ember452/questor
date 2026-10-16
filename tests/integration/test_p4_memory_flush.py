@@ -7,9 +7,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from questor.contracts.common import new_id, utc_now
+from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints
 from questor.contracts.ports import StreamChunk
+from questor.contracts.state_schema import ContentBlock, Message, Role, RunStatus
 from questor.providers.fake import ScriptedProvider
 from questor.providers.store_memory_sqlite import SQLiteMemoryStore
+from questor.state.domain_state import Context, Run
 from questor.surfaces.cli import CliSurface
 
 _ANSWER = [
@@ -46,5 +50,38 @@ async def test_flush_is_idempotent_on_repeated_run_id(tmp_path: Path) -> None:
         second = await flush_run_to_daily(mem, summary_text="durable note ABC", run_id="run-x")
         assert first["wrote"] is True
         assert second["wrote"] is False and second["idempotent"] is True
+    finally:
+        await mem.close()
+
+
+def _assistant_run(status: RunStatus) -> Run:
+    items = (Message(id=new_id("msg"), role=Role.ASSISTANT, content=(ContentBlock(type="text", text="final answer EPHEM-7"),), seq=0),)
+    kw = {"run_id": "r-1", "status": status, "context": Context(items=items), "completed_at": utc_now()}
+    if status is RunStatus.FAILED:
+        kw["error_stack"] = (ErrorEntry(kind=ErrorKind.INTERNAL, layer=ErrorLayer.KERNEL, message="boom", at_turn=1, hints=RecoveryHints(), timestamp=utc_now()),)
+    return Run(**kw)
+
+
+async def test_flush_writes_on_completed_run(tmp_path: Path) -> None:
+    mem = await SQLiteMemoryStore(db_path=str(tmp_path / "m.db"), memory_root=str(tmp_path / "root")).connect()
+    try:
+        surface = CliSurface(workspace_root=tmp_path, memory_store=mem)
+        await surface._flush_run_to_daily(_assistant_run(RunStatus.COMPLETED))
+        daily = [p for p in await mem.list_memory_paths() if p.startswith("memory/2")]
+        texts = [await mem.read_memory_text(p) for p in daily]
+        assert any("EPHEM-7" in t for t in texts)
+    finally:
+        await mem.close()
+
+
+async def test_flush_skips_failed_run(tmp_path: Path) -> None:
+    # failed/cancelled 的残缺输出不得污染长期记忆（链走发现：旧码在任意终态都 flush）。
+    mem = await SQLiteMemoryStore(db_path=str(tmp_path / "m.db"), memory_root=str(tmp_path / "root")).connect()
+    try:
+        surface = CliSurface(workspace_root=tmp_path, memory_store=mem)
+        await surface._flush_run_to_daily(_assistant_run(RunStatus.FAILED))
+        daily = [p for p in await mem.list_memory_paths() if p.startswith("memory/2")]
+        texts = [await mem.read_memory_text(p) for p in daily]
+        assert not any("EPHEM-7" in t for t in texts)
     finally:
         await mem.close()

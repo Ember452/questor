@@ -29,7 +29,7 @@ from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
 from questor.contracts.memory import MemoryStorePort
 from questor.contracts.ports import ProviderPort, StorePort
-from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role
+from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role, RunStatus
 from questor.contracts.tool import RunToolSurface
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
@@ -48,6 +48,9 @@ from questor.surfaces.run_registry import RunRegistry
 _TERMINAL_EVENTS = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
 
 _log = logging.getLogger("questor.cli")
+
+#: run-完成 flush 摘要的字符上限（与 ``reduce`` 的 16KiB 写上限对称，防单次长跑回答撑爆 daily）。
+_FLUSH_SUMMARY_MAX_CHARS = 16 * 1024
 
 
 def _final_answer_text(run: Run) -> str:
@@ -162,13 +165,14 @@ class CliSurface:
         return final
 
     async def _flush_run_to_daily(self, run: Run) -> None:
-        """run 完成边界的 episodic→daily 沉淀（产品化“记住”写入触发器）。
+        """run **成功完成**边界的 episodic→daily 沉淀（产品化“记住”写入触发器）。
 
         ADR-0025：经注入的 ``MemoryStorePort`` 离线收口、不进热 loop；幂等（run_id 键）使重投安全。
-        本地写入 best-effort：失败只告警不拖垮已完成 run（主回答已流式完）。无 memory_store / 无终态 / 无回答 → 不写。"""
-        if self.memory_store is None or not run.status.is_terminal:
+        best-effort：失败只告警不拖垮已完成 run（主回答已流式完）。**仅 COMPLETED 才写**（failed/cancelled
+        的残缺/错误输出不污染长期记忆）；无 memory_store / 无回答 → 不写；摘要按上限截断。"""
+        if self.memory_store is None or run.status is not RunStatus.COMPLETED:
             return
-        summary = _final_answer_text(run)
+        summary = _final_answer_text(run)[:_FLUSH_SUMMARY_MAX_CHARS]
         if not summary:
             return
         try:
@@ -208,6 +212,7 @@ class CliSurface:
                 )
         try:
             final = await loop.drive_controller(controller)
+            await self._flush_run_to_daily(final)
         finally:
             _, still_pending = await asyncio.wait({printer}, timeout=2.0)
             for task in still_pending:
