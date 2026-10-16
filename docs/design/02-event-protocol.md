@@ -53,6 +53,7 @@ Kernel 内部事件(细粒度、私有、可随实现演进)
 ## 4. 传输绑定（对齐 ADR-0007）
 - HTTP + SSE：`data: {json}\n\n`，行首 `id: <seq>`；`POST /run`、`/cancel`、`/resume`。
 - 重连带 `Last-Event-ID`/`after_seq` → 从最近快照重放其后事件；游标过期回 `resync_required`。
+- **P3 落定**（详见 [ADR-0021](../adr/0021-cross-process-resume.md)）：`/resume` 为跨进程续跑触发（`rebuild_run` + 交回唯一 loop，仅重派 OPEN 调用）；`after_seq` 重放的“不丢不重”在真 socket 层验收（durable 走 `seq`、delta 不占 durable seq）。
 
 ## 5. Command 集（输入事件，均经 CommandInboxPort→reduce）
 `SubmitMessage`、`ProposeAction`（策略的单步意图：调工具/收尾）、`MarkToolValidated`、`RequestApproval`、`ResolveApproval(allow|deny, request_id)`、`ExpireApproval`、`SetPermissionMode`、`MarkToolRunning`、`RecordToolResult`、`MarkToolDenied`、`Cancel(reason ∈ {user|timeout|budget_exhausted|no_progress|safety|owner})`、`WriteMemory`、`RequestCompactHint`(仅 advisory，不强制)。
