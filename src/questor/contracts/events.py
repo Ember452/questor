@@ -16,6 +16,7 @@ from typing import Any, ClassVar
 
 from questor.contracts.common import JsonObject, freeze, require_aware, utc_now
 from questor.contracts.errors import ErrorEntry
+from questor.contracts.memory import MemoryWrite
 from questor.contracts.state_schema import CancelReason, Checkpoint, Message, TaskNode
 
 #: 关联键——一旦发布永不改名/删除（design/02 §1）。
@@ -132,10 +133,13 @@ class Cancel:
 
 @dataclass(frozen=True, slots=True)
 class WriteMemory:
-    """记忆写入的唯一途径：经 Command→reduce→StorePort（C4）。"""
+    """记忆写入的唯一途径：经 Command→reduce→StorePort（C4）。
+
+    ADR-0024：载荷从旧的裸 ``JsonObject`` 收敛为 typed :class:`MemoryWrite`，使有界/幂等/权限
+    判定可在 reduce 内强制；命令名 ``write_memory`` 与 Command 联合不变（不破信封）。"""
 
     run_id: str
-    payload: JsonObject
+    payload: MemoryWrite
     type: ClassVar[str] = "write_memory"
 
 
