@@ -11,7 +11,6 @@ import asyncio
 import contextlib
 import os
 import sys
-import threading
 from pathlib import Path
 
 from questor.capabilities.tools.apply_patch import ApplyPatchTool
@@ -39,6 +38,7 @@ from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.providers.store_sqlite import SQLiteStore
 from questor.state.domain_state import Run
+from questor.surfaces.approval import prompt_approval
 from questor.surfaces.run_registry import RunRegistry
 
 _TERMINAL_EVENTS = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
@@ -55,30 +55,6 @@ def provider_from_env() -> ProviderPort:
 def sys_stdin_tty() -> bool:
     """stdin 是否接终端（决定能否弹交互审批；非交互一律 fail-closed deny）。"""
     return sys.stdin.isatty()
-
-
-async def _confirm_on_tty(args_summary: str, name: str, reason: str) -> bool:
-    """在有 TTY 时把审批解析成人决策；用 daemon 线程读 stdin，超时/取消不阻塞退出。"""
-
-    def reader(resolve: callable) -> None:  # noqa: ANN401
-        try:
-            print(f"\n[approval] {name}({args_summary}) — {reason}")
-            answer = input("allow? [y/n]: ")
-            resolve(answer.strip().lower() in {"y", "yes"})
-        except Exception:  # noqa: BLE001 - 任何读 stdin 失败都视为拒绝（fail-closed）
-            resolve(False)
-
-    loop = asyncio.get_running_loop()
-    future: asyncio.Future[bool] = loop.create_future()
-    # daemon=True：非守护线程会卡住解释器退出（本项目历史 CI 挂死根因）；这里宁可丢弃
-    # 一次迟到的按键，也绝不留下非守护 reader 线程。
-    threading.Thread(target=reader, args=(lambda value: loop.call_soon_threadsafe(_settle, future, value),), daemon=True).start()
-    return await future
-
-
-def _settle(future: asyncio.Future[bool], value: bool) -> None:
-    if not future.done():
-        future.set_result(value)
 
 
 def _default_registry() -> ToolRegistry:
@@ -174,7 +150,7 @@ class CliSurface:
             if env.type == EventType.APPROVAL_REQUEST:
                 request_id = env.data["request_id"]
                 if interactive:
-                    allow = await _confirm_on_tty(env.data.get("args_summary", ""), env.data.get("name", ""), env.data.get("reason", ""))
+                    allow = await prompt_approval(env.data.get("args_summary", ""), env.data.get("name", ""), env.data.get("reason", ""))
                     decision = "allow" if allow else "deny"
                 else:
                     decision = "deny"
