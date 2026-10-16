@@ -6,6 +6,9 @@ from pathlib import Path
 
 from questor.capabilities.tools.apply_patch import ApplyPatchTool
 from questor.capabilities.tools.edit import EditTool
+from questor.capabilities.tools.glob import GlobTool
+from questor.capabilities.tools.grep import GrepTool
+from questor.capabilities.tools.ls import LsTool
 from questor.capabilities.tools.read import ReadTool
 from questor.capabilities.tools.write import WriteTool
 from support.tool_ctx import FakeToolContext
@@ -122,3 +125,61 @@ async def test_apply_patch_escape_denied(tmp_path: Path) -> None:
     res = await ApplyPatchTool().execute({"input": patch}, FakeToolContext(tmp_path))
     assert res.status == "error"
     assert "escapes workspace root" in res.result
+
+
+async def test_ls_lists_and_skips_noise_dirs(tmp_path: Path) -> None:
+    (tmp_path / "keep.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "dep.js").write_text("x", encoding="utf-8")
+    res = await LsTool().execute({"path": "."}, FakeToolContext(tmp_path))
+    assert res.status == "success"
+    assert "keep.txt" in res.result
+    assert "dep.js" not in res.result
+    assert "node_modules" not in res.result.split("\n")
+
+
+async def test_ls_entry_cap(tmp_path: Path) -> None:
+    for i in range(10):
+        (tmp_path / f"f{i}.txt").write_text("x", encoding="utf-8")
+    res = await LsTool().execute({"path": ".", "limit": 3}, FakeToolContext(tmp_path))
+    assert res.status == "success"
+    assert res.result.count("\n") <= 4
+    assert "truncated" in res.result
+
+
+async def test_glob_matches_and_caps(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "b.py").write_text("x", encoding="utf-8")
+    res = await GlobTool().execute({"pattern": "**/*.txt"}, FakeToolContext(tmp_path))
+    assert res.status == "success"
+    assert "a.txt" in res.result
+    assert "b.py" not in res.result
+
+
+async def test_glob_skips_dirs(tmp_path: Path) -> None:
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "x.txt").write_text("x", encoding="utf-8")
+    res = await GlobTool().execute({"pattern": "**/*.txt"}, FakeToolContext(tmp_path))
+    assert res.status == "success"
+    assert "x.txt" not in res.result
+
+
+async def test_grep_finds_pattern(tmp_path: Path) -> None:
+    (tmp_path / "code.py").write_text("hello world\nfoo bar\n", encoding="utf-8")
+    res = await GrepTool().execute({"pattern": "foo"}, FakeToolContext(tmp_path))
+    assert res.status == "success"
+    assert "code.py" in res.result
+    assert "foo bar" in res.result
+
+
+async def test_grep_invalid_regex_errors(tmp_path: Path) -> None:
+    res = await GrepTool().execute({"pattern": "("}, FakeToolContext(tmp_path))
+    assert res.status == "error"
+    assert "regex" in res.result.lower()
+
+
+async def test_grep_respects_max_matches(tmp_path: Path) -> None:
+    (tmp_path / "many.txt").write_text("\n".join("hit" for _ in range(50)), encoding="utf-8")
+    res = await GrepTool().execute({"pattern": "hit", "max_matches": 5}, FakeToolContext(tmp_path))
+    assert res.status == "success"
+    assert res.result.count("many.txt") <= 5
