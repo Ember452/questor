@@ -270,6 +270,7 @@ class EventType:
     RUN_COMPLETED = "run_completed"
     RESYNC_REQUIRED = "resync_required"
     WARNING = "warning"  # 非终态告警（02 §10）
+    MEMORY_WRITTEN = "memory_written"  # 记忆写入回执（有界、无原文；ADR-0024/0026）
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。

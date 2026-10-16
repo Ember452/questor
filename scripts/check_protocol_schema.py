@@ -103,6 +103,7 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         "run_completed": _envelope("run_completed", {"usage": {"total_tokens": 3}, "exit_reason": "answered"}),
         "resync_required": _envelope("resync_required", {"reason": "version_mismatch", "expected": 1, "current": 1}),
         "warning": _envelope("warning", {"message": "be careful"}),
+        "memory_written": _envelope("memory_written", {"kind": "daily", "chunk_count": 2}),
     }
 
 
