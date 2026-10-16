@@ -189,9 +189,19 @@ class SandboxedProcessRunner:
                 kind=f"process-{kind}",
                 media_type="text/plain",
             )
-            return bytes(spool[:limit]).decode("utf-8", errors="replace"), ref
+            return _bounded_preview(spool, limit), ref
         # 无 artifact store 时也不得把无界全文塞回 prompt；只保留有界 preview。
-        return bytes(spool[:limit]).decode("utf-8", errors="replace"), None
+        return _bounded_preview(spool, limit), None
+
+
+def _bounded_preview(spool: bytearray, limit: int) -> str:
+    """取不超过 ``limit`` 字节的合法 UTF-8 前缀。
+
+    直接 `spool[:limit].decode(errors="replace")` 会在多字节字符中间开刀，把裂口处
+    渲染成一串 U+FFFD 噪声（CJK/emoji 输出下可见）；errors="ignore" 则把不完整尾字节丢弃，
+    拿到的是合法前缀。
+    """
+    return bytes(spool[:limit]).decode("utf-8", errors="ignore")
 
 
 __all__ = ["ProcessRequest", "ProcessResult", "SandboxedProcessRunner"]
