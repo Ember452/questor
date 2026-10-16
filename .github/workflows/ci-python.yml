@@ -1,21 +1,27 @@
 name: ci-python
 
 on:
-  # 所有分支的 push 都跑守卫（不只 main）：功能分支未建 PR 时也能拿到 CI 证据，
-  # 避免“本地绿 = 认为没问题”的假信心。与 pull_request 重复触发的开销由下面的
-  # concurrency 同一组自动取消来吸收。
+  # push 只触发 main（合并后的最终验证，此时 tests-windows 也会跑）。
+  # 功能分支一律走 PR（ADR-0012 B 案），验证由 pull_request run 承担。
+  # 千万别把 push 扩到全分支再靠 concurrency 去重：被取消的 push run 仍会
+  # 上报同名 check，而 GitHub 对 required checks 按“同一 commit 上全部聚合”
+  # 判定，任一 cancelled 即视为 failing——PR 三 job 全绿 merge 按钮也照样灰死
+  # （2026-10-16 实测踩坑，详见 ADR-0012 修正条目）。
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# 同一分支上新提交自动取消仍在跑的旧 run。不加这段时，每个 push 的 run 都会各自跑到
-# 结束（卡死时即 6 小时默认上限），旧 run 堆积且白烧免费额度。
-# group 用“分支名”而不是 github.ref：PR 事件的 ref 是 refs/pull/N/merge、分支 push 是
-# refs/heads/…，两者归同一组后，“同分支 push + 已开 PR” 只会跑最新一个，不双份烧分钟数。
+# 同一分支上新提交自动取消仍在跑的旧 run。不加这段时，连续 push 的 run 都会各自
+# 跑到结束（卡死时即 6 小时默认上限），旧 run 堆积且白烧免费额度。
+# group 用“分支名”而不是 github.ref：PR 事件的 ref 是 refs/pull/N/merge、push 到 main
+# 是 refs/heads/main。push 已收窄到 main，两类事件天然不同组；按分支名归组仍能防住
+# 同一分支连续 push 的 run 堆积。
+# 注意：cancel 只省分钟数，不消除 check——被取消 run 的 check 仍会上报并参与
+# required checks 聚合判定，所以重复触发必须从触发器层面避免（见 on.push 注释）。
 concurrency:
   group: ci-python-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
@@ -118,8 +124,9 @@ jobs:
           path: coverage.xml
           retention-days: 7
 
-  # Windows runner 分钟单价高于 Linux（私有仓库还计费），所以：**功能分支的纯 push 不跑这个 job**；
+  # Windows runner 分钟单价高于 Linux（私有仓库还计费），所以：**push 到 main 之外不跑这个 job**；
   # Windows 真机 leg 只在 PR、workflow_dispatch 和已合入 main 时跑——即“合并前必验 Windows”。
+  # 这行 if 同时是防御：若将来有人把 push 触发扩回全分支，Windows leg 也不会被白白烧掉。
   # 两个 job 的 steps 故意保持一致，改一个要同步改另一个。
   tests-windows:
     needs: boundaries

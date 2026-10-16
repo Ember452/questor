@@ -25,5 +25,12 @@
   1. Settings → Branches → 保护规则：在 **Require a pull request before merging → Required status checks** 加入 `boundaries`（必选）与 `tests-posix`。关于 `tests-windows`：**它在 PR / dispatch 事件上是会真跑的**（job 条件是`event_name != 'push' || ref == refs/heads/main`），**只有功能分支的纯 push 会把它置为 skipped**；skipped 的 required check 在不同时期/配置下行为并非完全一致，因此建议：先只把 `boundaries` + `tests-posix` 设为 required，观察一次 PR 上 `tests-windows` 的报告形式后再决定是否加——不要凭印象把它排除在门禁之外，也不要凭印象直接勾上。
      实测修正：上文曾经写“必须先合一个跑通的 PR，check 名才会出现在候选里”——不必。把 push 触发扩到全分支后，分支自身的 run 就会上报 check，候选框里已经能搜到。
   2. 同页把管理员绕行关掉：勾选 **Do not allow bypassing the above settings**（等价于撤销原 A 案刻意保留的 *Allow administrators to bypass*）。
-  3. **规则模式必须只匹配 `main`，不能是 `*` / `feat/**`**（这是切换当天真碰上的事）：对功能分支也开启 Require PR 后，**连更新一个开放中 PR 的 head 分支都推不上去**，GH013 原文：`Changes must be made through a pull request` + `2 of 2 required status checks are expected`。后果是死锁：CI 红了却无法推修复。B 案要的是“**进主干**必须走 PR + 绿 checks”，而不是“每个分支都不许直接提交”。
+  3. **规则只能管主干，不能管到功能分支头上**（切换当天真碰上的事）。实际成因比“pattern 写成 `*`”隐蔽：**Ruleset 的名字不等于它的 target**——一个名叫 `main` 的 ruleset 如果 Target branches 选了 *All branches*，它会罩住全部分支（页面上会写 “targeting 5 branches”，这就是信号）。后果是死锁：**连更新一个开放中 PR 的 head 分支都推不上去**，GH013 原文：`Changes must be made through a pull request` + `2 of 2 required status checks are expected`——CI 红了却无法推修复。做法：Target branches 改成只 Include `main`（或精确 pattern `main`），确认卡片变成 “targeting 1 branch”。B 案要的是“**进主干**必须走 PR + 绿 checks”，而不是“每个分支都禁止直接提交”。
 - **在上述各项（尤其第 2、3 条）落地前，现实是"口径已 B、强制力不完全"。** 这句留在这里，是为了不让文档假装闸门已经关闭——A 案当初被否掉的正是"规则挂着但一直 bypass"的自欺。
+
+### 落地状态（2026-10-16 实测）
+
+- ✅ **第 1 条已生效**：push 被拒时 GH013 直接报 `2 of 2 required status checks are expected`，说明 Require PR + 两个 required check 已配置并被执行。
+- ✅ **第 3 条已修正**：把 ruleset 的 Target 收窄后，同一分支的 push 从 `[remote rejected]` 变为成功（`5f17d36..9d5a682`）。
+- ❓ **第 2 条仍未确认**：“Do not allow bypassing” 无法从上述任何证据推出（维护者是 owner，只有直推 `main` 才会暴露它是否真被拦住）。需你在页面上自己确认勾上了；确认后可在本节追一行。
+- **修正（2026-10-16 晚，PR merge 卡死复盘）**：切换记录里 1892fb3 “把 push 触发扩到全分支”那步被证实是错的。已开 PR 的分支每 push 一次会同时产生 push 与 pull_request 两个 run，concurrency 只留最新一个，但**被取消的 push run 仍会上报同名 check**——GitHub 对 required checks 按“同一 commit 上全部聚合”判定，任一 cancelled 即视为 failing。实测：PR 三个 job 全绿，merge 按钮照样灰死（页面报 “3 cancelled, 3 successful checks”）。修法（`ci-python.yml`）：push 触发收窄回 `main`，功能分支验证完全交给 PR run；concurrency 保留，仅用于防同分支 run 堆积。当初扩全分支的理由（“PR 未建时功能分支也要有守卫证据”）在 B 案“一律先开 PR”流程下不再成立——证据由 PR run 提供。
