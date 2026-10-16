@@ -111,14 +111,14 @@ jobs:
       # always()：红的 run 才最需要产物，绿的不需要。只留 7 天，不慢慢堆满额度。
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pytest-results-posix
           path: pytest-results.xml
           retention-days: 7
       - name: Upload coverage baseline
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report-posix
           path: coverage.xml
@@ -146,14 +146,14 @@ jobs:
         run: uv run pytest -v --tb=short -p no:cacheprovider --durations=10 --junitxml=pytest-results.xml --cov=src/questor --cov-branch --cov-report=term-missing --cov-report=xml:coverage.xml
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pytest-results-windows
           path: pytest-results.xml
           retention-days: 7
       - name: Upload coverage baseline
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report-windows
           path: coverage.xml
