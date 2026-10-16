@@ -110,6 +110,8 @@ def test_sse_real_socket_reconnect_no_loss_no_dup(tmp_path: Path) -> None:
         "SSE_DB": db,
         "SSE_PORT": str(port),
         "SSE_WS": str(tmp_path),
+        # hermetic：不让系统代理干扰 loopback（服务端与客户端都不走代理）。
+        "NO_PROXY": "127.0.0.1,localhost",
     }
     server_py = tmp_path / "server.py"
     server_py.write_text(_SERVER, encoding="utf-8")
@@ -128,7 +130,8 @@ def test_sse_real_socket_reconnect_no_loss_no_dup(tmp_path: Path) -> None:
             pytest.skip(f"real uvicorn socket unavailable in this environment (UNVERIFIED): {out[-500:]}")
 
         base = f"http://127.0.0.1:{port}"
-        with httpx.Client(base_url=base, timeout=None) as client:
+        # trust_env=False → 忽略环境里的 HTTP_PROXY/HTTPS_PROXY，避免代理把 loopback 请求劫成 502（审计 B1）。
+        with httpx.Client(base_url=base, timeout=None, trust_env=False) as client:
             run_id = client.post("/run", json={"text": "hello"}).json()["run_id"]
             seqs = asyncio.run(_wait_terminal(db, run_id, deadline=time.monotonic() + 20))
             assert len(seqs) >= 2, seqs  # 至少 run_started + 终态
