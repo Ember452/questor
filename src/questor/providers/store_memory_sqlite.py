@@ -35,6 +35,8 @@ from questor.contracts.memory import (
     MemoryWriteKind,
     VectorBackend,
 )
+from questor.memory.chunker import CHUNKER_VERSION
+from questor.memory.sync import build_chunks
 
 #: 记忆库 DDL 版本；读到更高版本即 fail-closed（不猜测半升级表形，承 ADR-0022）。
 MEMORY_SCHEMA_VERSION = 1
@@ -331,23 +333,37 @@ class SQLiteMemoryStore(MemoryStorePort):
         )
         return list(await cur.fetchall())
 
-    async def sync(self) -> JsonObject:
-        """重建派生索引（扫盘 md → 逐块重索）并 reconcile stale 行。
+    def _scan_source_files(self) -> dict[str, str]:
+        """扫 memory root 下的 md 真源→ ``{相对path: 文本}``；跳过隐藏/临时文件（如 ``.memtmp_``）。"""
+        files: dict[str, str] = {}
+        for dirpath, _dirs, names in os.walk(self.memory_root):
+            for name in names:
+                if not name.endswith(".md") or name.startswith("."):
+                    continue
+                full = os.path.join(dirpath, name)
+                with open(full, encoding="utf-8") as fh:
+                    files[_rel(self.memory_root, full)] = fh.read()
+        return files
 
-        T8 最小实现：清空索引表后按 ``memory_chunks`` 现存文本重建 FTS；真正的扫盘 markdown
-        感知重建由 ``memory`` 子系统的 chunker 在 T9 接管（文件为真源，索引损坏可重建）。"""
+    async def sync(self) -> JsonObject:
+        """扫盘 md（文件真源）→ chunker 重建派生索引 + reconcile stale 行（design/06 §0；ADR-0023）。
+
+        全量 wipe+rebuild：先删 ``memory_chunks``/FTS，再按当前文件内容重建（``memory.sync.build_chunks``）。
+        索引损坏或 ``CHUNKER_VERSION`` 变更都可由本函数自愈——文件永远权威；dreams 按映射排除不索。"""
+        files = self._scan_source_files()
+        chunks = build_chunks(files)
         db = self._dbp()
         await db.execute("BEGIN IMMEDIATE")
         try:
             await db.execute("DELETE FROM memory_chunks_fts")
-            cur = await db.execute("SELECT id, text, path FROM memory_chunks")
-            for cid, text, path in await cur.fetchall():
-                await db.execute("INSERT INTO memory_chunks_fts (text, id, path) VALUES (?,?,?)", (text, cid, path))
+            await db.execute("DELETE FROM memory_chunks")
+            for chunk in chunks:
+                await self._index_chunk(chunk, embedding=None)
             await db.execute("COMMIT")
         except BaseException:
             await db.execute("ROLLBACK")
             raise
-        return {"reindexed": True}
+        return {"reindexed": len(chunks), "files": len(files), "chunker_version": CHUNKER_VERSION}
 
     async def delete(self, chunk_ids: tuple[str, ...]) -> None:
         db = self._dbp()
