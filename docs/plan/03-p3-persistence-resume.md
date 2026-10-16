@@ -103,3 +103,10 @@
 - **A3（`pending` 列写了不读）→ 已标注**：`_checkpoint` 说明 `pending` 仅供诊断/审计，权威回退靠快照 ledger。
 - **F1/F2/F3（peer-scan 路径/行号）→ 已修**：`store.py`→`core/sessions/store.py`；`transcript.py`→`core/sessions/transcript.py`；`hermes_state_schema.py:1348-1367`→`1348-1365`。
 - **审计 check #6（`driver_id`/`driver_version`）→ 版本闸门已测试钉住，驱动身份显式后置**：`contract_version` 不兼容的快照由 `rebuild_run` fail-closed（`test_rebuild_fail_closed_on_incompatible_snapshot_version` 钉住）；`driver_id`/`driver_version` 属策略/驱动版本化（design/05 可插拔），归 **P9**，不在 P3 塑假字段（避免审计反对的"假扩展位"）。
+
+## 8. 真实 LLM 冒烟（DeepSeek `deepseek-chat` via LiteLLM）
+
+把 §7 里"真实流式续跑 UNVERIFIED"降级为已验证，并因此暴露且修复了一个脚本测试没覆盖的真缺陷：
+- **已验证**：真实逐块流式（数十个 `text_delta`）、真实 function-calling（`read` 工具 → `tool_started`/`tool_completed` 落库 → 结果回填 → 下一轮真模型综合）、durable 事件全落库、`after_seq` 重放、`rebuild` 幂等。key 只走环境变量、未写入任何提交文件。
+- **发现并修复**：终态（run_completed/failed/cancelled）此前不落快照 → 对已完成 run `rebuild` 返回 stale `running`、resume 会重驱一轮。修复：`drive_controller` 对终态补打 `final` 快照；`test_rebuild_reflects_terminal_state` 钉住；真实 provider 复验 `rebuild 终态 = completed`。
+- **仍属诚实边界**（非 key 依赖）：seatbelt/bwrap 实机、真 mid-`tool.execute` SIGKILL 保真度（v1 at-least-once）、跨机 exactly-once（→ P9）。
