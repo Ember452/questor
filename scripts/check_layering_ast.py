@@ -80,6 +80,10 @@ def _referenced_modules(node: ast.AST) -> list[tuple[int, str]]:
                 found.append((child.lineno, alias.name))
         elif isinstance(child, ast.ImportFrom) and child.module and not child.level:
             found.append((child.lineno, child.module))
+            # `from questor import surfaces` 不产生任何带层名的 module，只看 child.module 会漏；
+            # 把导入名字补成完整模块路径，才能被分层判定看到（否则这种写法会漏判）。
+            for alias in child.names:
+                found.append((child.lineno, f"{child.module}.{alias.name}"))
         elif isinstance(child, ast.Call):
             func = child.func
             dyn = (isinstance(func, ast.Attribute) and func.attr == "import_module") or (
@@ -133,16 +137,18 @@ def check(root: Path) -> tuple[list[str], int]:
 def self_test() -> int:
     """Prove the guard flags a bad dynamic import, a forbidden import, and passes a good one."""
     bad = 'import importlib\nimportlib.import_module("questor.surfaces")\n'
+    bad_from_import = "from questor import surfaces\n"
     forbidden = 'import subprocess\n'
     surfaces_reduce = 'from questor.state.reduce import reduce\n'
     good = "from questor.contracts import events\n"
     bad_hits = analyze_source(bad, "kernel")
+    pkg_hits = analyze_source(bad_from_import, "kernel")
     forbidden_hits = analyze_source(forbidden, "capabilities")
     surfaces_hits = analyze_source(surfaces_reduce, "surfaces")
     good_hits = analyze_source(good, "kernel")
-    ok = bool(bad_hits) and bool(forbidden_hits) and bool(surfaces_hits) and not good_hits
-    print(f"self-test: dyn-import flagged={bool(bad_hits)} forbidden-caps flagged={bool(forbidden_hits)} surfaces-reduce flagged={bool(surfaces_hits)} clean-passed={not good_hits}")
-    for msg in (*bad_hits, *forbidden_hits, *surfaces_hits):
+    ok = bool(bad_hits) and bool(pkg_hits) and bool(forbidden_hits) and bool(surfaces_hits) and not good_hits
+    print(f"self-test: dyn-import={bool(bad_hits)} package-import={bool(pkg_hits)} forbidden-caps={bool(forbidden_hits)} surfaces-reduce={bool(surfaces_hits)} clean-passed={not good_hits}")
+    for msg in (*bad_hits, *pkg_hits, *forbidden_hits, *surfaces_hits):
         print(f"  expected-red -> {msg}")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1

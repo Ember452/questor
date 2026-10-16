@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from collections.abc import Callable
 
 from questor.capabilities.tools._output import envelope_for_text, preview_bytes
 from questor.contracts.artifacts import ArtifactRef, OutputBudget
@@ -43,15 +44,15 @@ def _budgets_positive() -> list[str]:
     return problems
 
 
-def _preview_bounds() -> list[str]:
+def _preview_bounds(preview: Callable[[str, int], str] = preview_bytes) -> list[str]:
     problems: list[str] = []
-    # ascii + multibyte: preview must never exceed the byte limit.
+    # ascii + multibyte：preview 永远不得超出字节上限。
     for payload, limit in (("x" * 5000, 128), ("汉" * 2000, 100), ("a" * 10, 64)):
-        bounded = preview_bytes(payload, limit)
+        bounded = preview(payload, limit)
         if len(bounded.encode("utf-8")) > limit:
             problems.append(f"preview_bytes exceeded limit {limit} (got {len(bounded.encode('utf-8'))})")
-    # sanity: an unbounded payload really is over the limit (so the check above is meaningful).
-    if len(preview_bytes("y" * 5000, 128).encode("utf-8")) >= 5000:
+    #  sanity：未截断的 payload 确实超上限，上面的判定才有意义。
+    if len(preview("y" * 5000, 128).encode("utf-8")) >= 5000:
         problems.append("preview_bytes did not truncate an oversized payload")
     return problems
 
@@ -80,14 +81,17 @@ def check() -> int:
     return 0
 
 
+def _broken_preview(text: str, _limit: int) -> str:
+    """故意失效的原语：不论上限都返回全文。"""
+    return text
+
+
 def self_test() -> int:
-    """A non-bounding preview_bytes must be judged red; the real one must be green."""
-    # red sample: pretend the primitive is broken (returns full text regardless of limit).
-    broken = preview_bytes("x" * 5000, 10)
-    sample_red = len(broken.encode("utf-8")) > 10  # would be True if broken
+    """self-test 必须既能证绿也能证红（C15）：把真实原语换成全文直通的桩，守卫必须报 problem。"""
     real_green = not _preview_bounds() and not _envelope_bounds()
-    ok = real_green
-    print(f"self-test: real-bounded-green={real_green} (unbounded sample would flag={sample_red})")
+    red_problems = _preview_bounds(preview=_broken_preview)
+    ok = real_green and bool(red_problems)
+    print(f"self-test: real-bounded-green={real_green} broken-primitive-caught={bool(red_problems)} ({red_problems[:1]})")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 
