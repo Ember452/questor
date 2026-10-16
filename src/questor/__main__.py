@@ -40,16 +40,21 @@ def _memory_root() -> str:
 
 
 class _HeuristicDistiller:
-    """无密钥离线 fallback 蒸馏器：把 daily 非标题行去重合并进 core、产一句梦境摘要。
+    """无密钥离线 fallback 蒸馏器：**合并**现有 core + 近期 daily 的非标题行去重回写（单调不回退）。
 
     诚实边界：真 LLM 蒸馏质量 UNVERIFIED；配置 ``LITELLM_API_KEY`` 时可换成 LLM-backed
     ``DistillProvider`` 注入（本组合根是唯一装配点）。无可萃取时返回 ``None`` → 空哨兵跳过。"""
 
+    @staticmethod
+    def _facts(text: str) -> set[str]:
+        return {line.lstrip("- ").strip() for line in text.splitlines() if line.strip() and not line.startswith("#")}
+
     async def distill(self, core: str, dailies: list[str]) -> DistillOutcome | None:
-        facts = sorted({line.strip() for chunk in dailies for line in chunk.splitlines() if line.strip() and not line.startswith("#")})
+        # 合并现有 core 与近期 daily：新原料为空时仍保留既有精华，避免 --dream 把 core 越刷越小。
+        facts = self._facts(core) | self._facts("\n".join(dailies))
         if not facts:
             return None
-        new_core = "# MEMORY\n" + "".join(f"- {f}\n" for f in facts)
+        new_core = "# MEMORY\n" + "".join(f"- {f}\n" for f in sorted(facts))
         return DistillOutcome(new_core=new_core, dream=f"consolidated {len(facts)} fact(s) into core")
 
 
