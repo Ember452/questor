@@ -22,6 +22,9 @@ dev = [
     "ruff",
     "import-linter",
     "pytest-cov>=7.1.0",
+    # P3 T14：真 socket SSE after_seq 重连验收（uvicorn 起真服务 + httpx 真客户端重连）。
+    "uvicorn",
+    "httpx",
 ]
 
 [build-system]
