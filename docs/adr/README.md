@@ -25,7 +25,7 @@
 | [0017](./0017-platform-shell-ir.md) | Shell dialect 化 IR；Windows PowerShell 一等支持 | ✅ |
 | [0018](./0018-harness-owned-process-runner.md) | 子进程执行由 Harness ProcessRunnerPort 唯一拥有 | ✅ |
 | [0019](./0019-bounded-artifact-projection.md) | 大输出有界 artifact envelope；写失败不回落原文 | ✅ |
-| [0020](./0020-durable-write-gate-and-log-authority.md) | 耐久写门（durable 永不半 tool_use）+ log 权威顺序 | ✅ |
+| [0020](./0020-durable-write-gate-and-log-authority.md) | 耐久 checkpoint：完整快照 + 派发侧补齐 + log/snapshot 双权威 | ✅ |
 | [0021](./0021-cross-process-resume.md) | 跨进程续跑协议：快照+重放尾+回填修复+幂等 re-dispatch | ✅ |
 | [0022](./0022-dual-cursor-watermark.md) | 双游标物化到 StorePort：per-run 逻辑 seq + 全局物理 watermark | ✅ |
 
