@@ -37,7 +37,9 @@ from questor.contracts.events import (
     RequestApproval,
     ResolveApproval,
     SubmitMessage,
+    WriteMemory,
 )
+from questor.contracts.memory import MemoryStorePort
 from questor.contracts.policy import PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
 from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort
 from questor.contracts.sandbox import Confinement, SandboxBackend, SandboxDescriptor
@@ -77,6 +79,7 @@ class _ToolCtx:
         run_id: str = "",
         process_runner: object | None = None,
         artifact_store: object | None = None,
+        memory_store: MemoryStorePort | None = None,
     ) -> None:
         self.workspace_root = workspace_root
         self.cwd = cwd or workspace_root
@@ -84,6 +87,7 @@ class _ToolCtx:
         self.run_id = run_id
         self._process_runner = process_runner
         self._artifact_store = artifact_store
+        self._memory_store = memory_store
         self._cancel = cancel_event
         # T11/T12 前只记录声明；真正的 ProcessRunner 必须读取此列表并执行 provider credential 过滤。
         self._declared_env_names: set[str] = set()
@@ -123,6 +127,14 @@ class _ToolCtx:
         if self._artifact_store is None:
             raise RuntimeError("no ArtifactStore wired into ToolContext")
         return await self._artifact_store.put_bytes(content, run_id=self.run_id, kind=kind, media_type=media_type)
+
+    async def memory_search(self, query: str, *, k: int = 8, scope: object | None = None) -> tuple:
+        """经 Harness 持有的 MemoryStorePort 取**有界**检索命中；工具拿不到裸句柄（C4）。
+
+        无 store（未装配记忆）时返回空、不抛——降级为"无记忆可用"，不破循环。"""
+        if self._memory_store is None:
+            return ()
+        return await self._memory_store.search(query, k=k, scope=scope)
 
 
 def _none_descriptor() -> SandboxDescriptor:
@@ -175,6 +187,7 @@ class DefaultTurnLoop:
         process_runner: object | None = None,
         artifact_store: object | None = None,
         store: StorePort | None = None,
+        memory_store: MemoryStorePort | None = None,
         workspace_root: Path | None = None,
         model: str = "",
         system: str | None = None,
@@ -191,6 +204,7 @@ class DefaultTurnLoop:
         self.process_runner = process_runner
         self.artifact_store = artifact_store
         self.store = store
+        self.memory_store = memory_store
         self.workspace_root = workspace_root or Path.cwd()
         self.model = model
         self.system = system
@@ -319,6 +333,12 @@ class DefaultTurnLoop:
             run, events = reduce(run, command)
             controller.run = run
             await self._emit(events)
+            # 记忆写副作用：reduce 已受理（产 memory_written）后，由 kernel 在消费点经注入的
+            # MemoryStorePort 落库——写唯一入口仍是 Command（C4/C16），幂等键取已占的 durable seq。
+            if isinstance(command, WriteMemory) and self.memory_store is not None:
+                ack = next((e for e in events if e.type == EventType.MEMORY_WRITTEN), None)
+                if ack is not None:
+                    await self.memory_store.write(command.payload, idempotency_key=f"mem:{command.run_id}:{ack.seq}")
             if run.status.is_terminal:
                 return run
         return run
@@ -488,6 +508,7 @@ class DefaultTurnLoop:
             run_id=run.run_id,
             process_runner=self.process_runner,
             artifact_store=self.artifact_store,
+            memory_store=self.memory_store,
         )
         deadline = tool.spec.timeout_s or run.budget.tool_default_timeout_seconds
         try:
