@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from questor.contracts.memory import MemoryScope, MemorySource, MemoryWrite, MemoryWriteKind
+from questor.contracts.memory import MemoryScope, MemorySource, MemoryStrategyConfig, MemoryWrite, MemoryWriteKind
 from questor.providers.store_memory_sqlite import (
     MEMORY_SCHEMA_VERSION,
     MemorySchemaVersionError,
@@ -94,3 +94,35 @@ async def test_schema_version_fail_closed(tmp_path: Path) -> None:
     reopened = SQLiteMemoryStore(db_path=str(tmp_path / "memory.db"), memory_root=str(tmp_path / "mstore"))
     with pytest.raises(MemorySchemaVersionError):
         await reopened.connect()
+
+
+async def test_search_degrades_to_keyword_without_embedding(tmp_path: Path) -> None:
+    # 向量后端无 embedding（写时 embedding=None）→ 带 query_embedding 检索也不抛，降级关键词命中（ADR-0026）。
+    store = await _open(tmp_path)
+    try:
+        await store.write(
+            MemoryWrite(kind=MemoryWriteKind.DAILY, scope=MemoryScope.USER, text="alpha one fact"),
+            idempotency_key="e1",
+        )
+        hits = await store.search("alpha", k=5, query_embedding=(0.1, 0.2, 0.3))
+        assert hits and "alpha" in hits[0].snippet
+    finally:
+        await store.close()
+
+
+async def test_pluggable_configs_both_retrieve(tmp_path: Path) -> None:
+    # DoD④：默认 vs 替换策略（不同融合权重/半衰期）跑同一写入均命中，无需改 kernel。
+    store = await _open(tmp_path)
+    try:
+        await store.write(
+            MemoryWrite(kind=MemoryWriteKind.DAILY, scope=MemoryScope.USER, text="the secret token is GLYPH7"),
+            idempotency_key="s1",
+        )
+        store.config = MemoryStrategyConfig(vector_weight=0.9, keyword_weight=0.1)
+        vec_heavy = await store.search("GLYPH7", k=5)
+        store.config = MemoryStrategyConfig(vector_weight=0.1, keyword_weight=0.9, half_life_days=7.0)
+        kw_heavy = await store.search("GLYPH7", k=5)
+        assert vec_heavy and kw_heavy
+        assert "GLYPH7" in vec_heavy[0].snippet and "GLYPH7" in kw_heavy[0].snippet
+    finally:
+        await store.close()
