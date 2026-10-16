@@ -1,4 +1,4 @@
-"""L0 arg-key 词典（design/03 §11 步骤③）。
+"""L0 arg-key 词典（design/03 §3 第③层）。
 
 本模块**只放数据**，不 import state/kernel/providers/capabilities，也不放抽取逻辑：
 路径、shell、动作与 patch header 是跨层共享的“词汇”，抽取函数留在 L2。

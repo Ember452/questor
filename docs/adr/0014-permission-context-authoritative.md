@@ -13,4 +13,14 @@
   1. 每次 mode 改变后重建引擎实例：隐藏写入口，且并发工具/恢复时易读到旧实例 → 否。
   2. 把 rules 只留在 surfaces/config：无法回放、审计与跨进程恢复 → 否。
   3. kernel Rule 与 state PermissionRule 并存：字段迁移必然漂移 → 否。
-- 关联：ADR-0006、ADR-0015、ADR-0016；[`../design/01-state-model.md`](../design/01-state-model.md) §6、[`../design/03-tool-interface.md`](../design/03-tool-interface.md) §11。
+- 关联：ADR-0006、ADR-0015、ADR-0016；[`../design/01-state-model.md`](../design/01-state-model.md) §6、[`../design/03-tool-interface.md`](../design/03-tool-interface.md) §3.1（权限求值八步）。
+
+## 实现回填（追加于 2026-10-16，不回改上方原始决策）
+
+- **`denylist` 曾为假控制面，现已修正**：P2 T8 实现时引擎只用硬编码 `_SENSITIVE_*` 常量，从不读
+  `PermissionCtx.denylist`——“给它加路径不会生效”，与本 ADR 第 6 条的承诺直接矛盾（P2 审计
+  `docs/audit/P2-review-2026-10-15.md` §4-A4 指出）。现 `denylist` 已真参与求值（`floor_applied="configured-denylist"`）。
+- **语义细化**：配置侧 `denylist` 与内置敏感默认取**并集**——只能**加严**，不可被用来取消内置默认
+  （否则一条配置就能关掉凭据防护，与“唯一真源”的意图相反）。
+- **求值次序的正式列举已移入 `design/03` §3.1**（八步表）。上方第 10 行的简序未含 `enforce_read_only`
+  上限步与配置 `denylist` 步，以 §3.1 为准。

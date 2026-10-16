@@ -41,7 +41,7 @@ P2 的 ROADMAP 判据——"危险操作触发 `ask`；`deny`/敏感路径不可
 | T20 守卫+CI | scripts/CI | AST forbidden-import + output-budget + secret-projection 三守卫（各带 --self-test 可判红）；CI 拆为 `tests-posix` / `tests-windows` 两条平台分相 job（原计 matrix，因 job 级 `if` 看不到 `matrix` 上下文会整文件非法而拆） | `scripts/check_*.py` `.github/workflows/ci-python.yml` |
 | T21 DoD | tests | 端到端"全接线" loop DoD（写 ask→执行/拒绝、floor、敏感 deny、非法参数、真机 PowerShell 删除） | `tests/integration/test_p2_dod.py` |
 
-**实测复核（Windows 本机）**：`pytest` **317 passed / 5 skipped**、branch coverage **85%**、`ruff` 全绿、`lint-imports` **4 kept / 0 broken**、`check_layering_ast`（66 files, 0 violation）+ `check_protocol_schema`（19 types lockstep）+ `check_output_budgets` + `check_secret_projection` + `check_thread_leak` 全部 `--self-test` PASS、`verify_p0` ALL PASS。分支相对 main **70+ commits**、测试文件 **49** 个。
+**实测复核（Windows 本机）**：`pytest` **345 passed / 5 skipped**、branch coverage **87%**、`ruff` 全绿、`lint-imports` **4 kept / 0 broken**、`check_layering_ast`（66 files, 0 violation）+ `check_protocol_schema`（19 types lockstep）+ `check_output_budgets` + `check_secret_projection` + `check_thread_leak` 全部 `--self-test` PASS、`verify_p0` ALL PASS。分支相对 main **80+ commits**、测试文件 **52** 个。
 
 **GitHub CI（ubuntu-24.04）首跑暴露的两个真 bug**——本地全绿全部没报出来，是 CI 的价值所在：
 1. `surfaces/approval.py`：审批超时后事件循环已关，reader 线程回调 `call_soon_threadsafe` 抛 `RuntimeError: Event loop is closed`（已改 `_safe_settle` + 两条可证伪测试）。
@@ -82,7 +82,9 @@ P2 的 ROADMAP 判据——"危险操作触发 `ask`；`deny`/敏感路径不可
 
 ---
 
-## 5. 实现偏差（详见 plan/02 §13.1 / §13.2）
+## 5. 实现偏差与审计闭环（详见 plan/02 §13.1 / §13.2 / §13.3）
+
+> **独立审计曾判 P2 = NO-GO（有条件）**（`docs/audit/P2-review-2026-10-15.md`），列出 4 条阻断项：工具 panic 不兜底、`FinalizeRun` 留悬挂 `tool_use`、flag 簇误判只读、`PermissionCtx.denylist` 是假控制面。**我逐条亲手复现，4 条全属实，已全部修复并由测试钉住**（详 plan/02 §13.3）。本报告上方的“达成”结论以该轮修复后的 HEAD 为准。
 
 - **`RunToolSurface`/`PermissionDecision`/`edit_distance` 下沉 L0**：避免 L2 kernel import L3、以及 `capability_floor↔permission_policy` import 环。属分层修正，additive，不改 wire 契约。
 - **surfaces 去具体 store + 同步挂订阅队列**：T20 forbidden 规则要求 surfaces 不 import store 具体实现；据此 `cli.run_once` 用内存总线，并在 start drive 前预挂订阅队列，消除 store=None 的"晚订阅漏事件"竞态；`EventServer.store` 改 `StorePort` 抽象。
@@ -95,6 +97,7 @@ P2 的 ROADMAP 判据——"危险操作触发 `ask`；`deny`/敏感路径不可
 ## 6. 诚实边界（UNVERIFIED，环境限制非代码缺陷）
 
 - **seatbelt/bwrap 实机**：Windows 只验 descriptor/argv 生成；macOS/Linux 的 seatbelt/bwrap profile 真执行未做。
+- **Windows 链跳已转为实测**：原测试在非 posix 直接 return（等于没测）；现在真建 junction（`mklink /J`）验证 containment 拒绝。
 - **POSIX 受控子进程执行整体未实现**：`providers/sandbox.py` 只有 Windows Job 真正包得住 argv；因此 §5.2 的"bash 真机跑 `rm -rf` 语料 / 杀 process group"在 Linux CI 上只能以 skip + 拒绝路径断言的形式存在，不得当成已验收。
 - **真实 LiteLLM 网络端到端**：无 key，走 fake/scripted provider；对外不称"跑通真模型"。
 - **跨真实 socket 的 SSE 重连**：进程内 async transport 验证，未做 uvicorn/浏览器级断连重连。

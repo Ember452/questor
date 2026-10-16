@@ -1013,3 +1013,29 @@ docs: record p2 deviations and license ledger
 - **P2 达成判定**：§5.1 **Windows 主验收**的三条判据（危险操作触发 `ask`；`deny`/敏感路径不可越；非法参数被拒）已由**真实 shell/文件工具 + 真实审批闭环 + 端到端 DoD** 证明，不再只是 fake/内部测试层面。**§5.2 POSIX 真机运行未达成**（受控子进程的 POSIX wrapping 本身未实现，属 ADR-0015 已声明的后置项，不是漏测）。因此 P2 结论按平台分栏：**Windows = 达成，POSIX = 描述符/拒绝路径达成、真机执行待后续**。
 - **TDD 流程偏差**：T1/T2 部分契约测试与实现同批提交，未逐个先跑红；从 T3 起严格 RED→GREEN，并为 T1/T2 补了可证伪的生命周期/snapshot/审批/幂等回归用例。
 - **交付方式**：远端 main 已启用 “must be made through a pull request”；本批次全程走 `feat/p2-foundation-hitl` 分支逐任务 commit/push，未直推 main。
+
+---
+
+## 13.3 P2 审计闭环（2026-10-16；回应 `docs/audit/P2-review-2026-10-15.md`）
+
+该审计给出 **NO-GO（有条件）**，列出 4 条阻断项。**我逐条亲手复现，4 条全部属实，无异议**；本轮已全部修复：
+
+| 审计项 | 复现证据 | 修法 | 锁住它的测试 |
+|---|---|---|---|
+| #1 工具 panic 不兜底（C10/design/03 §8） | `loop.py` 仅策略处有 `except Exception`；`tool.execute` 裸奔 | `asyncio.wait_for` + `except Exception` → `ToolResult(status="error")`；BaseException（取消/中断）仍向上抛 | `test_p2_tool_fault_isolation.py::test_tool_panic_becomes_error_result_and_run_survives` |
+| #2 `FinalizeRun` 不回填 open tool_use（C7/I1） | 实跑：终态后 `status=pending`、无 `tool_result` | failed/completed 均先 `_backfill_open_calls(note=…)` 并连续取号 | `test_reduce_finalize_pairing.py`（3 条，含 seq 唯一与“无 open 调用时不多产事件”） |
+| #3 flag 簇不展开 → `sed -ni` 误判只读 | 实跑：`all_read_only=True, write=()`；写 `-n -i` 却正确 | `_flag_forms()` 把 `-ni`/`-i.bak`/`--in-place=x` 展开后比对写形式集合 | `test_bundled_short_flags_are_expanded` + `test_same_semantics_regardless_of_flag_spacing` |
+| #4 `PermissionCtx.denylist` 假控制面（ADR-0014） | 实跑：denylist 含该路径时 `full_auto` 仍 `ALLOW` | 新增第 4 步 `_denylisted()`（`configured-denylist`），与内置默认取并集、不可取消默认 | `test_configured_denylist_denies_even_under_full_auto` 等 4 条 |
+
+另主动修了审计列为“应修/建议”、但我认为不该拖到 P3 的项：
+
+- **#7 deadline 武装**：文件工具不过 ProcessRunner，`spec.timeout_s` 以前只是记录——实测一个 `sleep(30)` 的只读工具跑满 30s 还报 success，即 §5-6 描述的“挂死工具卡住单写者循环”。现在 Harness 对**每个**工具武装 deadline。
+- **`TIMED_OUT` 状态以前从不产生**（审计未点名）：`process_to_tool_result` 把超时压成 `"error"`，账本无法区分“被杀”与“业务失败”。现超时统一产 `status="timed_out"`；不新增第 20 个事件类型，投影为 `tool_completed{status:"timed_out"}`。
+- **#5 三条未验分支**：`enforce_read_only`、`protected-root` 各有正反用例；**Windows 链跳由 UNVERIFIED 变实测**——用 `mklink /J` 真建 junction（只接受目录目标），containment 正确拒绝（注：`Path.resolve()` 在 Windows 确实跟随 junction，这是实测得到而非推定）。
+- **#6 / E1**：`check_output_budgets --self-test` 以前只能自证绿；现注入“全文直通”的失效原语并断言必须报 problem（C15 的“守卫能判红”）。同时修了它自身 `_preview_bounds` 不接收注入参数的结构问题。
+- **E2**：AST 守卫对 `from questor import surfaces` 这种包级导入漏判（module 只到 `questor` → layer None）；现已把导入名补成完整模块路径参与判定，self-test 加了对应红样本。
+- **#5-5 `wrap_shell` 缺失**：design/03 §4 承诺的接缝现在存在于 `SandboxPort`，并在**所有**后端抛 NotImplemented；`test_sandbox_backends.py` 钉住“任何后端不得把 shell 串原样返回”。这不是空有签名：它把 ADR-0017 “不得把命令串拼回 shell 伪装成 argv” 变成可测的。
+- **#5-3 / 死字段**：`parallel_safe`/`orchestrator`/`barrier` 逐项标 `NOT enforced until P5/P8`，`available` 字段明写“动态可用性唯一真源是 `Tool.available()`”；`envelope_for_text` 保留（guard 在用），但进程侧 preview 改用合法 UTF-8 前缀切法，不再在多字节字符中间开刀。
+- **文档反向漂移**：把八步求值次序正式写进 `design/03` **§3.1**（带 `floor_applied` 对应表），修正四处引用不存在的 `§11 八步` 的 docstring，并在 **ADR-0014 追加“实现回填”**说明 denylist 曾经的假控制面与现在的确切语义（不回改原始决策）。
+
+**复验结果（2026-10-16 Windows 本机）**：`pytest` **345 passed / 5 skipped**（新增 18 条测试）、branch coverage **87%**；`ruff` clean；`lint-imports` 4 kept；AST 66 files 0 violation 且 self-test 新增 package-import 项 PASS；`check_output_budgets` self-test 现在 `broken-primitive-caught=True`；其余守卫全绿。仍 UNVERIFIED：seatbelt/bwrap 实机、POSIX 受控子进程执行、真网络 LLM/ SSE、多 agent inbox、`security-ci + pip-audit`。

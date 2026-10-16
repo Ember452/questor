@@ -60,6 +60,24 @@ async put_artifact(bytes, kind, media_type) -> ArtifactRef
 4. **PermissionCtx + capability floor**：敏感路径与 OS 能力先于 mode。
 5. **业务校验**：工具 execute 内完成，不下沉沙箱。
 
+### 3.1 权限求值八步（引擎内部严格次序，`kernel/permission_policy.py`）
+
+上面的第 4 层展开为八步；**次序本身就是安全语义**，任何重排都可能把"不可越"变成"可越"：
+
+| # | 步骤 | 结果 / `floor_applied` |
+|---|---|---|
+| 1 | args 不可解析 / 非 JSON 对象 | DENY（`invalid-arguments`），不进后续任何一步 |
+| 2 | 内置敏感路径（`~/.ssh`、`*.pem`、`.env*`、凭据类） | DENY（`sensitive-path`），`protect_sensitive_paths` 管这一步 |
+| 3 | workspace 内可控制 Agent 能力的文件（`mcp.json`/`config.json`/`permissions.json`） | DENY（`protected-root`） |
+| 4 | 配置侧 `PermissionCtx.denylist` | DENY（`configured-denylist`）；与 2/3 **取并集**，不可用来取消内置默认（ADR-0014） |
+| 5 | `enforce_read_only` 预设且工具非只读 | DENY（`read-only-limit`），rules/mode 均不可放宽 |
+| 6 | capability floor（network / exec / write） | DENY 或 ASK（`*-capability`）；**mode 不得放宽**（ADR-0015） |
+| 7 | rules 匹配（`tool_pattern` × `argument_pattern`） | 取**最后一条**匹配（last-match-wins）；deny 直返，allow 再过审批模式 |
+| 8 | mode（`default`/`plan`/`full_auto`）+ `approval_mode` + `approval_policy` | 只收紧不放宽；`approval_policy=never` 时 ask 降级为 deny |
+
+附：人工审批回执**不携带 mode**——批准一次调用不等于把 run 切到 `full_auto`（防越权升级，ADR-0016）。
+`SetPermissionMode` 是独立 Command，且只影响**之后**的求值（历史 decision 不回溯）。
+
 ## 4. SandboxDescriptor 与 ProcessRequest
 `SandboxPort` 不再只返回三个裸布尔：
 ```python
@@ -115,7 +133,7 @@ running
 
 ## 8. 取消、超时与 settle
 - 有效 timeout：`ToolSpec.timeout_s ?? Budget.tool_default_timeout_seconds ?? 300`；0/负值注册期拒绝。
-- 每个工具由 ProcessRunner 武装 deadline；超时产 `TOOL_TIMEOUT` 结构化 ToolResult，并杀进程树。
+- **deadline 由 Harness 在 loop 里对每个工具武装**（`asyncio.wait_for`），不只经 ProcessRunner 的 exec 工具：文件工具挂死（网络盘/巨文件）同样受约束。超时产 `status="timed_out"` 的结构化 ToolResult，入账本为 `ToolCallStatus.TIMED_OUT`，对外投影为 `tool_completed{status:"timed_out"}`（不新增第 20 个事件类型：与 `tool_completed` 语义重叠，加类型只会让消费方多一套分支）。exec 工具额外杀进程树。
 - approval timeout 默认 300s，None 仍取安全默认；到期只能过期同 request_id 的 pending request。
 - settle 必须使用脱离取消链的执行上下文：外层 Cancel 后仍能把最终/取消结果经 Command 落账。
 - KeyboardInterrupt/SystemExit 透传；普通工具 panic 转 error，不崩 run。

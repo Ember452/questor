@@ -1,4 +1,4 @@
-"""L2 arg-key 抽取器（design/03 §11；T5）。
+"""L2 arg-key 抽取器（design/03 §3 第③层；T5）。
 
 纯函数、无 IO、无权限判断。它只把工具参数转换成可审计的路径/shell/action 事实；
 真实安全分类由 shell parser、permission policy 和 capability floor 完成。
