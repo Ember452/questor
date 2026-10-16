@@ -25,6 +25,8 @@ from questor.contracts.memory import MemoryStorePort
 
 _EMPTY_SENTINELS = frozenset({"", "无", "none", "n/a"})
 _DAILY_DATE = re.compile(r"memory/(\d{4}-\d{2}-\d{2})\.md")
+#: 蒸馏 provider（通常是 LLM 调用）transient 失败的有界重试次数（承 Cow summarizer 重试纪律）。
+_MAX_DISTILL_ATTEMPTS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +52,22 @@ def _is_empty(value: str) -> bool:
 def _batch_hash(dailies: list[str]) -> str:
     """对本次喂入的 daily 原料取语义哈希，作跨运行的去重键（不含可变 core，保证二次同原料 no-op）。"""
     return hashlib.sha256("\x1f".join(dailies).encode("utf-8")).hexdigest()
+
+
+async def _call_distill(
+    provider: DistillProvider, core: str, dailies: list[str], *, attempts: int = _MAX_DISTILL_ATTEMPTS
+) -> DistillOutcome | None:
+    """有界重试 transient 蒸馏失败（如 LLM 网络抖动）；耗尽后上抛，绝不静默吞（ADR-0025）。
+
+    幂等靠 ``deep_dream`` 的输入哈希键：重投同一原料不会重复写 core。"""
+    last: Exception | None = None
+    for _ in range(max(1, attempts)):
+        try:
+            return await provider.distill(core, dailies)
+        except Exception as exc:  # noqa: BLE001 - transient 重试；最终失败上抛由调用方（CLI/surface）记日志
+            last = exc
+    assert last is not None  # 循环至少执行一次，last 必非 None
+    raise last
 
 
 def _recent_daily_paths(paths: list[str], *, lookback_days: int, now: datetime) -> list[str]:
@@ -84,7 +102,7 @@ async def deep_dream(
     daily_paths = _recent_daily_paths(paths, lookback_days=lookback_days, now=now)
     dailies = [await store.read_memory_text(p) for p in daily_paths]
     batch = _batch_hash(dailies)
-    outcome = await provider.distill(core, dailies)
+    outcome = await _call_distill(provider, core, dailies)
     if outcome is None or _is_empty(outcome.new_core):
         # 空哨兵跳过：无可萃取即不写、不杜撰（只删不编）。二次同原料亦走此路或命中 ledger，均 no-op。
         return {"wrote": False, "reason": "empty-sentinel", "input_hash": batch}

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from questor.contracts.memory import MemoryScope, MemoryWrite, MemoryWriteKind
 from questor.memory.distill import DistillOutcome, deep_dream, flush_run_to_daily
 from questor.providers.store_memory_sqlite import SQLiteMemoryStore
@@ -90,5 +92,44 @@ async def test_flush_run_to_daily_is_idempotent(tmp_path: Path) -> None:
         daily_paths = [p for p in await store.list_memory_paths() if p.startswith("memory/2")]
         text = await store.read_memory_text(daily_paths[0])
         assert text.count("decided to use SQLite") == 1  # 重复 flush 不二次 append（claim-then-commit）
+    finally:
+        await store.close()
+
+
+class _FlakyProvider:
+    """前 ``fail_times`` 次抛 transient，之后成功（测有界重试）。"""
+
+    def __init__(self, fail_times: int) -> None:
+        self._fail = fail_times
+        self.calls = 0
+
+    async def distill(self, core: str, dailies: list[str]) -> DistillOutcome:
+        self.calls += 1
+        if self.calls <= self._fail:
+            raise RuntimeError("transient LLM blip")
+        return DistillOutcome(new_core="# MEMORY\n- kept fact\n", dream="ok")
+
+
+async def test_deep_dream_retries_transient_failure(tmp_path: Path) -> None:
+    store = await _open(tmp_path)
+    try:
+        await store.write(MemoryWrite(kind=MemoryWriteKind.DAILY, scope=MemoryScope.USER, text="kept fact"), idempotency_key="t1")
+        await store.sync()
+        provider = _FlakyProvider(fail_times=2)
+        result = await deep_dream(store, provider, lookback_days=7)
+        assert result["wrote"] is True
+        assert provider.calls == 3  # 2 次 transient 后第 3 次（≤ 有界 3）成功
+    finally:
+        await store.close()
+
+
+async def test_deep_dream_exhausts_retries_and_raises(tmp_path: Path) -> None:
+    store = await _open(tmp_path)
+    try:
+        await store.write(MemoryWrite(kind=MemoryWriteKind.DAILY, scope=MemoryScope.USER, text="kept fact"), idempotency_key="t2")
+        await store.sync()
+        with pytest.raises(RuntimeError):
+            await deep_dream(store, _FlakyProvider(fail_times=99), lookback_days=7)
+        assert await store.read_memory_text("MEMORY.md") == ""  # 失败不写、不杜撰
     finally:
         await store.close()
