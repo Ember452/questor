@@ -24,6 +24,7 @@ from pathlib import Path
 LAYER_RANK: dict[str, int] = {
     "contracts": 0,
     "state": 1,
+    "memory": 1,  # 记忆子系统=state 的 peer（STRUCTURE §9），只依 contracts；被 providers/kernel 依赖（外→内合法）。
     "kernel": 2,
     "capabilities": 3,
     "policy": 4,
@@ -41,17 +42,24 @@ _ROOT_PKG = "questor"
 #: 键是层名，值是禁止被 import 的模块前缀（stdlib 或 questor 具体实现）。
 FORBIDDEN_IMPORTS: dict[str, tuple[str, ...]] = {
     # 工具绝不自己 spawn 进程 / 直接依赖沙箱具体实现（进程/env 都在 L5 ProcessRunner）。
+    # 也不得持记忆库具体实现（检索只经 ctx.memory_search，C4）。
     "capabilities": (
         "subprocess",
         "questor.providers.sandbox",
         "questor.providers.process_runner",
         "questor.providers._win_job",
+        "questor.providers.store_memory_sqlite",
     ),
-    # surfaces 零业务：不碰 reduce、不碰 store 具体实现（经 Command Inbox / 注入 StorePort）。
+    # surfaces 零业务：不碰 reduce、不碰 store 具体实现（经 Command Inbox / 注入 StorePort/MemoryStorePort）。
     "surfaces": (
         "questor.state.reduce",
         "questor.providers.store_sqlite",
+        "questor.providers.store_memory_sqlite",
         "subprocess",
+    ),
+    # 策略只读视图→出意图；绝不持记忆库/向量库裸句柄（C4）。
+    "policy": (
+        "questor.providers.store_memory_sqlite",
     ),
     # L0 词汇层只放数据与纯不变式，不碰 IO/网络/进程。
     "contracts": (
@@ -140,15 +148,21 @@ def self_test() -> int:
     bad_from_import = "from questor import surfaces\n"
     forbidden = 'import subprocess\n'
     surfaces_reduce = 'from questor.state.reduce import reduce\n'
+    memory_to_provider = 'from questor.providers.store_memory_sqlite import SQLiteMemoryStore\n'
+    caps_store = 'from questor.providers.store_memory_sqlite import SQLiteMemoryStore\n'
+    providers_import_memory = 'from questor.memory.search import fuse\n'  # 外→内（providers⊐memory），应放行
     good = "from questor.contracts import events\n"
     bad_hits = analyze_source(bad, "kernel")
     pkg_hits = analyze_source(bad_from_import, "kernel")
     forbidden_hits = analyze_source(forbidden, "capabilities")
     surfaces_hits = analyze_source(surfaces_reduce, "surfaces")
+    memory_hits = analyze_source(memory_to_provider, "memory")
+    caps_store_hits = analyze_source(caps_store, "capabilities")
+    allowed_hits = analyze_source(providers_import_memory, "providers")
     good_hits = analyze_source(good, "kernel")
-    ok = bool(bad_hits) and bool(pkg_hits) and bool(forbidden_hits) and bool(surfaces_hits) and not good_hits
-    print(f"self-test: dyn-import={bool(bad_hits)} package-import={bool(pkg_hits)} forbidden-caps={bool(forbidden_hits)} surfaces-reduce={bool(surfaces_hits)} clean-passed={not good_hits}")
-    for msg in (*bad_hits, *pkg_hits, *forbidden_hits, *surfaces_hits):
+    ok = bool(bad_hits) and bool(pkg_hits) and bool(forbidden_hits) and bool(surfaces_hits) and bool(memory_hits) and bool(caps_store_hits) and not allowed_hits and not good_hits
+    print(f"self-test: dyn-import={bool(bad_hits)} package-import={bool(pkg_hits)} forbidden-caps={bool(forbidden_hits)} surfaces-reduce={bool(surfaces_hits)} memory-outer={bool(memory_hits)} caps-store={bool(caps_store_hits)} providers->memory-allowed={not allowed_hits} clean-passed={not good_hits}")
+    for msg in (*bad_hits, *pkg_hits, *forbidden_hits, *surfaces_hits, *memory_hits, *caps_store_hits):
         print(f"  expected-red -> {msg}")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
