@@ -20,17 +20,21 @@ if TYPE_CHECKING:
     from questor.state.domain_state import Run
 
 
-async def resume_and_drive(turn_loop: object, store: StorePort, run_id: str, *, now=None) -> Run | None:
+async def resume_and_drive(turn_loop: object, store: StorePort, run_id: str, *, controller: RunController | None = None, now=None) -> Run | None:
     """重建 ``run_id`` 的权威状态并续跑到唯一终态；无快照（未知 run）返回 ``None``。
 
     幂等：``rebuild_run`` 对已终态 run 也返回其终态快照，``drive_controller`` 遇终态 run 直接
     ``_resume_settle_open_calls`` 空转后返回，不重复执行已完成的工具（派发侧判 OPEN 状态）。
+
+    ``controller``：surfaces 若要把续跑中的 run 注册回 Command Inbox（使后续 HTTP 审批/取消能路由），
+    可先传入已注册的 RunController；否则本函数自内部用重建的 run 新建一个（C16：仍经 RunController，不直 reduce）。
     """
+    if controller is not None:
+        return await turn_loop.drive_controller(controller)  # type: ignore[attr-defined]
     run = await rebuild_run(store, run_id, now=now)
     if run is None:
         return None
-    controller = RunController(run)
-    return await turn_loop.drive_controller(controller)  # type: ignore[attr-defined]
+    return await turn_loop.drive_controller(RunController(run))  # type: ignore[attr-defined]
 
 
 __all__ = ["resume_and_drive"]

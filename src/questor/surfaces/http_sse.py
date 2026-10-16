@@ -25,6 +25,7 @@ from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, M
 from questor.contracts.tool import RunToolSurface
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
+from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.state.domain_state import Run
 from questor.surfaces.approval import http_status_for_receipt
@@ -60,6 +61,9 @@ class EventServer:
     def __init__(self, surface: CliSurface, store: StorePort) -> None:
         self.surface = surface
         self.store = store
+        # 让 EventServer 构造的 turn loop 也持久化 checkpoint（P3 resume 前置）；surface 仍只持 StorePort 抽象。
+        if surface.store is None:
+            surface.store = store
         self.bus = InProcessEventBus(store)
         self.registry = RunRegistry()
 
@@ -117,6 +121,22 @@ class EventServer:
             )
         )
 
+    async def resume(self, run_id: str) -> str:
+        """从持久态续跑一个被 kill/重启的 run（P3，ADR-0021）。
+
+        surfaces 零业务：rebuild 不直 reduce（交给 kernel）；重建的 run 经 RunController 注册回
+        Command Inbox，使后续 HTTP 审批/取消能路由到续跑中的 run。无快照 → 404。
+        """
+        run = await rebuild_run(self.store, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=f"no checkpoint for run {run_id}")
+        tool_surface = self.surface.registry.freeze_for_run(run_id)
+        controller = RunController(run)
+        self.registry.register(controller)
+        task = asyncio.create_task(self._loop(asyncio.Event(), tool_surface).drive_controller(controller))
+        self.registry.set_task(run_id, task)
+        return run_id
+
     @staticmethod
     def _checked(receipt: InboxReceipt) -> InboxReceipt:
         """receipt 映射的 HTTP 码 >=400 时抛 HTTPException（surface 不碰 reduce，只据 receipt 说话）。"""
@@ -159,6 +179,11 @@ def create_app(server: EventServer) -> FastAPI:
     @app.post("/runs/{run_id}/permissions")
     async def permissions(run_id: str, payload: dict) -> JSONResponse:
         return _receipt_response(await server.set_permission_mode(run_id, payload.get("mode", "")))
+
+    @app.post("/runs/{run_id}/resume")
+    async def resume_run(run_id: str) -> dict:
+        """从持久态续跑被 kill/重启的 run（P3）；提交驱动，不直 reduce。"""
+        return {"run_id": await server.resume(run_id)}
 
     @app.get("/events/{run_id}")
     async def events(request: Request, run_id: str, after_seq: int = 0) -> EventSourceResponse:
