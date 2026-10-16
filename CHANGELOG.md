@@ -45,6 +45,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - New machine guards (each with `--self-test` that goes red): AST forbidden-import rules (capabilities/surfaces/contracts), output-budget invariant guard, secret/env-value projection guard; CI runs them and adds platform-split `tests-posix` / `tests-windows` jobs so PowerShell vs bash DoD is exercised on the real platform (skip-when-absent, never faked) — Windows only on PR/dispatch/main to keep its runner minutes down.
 - P2 end-to-end DoD test drives a fully-wired loop (engine + capability floor + registry + Command Inbox) for the headline dangerous-op flows.
 
+### Fixed (found by the first P2 CI run on Linux, 2026-10-16)
+- `surfaces/approval.py`: the reader thread called `loop.call_soon_threadsafe` outside its `try`, so a keystroke arriving after an approval timeout (loop already closed) raised `RuntimeError: Event loop is closed` inside a daemon thread. Now routed through `_safe_settle()`, which discards late input — that drop *is* the timeout-means-deny semantics — with two falsifiable regression tests.
+- Shell-tool platform gating: the DoD tests keyed off `shutil.which("powershell")`, but the ubuntu runner ships `pwsh`, so tests that must skip did not — and they used `NullSandbox` as if it could execute. They now probe the real capability (`detect_sandbox().wrap_argv`) and skip with an explicit reason when the host cannot wrap argv, while a new always-run assertion locks the correct behaviour: no capable backend means a structured error, never an unconfined spawn.
+- `tests/unit/test_loop_tool_ctx.py` hard-coded a Windows path as "absolute argv[0]", which `ProcessRequest` correctly rejects on POSIX; switched to `sys.executable`.
+
 ### Fixed (P0/P1 adversarial audit, 2026-10-15)
 - C2: deep-freeze JSON leaves (`ToolCall.args`, `ContentBlock.input/payload/provider_state`, `Envelope.data`) via `immutables` so COW states no longer share mutable leaves.
 - C7/ADR-0011: Cancel no longer emits two events with the same seq (was causing a store `IntegrityError`).

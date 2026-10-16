@@ -11,6 +11,8 @@ P2 把"只会读一个文件的最小循环"升级成**能对危险操作做正�
 
 P2 的 ROADMAP 判据——"危险操作触发 `ask`；`deny`/敏感路径不可越；非法参数被拒"——现在由**真实工具 + 真实审批闭环 + 端到端 DoD** 证明，不再停在 fake/内部单测层面。
 
+> 按平台分栏的准确结论：**§5.1 Windows 主验收达成**；**§5.2 POSIX 真机执行未达成**——不是漏测，而是 POSIX 侧受控子进程的 `wrap_argv` 本身尚未实现（只有 Windows Job 有实现，seatbelt/bwrap 是诚实的 `_UnimplementedSandbox`，ADR-0015 已声明后置）。Linux CI 上该分相跑的是"拒绝路径"断言，真机跑通待 wrapping 落地。
+
 ---
 
 ## 2. 交付物清单（按任务 · 按层）
@@ -39,7 +41,11 @@ P2 的 ROADMAP 判据——"危险操作触发 `ask`；`deny`/敏感路径不可
 | T20 守卫+CI | scripts/CI | AST forbidden-import + output-budget + secret-projection 三守卫（各带 --self-test 可判红）；CI 拆为 `tests-posix` / `tests-windows` 两条平台分相 job（原计 matrix，因 job 级 `if` 看不到 `matrix` 上下文会整文件非法而拆） | `scripts/check_*.py` `.github/workflows/ci-python.yml` |
 | T21 DoD | tests | 端到端"全接线" loop DoD（写 ask→执行/拒绝、floor、敏感 deny、非法参数、真机 PowerShell 删除） | `tests/integration/test_p2_dod.py` |
 
-**实测复核（报告撰写时于 Windows 本机亲自跑）**：`pytest` **316 passed**、branch coverage **86%**、`ruff` 全绿、`lint-imports` **4 kept / 0 broken**、`check_layering_ast`（66 files, 0 violation）+ `check_protocol_schema`（19 types lockstep）+ `check_output_budgets` + `check_secret_projection` + `check_thread_leak` 全部 `--self-test` PASS、`verify_p0` ALL PASS。分支相对 main **70 commits**、测试文件 **49** 个。
+**实测复核（Windows 本机）**：`pytest` **317 passed / 5 skipped**、branch coverage **85%**、`ruff` 全绿、`lint-imports` **4 kept / 0 broken**、`check_layering_ast`（66 files, 0 violation）+ `check_protocol_schema`（19 types lockstep）+ `check_output_budgets` + `check_secret_projection` + `check_thread_leak` 全部 `--self-test` PASS、`verify_p0` ALL PASS。分支相对 main **70+ commits**、测试文件 **49** 个。
+
+**GitHub CI（ubuntu-24.04）首跑暴露的两个真 bug**——本地全绿全部没报出来，是 CI 的价值所在：
+1. `surfaces/approval.py`：审批超时后事件循环已关，reader 线程回调 `call_soon_threadsafe` 抛 `RuntimeError: Event loop is closed`（已改 `_safe_settle` + 两条可证伪测试）。
+2. shell 工具的真跑条件写错了：只看 `which("powershell")` 判平台，而 ubuntu runner **装了 `pwsh`** → 该 skip 的没 skip。现改为**探测后端能不能真 wrap argv**，并把"包不住就拒绝执行"本身钉成跨平台断言（fail-closed 不再靠运气）。
 
 ---
 
@@ -89,6 +95,7 @@ P2 的 ROADMAP 判据——"危险操作触发 `ask`；`deny`/敏感路径不可
 ## 6. 诚实边界（UNVERIFIED，环境限制非代码缺陷）
 
 - **seatbelt/bwrap 实机**：Windows 只验 descriptor/argv 生成；macOS/Linux 的 seatbelt/bwrap profile 真执行未做。
+- **POSIX 受控子进程执行整体未实现**：`providers/sandbox.py` 只有 Windows Job 真正包得住 argv；因此 §5.2 的"bash 真机跑 `rm -rf` 语料 / 杀 process group"在 Linux CI 上只能以 skip + 拒绝路径断言的形式存在，不得当成已验收。
 - **真实 LiteLLM 网络端到端**：无 key，走 fake/scripted provider；对外不称"跑通真模型"。
 - **跨真实 socket 的 SSE 重连**：进程内 async transport 验证，未做 uvicorn/浏览器级断连重连。
 - **多 agent / 远程 Command inbox**：P8/P9。
