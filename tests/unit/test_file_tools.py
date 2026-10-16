@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from questor.capabilities.tools.apply_patch import ApplyPatchTool
+from questor.capabilities.tools.edit import EditTool
 from questor.capabilities.tools.read import ReadTool
+from questor.capabilities.tools.write import WriteTool
 from support.tool_ctx import FakeToolContext
 
 
@@ -48,3 +51,74 @@ async def test_read_cancelled(tmp_path: Path) -> None:
     res = await ReadTool().execute({"file_path": "a.txt"}, FakeToolContext(tmp_path, cancelled=True))
     assert res.status == "error"
     assert res.result == "cancelled"
+
+
+async def test_write_creates_and_overwrites(tmp_path: Path) -> None:
+    res = await WriteTool().execute({"file_path": "sub/out.txt", "content": "hello"}, FakeToolContext(tmp_path))
+    assert res.status == "success"
+    assert (tmp_path / "sub" / "out.txt").read_text(encoding="utf-8") == "hello"
+
+
+async def test_write_escape_denied(tmp_path: Path) -> None:
+    res = await WriteTool().execute({"file_path": "../evil.txt", "content": "x"}, FakeToolContext(tmp_path))
+    assert res.status == "error"
+    assert "escapes workspace root" in res.result
+    assert not (tmp_path.parent / "evil.txt").exists()
+
+
+async def test_edit_unique_anchor(tmp_path: Path) -> None:
+    (tmp_path / "f.txt").write_text("alpha\nbeta\n", encoding="utf-8")
+    res = await EditTool().execute({"file_path": "f.txt", "old_string": "beta", "new_string": "gamma"}, FakeToolContext(tmp_path))
+    assert res.status == "success"
+    assert (tmp_path / "f.txt").read_text(encoding="utf-8") == "alpha\ngamma\n"
+
+
+async def test_edit_ambiguous_without_replace_all_errors(tmp_path: Path) -> None:
+    (tmp_path / "f.txt").write_text("dup\ndup\n", encoding="utf-8")
+    res = await EditTool().execute({"file_path": "f.txt", "old_string": "dup", "new_string": "x", "replace_all": False}, FakeToolContext(tmp_path))
+    assert res.status == "error"
+    assert "multiple" in res.result.lower()
+
+
+async def test_edit_replace_all_reports_count(tmp_path: Path) -> None:
+    (tmp_path / "f.txt").write_text("dup dup dup", encoding="utf-8")
+    res = await EditTool().execute({"file_path": "f.txt", "old_string": "dup", "new_string": "x", "replace_all": True}, FakeToolContext(tmp_path))
+    assert res.status == "success"
+    assert (tmp_path / "f.txt").read_text(encoding="utf-8") == "x x x"
+    assert "3" in str(res.display)
+
+
+async def test_edit_missing_anchor_errors(tmp_path: Path) -> None:
+    (tmp_path / "f.txt").write_text("abc", encoding="utf-8")
+    res = await EditTool().execute({"file_path": "f.txt", "old_string": "zzz", "new_string": "y"}, FakeToolContext(tmp_path))
+    assert res.status == "error"
+
+
+async def test_apply_patch_all_or_nothing(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("keep\nold\n", encoding="utf-8")
+    patch = (
+        "--- a/a.txt\n"
+        "+++ b/a.txt\n"
+        "@@\n"
+        " keep\n"
+        "-old\n"
+        "+new\n"
+    )
+    res = await ApplyPatchTool().execute({"input": patch}, FakeToolContext(tmp_path))
+    assert res.status == "success"
+    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "keep\nnew\n"
+
+
+async def test_apply_patch_context_mismatch_leaves_file_untouched(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("actual\n", encoding="utf-8")
+    patch = "--- a/a.txt\n+++ b/a.txt\n@@\n-wrong\n+new\n"
+    res = await ApplyPatchTool().execute({"input": patch}, FakeToolContext(tmp_path))
+    assert res.status == "error"
+    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "actual\n"
+
+
+async def test_apply_patch_escape_denied(tmp_path: Path) -> None:
+    patch = "--- a/../evil.txt\n+++ b/../evil.txt\n@@\n+x\n+y\n"
+    res = await ApplyPatchTool().execute({"input": patch}, FakeToolContext(tmp_path))
+    assert res.status == "error"
+    assert "escapes workspace root" in res.result
