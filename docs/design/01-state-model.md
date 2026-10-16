@@ -100,7 +100,10 @@ Checkpoint { cp_id, seq, turn, kind: auto|manual|pre_tool|post_tool|pre_compact,
 ```
 - **续传**：客户端带 `after_seq` → 服务端从最近 `cp` 起重放 `seq>after` 的事件；`cp` 之前的状态直接取快照。
 - **快照节奏**：turn 边界必打（单步接口的天然一致点）；重工具/压缩前后各一个。
-- **恢复不变式**：恢复时先扫 `pending_tool_calls` 补合成 tool_result，再续跑。
+- **恢复不变式**：进入 provider 前先把未闭合 `tool_use` 补齐（**实派执行/等待审批，不合成假结果**）再续跑——
+  实现为 `kernel/loop.py::_settle_open_calls`（ADR-0021）；原案“扫 `pending_tool_calls` 补合成 tool_result”已被
+  ADR-0020/0021 修正为“完整快照 + 派发侧补齐”。ADR-0028 把同一机制从 resume 入口**扩到每次回发前**
+  （配对关卡；判据取 context 侧 `open_tool_use_ids`，因为账本驱动的回填盖不住“context 有、ledger 无”的悬空）。
 - **P3 落定**（详见 [ADR-0020](../adr/0020-durable-write-gate-and-log-authority.md) / [ADR-0021](../adr/0021-cross-process-resume.md)）：默认**写门截断**——落 checkpoint 前把持久化 `items` 截到 `closed_prefix`，durable 永不持半 `tool_use`；`pending_tool_calls` 只在窄窗口非空，读时 repair 兜底。续跑 = `rebuild_run`（最近快照 + 重放 `seq>cp.seq` 耐久尾 + 回填 + 闭过期审批）交回唯一 loop，仅对仍 OPEN 的调用幂等 re-dispatch。
 
 ## 6. 权限上下文 PermissionCtx（决策②，一等）
@@ -141,6 +144,9 @@ ErrorEntry { seq, at_turn, layer(kernel/tool/provider/persist), code, message,
 run.error_stack: ErrorEntry[]
 ```
 - 各阶段 catch → 归一成本 envelope；重试/fallback 读 `retryable`；终态失败时最后一条进 `run_failed` 事件的 `data.error`。
+- **接线现状**：provider 故障域于 **ADR-0028** 落地（`contracts/errors.py::classify_provider_error` 纯函数 +
+  `kernel/loop.py` 在唯一 `ProviderPort.stream` 调用点捕获→`run_failed`）。此前 `ErrorLayer.PROVIDER` 在生产
+  路径 0 使用、本条只停留在纸面；退避重试/fallback 编排仍归 P10（design/04 §8）。
 
 ## 9. 持久化映射（设计级，非最终 DDL）
 StorePort→SQLite：`sessions / runs / messages(+content) / task_nodes / tool_calls / checkpoints / events(append) / permission_rules`。
