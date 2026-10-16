@@ -51,7 +51,7 @@ from questor.contracts.state_schema import (
     ToolArgsStatus,
     ToolCallStatus,
 )
-from questor.contracts.tool import RunToolSurface, Tool, ToolSpec
+from questor.contracts.tool import RunToolSurface, Tool, ToolResult, ToolSpec
 from questor.kernel.events import EventBus
 from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
 from questor.kernel.run_control import RunController
@@ -464,7 +464,26 @@ class DefaultTurnLoop:
             process_runner=self.process_runner,
             artifact_store=self.artifact_store,
         )
-        result = await tool.execute(intent.args, ctx)
+        # 工具是插件（C10）：它的 panic 与挂死都必须由 Harness 兜住，否则单写者循环会崩、
+        # tool_call 悬在 RUNNING 并留下无 tool_result 的配对破坏（I1/C7）。
+        # deadline 对**所有**工具生效，不只有 ProcessRunner 的 exec 工具（design/03 §8）。
+        deadline = tool.spec.timeout_s or run.budget.tool_default_timeout_seconds
+        try:
+            result = await asyncio.wait_for(tool.execute(intent.args, ctx), timeout=deadline)
+        except TimeoutError:
+            result = ToolResult(
+                status="timed_out",
+                result=f"tool '{intent.name}' exceeded its {deadline}s deadline set by the Harness",
+                display=f"{intent.name} timed out after {deadline}s",
+            )
+        except Exception as exc:  # noqa: BLE001 - 插件故障不得击穿内核（C10）
+            # 只捕 Exception：CancelledError / KeyboardInterrupt / SystemExit 是 BaseException，
+            # 取消与进程级中断必须继续向上传递，不能被“吃成”一个工具 error。
+            result = ToolResult(
+                status="error",
+                result=f"tool '{intent.name}' raised {type(exc).__name__}: {exc}",
+                display=f"{intent.name} crashed",
+            )
         run, events = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status=result.status, result=result.result, display=result.display))
         controller.run = run
         await self._emit(events)

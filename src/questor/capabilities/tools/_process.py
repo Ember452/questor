@@ -43,7 +43,8 @@ def process_to_tool_result(result: ProcessResult, *, name: str) -> ToolResult:
     if result.stderr_artifact is not None:
         artifact["stderr"] = _ref_dict(result.stderr_artifact)
 
-    status = "success" if not result.timed_out else "error"
+    # 超时单独成状态：账本要能区分“被 Harness 杀死”与“工具自己失败”（C7/ADR-0016）。
+    status = "timed_out" if result.timed_out else "success"
     display = f"{name} exit={result.exit_code}" + (" (timed out)" if result.timed_out else "")
     return ToolResult(status=status, result=body, display=display, artifact=artifact or None)
 

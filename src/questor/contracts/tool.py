@@ -48,12 +48,12 @@ class ToolSpec:
     capability: Capability
     risk: Risk
     read_only: bool = False  # 权威布尔；缺 metadata 一律 fail-closed 视为非只读
-    available: bool = True
-    timeout_s: float | None = None  # None → Budget 默认；0/负值注册期拒绝
-    parallel_safe: bool = False  # 仅 schema 占位，完整并行到 P5（ROADMAP §2.5）
-    approval_mode: str | None = None  # MCP：只收紧不放宽，unknown→deny（03 §11）
-    orchestrator: bool = False  # 嵌套/子代理工具：不参与 gate（03 §11）
-    barrier: bool = False  # 同批独占
+    available: bool = True  # 静态默认值；**动态可用性的唯一真源是 `Tool.available()`**，本字段不被注册表读取
+    timeout_s: float | None = None  # None → Budget 默认；0/负值注册期拒绝（Harness 武装，见 loop）
+    parallel_safe: bool = False  # NOT enforced until P5：仅契约占位，v1 执行严格串行（ROADMAP §2.5）
+    approval_mode: str | None = None  # MCP：只收紧不放宽，unknown→deny
+    orchestrator: bool = False  # NOT enforced until P8：子代理 gate 尚未实现，不得当成已生效
+    barrier: bool = False  # NOT enforced until P5：同批独占 gate 尚未实现
     description_max_chars: int = 2000  # 描述长度上限（防超长/注入面）
 
     def __post_init__(self) -> None:
@@ -64,9 +64,14 @@ class ToolSpec:
 
 @dataclass(frozen=True, slots=True)
 class ToolResult:
-    """工具返回：``result`` 给模型、``display`` 给人（卡片）。"""
+    """工具返回：``result`` 给模型、``display`` 给人（卡片）。
 
-    status: str  # success | error | critical_error
+    ``status`` 取 success | error | critical_error | timed_out | cancelled：后两者由 Harness 在
+    deadline 到期/取消时产生（工具自己不会返回它们），入账本时映到同名 ToolCallStatus，
+    使“超时/被取消”与“业务失败”可区分（C7/ADR-0016）。
+    """
+
+    status: str  # success | error | critical_error | timed_out | cancelled
     result: Any | None = None
     display: Any | None = None
     files: tuple[str, ...] = ()

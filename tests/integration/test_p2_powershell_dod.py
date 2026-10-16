@@ -70,7 +70,7 @@ async def test_powershell_write_then_verify(tmp_path: Path) -> None:
 async def test_powershell_timeout_kills_tree(tmp_path: Path) -> None:
     ctx = _ToolCtx(tmp_path, asyncio.Event(), run_id="run-ps3", process_runner=_runner(tmp_path))
     res = await PowerShellTool().execute({"command": "Start-Sleep -Seconds 5", "timeout": 1}, ctx)
-    assert res.status == "error"
+    assert res.status == "timed_out"  # 与“工具自己失败”可区分（C7/ADR-0016）
     assert "timed out" in res.result
 
 

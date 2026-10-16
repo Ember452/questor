@@ -174,7 +174,7 @@ class RecordToolResult:
 
     run_id: str
     tool_call_id: str
-    status: str  # success | error | critical_error
+    status: str  # success | error | critical_error | timed_out | cancelled
     result: Any | None = None
     display: Any | None = None
     type: ClassVar[str] = "record_tool_result"
