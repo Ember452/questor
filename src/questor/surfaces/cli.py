@@ -19,12 +19,14 @@ from questor.capabilities.tools.edit import EditTool
 from questor.capabilities.tools.glob import GlobTool
 from questor.capabilities.tools.grep import GrepTool
 from questor.capabilities.tools.ls import LsTool
+from questor.capabilities.tools.memory_search import MemorySearchTool
 from questor.capabilities.tools.powershell import PowerShellTool
 from questor.capabilities.tools.read import ReadTool
 from questor.capabilities.tools.registry import ToolRegistry
 from questor.capabilities.tools.write import WriteTool
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
+from questor.contracts.memory import MemoryStorePort
 from questor.contracts.ports import ProviderPort, StorePort
 from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role
 from questor.contracts.tool import RunToolSurface
@@ -60,7 +62,7 @@ def sys_stdin_tty() -> bool:
 def _default_registry() -> ToolRegistry:
     """P2 默认内置工具集（注册表只收 available() 为真的，缺 bash 的平台自动隐藏）。"""
     registry = ToolRegistry()
-    for tool in (ReadTool(), WriteTool(), EditTool(), ApplyPatchTool(), LsTool(), GlobTool(), GrepTool(), BashTool(), PowerShellTool()):
+    for tool in (ReadTool(), WriteTool(), EditTool(), ApplyPatchTool(), LsTool(), GlobTool(), GrepTool(), BashTool(), PowerShellTool(), MemorySearchTool()):
         registry.register(tool)
     return registry
 
@@ -76,12 +78,14 @@ class CliSurface:
         system: str | None = None,
         model: str = "echo",
         store: StorePort | None = None,
+        memory_store: MemoryStorePort | None = None,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
         self.system = system
         self.model = model
         self.store = store
+        self.memory_store = memory_store
         self.read = ReadTool()
         self.registry = _default_registry()
 
@@ -96,6 +100,7 @@ class CliSurface:
             tools=surface.tools,
             surface=surface,
             store=self.store,
+            memory_store=self.memory_store,
             workspace_root=self.workspace_root,
             model=self.model,
             system=self.system,
