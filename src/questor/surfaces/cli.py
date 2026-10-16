@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 import sys
 from pathlib import Path
@@ -35,6 +36,7 @@ from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.permissions import DefaultPermissionEngine
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
+from questor.memory.distill import flush_run_to_daily
 from questor.observability.logging import configure_logging, log_event
 from questor.policy.react_policy import ReActPolicy
 from questor.providers.fake import EchoProvider
@@ -44,6 +46,18 @@ from questor.surfaces.approval import prompt_approval
 from questor.surfaces.run_registry import RunRegistry
 
 _TERMINAL_EVENTS = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
+
+_log = logging.getLogger("questor.cli")
+
+
+def _final_answer_text(run: Run) -> str:
+    """取最后一条 assistant 消息的可见文本（run 的浓缩回答，非 delta）作为 daily 沉淀素材。"""
+    for message in reversed(run.context.items):
+        if message.role is Role.ASSISTANT:
+            text = "".join(b.text or "" for b in message.content if b.type == "text").strip()
+            if text:
+                return text
+    return ""
 
 
 def provider_from_env() -> ProviderPort:
@@ -137,6 +151,7 @@ class CliSurface:
                 idempotency_key=f"submit:{run.run_id}",
             )
             final = await loop.drive_controller(controller)
+            await self._flush_run_to_daily(final)
         finally:
             # 两个消费者都会自然收到终态帧并退出（queue 里已有 terminal）；超时才强收。
             _, still_pending = await asyncio.wait({printer, approver}, timeout=2.0)
@@ -145,6 +160,21 @@ class CliSurface:
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
         return final
+
+    async def _flush_run_to_daily(self, run: Run) -> None:
+        """run 完成边界的 episodic→daily 沉淀（产品化“记住”写入触发器）。
+
+        ADR-0025：经注入的 ``MemoryStorePort`` 离线收口、不进热 loop；幂等（run_id 键）使重投安全。
+        本地写入 best-effort：失败只告警不拖垮已完成 run（主回答已流式完）。无 memory_store / 无终态 / 无回答 → 不写。"""
+        if self.memory_store is None or not run.status.is_terminal:
+            return
+        summary = _final_answer_text(run)
+        if not summary:
+            return
+        try:
+            await flush_run_to_daily(self.memory_store, summary_text=summary, run_id=run.run_id)
+        except Exception:  # noqa: BLE001 - 记忆沉淀失败不得拖垮已完成 run；run_id 幂等键使重投安全
+            _log.warning("run-completion daily flush failed for run %s", run.run_id, exc_info=True)
 
     async def resume(self, run_id: str) -> Run | None:
         """从持久态续跑一个被 kill/重启的 run（P3 T12，ADR-0021）。
