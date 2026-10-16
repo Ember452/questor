@@ -223,6 +223,10 @@ class DefaultTurnLoop:
         try:
             result = await self._drive_controller(controller)
             controller.run = result
+            # 终态也落一个权威快照（completed/failed/cancelled）：否则对已结束的 run 重建
+            # 会拿到 turn 边界那个 status=running 的 stale 快照，resume 会重驱一轮（真实 LLM 冒烟发现）。
+            if result.status.is_terminal and self.store is not None:
+                await self._checkpoint(result, "final")
             return result
         finally:
             if controller.run.status.is_terminal:

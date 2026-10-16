@@ -249,6 +249,26 @@ async def test_rebuild_fail_closed_when_all_checkpoints_corrupt(tmp_path: Path) 
     await store.close()
 
 
+async def test_rebuild_reflects_terminal_state(tmp_path: Path) -> None:
+    """真实 LLM 冒烟发现的缺陷：终态(run_completed)不落快照 → 对已完成 run 重建会返回 stale running。
+
+    修复后：终态也落快照，rebuild 对已完成 run 返回 completed（续跑幂等、不重驱）。
+    """
+    store = await SQLiteStore(str(tmp_path / "term.db")).connect()
+    try:
+        tool = _RecordingTool(tmp_path)
+        loop = _build_loop(tmp_path, tool, store)
+        controller = RunController(Run(run_id=new_id("run"), budget=Budget(max_turns=3)))
+        await controller.submit(SubmitMessage(run_id=controller.run.run_id, content=Message(id="u", role=Role.USER, content=(ContentBlock(type="text", text="go"),), seq=0)), source="test", idempotency_key="submit")
+        final = await loop.drive_controller(controller)
+        assert final.status is RunStatus.COMPLETED
+
+        rebuilt = await rebuild_run(store, final.run_id)
+        assert rebuilt is not None and rebuilt.status is RunStatus.COMPLETED  # 不再是 stale running
+    finally:
+        await store.close()
+
+
 async def test_rebuild_fail_closed_on_incompatible_snapshot_version(tmp_path: Path) -> None:
     """§6-4：contract_version 比本仓可解的更新 → rebuild 必须 fail-closed 拒续跑，绝不静默半重建。"""
     from questor.contracts.state_schema import Budget
