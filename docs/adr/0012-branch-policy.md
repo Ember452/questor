@@ -22,6 +22,8 @@
 - **事实依据**：`ci-python.yml` 的 `boundaries` job 自 P0 起就是**独立 blocking**（不依赖 change classifier，C15）——即 ADR 第 2 条说的"可当 required status check 的门禁"已存在；P2 T20 又补了 `check_output_budgets` / `check_secret_projection` 两条可判红守卫，并把 push 触发从"仅 main"改为全分支（commit `1892fb3`），Windows 真机 leg 在 PR / dispatch / 进 main 时跑。
 - **已同步的文档**：`CONTRIBUTING.md` 提交流程、`AGENTS.md §6` 分支口径均已改为 B。
 - **仍需维护者在 GitHub 侧手动完成（本仓 agent 无网络，既不能代做也不能验证，故如实列成待办而非宣称已完成）**：
-  1. Settings → Branches → `main` 保护规则：在 **Require a pull request before merging → Required status checks** 加入 `boundaries`（必选），按需要加 `tests-posix` / `tests-windows`。注意两条现实约束：**a)** 一个 check 必须**先有一次 run 真产出过**才会出现在下拉候选里（所以先合一个跑通的 PR，再回来勾）；**b)** `tests-windows` 在纯 push 事件上是 `skipped` 状态——把 skipped 的 job 设为 required 会让 PR 永远卡在 pending，所以 **Windows 分相不要设为 required**，当信号看即可。
+  1. Settings → Branches → 保护规则：在 **Require a pull request before merging → Required status checks** 加入 `boundaries`（必选）与 `tests-posix`。关于 `tests-windows`：**它在 PR / dispatch 事件上是会真跑的**（job 条件是`event_name != 'push' || ref == refs/heads/main`），**只有功能分支的纯 push 会把它置为 skipped**；skipped 的 required check 在不同时期/配置下行为并非完全一致，因此建议：先只把 `boundaries` + `tests-posix` 设为 required，观察一次 PR 上 `tests-windows` 的报告形式后再决定是否加——不要凭印象把它排除在门禁之外，也不要凭印象直接勾上。
+     实测修正：上文曾经写“必须先合一个跑通的 PR，check 名才会出现在候选里”——不必。把 push 触发扩到全分支后，分支自身的 run 就会上报 check，候选框里已经能搜到。
   2. 同页把管理员绕行关掉：勾选 **Do not allow bypassing the above settings**（等价于撤销原 A 案刻意保留的 *Allow administrators to bypass*）。
-- **在以上两项落地前，现实是"口径已 B、强制力仍靠自觉"。** 这句留在这里，是为了不让文档假装闸门已经关闭——A 案当初被否掉的正是"规则挂着但一直 bypass"的自欺。
+  3. **规则模式必须只匹配 `main`，不能是 `*` / `feat/**`**（这是切换当天真碰上的事）：对功能分支也开启 Require PR 后，**连更新一个开放中 PR 的 head 分支都推不上去**，GH013 原文：`Changes must be made through a pull request` + `2 of 2 required status checks are expected`。后果是死锁：CI 红了却无法推修复。B 案要的是“**进主干**必须走 PR + 绿 checks”，而不是“每个分支都不许直接提交”。
+- **在上述各项（尤其第 2、3 条）落地前，现实是"口径已 B、强制力不完全"。** 这句留在这里，是为了不让文档假装闸门已经关闭——A 案当初被否掉的正是"规则挂着但一直 bypass"的自欺。
