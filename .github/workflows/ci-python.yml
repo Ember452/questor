@@ -76,22 +76,15 @@ jobs:
       - name: Thread-leak guard (self-test proves it can go red)
         run: uv run python scripts/check_thread_leak.py --self-test
 
-  # P2 T20：平台矩阵真机跑 shell 工具的 DoD —— Windows 真 PowerShell、Ubuntu 真 bash；
-  # 缺平台时对应测试自行 skip（不 fake 冒充覆盖）。fail-fast: false 让两平台各自报红/绿。
-  tests:
+  # P2 T20：平台分相真机跑 shell 工具的 DoD —— Windows 真 PowerShell、Ubuntu 真 bash；
+  # 缺平台时对应测试自行 skip（不 fake 冒充覆盖）。
+  #
+  # 为什么是两个并列 job、而不是一个 `strategy.matrix.os` job 加 job 级 `if`：
+  # job 级 `if` 表达式里 **matrix 上下文不可用**（引用会使整个 workflow 文件注册失败，
+  # 一条 run 都不会创建）。拆成两个 job 后，条件只用 `github.*`，受支持且 check 名固定。
+  tests-posix:
     needs: boundaries
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-2022]
-    # Windows runner 分钟单价高于 Linux（私有仓库还计费），所以：**功能分支的纯 push
-    # 只跑 ubuntu leg**；Windows 真机 leg 在 PR、workflow_dispatch 和已合入 main 时跑——
-    # 即“合并前必验 Windows”，不每天为它付双倍钱。
-    if: >-
-      github.event_name != 'push'
-      || github.ref == 'refs/heads/main'
-      || matrix.os == 'ubuntu-24.04'
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     # 兜底：曾经因 aiosqlite 非守护线程泄漏使 pytest step 永不结束，这里限时自停。
     timeout-minutes: 15
     steps:
@@ -106,22 +99,55 @@ jobs:
       # -v + 禁用 cache provider：卡死时日志能直接看出停在哪个测试（-q 下什么都不刷）。
       # --timeout 由 pyproject 的 addopts 提供（单测卡死限时）；junitxml 供事后定位（DeepCode 做法）。
       # P2 起产 coverage baseline：只观测、不设 fail-under，避免把基线阶段变成虚假门槛。
+      # 单行写法：同一个 run step 要在 ubuntu(bash) 与 windows(powershell) 都能跑，不用行连接符。
       - name: pytest with coverage baseline
-        # 单行写法：同一个 run step 要在 ubuntu(bash) 与 windows(powershell) 都能跑，
-        # 反斜杠/反引号续行跨 shell 不一致，故不用任何行连接符。
         run: uv run pytest -v --tb=short -p no:cacheprovider --durations=10 --junitxml=pytest-results.xml --cov=src/questor --cov-branch --cov-report=term-missing --cov-report=xml:coverage.xml
       # always()：红的 run 才最需要产物，绿的不需要。只留 7 天，不慢慢堆满额度。
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-results-${{ matrix.os }}
+          name: pytest-results-posix
           path: pytest-results.xml
           retention-days: 7
       - name: Upload coverage baseline
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report-${{ matrix.os }}
+          name: coverage-report-posix
+          path: coverage.xml
+          retention-days: 7
+
+  # Windows runner 分钟单价高于 Linux（私有仓库还计费），所以：**功能分支的纯 push 不跑这个 job**；
+  # Windows 真机 leg 只在 PR、workflow_dispatch 和已合入 main 时跑——即“合并前必验 Windows”。
+  # 两个 job 的 steps 故意保持一致，改一个要同步改另一个。
+  tests-windows:
+    needs: boundaries
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+      - run: uv sync --locked --all-groups
+      - name: pytest with coverage baseline
+        run: uv run pytest -v --tb=short -p no:cacheprovider --durations=10 --junitxml=pytest-results.xml --cov=src/questor --cov-branch --cov-report=term-missing --cov-report=xml:coverage.xml
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results-windows
+          path: pytest-results.xml
+          retention-days: 7
+      - name: Upload coverage baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-windows
           path: coverage.xml
           retention-days: 7
