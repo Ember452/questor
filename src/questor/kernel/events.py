@@ -14,7 +14,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import replace
 from datetime import datetime
 
@@ -97,6 +97,14 @@ class InProcessEventBus(EventBus):
         self._store = store
         self._subs: dict[str, list[asyncio.Queue[Envelope]]] = defaultdict(list)
         self._closed: set[str] = set()
+        # bus 级只读 observer（ADR-0033 / D-P7-A）：每条**投影后**的对外 Envelope 恰触发一次，
+        # 与消费者/订阅者数量无关——带外投影（log_envelope）由此挂载，杜绝"逐消费者各投 = 多 surface 双投"。
+        # 依赖方向：observer 由 surfaces/组合根注入回调，kernel 不 import observability（S7 九内核零依赖不破）。
+        self._observers: list[Callable[[Envelope], None]] = []
+
+    def add_observer(self, observer: Callable[[Envelope], None]) -> None:
+        """挂一个只读 observer：每次 ``emit`` 对投影后的 Envelope 调用一次（旁路观测，不改状态/扇出）。"""
+        self._observers.append(observer)
 
     def add_subscriber(self, run_id: str) -> asyncio.Queue[Envelope]:
         queue: asyncio.Queue[Envelope] = asyncio.Queue()
@@ -123,6 +131,9 @@ class InProcessEventBus(EventBus):
         projected = project(env)
         if projected is None:
             return
+        # 先触发 bus 级 observer（带外投影）：恰一次，与下面订阅扇出/订阅者数量无关（ADR-0033）。
+        for observer in self._observers:
+            observer(projected)
         for queue in self._subs.get(env.run_id, ()):
             try:
                 queue.put_nowait(projected)

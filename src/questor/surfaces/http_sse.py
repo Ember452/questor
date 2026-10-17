@@ -27,6 +27,7 @@ from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
+from questor.observability.projection import log_envelope
 from questor.state.domain_state import Run
 from questor.surfaces.approval import http_status_for_receipt
 from questor.surfaces.cli import CliSurface
@@ -65,6 +66,9 @@ class EventServer:
         if surface.store is None:
             surface.store = store
         self.bus = InProcessEventBus(store)
+        # bus 级唯一只读投影订阅（ADR-0033 / D-P7-A）：sidecar 路径的事件带外行也落主干日志
+        # （收口 plan/05 §0.4 缺口：`stream()` 曾完全不投）。挂在此处一次，与 SSE 订阅者数量无关。
+        self.bus.add_observer(log_envelope)
         self.registry = RunRegistry()
 
     def _loop(self, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
