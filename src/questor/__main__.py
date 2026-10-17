@@ -49,6 +49,13 @@ def _memory_root() -> str:
     return os.environ.get("QUESTOR_MEMORY_ROOT", str(Path.cwd() / ".questor" / "memory_store"))
 
 
+def _skills_dir_from_env() -> str:
+    """技能搜索目录取自 ``QUESTOR_SKILLS_DIR``（默认 ``<cwd>/.questor/skills``）；env 读属组合根职责。
+
+    与 ``QUESTOR_STORE_PATH``/``QUESTOR_LOG_DIR`` 同族命名；目录不存在时 catalog 为空（合法，不报错）。"""
+    return os.environ.get("QUESTOR_SKILLS_DIR", str(Path.cwd() / ".questor" / "skills"))
+
+
 def _model_from_env() -> str:
     """模型名取自 ``QUESTOR_MODEL``（缺省回落离线 ``"echo"``）；env 读取属组合根职责（DESIGN §11）。
 
@@ -102,7 +109,7 @@ async def _amain(argv: list[str]) -> int:
                 f"input_hash={str(result.get('input_hash', ''))[:12]}"
             )
             return 0
-        surface = CliSurface(store=store, memory_store=memory, model=_model_from_env())
+        surface = CliSurface(store=store, memory_store=memory, model=_model_from_env(), skills_dir=Path(_skills_dir_from_env()))
         if argv and argv[0] == "--list":
             unfinished = await store.list_unfinished_runs()
             for run_id in unfinished:

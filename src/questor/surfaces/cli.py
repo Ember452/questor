@@ -14,6 +14,7 @@ import os
 import sys
 from pathlib import Path
 
+from questor.capabilities.skills.catalog import build_skill_catalog
 from questor.capabilities.tools.apply_patch import ApplyPatchTool
 from questor.capabilities.tools.bash import BashTool
 from questor.capabilities.tools.edit import EditTool
@@ -97,15 +98,19 @@ class CliSurface:
         model: str = "echo",
         store: StorePort | None = None,
         memory_store: MemoryStorePort | None = None,
+        skills_dir: Path | None = None,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
-        self.system = system
         self.model = model
         self.store = store
         self.memory_store = memory_store
         self.read = ReadTool()
         self.registry = _default_registry()
+        # 技能生效（DoD①）：把发现的 SKILL.md 目录并入 system prompt。skills_dir=None（默认）
+        # 时 catalog 为空、system 不变——不影既有 run。描述已在 catalog 内过 `bound_description` 有界。
+        catalog = build_skill_catalog(skills_dir)
+        self.system = f"{system}\n\n{catalog}".strip() if catalog else system
 
     def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
         """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。"""
