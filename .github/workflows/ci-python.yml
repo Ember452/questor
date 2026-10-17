@@ -83,6 +83,13 @@ jobs:
         run: |
           uv run python scripts/check_secret_projection.py --self-test
           uv run python scripts/check_secret_projection.py
+      # ADR-0027 / G-L1+G-L2: the nine log-kernel files must stay free of every other
+      # questor layer so "extract the package" is a mechanical move. Catches dynamic
+      # imports import-linter misses; --self-test proves it can go red; fail-on-empty.
+      - name: Log-kernel isolation guard (self-test proves it can go red)
+        run: |
+          uv run python scripts/check_log_kernel_isolation.py --self-test
+          uv run python scripts/check_log_kernel_isolation.py
       - name: Thread-leak guard (self-test proves it can go red)
         run: uv run python scripts/check_thread_leak.py --self-test
 
