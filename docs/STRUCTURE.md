@@ -58,10 +58,14 @@ desktop/
 ```
 - **铁律**：`web/` 只做 UI 与"订阅外部事件"，**禁止把业务/状态/校验逻辑下沉到壳**（ROADMAP §1.5 / ADR-0007）。
 - `src-tauri` 不碰内核逻辑，只负责启动 sidecar + 暴露窗口能力。
-- **P7 现状（`feat/p7-desktop-shell`）**：`web/src/{generated,api}` + `scripts/generate-protocol.mjs` + `sidecar-requirements.{in,lock}`
-  已落地并 `vitest`/`check:protocol`/`check_thin_client` 验证；**Python 侧 sidecar serve 生产入口在 `src/questor/surfaces/serve.py`
-  （L6，loopback `127.0.0.1:0` + generation bootstrap，ADR-0032）**，组合根 `__main__.py --serve` 装配。`src-tauri` Rust 壳
-  与 PyInstaller 冻结**尚未建**（本机无 cargo/pyinstaller，UNVERIFIED）。
+- **P7 现状（`feat/p7-desktop-shell`，含审计后加固）**：`web/src/{generated,api}` + Vite 薄客户端 app（`tsc`+`vite build` 产 dist）、
+  `scripts/generate-protocol.mjs`（含 per-type `*Data` 字段级接口 + 漂移 `--check`）、`sidecar-requirements.{in,lock}`、
+  **`desktop/sidecar` Rust crate**（generation 栅栏/两级优雅关闭/`fail_all`/loopback 就绪/Job Object 杀进程树/`resolve_sidecar`，
+  `cargo test`）、**`desktop/src-tauri` Tauri v2 壳**（spawn 冻结产物、读 bootstrap、注入 token、退出走 `/shutdown`）均已本地
+  **cargo `check`/`clippy`/`test` 编译验证**；sidecar serve 生产入口 `src/questor/surfaces/serve.py`（loopback `127.0.0.1:0` +
+  generation bootstrap + 会话 token，ADR-0032）由组合根 `__main__.py --serve` 装配；PyInstaller onedir 已用 `build-sidecar.py`
+  实产并经 `verify_release_bundle --verify-runtime` 启动验证（无系统 Python）。**仍 UNVERIFIED**：真开窗口/像素渲染、全量
+  `tauri build` 安装介质（需显示 + `@tauri-apps/cli`）、真远程 MCP/真 LLM。
 
 ## 4. 测试 `tests/`
 - 单元测试随模块镜像目录；**任务级评测/回归网**单列（如 `tests/evals/`），改内核前必备（ROADMAP P10）。

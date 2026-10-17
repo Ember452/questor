@@ -55,6 +55,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   全流（带外投影行也真落盘）——“无系统 Python 回退 + 冻结产物真能服务”由 UNVERIFIED **转已验**。
 - **决策**：ADR-0032（sidecar serve 接线与进程边界）、ADR-0033（bus 级只读投影）、ADR-0034（D-P7-C 重连文本=选型①
   有界 `final_text`）、ADR-0035（工具/节点事件 additive 定形）。
+- **P7 对抗式审计后加固（`docs/audit/P7-review-2026-10-17.md` 判 NO-GO → 逐条修）**：sidecar 启动位解析
+  `resolve_sidecar`（env→发布资源→开发态，发布态不写死 `python`）+ bundle 打包链；会话 token 强制端点鉴权（
+  缺→401，堆本机旁路 HITL）；真 `/shutdown` 优雅关闭；崩溃检测/重启决策原语；MCP 接进 sidecar 路径（原仅 CLI）；
+  字段级协议漂移两道 `--check` 门；`resync_required` 分因（after_ahead）+ 传输级 `stream_end` 尾帧；clippy/fmt 绿；
+  新增独立 `ci-desktop` 桌面 lane 与 `check_desktop_csp` 锁定。修一处预存在测试时区缺陷（日志读器用本地日期而 sink 按 UTC 命名）。
+  **仍 UNVERIFIED**：真开窗口/全量 `tauri build` 安装介质/真远程 MCP/真 LLM（环境受限）。
 - **诚实边界（UNVERIFIED，不用 fake 冒充真机）**：真**开窗口/像素渲染**（需显示环境）与全量 `tauri build` 桌面 bundle
   （需 `@tauri-apps/cli` + WebView2 runtime + 上一步的 vite 产物链）、真远程 MCP server 端到端、真 LLM、
   在途半条 live-delta 文本恢复——本机无头环境不跑真窗口，未伪造（sidecar 冻结产物已实跑、Tauri 壳已 `cargo check`/`test` 编译级验）。
