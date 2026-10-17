@@ -44,6 +44,17 @@ KERNEL_FILES: tuple[str, ...] = (
     "observability/configure.py",
 )
 
+#: Files under ``observability/`` that are sanctioned to be OUTSIDE the kernel list: the package
+#: init (docstring only) and the one adapter layer. Anything else that shows up there must be
+#: added to KERNEL_FILES explicitly -- otherwise a 10th kernel file with a forbidden import would
+#: simply never be scanned (guard scope silently *widens*, the mirror image of fail-on-empty).
+SANCTIONED_NON_KERNEL: frozenset[str] = frozenset(
+    {
+        "observability/__init__.py",
+        "observability/projection.py",
+    }
+)
+
 
 def _external_questor(module: str) -> bool:
     """True for a questor reference that is *not* the kernel's own package sibling."""
@@ -98,8 +109,19 @@ def scan_source(source: str, path: str) -> list[str]:
     return violations
 
 
+def _scope_violations(found: list[str], root: Path) -> list[str]:
+    """Anti-widening: every ``observability/*.py`` file (root-relative path) must be kernel or a named adapter."""
+    covered = set(KERNEL_FILES) | set(SANCTIONED_NON_KERNEL)
+    return [
+        f"{root / rel}: neither in KERNEL_FILES nor a sanctioned adapter "
+        "(add it explicitly or the isolation scan silently skips it)"
+        for rel in sorted(found)
+        if rel not in covered
+    ]
+
+
 def check(root: Path) -> tuple[list[str], int]:
-    """Scan every kernel file under ``root``; flag missing files (fail-on-empty)."""
+    """Scan every kernel file under ``root``; flag missing files (fail-on-empty) and new files."""
     violations: list[str] = []
     scanned = 0
     for rel in KERNEL_FILES:
@@ -109,6 +131,11 @@ def check(root: Path) -> tuple[list[str], int]:
             continue
         scanned += 1
         violations += scan_source(file.read_text(encoding="utf-8"), str(file))
+    pkg = root / "observability"
+    if pkg.is_dir():
+        # 路径必须与 KERNEL_FILES 同基准（相对 root），否则清单比对全体对不上、把内核文件自己报成越界。
+        found = [p.relative_to(root).as_posix() for p in sorted(pkg.glob("*.py"))]
+        violations += _scope_violations(found, root)
     return violations, scanned
 
 
@@ -130,11 +157,17 @@ def self_test() -> int:
     annotation_only = any("G-L2" in m for m in red_annotation)
 
     ok = bool(red_import) and bool(red_dynamic) and annotation_only and not ok_sibling and not ok_stdlib
+    # Anti-widen: a new observability file outside the kernel list and outside the sanctioned
+    # adapters must go red (anti-shrink is the fail-on-empty branch in check()).
+    widen = _scope_violations(["observability/entry.py", "observability/sneaky.py"], Path("src/questor"))
+    scope_clean = _scope_violations([*KERNEL_FILES, "observability/__init__.py", "observability/projection.py"], Path("src/questor"))
+    ok = ok and bool(widen) and not scope_clean
     print(
         f"self-test: external-import={bool(red_import)} dynamic-import={bool(red_dynamic)} "
-        f"annotation-leak={annotation_only} sibling-passed={not ok_sibling} stdlib-passed={not ok_stdlib}"
+        f"annotation-leak={annotation_only} sibling-passed={not ok_sibling} stdlib-passed={not ok_stdlib} "
+        f"scope-widening-caught={bool(widen)}"
     )
-    for msg in (*red_import, *red_dynamic, *red_annotation):
+    for msg in (*red_import, *red_dynamic, *red_annotation, *widen):
         print(f"  expected-red -> {msg}")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
