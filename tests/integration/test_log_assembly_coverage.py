@@ -62,6 +62,8 @@ def _run_cli(args: list[str], db: str) -> subprocess.CompletedProcess[str]:
         "QUESTOR_STORE_PATH": db,
         "QUESTOR_MEMORY_DB": str(Path(db).parent / "memory.db"),
         "QUESTOR_LOG_LEVEL": "INFO",
+        # 把文件面定向到 tmp，避免装配生效后在仓里落日分片（新默认是 <cwd>/.questor/logs）。
+        "QUESTOR_LOG_DIR": str(Path(db).parent / "logs"),
         "LITELLM_LOCAL_MODEL_COST_MAP": "True",  # 去联网拉 cost map 的噪声/超时，让 A① 判据确定
         "PYTHONPATH": str(Path(_REPO_ROOT) / "src"),
     }
@@ -84,9 +86,9 @@ def test_resume_has_stderr_log_lines(tmp_path: Path) -> None:
 
     proc = _run_cli(["--resume", run_id], db)
     assert proc.returncode == 0, proc.stderr
-    # 装配上移后，--resume 路径起手即有落 stderr 的 questor 日志行（live 队列驱至
-    # 终态会 emit run_completed；用行形状 + logger 名校验，不钉死具体事件类型）。
-    assert re.search(r"\[run_\w+\]", proc.stderr), f"expected a questor run log line on stderr, got: {proc.stderr!r}"
+    # 装配生效（刀2 接新管线）后，--resume 起手即有投影到 stderr 的 questor 事件行（live 队列驱至
+    # 终态会 emit run_completed；新版经带外投影 → pipeline → console sink 渲染）。
+    assert re.search(r"questor\.events\.run_\w+", proc.stderr), f"expected a projected questor.events.* line on stderr, got: {proc.stderr!r}"
     assert _LOG_LINE_RE.search(proc.stderr), proc.stderr
 
 

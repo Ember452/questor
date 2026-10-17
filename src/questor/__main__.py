@@ -12,18 +12,23 @@
 路径：state 取 ``QUESTOR_STORE_PATH``（默认 ``<cwd>/.questor/state.db``）；记忆库取
 ``QUESTOR_MEMORY_DB``（默认 ``<cwd>/.questor/memory.db``）、md 真源根取 ``QUESTOR_MEMORY_ROOT``
 （默认 ``<cwd>/.questor/memory_store``）。记忆与 event-log 分库（ADR-0023 故障隔离）。
+
+日志（ADR-0027 / DESIGN §10/§11）：目录取 ``QUESTOR_LOG_DIR``（默认 ``<cwd>/.questor/logs/``，写
+按日 JSONL 主干 + ``errors``/``llm`` 分流）；console 级别取 ``QUESTOR_LOG_LEVEL``（默认 INFO，主干
+文件恒 DEBUG）；保留天数取 ``QUESTOR_LOG_KEEP_DAYS``（默认 14，启动懒清理）；``QUESTOR_LOG_PAYLOAD``
+（默认 off）为 preview 开关、实装归刀 3、本期非 off 值拒绝启动。这些 env 只在组合根读、内核 env-free。
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import sys
 from pathlib import Path
 
 from questor.memory.distill import DistillOutcome, deep_dream
-from questor.observability.logging import configure_logging
+from questor.observability.configure import configure_logging
+from questor.observability.entry import LogLevel
 from questor.providers.store_memory_sqlite import SQLiteMemoryStore
 from questor.providers.store_sqlite import SQLiteStore
 from questor.surfaces.cli import CliSurface, interactive
@@ -41,9 +46,29 @@ def _memory_root() -> str:
     return os.environ.get("QUESTOR_MEMORY_ROOT", str(Path.cwd() / ".questor" / "memory_store"))
 
 
-def _log_level_from_env() -> int:
-    """日志级别取自 ``QUESTOR_LOG_LEVEL``（默认 INFO）；env 读取属组合根职责，内核不读 env（DESIGN §11）。"""
-    return getattr(logging, os.environ.get("QUESTOR_LOG_LEVEL", "INFO").upper(), logging.INFO)
+def _console_level_from_env() -> LogLevel:
+    """console 级别取自 ``QUESTOR_LOG_LEVEL``（默认 INFO）；env 读取属组合根职责，内核不读 env（DESIGN §11）。"""
+    return getattr(LogLevel, os.environ.get("QUESTOR_LOG_LEVEL", "INFO").upper(), LogLevel.INFO)
+
+
+def _log_dir() -> str:
+    """日志目录取自 ``QUESTOR_LOG_DIR``（默认 ``<cwd>/.questor/logs/``）；env 读取属组合根（DESIGN §10/§11）。"""
+    return os.environ.get("QUESTOR_LOG_DIR", str(Path.cwd() / ".questor" / "logs"))
+
+
+def _keep_days_from_env() -> int:
+    """保留天数取自 ``QUESTOR_LOG_KEEP_DAYS``（默认 14）；解析失败回落默认，绝不在装配期崩。"""
+    try:
+        return int(os.environ.get("QUESTOR_LOG_KEEP_DAYS", "14"))
+    except ValueError:
+        return 14
+
+
+def _payload_gate() -> None:
+    """``QUESTOR_LOG_PAYLOAD`` 解析：preview 截断属刀 3，本期仅解析、拒绝未实现值（T2.14）。"""
+    payload = os.environ.get("QUESTOR_LOG_PAYLOAD", "off").strip().lower()
+    if payload not in {"", "off"}:
+        raise SystemExit(f"QUESTOR_LOG_PAYLOAD={payload!r} 尚未实装（preview 归刀 3）；当前仅支持 off")
 
 
 def _model_from_env() -> str:
@@ -75,9 +100,17 @@ class _HeuristicDistiller:
 
 
 async def _amain(argv: list[str]) -> int:
-    # 日志装配上移至组合根唯一入口（刀1 缺陷修复）：覆盖 REPL/--resume/--list/--dream
-    # 四入口——此前仅 ``interactive()`` 配置，崩溃恢复的 ``--resume`` 裸奔无日志（DESIGN §11）。
-    configure_logging(level=_log_level_from_env())
+    # 组合根唯一装配入口（DESIGN §11；T2.14）：读 env 族并装**完整管线**——带内桥 + console(stderr)
+    # + 按日 JSONL 文件面 + errors 分流——覆盖 REPL/--resume/--list/--dream 四入口。参数由组合根注入、
+    # 内核 env-free（config⟂observability）。sidecar 宿主入口须调同一 configure_logging、不自配。
+    _payload_gate()
+    configure_logging(
+        console_level=_console_level_from_env(),
+        file_level=LogLevel.DEBUG,
+        log_dir=_log_dir(),
+        keep_days=_keep_days_from_env(),
+        llm_file=False,
+    )
     path = _store_path()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     store = await SQLiteStore(path).connect()

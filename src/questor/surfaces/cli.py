@@ -37,7 +37,8 @@ from questor.kernel.permissions import DefaultPermissionEngine
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.memory.distill import flush_run_to_daily
-from questor.observability.logging import configure_logging, log_event
+from questor.observability.configure import configure_logging
+from questor.observability.projection import log_envelope
 from questor.policy.react_policy import ReActPolicy
 from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
@@ -225,7 +226,7 @@ class CliSurface:
         """从预挂的订阅队列消费：text_delta 打印/回调，终态后换行退出。"""
         while True:
             env = await queue.get()
-            log_event(env)
+            log_envelope(env)
             if env.type == EventType.TEXT_DELTA:
                 piece = env.data.get("delta", "")
                 if on_delta is not None:
