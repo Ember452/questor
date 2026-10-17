@@ -119,7 +119,10 @@
       "additionalProperties": false,
       "properties": {
         "tool_call_id": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "status": { "type": "string", "enum": ["success", "error", "critical_error", "timed_out", "cancelled", "denied"] }
+        "status": { "type": "string", "enum": ["success", "error", "critical_error", "timed_out", "cancelled", "denied"] },
+        "preview": { "type": "string", "maxLength": 4096, "description": "Bounded tool-output preview for the card (C18/ADR-0019). Never the full text; read full body via artifact_ref. Not logged (C20)." },
+        "artifact_ref": { "type": ["string", "null"], "maxLength": 128, "description": "Opaque artifact:// pointer for the full output when archived. Never an absolute path." },
+        "truncated": { "type": "boolean", "description": "True when preview was cut or the full body lives behind artifact_ref." }
       }
     },
     "approval_request": {

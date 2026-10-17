@@ -49,7 +49,9 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.MESSAGE_COMPLETED: frozenset({"message_id"}),
     EventType.TOOL_STARTED: frozenset({"tool_call_id", "name", "capability", "risk", "args_summary"}),
     EventType.TOOL_PROGRESS: frozenset({"message"}),
-    EventType.TOOL_COMPLETED: frozenset({"tool_call_id", "status"}),
+    # 工具卡（P7 T7）additive：有界 preview + artifact 指针 + truncated（C18/C20；ADR-0035）。
+    # preview/artifact_ref 只进事件协议（给前端），绝不进带外投影白名单（projection._DATA_KEYS 不含）。
+    EventType.TOOL_COMPLETED: frozenset({"tool_call_id", "status", "preview", "artifact_ref", "truncated"}),
     EventType.APPROVAL_REQUEST: frozenset({"request_id", "tool_call_id", "name", "args_summary", "risk", "reason", "expires_at"}),
     EventType.APPROVAL_RESOLVED: frozenset({"request_id", "tool_call_id", "decision", "decided_by", "resolved_at"}),
     EventType.PERMISSION_MODE_CHANGED: frozenset({"mode", "changed_by", "effective_from_turn"}),

@@ -57,6 +57,43 @@ _OPEN_CALL = OPEN_TOOL_CALL_STATUSES
 #: 防长跑把 memory.db / event payload 撑爆。实现期可经配置覆盖，只增不改）。
 _MAX_MEMORY_WRITE_BYTES = 16 * 1024
 
+#: 工具事件内 preview 的字符上限（P7 T7；C18）——远小于 ADR-0019 的 16 KiB model 预算，
+#: 因为事件帧要给所有 surface 高频扇出、必须比“回模型”的预算更小。全文靠 artifact 指针按需读。
+_TOOL_PREVIEW_CHARS = 4096
+
+
+def _tool_completed_data(tool_call_id: str, status: str, *, result: object, display: object) -> dict[str, object]:
+    """为 ``tool_completed`` 事件派生**有界** preview + artifact 指针 + truncated（P7 T7；ADR-0035/ADR-0019）。
+
+    - 短输出：``preview`` 即全文、``truncated=False``、无 ``artifact_ref``。
+    - 超长 display：``preview`` 截到字符上限、``truncated=True``（不臆造指针）。
+    - 归档信封（``result`` 为 ``archived_tool_result`` dict）：取内层有界 ``preview`` + ``artifact_ref.artifact_id``
+      + ``truncated=True``。
+    - **写失败绝不回退全文**（ADR-0019）：事件里永远最多一屏 preview；无归档就只给截断 preview。
+    为何在 L1 内联 slice：不能 import L3 ``capabilities/tools/_output``（state 不得依赖上层，C1/C14），
+    故自带一份极简字符截断（与 _output 的字节级 preview 同语义、只用于事件展示层上界）。
+    """
+    data: dict[str, object] = {"tool_call_id": tool_call_id, "status": status}
+    text = display if isinstance(display, str) and display else (result if isinstance(result, str) else "")
+    artifact_ref: object = None
+    truncated = False
+    if isinstance(result, dict) and result.get("kind") == "archived_tool_result":
+        ref = result.get("artifact_ref")
+        if isinstance(ref, dict) and isinstance(ref.get("artifact_id"), str):
+            artifact_ref = ref["artifact_id"]
+        inner = result.get("preview")
+        if isinstance(inner, str):
+            text = inner
+        truncated = True
+    if text:
+        data["preview"] = text[:_TOOL_PREVIEW_CHARS]
+        if len(text) > _TOOL_PREVIEW_CHARS:
+            truncated = True
+    if artifact_ref is not None:
+        data["artifact_ref"] = artifact_ref
+    data["truncated"] = truncated
+    return data
+
 
 def _event(seq: int, run: Run, turn: int | None, etype: str, data: dict) -> Envelope:
     """构造一个对外事件信封（v 取 wire 版本，run_id 取自当前 run）。"""
@@ -113,7 +150,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         ledger = replace(run.tool_ledger, calls=_replace_call(run.tool_ledger.calls, replace(target, status=_call_status(command.status), result=command.result, display=command.display)))
         ctx = _append_tool_result(run.context, command.tool_call_id, command.result, is_error=command.status != "success")
         new = replace(run, tool_ledger=ledger, context=ctx, seq=run.seq + 1)
-        return new, [_event(new.seq, new, target.turn, EventType.TOOL_COMPLETED, {"tool_call_id": command.tool_call_id, "status": command.status})]
+        return new, [_event(new.seq, new, target.turn, EventType.TOOL_COMPLETED, _tool_completed_data(command.tool_call_id, command.status, result=command.result, display=command.display))]
 
     if isinstance(command, MarkToolValidated):
         target = _open_call(run, command.tool_call_id)
@@ -135,7 +172,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         ledger = replace(run.tool_ledger, calls=_replace_call(run.tool_ledger.calls, denied))
         ctx = _append_tool_result(run.context, command.tool_call_id, f"denied: {command.reason}", is_error=True)
         new = replace(run, tool_ledger=ledger, context=ctx, seq=run.seq + 1)
-        return new, [_event(new.seq, new, target.turn, EventType.TOOL_COMPLETED, {"tool_call_id": command.tool_call_id, "status": "denied"})]
+        return new, [_event(new.seq, new, target.turn, EventType.TOOL_COMPLETED, _tool_completed_data(command.tool_call_id, "denied", result=command.reason, display=None))]
 
     if isinstance(command, RequestApproval):
         target = _open_call(run, command.tool_call_id)
