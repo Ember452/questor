@@ -26,6 +26,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   + teardown）；C17 env 凭据门在装配侧拒绝 server.env 携带 provider 凭据；`test_mcp_loop_integration.py` 以真子进程
   + 真 SQLiteStore 实测“远程工具→`event_log` 先入账”与“无网络围栏时 C17 floor fail-closed 拒但配对仍闭合”。
   真实外网 MCP server / 真 key 端到端、HTTP sidecar 带外投影仍标 **UNVERIFIED**（见 `docs/plan/05` §0.4）。
+- **对抗式验收审计加固**（`docs/audit/P5-review-2026-10-17.md`）：MCP 发现上限 256、逐工具畸形 descriptor 守卫、`normalize_mcp_schema` 递归深度上限、`${VAR}` 占位符 fail-closed、`McpServerConfig.env` repr 隐值（C17/C18/C20，各配判红测试）。
 - 许可/provenance：crewAI / DeepCode / hermes / CowAgent 改造（MIT，改造处文件内标 provenance）；`mcp` SDK MIT；EvoFlow evopanel 零接触。
 
 ### Fixed

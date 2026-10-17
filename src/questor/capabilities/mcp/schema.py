@@ -9,11 +9,17 @@ from __future__ import annotations
 
 from typing import Any
 
+#: 递归深度上限：远程 schema 不可信，恶意/病态深层嵌套不得把归一变成 RecursionError（C18 有界）。
+_MAX_SCHEMA_DEPTH = 32
 
-def normalize_mcp_schema(schema: Any) -> dict[str, Any]:
-    """递归归一一段 JSON Schema；非 dict 输入返回空对象 schema。"""
+
+def normalize_mcp_schema(schema: Any, _depth: int = 0) -> dict[str, Any]:
+    """递归归一一段 JSON Schema；非 dict 输入返回空对象 schema，超深直接截断（不崩）。"""
     if not isinstance(schema, dict):
         return {"type": "object", "properties": {}}
+    if _depth >= _MAX_SCHEMA_DEPTH:
+        # 触底：不再下钻，返回当前层浅拷贝（保留已知标量键，丢嵌套子结构），避开 RecursionError。
+        return {k: v for k, v in schema.items() if not isinstance(v, (dict, list))} or {"type": "object", "properties": {}}
     normalized = dict(schema)
     raw_type = normalized.get("type")
     if isinstance(raw_type, list):
@@ -32,11 +38,11 @@ def normalize_mcp_schema(schema: Any) -> dict[str, Any]:
     properties = normalized.get("properties")
     if isinstance(properties, dict):
         normalized["properties"] = {
-            name: normalize_mcp_schema(value) if isinstance(value, dict) else value
+            name: normalize_mcp_schema(value, _depth + 1) if isinstance(value, dict) else value
             for name, value in properties.items()
         }
     if isinstance(normalized.get("items"), dict):
-        normalized["items"] = normalize_mcp_schema(normalized["items"])
+        normalized["items"] = normalize_mcp_schema(normalized["items"], _depth + 1)
     if normalized.get("type") == "object":
         normalized.setdefault("properties", {})
         normalized.setdefault("required", [])

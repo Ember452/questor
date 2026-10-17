@@ -60,9 +60,11 @@ def _make_escape_link(root: Path, outside_dir: Path) -> tuple[str, str | None]:
         import subprocess
 
         link = root / "linkdir"
-        result = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(outside_dir)], capture_output=True, text=True)
+        # 不用 text=True：cmd/mklink 的输出走 OEM 代码页（zh-CN=cp936），UTF-8 模式下会解码崩。
+        # 取字节；仅在失败分支需人读 detail 时才带 errors="replace" 解码（成功分支不解码）。
+        result = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(outside_dir)], capture_output=True)
         if result.returncode != 0 or not link.is_dir():
-            detail = (result.stdout or "") + (result.stderr or "")
+            detail = ((result.stdout or b"") + (result.stderr or b"")).decode("utf-8", errors="replace")
             return "", f"Windows 无法创建 junction：{detail.strip()[:160]}"
         return "linkdir/secret.txt", None
     link = root / "link.txt"

@@ -25,6 +25,15 @@ async def boom() -> str:
     raise RuntimeError("boom from remote server")
 
 
+@mcp.tool()
+async def hang() -> str:
+    """Sleep far longer than any test deadline, to exercise mid-call cancellation + session reuse."""
+    import anyio
+
+    await anyio.sleep(30)
+    return "should not finish"
+
+
 if __name__ == "__main__":
     # 启动 banner 走 stderr：验证它落到我们指定的独立文件、不污染 stdout 的 JSON-RPC 通道。
     print("demo mcp server starting", file=sys.stderr, flush=True)

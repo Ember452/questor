@@ -23,6 +23,9 @@ _log = logging.getLogger("questor.mcp")
 #: server 名字符集（用于命名规则 `mcp_<server>_<tool>`，避免非法字符进工具名）。
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
+#: 未展开的 `${VAR}` 占位符（fail-closed 拒载，不把模板字面量递给子进程）。
+_PLACEHOLDER_RE = re.compile(r"\$\{[^}]*\}")
+
 #: MCP 配置文件名。落点在 workspace root，必须与 `contracts/tool_args.PROTECTED_IN_ROOTS` 里的
 #: token 一致（C10 测试机器守这层耦合）——agent 不得自改自身 MCP 面。
 MCP_CONFIG_FILENAME = "mcp.json"
@@ -46,6 +49,10 @@ class McpServerConfig:
         object.__setattr__(self, "args", tuple(self.args))
         object.__setattr__(self, "env", MappingProxyType(dict(self.env)))
 
+    def __repr__(self) -> str:
+        # env 值属机密（C17/C20）：repr 只露键名不露值，防止 config 被意外进日志/repr 泄密。
+        return f"McpServerConfig(name={self.name!r}, command={self.command!r}, args={self.args!r}, env=<redacted:{len(self.env)} keys>)"
+
 
 def _build_entry(name: str, entry: object) -> McpServerConfig | None:
     """把一条 entry 归一成 config；非法则返回 None（调用方已负责出声跳过）。"""
@@ -66,6 +73,14 @@ def _build_entry(name: str, entry: object) -> McpServerConfig | None:
     raw_env = entry.get("env", {})
     if not isinstance(raw_env, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in raw_env.items()):
         _log.warning("skipping MCP server '%s': 'env' must be a string->string object", name)
+        return None
+    # 未展开的 ${VAR} 占位符：fail-closed 跳过该 server（不把模板字面量当命令/参数启动）。
+    if (
+        _PLACEHOLDER_RE.search(command)
+        or any(_PLACEHOLDER_RE.search(a) for a in raw_args)
+        or any(_PLACEHOLDER_RE.search(k) or _PLACEHOLDER_RE.search(v) for k, v in raw_env.items())
+    ):
+        _log.warning("skipping MCP server '%s': unresolved ${VAR} placeholder in command/args/env", name)
         return None
     return McpServerConfig(name=name, command=command, args=tuple(raw_args), env=MappingProxyType(dict(raw_env)))
 
