@@ -6,6 +6,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — P7 桌面壳（Tauri）地基（分支 `feat/p7-desktop-shell`；详 `docs/plan/07-p7-desktop-shell.md`）
+
+- **sidecar serve 生产入口（DoD①/⑤，ADR-0032/D-P7-B）**：`surfaces/serve.py` 把 `EventServer` 挂上 uvicorn，
+  **只 bind `127.0.0.1:0`**（OS 临时口、绝不 `0.0.0.0`）、先写进程握手 bootstrap（`{host,port,generation,pid}`）
+  再常驻；`__main__.py` 新增 `--serve`（具体 store 装配留组合根、serve 面不 import store 实现，守分层 AST 守卫）；
+  `create_app` 加 `GET /health` 就绪探针。真 uvicorn 子进程 + 真 httpx 跑穿 `POST /run`→`text_delta`→终态。
+- **带外投影收口为 bus 级只读订阅（DoD⑤，ADR-0033/D-P7-A，正面收 `plan/05` §0.4 缺口）**：`InProcessEventBus`
+  新增 `add_observer`，`emit` 对每条投影后 Envelope **恰触发一次**（与订阅者数量无关）；`EventServer`/`CliSurface`
+  各挂**一条** `log_envelope` observer；**删除 `cli._stream` 的逐消费者 `log_envelope`**（多 surface 双投隐患消除，
+  违 C6/C20/pitfalls#2 的隐患收口）。九内核零依赖不破（`check_log_kernel_isolation` 绿、`lint-imports` 5 kept）。
+- **协议 TS codegen + 漂移门（DoD①，C15）**：`desktop/web/scripts/generate-protocol.mjs`（`json-schema-to-typescript`）
+  从 `protocol/event.schema.json` 生成 `desktop/web/src/generated/event.ts`（含 20 类 type 判别联合）；`--check`
+  比对现算输出、陈旧即退出码非零；并入独立 blocking `boundaries` job。校正 `protocol/README.md` stale 的 “19”→**20**。
+- **契约 additive 定形（DoD②，ADR-0034/0035；只增不改、三处 lockstep、类型数恒 20 不 bump）**：`node_updated` 从
+  `None` 透传收为有界白名单 `{node_id,status,title,parent_id}`（去 draft 透传隐患）；`tool_completed` 加**有界**
+  `preview` + `artifact_ref` 指针 + `truncated`（复用 ADR-0019，写失败绝不回退原文）；`message_completed` 加**有界**
+  `final_text` + `item_id`（D-P7-C 选型①，重连仅靠事件流即恢复定稿文本、单一真源不另开 `/transcript`）。带外投影
+  白名单恒不含 preview/final_text（C20）。修 `check_protocol_schema` 一处 doc/code 偏差：`project` 对未列表类型是**丢弃**而非透传。
+- **TS 瘦客户端（DoD①/②/④，S6/C14/C16）**：`desktop/web/src/api/eventStream.ts`（`ThreadEventStream`：按 `seq` 游标
+  去重不丢不重、live `text_delta` 按 `item_id` 缓冲、终态帧停流恰一终态、错误类 `run_failed/warning` 必出声、
+  `resync_required` 即停重握手）+ `commandClient.ts`（**只**投既有 Command Inbox 端点、decision/mode 域锁死、非 2xx
+  出声、绝不第二写入口）。事件类型仅从 `generated/` 导入。`tsc --noEmit` 净 + `vitest` 12 绿（纯逻辑，非像素）。
+- **守卫扩面（DoD④，C14/C15）**：`scripts/check_thin_client.py`——静态扫 `desktop/web/src`（排除 `generated/`）拦 harness
+  逻辑下沉（bus/store/权限/reduce/`questor.` 等）+ 事件信封类型只可来自 `generated/`；fail-on-empty + `--self-test` 判红；
+  并入独立 blocking `boundaries` job。`scripts/verify_release_bundle.py`——结构门：sidecar 二进制**恰一个**（0/多→红）+
+  内嵌解释器在位（无系统 Python 回退）+ 资源树非空；`--self-test` 判红/绿；sidecar 三段式步骤①窄锁
+  `desktop/sidecar-requirements.{in,lock}`（`uv pip compile` 产出）。
+- **端到端能力矩阵（DoD①/②，脚本化 provider）**：`test_p7_desktop_e2e.py`——真 uvicorn+httpx 跑流式（`text_delta` +
+  `message_completed.final_text` + 终态、durable seq 不重，交叉校 `store.replay`）、取消回填（`Cancel`→`run_cancelled` +
+  未闭合 `tool_use` 配对、无悬空，C7/C19）、Skills 目录注入 system prompt；断言落 reducer/store 侧。
+- **决策**：ADR-0032（sidecar serve 接线与进程边界）、ADR-0033（bus 级只读投影）、ADR-0034（D-P7-C 重连文本=选型①
+  有界 `final_text`）、ADR-0035（工具/节点事件 additive 定形）。
+- **诚实边界（UNVERIFIED，不用 fake 冒充真机）**：真 Rust Tauri 壳（`src-tauri` sidecar supervisor：generation 栅栏/
+  两级优雅关闭/`fail_all`/Windows Job Object 杀进程树）、PyInstaller onedir 真冻结、真远程 MCP server 端到端、真 LLM、
+  在途半条 live-delta 文本恢复——本机无 cargo/pyinstaller/显示，未实现亦未伪造；webview 像素渲染未验（传输层由真 socket 用例覆盖）。
+
 ### Added — P5 Skills / MCP（分支 `feat/p5-skills-mcp`；详 `docs/plan/05-p5-skills-mcp.md`）
 
 - **Skills 加载（DoD①）**：`capabilities/skills`——`SKILL.md` 严格 frontmatter 解析（依赖最小、不新增第三方）、

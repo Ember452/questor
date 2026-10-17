@@ -47,13 +47,21 @@ src/questor/
 
 ```
 desktop/
-├── src-tauri/       # Rust 壳：窗口/生命周期/打包；把 Python 后端作为 sidecar 子进程拉起
+├── src-tauri/       # Rust 壳：窗口/生命周期/打包；把 Python 后端作为 sidecar 子进程拉起（P7 尚未建，UNVERIFIED）
 │   ├── src/  tauri.conf.json  build.rs  capabilities/  icons/
-└── web/             # 前端（React/Svelte + TS）：瘦客户端，仅消费事件协议（SSE）
-    ├── src/（pages · components · state · api 客户端）  index.html  vite.config.ts  package.json
+├── sidecar-requirements.{in,lock}  # sidecar 冻结窄锁（比根 pyproject 更窄；uv pip compile 产出）
+└── web/             # 前端（TS）：瘦客户端，仅消费事件协议（SSE）
+    ├── package.json · tsconfig.json · scripts/generate-protocol.mjs   # 协议 codegen + --check 防漂移
+    └── src/
+        ├── generated/event.ts        # 由 protocol/event.schema.json codegen（DO NOT EDIT）
+        └── api/{eventStream,commandClient}.ts   # 瘦客户端：仅投 Command + 消费事件（无业务下沉）
 ```
 - **铁律**：`web/` 只做 UI 与"订阅外部事件"，**禁止把业务/状态/校验逻辑下沉到壳**（ROADMAP §1.5 / ADR-0007）。
 - `src-tauri` 不碰内核逻辑，只负责启动 sidecar + 暴露窗口能力。
+- **P7 现状（`feat/p7-desktop-shell`）**：`web/src/{generated,api}` + `scripts/generate-protocol.mjs` + `sidecar-requirements.{in,lock}`
+  已落地并 `vitest`/`check:protocol`/`check_thin_client` 验证；**Python 侧 sidecar serve 生产入口在 `src/questor/surfaces/serve.py`
+  （L6，loopback `127.0.0.1:0` + generation bootstrap，ADR-0032）**，组合根 `__main__.py --serve` 装配。`src-tauri` Rust 壳
+  与 PyInstaller 冻结**尚未建**（本机无 cargo/pyinstaller，UNVERIFIED）。
 
 ## 4. 测试 `tests/`
 - 单元测试随模块镜像目录；**任务级评测/回归网**单列（如 `tests/evals/`），改内核前必备（ROADMAP P10）。

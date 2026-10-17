@@ -276,3 +276,18 @@
 - ✅ §0.0 记入 **本计划基线 = `main` @ `290375e`**，并证 #142（`eb1da31`）/#143（`114fb0f`）/#144（`290375e`，内含审计 `29821de`）已合入 → **C20（`HARD-CONSTRAINTS.md:110-115`）/`docs/pitfalls.md`/MCP/Skills 均存在**，P7 在其约束下规划；并记 `protocol/event.schema.json` 已在、`desktop/` 不存在、无 `--serve` 入口、`EventType`=20（`protocol/README.md:18` "19" stale 须校正）等现场事实。
 
 > **诚实边界**：本文为 READ-ONLY 规划，只落此文档，未改代码/未建分支/未 commit/未 push。所有 `file:line`（本仓与参考仓）为 2026-10-17 扫描快照，开工当天必重验；真机桌面打包、真 sidecar 崩溃重启、真远程 MCP server 端到端、以及未定案的在途 live-delta 文本恢复均标 **UNVERIFIED**，不用 fake 冒充真机。
+
+---
+
+## 8. 实现偏差回填（reality-wins，执行期追写；AGENTS §5.5）
+
+> 开工分支 `feat/p7-desktop-shell`。以下为实现与本文/设计的偏差与定案，按“现实胜”回写。
+
+- **T1 serve 落点修正（已记 ADR-0032 + 本文 §0.0 GATE-0）**：`check_layering_ast.py` FORBIDDEN_IMPORTS[surfaces] 禁 `providers.store_sqlite`/`store_memory_sqlite`/`subprocess` → 具体 store 实例化留**组合根 `__main__.py --serve`**，`surfaces/serve.py` 只接注入 server + 跑 uvicorn + 写 bootstrap，不 import 具体 store。本文原 T1 “serve.py 装配 SQLiteStore” 描述按此修正。
+- **D-P7-C 定案=选型①**（非②/非未定）：`message_completed` additive 有界 `final_text`+`item_id`（≤ 8192 字，`truncated` 标志），单一真源不另开 `/transcript`。未定稿半条 live-delta 仍 **UNVERIFIED**。详 ADR-0034。
+- **`check_protocol_schema` 一处 doc/code 偏差修正（T11 发现）**：`project()` 对 `EXTERNAL_EVENT_FIELDS` 值为 `None`/未列类型实际是**丢弃**（非注释所说的“原样透传”）；node_updated 定形同时改正了该注释。
+- **T6 合入 T5 客户端**：审批面板的**行为契约**（request_id 幂等、fail-closed deny）由服务端既有测试 + `commandClient.resolveApproval`（decision 域锁 allow|deny）覆盖；React 面板像素渲染属 webview（UNVERIFIED）。
+- **T8 仅落可验片**：sidecar 三段式步骤①窄锁 `desktop/sidecar-requirements.{in,lock}`（`uv pip compile` 实产）+ `scripts/verify_release_bundle.py`（结构门 self-test 判红/绿）。**未做/UNVERIFIED**：Rust `src-tauri` supervisor（generation 栅栏/两级优雅关闭/`fail_all`/Windows Job Object 杀进程树）、`tauri.conf.json` bundle.resources、`build-sidecar.py` PyInstaller 冻结、`--verify-runtime` 真产物冒烟——本机无 cargo/rustc/pyinstaller/显示，不交不能验的 Rust。
+- **T9 CSP/capabilities 锁定（本文 §0.2-③ GenericAgent 参照）**：需 Tauri webview HTML/`capabilities/` 实体才能扫，现 `src-tauri` 未建→**未实装**（会 fail-on-empty 假绿），归 T8 建壳时补；本轮只交 `check_thin_client`（已进 `boundaries`）。
+- **脚本命名**：本文 `verify-release-bundle` → 实文件 `scripts/verify_release_bundle.py`（下划线，与仓内其他守卫一致）。
+- **DoD 能力面**：按 §1.1 现实验 P1–P5（P5 已合入）；e2e 用脚本化 provider，真 LLM/真远程 MCP/真打包 = **UNVERIFIED**。

@@ -78,3 +78,15 @@
   （不违反内核零依赖，因为内核根本不 import 它）；② 验收判据必须**不可 skip**、且是白名单式
   "stdout 每行 ∈ 机器可读集"——带关键字的正则对第三方行天然免疫，等于没判据（G-L10）。
 - **关联**：Issue #127；HARD C14/C15（守卫必须能判红）；DESIGN §10。
+
+### 5. 带外投影逐消费者调用 = 多 surface 双投（收口只能 bus 级一处只读订阅）
+
+- **现象**：同一条 Envelope 在主干 JSONL 出现**两份**带外事件行；且同 run 多一个消费者就多一份。
+- **触发条件**：`log_envelope` 挂在**每个** surface 消费者的循环里（P5 时只有 CLI `_stream` 调、看着没事）；
+  P7 桌面使同一 `InProcessEventBus` 上**同时**有 SSE 订阅者 + CLI 打印者（+ 以后 IM/OpenAI 兼容），各消费者各投一次就翻倍。
+- **为什么容易复发**：逐消费者投影在每个 surface 里都“看起来只投自己那一份”，缺陷只在“多个 surface 共享一个总线”时
+  才暴露；而第 2 条“节流签名看不见区分信息”会把它伪装成“偶尔少一行”而非“翻倍”，极难定位。**任何新增 surface 都会再踩一次**。
+- **纪律**：投影是**总线级单一副作用**，不是消费者职责。收口点写死为 bus 级**一条只读订阅**（`InProcessEventBus.add_observer`，
+  `emit` 对每条投影后 Envelope 恰触发一次、与订阅者数量无关）；消费者（`cli._stream`）**不得**再调 `log_envelope`。
+  验收必须跑**真文件 canary**：开 2 个并发 `/events` 订阅者跑同一 run，主干日志每 seq **恰一行**（`tests/integration/test_p7_out_of_band_projection.py`）。
+- **关联**：ADR-0033 / plan/07 D-P7-A；HARD C6（折叠/合并同罪）/C20（第二载体）；本文件第 2 条；`surfaces/cli.py`、`surfaces/http_sse.py`。
