@@ -16,6 +16,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+pub mod backend;
+
 /// sidecar 代次。每次（重）起自增；`0` 表示从未启动。
 pub type Generation = u64;
 
