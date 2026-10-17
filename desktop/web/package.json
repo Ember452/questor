@@ -6,12 +6,16 @@
   "scripts": {
     "generate:protocol": "node scripts/generate-protocol.mjs",
     "check:protocol": "node scripts/generate-protocol.mjs --check",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "json-schema-to-typescript": "^15.0.4",
     "typescript": "^5.6.0",
+    "vite": "^5.4.0",
     "vitest": "^2.1.0"
   }
 }

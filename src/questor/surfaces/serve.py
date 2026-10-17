@@ -64,11 +64,12 @@ def read_bootstrap(path: Path) -> dict[str, int | str]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-async def serve(server: EventServer, *, generation: int, bootstrap_path: Path) -> dict[str, int | str]:
+async def serve(server: EventServer, *, generation: int, bootstrap_path: Path, static_dir: Path | None = None) -> dict[str, int | str]:
     """把 `EventServer` 挂上 uvicorn，bind loopback 临时口，先写 bootstrap 再常驻服务。
 
     依赖：`EventServer`（组合根已构建、已持 `StorePort` 抽象）；`generation` 由启动方（Rust 注入的
-    env）分配并随 bootstrap 落盘，用于陈旧连接栅栏。返回写入的 bootstrap dict（仅在服务退出后可达）。
+    env）分配并随 bootstrap 落盘，用于陈旧连接栅栏；`static_dir`（可选）为桌面前端产物，给定则
+    由 sidecar 一并伺服，webview 直接指本服务根路径（ADR-0007）。返回写入的 bootstrap dict（仅在服务退出后可达）。
     失败语义：uvicorn 常驻直至被信号/关闭中断；期间任何 HTTP 错误由 FastAPI 侧按既有映射出声。
     """
     # 延迟 import：uvicorn 属 dev/打包依赖（非 core），serve 面才需要；`create_app` 同层、避免模块期拉 fastapi。
@@ -76,7 +77,7 @@ async def serve(server: EventServer, *, generation: int, bootstrap_path: Path) -
 
     from questor.surfaces.http_sse import create_app
 
-    app = create_app(server)
+    app = create_app(server, static_dir=static_dir)
     sock, port = make_loopback_socket()
     boot = write_bootstrap(bootstrap_path, host=_LOOPBACK, port=port, generation=generation, pid=os.getpid())
     # 起手一条一方记录钉住"serve 面已就绪"（DoD A①：起手即有日志，由一方记录兑现）。

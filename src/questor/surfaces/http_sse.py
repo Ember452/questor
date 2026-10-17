@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 from questor.contracts.common import new_id, thaw
@@ -162,8 +164,12 @@ class EventServer:
                 return
 
 
-def create_app(server: EventServer) -> FastAPI:
-    """构建 FastAPI 应用：run/cancel/approve/permissions/events 全部只投 Command 或投事件。"""
+def create_app(server: EventServer, static_dir: Path | None = None) -> FastAPI:
+    """构建 FastAPI 应用：run/cancel/approve/permissions/events 全部只投 Command 或投事件。
+
+    ``static_dir``（存在时）挂载到 ``/``：桌面壳把 webview 指向本服务（ADR-0007），前端静态产物
+    由 sidecar 一并伺服（前端只同源调本 API，不新增跨源面）。属控制平面装配，不触事件协议/契约。
+    """
     app = FastAPI(title="questor", version="0.1.0")
 
     @app.get("/health")
@@ -207,5 +213,10 @@ def create_app(server: EventServer) -> FastAPI:
         version_header = request.headers.get("x-questor-contract-version")
         expected_version = int(version_header) if version_header and version_header.isdigit() else None
         return EventSourceResponse(server.stream(run_id, after_seq, expected_version=expected_version))
+
+    # 静态前端（桌面壳的 webview 入口）：仅在给定且存在时挂载，挂载于所有 API 路由之后，
+    # 故 /run·/events 等精确路由优先匹配，其余（含 /）走静态目录。
+    if static_dir is not None and static_dir.is_dir():
+        app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="web")
 
     return app

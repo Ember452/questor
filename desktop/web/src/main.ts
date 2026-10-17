@@ -1,0 +1,163 @@
+// P7 T4/T5/T6/T7：桌面薄客户端 UI。仅消费事件协议 + 投 Command，绝不做业务/权限/状态计算（S6/C14/C17）。
+// 连接 same-origin 的 sidecar（webview 指向本服务，ADR-0007）；EventSource 原生带 Last-Event-ID 重连。
+import { CommandClient } from "./api/commandClient";
+import { ThreadEventStream } from "./api/eventStream";
+import type { QuestorExternalEventProjectionV1 as Event } from "./generated/event";
+
+// 订阅 UI 关心的事件类型（均来自协议）。EventSource 只对命名事件分发，故逐类型 addEventListener。
+const EVENT_TYPES: string[] = [
+  "run_started", "turn_started", "text_delta", "reasoning_delta", "message_completed",
+  "tool_started", "tool_progress", "tool_completed", "approval_request", "approval_resolved",
+  "permission_mode_changed", "node_updated", "usage_delta", "heartbeat", "run_cancelled",
+  "run_failed", "run_completed", "resync_required", "warning", "memory_written",
+];
+
+const client = new CommandClient(window.location.origin);
+const log = document.getElementById("log") as HTMLDivElement;
+const input = document.getElementById("input") as HTMLInputElement;
+const composer = document.getElementById("composer") as HTMLFormElement;
+const cancelBtn = document.getElementById("cancel") as HTMLButtonElement;
+
+let currentRunId: string | null = null;
+let source: EventSource | null = null;
+let stream: ThreadEventStream | null = null;
+let assistantBubble: HTMLElement | null = null;
+let liveDeltaSeen = false;
+
+function el(tag: string, cls: string, text?: string): HTMLElement {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function appendText(target: HTMLElement, text: string): void {
+  target.appendChild(document.createTextNode(text));
+}
+
+// live 文本增量：起/续一个 assistant 气泡并追加（流式上屏）。
+function renderDelta(_itemId: string | null, text: string): void {
+  if (!assistantBubble) assistantBubble = el("div", "msg assistant");
+  liveDeltaSeen = true;
+  appendText(assistantBubble, text);
+  log.appendChild(assistantBubble);
+}
+
+// durable 事件渲染：只把协议字段画出来，不解释语义。
+function renderEvent(env: Event): void {
+  switch (env.type) {
+    case "message_completed": {
+      // 断线重连/晚订阅时，live delta 可能错过；message_completed 的有界 final_text（D-P7-C①）补回定稿文本。
+      if (!liveDeltaSeen) {
+        const finalText = (env.data as { final_text?: unknown }).final_text;
+        if (typeof finalText === "string" && finalText) {
+          if (!assistantBubble) assistantBubble = el("div", "msg assistant");
+          assistantBubble.textContent = finalText;
+          log.appendChild(assistantBubble);
+        }
+      }
+      assistantBubble = null; // 下一条消息另起气泡
+      liveDeltaSeen = false;
+      break;
+    }
+    case "tool_started": {
+      const d = env.data as { name?: unknown };
+      const card = el("div", "tool-card");
+      card.appendChild(el("span", "tool-name", `🔧 ${typeof d.name === "string" ? d.name : "tool"}`));
+      log.appendChild(card);
+      break;
+    }
+    case "tool_completed": {
+      const d = env.data as { status?: unknown; preview?: unknown; truncated?: unknown };
+      const card = el("div", "tool-card");
+      card.appendChild(el("span", "tool-status", `[${typeof d.status === "string" ? d.status : "?"}]`));
+      if (typeof d.preview === "string" && d.preview) {
+        card.appendChild(el("pre", "tool-preview", d.preview + (d.truncated ? " …" : "")));
+      }
+      log.appendChild(card);
+      break;
+    }
+    case "approval_request": {
+      renderApproval(env);
+      break;
+    }
+    default:
+      break; // 其它 durable 事件：本极简面板不呈现（但已消费、不崩）。
+  }
+}
+
+function renderApproval(env: Event): void {
+  const d = env.data as { request_id?: unknown; name?: unknown; args_summary?: unknown };
+  const requestId = typeof d.request_id === "string" ? d.request_id : "";
+  const panel = el("div", "approval");
+  panel.appendChild(el("div", "approval-body", `批准 ${String(d.name ?? "?")}：${String(d.args_summary ?? "")}？`));
+  const respond = (decision: "allow" | "deny") => {
+    panel.querySelectorAll("button").forEach((b) => ((b as HTMLButtonElement).disabled = true));
+    void client.resolveApproval(currentRunId ?? "", requestId, decision).catch(() => {
+      panel.appendChild(el("div", "approval-error", "审批提交失败（fail-closed）"));
+    });
+  };
+  const allow = el("button", "allow", "Allow");
+  const deny = el("button", "deny", "Deny");
+  allow.addEventListener("click", () => respond("allow"));
+  deny.addEventListener("click", () => respond("deny"));
+  panel.append(allow, deny);
+  log.appendChild(panel);
+}
+
+function renderError(env: Event): void {
+  const d = env.data as { error?: { message?: unknown }; message?: unknown; reason?: unknown };
+  const msg = String(d.error?.message ?? d.message ?? d.reason ?? "error");
+  log.appendChild(el("div", "error", `⚠ ${msg}`)); // 错误类必出声（C6）
+}
+
+function stopStream(): void {
+  source?.close();
+  source = null;
+}
+
+function openStream(runId: string): void {
+  currentRunId = runId;
+  assistantBubble = null;
+  liveDeltaSeen = false;
+  stream = new ThreadEventStream({
+    onDelta: renderDelta,
+    onEvent: renderEvent,
+    onTerminal: stopStream,
+    onError: renderError,
+    onResync: () => {
+      log.appendChild(el("div", "warn", "协议版本变更，需重新握手"));
+      stopStream();
+    },
+  });
+  const es = new EventSource(`/events/${runId}`);
+  source = es;
+  const handle = (ev: MessageEvent): void => {
+    try {
+      stream?.receive(JSON.parse(ev.data) as Event);
+    } catch {
+      // 单帧解码失败不崩宿主；错误类事件必出声由各自处理器负责，未知帧静默（C6）。
+    }
+  };
+  for (const type of EVENT_TYPES) es.addEventListener(type, handle as EventListener);
+  // 不自己实现重连：交给浏览器 EventSource 的自动重连 + 服务端 Last-Event-ID 续传（不重不丢）。
+}
+
+composer.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  log.appendChild(el("div", "msg user", text));
+  void client
+    .run(text)
+    .then((ack) => openStream(ack.run_id))
+    .catch(() => log.appendChild(el("div", "error", "启动 run 失败")));
+});
+
+cancelBtn.addEventListener("click", () => {
+  if (!currentRunId) return;
+  void client.cancel(currentRunId).catch(() => {
+    /* 取消是投 Command；终态由事件流反映 */
+  });
+});

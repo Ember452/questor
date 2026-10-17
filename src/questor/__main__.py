@@ -88,6 +88,17 @@ def _sidecar_bootstrap_from_env() -> str:
     return os.environ.get("QUESTOR_SIDECAR_BOOTSTRAP", str(Path.cwd() / ".questor" / "sidecar-bootstrap.json"))
 
 
+def _web_dist_from_env() -> Path | None:
+    """桌面前端静态产物目录取自 ``QUESTOR_WEB_DIST``（未设或目录不存在则 None → sidecar 只跑 API，不挂静态）。
+
+    给定后 sidecar 一并伺服前端、webview 指本服务根路径（ADR-0007）；env 读属组合根职责，serve 面不读 env。"""
+    dist = os.environ.get("QUESTOR_WEB_DIST")
+    if not dist:
+        return None
+    path = Path(dist)
+    return path if path.is_dir() else None
+
+
 class _HeuristicDistiller:
     """无密钥离线 fallback 蒸馏器：**合并**现有 core + 近期 daily 的非标题行去重回写（单调不回退）。
 
@@ -144,7 +155,12 @@ async def _amain(argv: list[str]) -> int:
             # sidecar 常驻服务：EventServer 复用已装配的 surface + store（surface 只持 StorePort 抽象，C4），
             # serve 面只 bind loopback 临时口 + 写 bootstrap，不 import 具体 store（ADR-0032 / S6）。
             server = EventServer(surface, store)
-            await serve(server, generation=_sidecar_generation_from_env(), bootstrap_path=Path(_sidecar_bootstrap_from_env()))
+            await serve(
+                server,
+                generation=_sidecar_generation_from_env(),
+                bootstrap_path=Path(_sidecar_bootstrap_from_env()),
+                static_dir=_web_dist_from_env(),
+            )
             return 0
         if argv and argv[0] == "--list":
             unfinished = await store.list_unfinished_runs()
