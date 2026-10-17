@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "generate:protocol": "node scripts/generate-protocol.mjs",
-    "check:protocol": "node scripts/generate-protocol.mjs --check"
+    "check:protocol": "node scripts/generate-protocol.mjs --check",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "json-schema-to-typescript": "^15.0.4"
+    "json-schema-to-typescript": "^15.0.4",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   }
 }
