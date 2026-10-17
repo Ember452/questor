@@ -7,10 +7,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import replace
 
 from questor.contracts.tool import RunToolSurface, Tool, ToolSpec
+
+_log = logging.getLogger("questor.tools")
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _WHITESPACE = re.compile(r"\s+")
@@ -55,8 +58,17 @@ class ToolRegistry:
         self._specs: dict[str, ToolSpec] = {}
 
     def register(self, tool: Tool) -> None:
-        """注册工具（新工具=加注册；改既有工具语义=契约变更，走评审）。"""
+        """注册工具（新工具=加注册；改既有工具语义=契约变更，走评审）。
+
+        C21 命名冲突守卫：若同名已被**另一个**工具占用，**拒绝覆盖 + 出声**（first-writer-wins）——
+        远程工具伪装/撞内置名时不能静默顶掉既有工具（C17 capability floor 不因远程放宽）。同对象重注册
+        （幂等 reload）不算冲突。
+        """
         spec = _sanitize_description(tool.spec)
+        existing = self._tools.get(spec.name)
+        if existing is not None and existing is not tool:
+            _log.warning("refusing to register tool '%s': name already claimed (collision kept existing)", spec.name)
+            return
         self._tools[spec.name] = tool
         self._specs[spec.name] = spec
 
