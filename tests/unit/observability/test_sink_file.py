@@ -1,8 +1,8 @@
 """T2.8 file sink ``observability/sink_file.py`` 判例（DESIGN §10；G-L9；tmp 真 IO）。
 
 **不用 mock 冒充 IO**：全用 ``tmp_path`` 真实读写。覆盖 roundtrip、WARNING+ 分流 ``errors``、跨日
-换文件、JSONL 单行（含异常链栈）、软阈值提级且 ``errors`` lane 不受影响、保留期懒清理、只读目录
-降级 console-only、llm 通道默认不写。
+换文件、JSONL 单行（含异常链栈）、软阈值提级且 ``errors`` lane 不受影响、**提级不跨日泄漏**、保留期
+懒清理、只读目录降级 console-only、llm 通道默认不写。
 """
 
 from __future__ import annotations
@@ -121,6 +121,31 @@ def test_llm_channel_default_off(tmp_path: Path) -> None:
     sink = FileSink(tmp_path / "logs", llm_file=False)
     sink.emit(_entry(msg="llm meta", level=LogLevel.DEBUG, logger="questor.llm"))
     assert not list((tmp_path / "logs").glob("llm-*.jsonl"))  # 默认不写 llm 通道
+
+
+def test_soft_threshold_raise_resets_on_new_day(tmp_path: Path) -> None:
+    """#135：软阈值提级只能作用于触发那一天，换日必须回到调用方要求的门。
+
+    旧实现是进程终身制（单计数器 + 单布尔永不复位）：一天写多之后，此后所有新分片永久丢 DEBUG——
+    长跑 sidecar 上等于"第一晚很噪 → 以后再也看不到细粒度日志"，而且除了 ``logging_status``
+    无处发现。
+    """
+    today = datetime.now(UTC)
+    tomorrow = today + timedelta(days=1)
+    sink = FileSink(tmp_path / "logs", file_level=LogLevel.DEBUG, max_size_bytes=400)
+    for i in range(12):
+        sink.emit(_entry(msg=f"filler-{i} " * 6, level=LogLevel.DEBUG, ts=today))
+    assert sink.min_level is LogLevel.INFO, "当日越线应提级"
+
+    sink.emit(_entry(msg="next-day-debug", level=LogLevel.DEBUG, ts=tomorrow))
+    next_day_file = tmp_path / "logs" / f"questor-{tomorrow:%Y%m%d}.jsonl"
+    assert next_day_file.exists(), "次日应开新分片"
+    assert any(r["msg"] == "next-day-debug" for r in _read(next_day_file)), "次日必须回到 DEBUG 门"
+    assert sink.min_level is LogLevel.DEBUG
+
+    st = sink.status()
+    assert st["base_file_level"] == "DEBUG" and st["raised_days"], "自我观测要能看出哪一天被降过级"
+    assert st["written_bytes"] > 0
 
 
 def test_llm_channel_enabled(tmp_path: Path) -> None:

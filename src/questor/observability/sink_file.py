@@ -61,14 +61,19 @@ class FileSink:
         max_size_bytes: int = 50 * 1024 * 1024,
     ) -> None:
         self.min_level = file_level  # 主干门（= file_level）；软阈值越线时被抬到 INFO
+        self._base_level = file_level  # 调用方要求的门——提级只对**当日**生效，换日自动回归
         self.keep_days = keep_days
         self.llm_file = llm_file
         self._max_bytes = max_size_bytes
         self._dir = Path(log_dir)
         self.degraded = False
         self._degrade_warned = False
-        self._raised = False
-        self._main_bytes = 0  # 本进程累计写入主干的字节（近似封顶，非精确配额）
+        # 预算按**记录日期**分桶，且三个 lane 的写入都计入（Issue #135）：
+        # 旧写法是跨日累计的单计数器 + 一个永不复位的 _raised 布尔，后果是一天日志多就
+        # 把此后所有分片永久降到 INFO（长跑 sidecar 上等于“第一天很噪 → 以后再也看不到 DEBUG”）。
+        self._bytes_by_day: dict[str, int] = {}
+        self._raised_days: set[str] = set()
+        self._current_day: str | None = None
         self._ensure_dir()
 
     # --- 目录/降级 ---------------------------------------------------------
@@ -96,18 +101,38 @@ class FileSink:
             return
         try:
             line = json.dumps(_entry_to_dict(entry), ensure_ascii=False) + "\n"
+            day = f"{entry.ts:%Y%m%d}"
+            self._roll_day(day)
             # errors lane：WARNING+ 独立分流，不看主干门（提级后仍收错误/警告，§16.3）。
             if entry.level >= LogLevel.WARNING:
                 self._append(self._fname(entry, _ERRORS), line)
+                self._account(day, line)
             # llm lane：仅开启时承载 questor.llm（默认关；preview 随刀 3）。
             if self.llm_file and entry.logger == "questor.llm":
                 self._append(self._fname(entry, _LLM), line)
+                self._account(day, line)
             # main lane：受当前 min_level 门。
             if entry.level >= self.min_level:
-                self._append_main(self._fname(entry, _MAIN), line)
+                self._append(self._fname(entry, _MAIN), line)
+                self._account(day, line)
         except (ValueError, OSError):
             # 磁盘写失败/文件在 teardown 期被关（ValueError("I/O on closed file")）→ 吞 + 降级。
             self._degrade(sys.exc_info()[1])
+
+    def _roll_day(self, day: str) -> None:
+        """换日则重置主干门：前一日的软阈值提级不该泄漏到新的一日（Issue #135）。"""
+        if day == self._current_day:
+            return
+        self._current_day = day
+        if day not in self._raised_days:
+            self.min_level = self._base_level
+
+    def _account(self, day: str, line: str) -> None:
+        """累计当日写入字节，越软阈值则提主干门一次（按日记账，不在写路径做多余 IO）。"""
+        total = self._bytes_by_day.get(day, 0) + len(line.encode("utf-8"))
+        self._bytes_by_day[day] = total
+        if total >= self._max_bytes and day not in self._raised_days:
+            self._raise_file_level(day)
 
     def _fname(self, entry: LogEntry, prefix: str) -> str:
         return f"{prefix}-{entry.ts:%Y%m%d}.jsonl"  # 文件名从记录自身 ts 推得（D7，无 rename）
@@ -116,24 +141,20 @@ class FileSink:
         with open(self._dir / name, "a", encoding="utf-8") as f:
             f.write(line)
 
-    def _append_main(self, name: str, line: str) -> None:
-        self._append(name, line)
-        self._main_bytes += len(line.encode("utf-8"))
-        if self._main_bytes >= self._max_bytes and not self._raised:
-            self._raise_file_level()
+    def _raise_file_level(self, day: str) -> None:
+        """软阈值越线：抬主干 ``min_level`` 到 INFO + 追一条自告警（主干 + errors 各一）。
 
-    def _raise_file_level(self) -> None:
-        """软阈值越线：抬主干 ``min_level`` 到 INFO + 追一条自告警（主干 + errors 各一）。"""
-        self._raised = True
+        只对**触发的那一天**生效：次日预算从 0 重新开始、门回到调用方要求的级别。
+        """
+        self._raised_days.add(day)
         self.min_level = LogLevel.INFO
         now = datetime.now().astimezone()
-        day = now.strftime("%Y%m%d")
         alarm = json.dumps(
             {
                 "ts": now.isoformat(),
                 "level": LogLevel.WARNING.name,
                 "logger": "questor.observability",
-                "msg": "main log exceeded max_size; file_level raised to INFO (errors lane unaffected)",
+                "msg": "main log exceeded max_size; file_level raised to INFO for this day (errors lane unaffected)",
                 "fields": {"file_level_raised": True},
                 "traceback": None,
                 "source": "inline",
@@ -179,8 +200,11 @@ class FileSink:
         return {
             "degraded": self.degraded,
             "file_level": self.min_level.name,
+            "base_file_level": self._base_level.name,
             "llm_file": self.llm_file,
             "max_size_bytes": self._max_bytes,
+            "written_bytes": sum(self._bytes_by_day.values()),
+            "raised_days": sorted(self._raised_days),
             "log_dir": str(self._dir),
             "files": files,
         }
