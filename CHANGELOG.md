@@ -46,11 +46,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   （S5/ADR-0007：仅 HTTP+SSE、不进程内直调 Python）；ExitRequested 走 `two_phase_shutdown`。`tauri.conf.json` 锁 CSP
   （`default-src 'self'`、`object-src 'none'`、`connect-src` 仅 loopback），capabilities 不授 fs/shell。本机
   `cargo check` Finished + `cargo test` 2 passed（bootstrap 契约解析 + 无 sidecar 时 shutdown no-op）。
+- **Windows Job Object 杀进程树（T8，cargo 验证）**：`StdProcess` 在 Windows 下用裸 kernel32 FFI
+  建 `KILL_ON_JOB_CLOSE` Job 并 assign 子进程，`force_kill` 走 `TerminateJobObject`（连 MCP 孙进程一起回收）、
+  Drop 关 job 防孤儿；真机 `cargo test` 含 `job_object_terminates_assigned_child` 绿。
+- **sidecar 三段式 + PyInstaller 冻结（T8，本机实产跑通）**：`desktop/scripts/build-sidecar.py` 把
+  `questor --serve` 冻结为 **onedir**（非 onefile）；`verify_release_bundle.py --verify-runtime` **启动冻结 exe**
+  （无系统 Python）→读 bootstrap → /health → /run → /events，实测 `run_started/turn_started/message_completed/run_completed`
+  全流（带外投影行也真落盘）——“无系统 Python 回退 + 冻结产物真能服务”由 UNVERIFIED **转已验**。
 - **决策**：ADR-0032（sidecar serve 接线与进程边界）、ADR-0033（bus 级只读投影）、ADR-0034（D-P7-C 重连文本=选型①
   有界 `final_text`）、ADR-0035（工具/节点事件 additive 定形）。
-- **诚实边界（UNVERIFIED，不用 fake 冒充真机）**：真**开窗口**（需显示环境）、全量 `tauri build` 打包（需先接 web 的 vite 产物 + tauri CLI）、Windows **Job Object 杀进程树**（MCP 孙进程回收；不交未实测的 FFI）、PyInstaller onedir
-  真冻结、`verify_release_bundle --verify-runtime` 真产物冒烟、真远程 MCP server 端到端、真 LLM、在途半条 live-delta 文本恢复、
-  webview 像素渲染——本机 cargo/WebView2 可用（已编译并链接跑测）但缺 pyinstaller/显示，未实现亦未伪造。
+- **诚实边界（UNVERIFIED，不用 fake 冒充真机）**：真**开窗口/像素渲染**（需显示环境）与全量 `tauri build` 桌面 bundle
+  （需 `@tauri-apps/cli` + WebView2 runtime + 上一步的 vite 产物链）、真远程 MCP server 端到端、真 LLM、
+  在途半条 live-delta 文本恢复——本机无头环境不跑真窗口，未伪造（sidecar 冻结产物已实跑、Tauri 壳已 `cargo check`/`test` 编译级验）。
 
 ### Added — P5 Skills / MCP（分支 `feat/p5-skills-mcp`；详 `docs/plan/05-p5-skills-mcp.md`）
 
