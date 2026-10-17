@@ -12,7 +12,6 @@ import asyncio
 import json
 import logging
 from collections.abc import Iterator
-from datetime import date
 from pathlib import Path
 
 import pytest
@@ -49,10 +48,10 @@ def clean_logging() -> Iterator[None]:
 
 
 def _event_rows(log_dir: Path, run_id: str) -> list[dict]:
-    path = log_dir / f"questor-{date.today():%Y%m%d}.jsonl"
-    if not path.exists():
-        return []
-    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    # 按记录 ts 的 UTC 日期命名（与本地 date.today() 可能错配）→ glob 所有主干文件再按 run_id 筛。
+    rows: list[dict] = []
+    for path in sorted(log_dir.glob("questor-*.jsonl")):
+        rows += [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     return [r for r in rows if r.get("source") == "event" and r.get("context", {}).get("run_id") == run_id]
 
 
@@ -84,8 +83,10 @@ async def _drive_sidecar_projection(tmp_path: Path) -> None:
 
         await asyncio.wait_for(asyncio.gather(task_a, task_b), timeout=15)
         log_pipeline.flush()
-        # 两订阅者都应收到 4 帧（含终态），证明"事件确实扇出到了多个消费者"——即翻倍风险的现场。
-        assert a == ["run_started", "tool_completed", "message_completed", "run_completed"], a
+        # 两订阅者都应收到 4 个领域帧（含终态）+ 一个传输级 stream_end 尾帧，证明事件确实扇出到多消费者。
+        domain_a = [x for x in a if x != "stream_end"]
+        assert domain_a == ["run_started", "tool_completed", "message_completed", "run_completed"], a
+        assert "stream_end" in a, a  # 传输级收尾帧确实发出
         assert b == a, b
     finally:
         await store.close()

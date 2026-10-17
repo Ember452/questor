@@ -37,6 +37,8 @@ from questor.surfaces.run_registry import RunRegistry
 
 # 终态事件集：流式跟到这些即停。
 TERMINAL = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
+# 传输级收尾帧名（§6-8）：非 harness 领域事件、不入库、不进 event.schema，仅告知“流已结束、勿自动重连”。
+STREAM_END = "stream_end"
 
 
 def envelope_to_json(env: Envelope) -> str:
@@ -182,6 +184,8 @@ class EventServer:
             yield envelope_to_frame(env)
             if env.type in TERMINAL:
                 self.registry.unregister(run_id)
+                # 传输级收尾（区别于 run_completed 领域终态）：客户端据此干净停流、不再自动重连。带 id 与其余帧同构。
+                yield {"id": str(env.seq), "event": STREAM_END, "data": json.dumps({"run_id": run_id, "last_seq": env.seq}, ensure_ascii=False)}
                 return
 
 

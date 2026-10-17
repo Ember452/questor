@@ -162,7 +162,7 @@ def test_sidecar_serve_headless_run_flow(tmp_path: Path) -> None:
             poster.start()
             resp = client.get(f"/events/{run_id}")
             poster.join(timeout=30)
-            events = _parse_sse_events(resp.text)
+            events = [e for e in _parse_sse_events(resp.text) if e != "stream_end"]  # 领域事件（过滤传输级 stream_end 帧）
             assert "run_started" in events, events
             assert "text_delta" in events, f"离线 Echo 应流式 text_delta（订阅先于跑），实得 {events}"
             terminal = {"run_completed", "run_cancelled", "run_failed"}

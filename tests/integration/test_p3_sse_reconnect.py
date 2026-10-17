@@ -141,7 +141,8 @@ def test_sse_real_socket_reconnect_no_loss_no_dup(tmp_path: Path) -> None:
 
             # 断开后重连：带 Last-Event-ID=mid → 只应拿到 durable 尾（不丢不重）。
             resp = client.get(f"/events/{run_id}", headers={"Last-Event-ID": str(mid)})
-            pairs = _parse_sse(resp.text)
+            # 过滤传输级 stream_end 尾帧（§6-8，非 durable 领域事件、不带自己的 id）：不纳入重放不丢不重校验。
+            pairs = [p for p in _parse_sse(resp.text) if p[1] != "stream_end"]
             got_seqs = [p[0] for p in pairs if p[0] is not None]
 
             assert got_seqs == expected_tail  # 无缺口、无重复

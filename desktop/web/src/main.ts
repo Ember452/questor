@@ -144,6 +144,8 @@ function openStream(runId: string): void {
     }
   };
   for (const type of EVENT_TYPES) es.addEventListener(type, handle as EventListener);
+  // 传输级收尾帧（§6-8）：非领域事件，不送 ThreadEventStream.receive，直接干净停流、不再重连。
+  es.addEventListener("stream_end", () => stopStream());
   // 不自己实现重连：交给浏览器 EventSource 的自动重连 + 服务端 Last-Event-ID 续传（不重不丢）。
 }
 

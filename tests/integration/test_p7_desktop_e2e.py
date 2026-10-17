@@ -126,7 +126,7 @@ def test_e2e_streaming_over_real_http_sse(tmp_path: Path) -> None:
             t.join(timeout=30)
 
         events = _parse_sse(resp.text)
-        types = [e for _, e in events]
+        types = [e for _, e in events if e != "stream_end"]  # 领域事件（过滤传输级 stream_end 尾帧）
         assert "text_delta" in types, types  # 流式上屏（live）
         assert "message_completed" in types, types
         assert types[-1] == "run_completed", types  # 终态收尾

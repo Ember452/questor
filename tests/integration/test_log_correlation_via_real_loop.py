@@ -14,7 +14,6 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator, Iterator
-from datetime import date
 from pathlib import Path
 
 import pytest
@@ -53,10 +52,12 @@ class _ProbingProvider(ProviderPort):
 
 
 def _read_main_jsonl(log_dir: Path) -> list[dict]:
-    path = log_dir / f"questor-{date.today():%Y%m%d}.jsonl"
-    if not path.exists():
-        return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    # 主干文件按记录自身 ts 的 UTC 日期命名（sink_file `_fname`）；测试读时不能拿本地 date.today()
+    # （跨 UTC/本地午夜会错配）——直接读目录下所有 questor-*.jsonl。
+    rows: list[dict] = []
+    for path in sorted(log_dir.glob("questor-*.jsonl")):
+        rows += [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return rows
 
 
 @pytest.fixture

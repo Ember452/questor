@@ -159,6 +159,15 @@ class InProcessEventBus(EventBus):
                            data={"reason": "version_mismatch", "expected": expected_version, "current": EVENT_SCHEMA_VERSION})
             return
 
+        # 分因闸门（§6-8）：after_seq 超过当前 durable 头 = 请求了尚未产生的游标（ahead），
+        # 不静默空重放，而是发一条 resync_required 让客户端重新对齐（错误类必出声，C6）。
+        if self._store is not None:
+            head = await self._store.sequence_head(run_id)
+            if after_seq > head:
+                yield Envelope(v=EVENT_SCHEMA_VERSION, seq=head, run_id=run_id, type=EventType.RESYNC_REQUIRED,
+                               data={"reason": "after_ahead", "expected": after_seq, "current": head})
+                return
+
         queue = self.add_subscriber(run_id)  # 先订阅后重放，避免两路之间的缺口
         seen = after_seq
 
