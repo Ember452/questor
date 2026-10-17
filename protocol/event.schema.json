@@ -93,7 +93,13 @@
       "type": "object",
       "required": ["message_id"],
       "additionalProperties": false,
-      "properties": { "message_id": { "type": "string", "minLength": 1, "maxLength": 128 } }
+      "description": "A finalized message (D-P7-C option (1); ADR-0034). final_text is the bounded committed body so after_seq replay alone recovers text for every surface; oversized bodies set truncated (full text stays authoritative in checkpoint). Not logged (C20).",
+      "properties": {
+        "message_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "item_id": { "type": ["string", "null"], "maxLength": 128 },
+        "final_text": { "type": "string", "maxLength": 8192 },
+        "truncated": { "type": "boolean" }
+      }
     },
     "tool_started": {
       "type": "object",

@@ -61,6 +61,29 @@ _MAX_MEMORY_WRITE_BYTES = 16 * 1024
 #: 因为事件帧要给所有 surface 高频扇出、必须比“回模型”的预算更小。全文靠 artifact 指针按需读。
 _TOOL_PREVIEW_CHARS = 4096
 
+#: 定稿消息 `final_text` 的字符上限（D-P7-C 选型①；ADR-0034 / C18）。事件帧恒有界；超长部分
+#: 置 `truncated=True`，完整正文仍以 checkpoint（Domain_State.context.items）为权威（reduce 无法做
+#: 异步 IO，故不在事件内归档；重连常见消息即自足，病态超长靠 rebuild）。
+_MSG_FINAL_TEXT_CHARS = 8192
+
+
+def _message_completed_data(message: Message) -> dict[str, object]:
+    """为 ``message_completed`` 派生**有界**定稿正文（D-P7-C 选型①；ADR-0034）。
+
+    取消息可见文本（text 块拼接）写进事件帧，使 ``after_seq`` 重放**仅靠事件流**即可恢复定稿
+    消息——单一真源，不另开 `/transcript` 第二读契约。纯字符串截断（L1 不做 IO）；`item_id` 供前端
+    把 live delta 与定稿消息归组。**未定稿的半条在途 delta 仍不在本事件里**（诚实边界，标 UNVERIFIED）。
+    """
+    text = "".join(b.text or "" for b in message.content if b.type == "text")
+    data: dict[str, object] = {
+        "message_id": message.id,
+        "item_id": message.id,
+        "truncated": len(text) > _MSG_FINAL_TEXT_CHARS,
+    }
+    if text:
+        data["final_text"] = text[:_MSG_FINAL_TEXT_CHARS]
+    return data
+
 
 def _tool_completed_data(tool_call_id: str, status: str, *, result: object, display: object) -> dict[str, object]:
     """为 ``tool_completed`` 事件派生**有界** preview + artifact 指针 + truncated（P7 T7；ADR-0035/ADR-0019）。
@@ -141,7 +164,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         ledger = replace(run.tool_ledger, calls=(*run.tool_ledger.calls, *new_calls))
         ctx = replace(run.context, items=(*run.context.items, command.message))
         new = replace(run, context=ctx, tool_ledger=ledger, seq=run.seq + 1)
-        return new, [_event(new.seq, new, command.turn, EventType.MESSAGE_COMPLETED, {"message_id": command.message.id})]
+        return new, [_event(new.seq, new, command.turn, EventType.MESSAGE_COMPLETED, _message_completed_data(command.message))]
 
     if isinstance(command, RecordToolResult):
         target = _open_call(run, command.tool_call_id)

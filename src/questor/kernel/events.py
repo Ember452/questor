@@ -46,7 +46,9 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.TURN_STARTED: frozenset({"turn"}),
     EventType.TEXT_DELTA: frozenset({"delta", "item_id"}),
     EventType.REASONING_DELTA: frozenset({"delta"}),
-    EventType.MESSAGE_COMPLETED: frozenset({"message_id"}),
+    # 重连定稿正文（D-P7-C 选型①；ADR-0034）：additive 有界 final_text + item_id（单一真源，不另开 /transcript）。
+    # final_text 只进事件协议，绝不进带外投影白名单（projection._DATA_KEYS 不含，C20）。
+    EventType.MESSAGE_COMPLETED: frozenset({"message_id", "item_id", "final_text", "truncated"}),
     EventType.TOOL_STARTED: frozenset({"tool_call_id", "name", "capability", "risk", "args_summary"}),
     EventType.TOOL_PROGRESS: frozenset({"message"}),
     # 工具卡（P7 T7）additive：有界 preview + artifact 指针 + truncated（C18/C20；ADR-0035）。
