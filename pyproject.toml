@@ -12,6 +12,7 @@ dependencies = [
     "litellm",
     "fastapi",
     "sse-starlette",
+    "mcp<2",
 ]
 
 [dependency-groups]
