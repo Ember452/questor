@@ -19,6 +19,7 @@ import asyncio
 import json
 import time
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
@@ -65,6 +66,7 @@ from questor.kernel.run_control import RunController
 from questor.kernel.shell_parse_posix import parse_posix_shell
 from questor.kernel.shell_parse_powershell import parse_powershell
 from questor.kernel.tool_arguments import extract_shell_commands
+from questor.observability.scope import bind
 from questor.state.checkpoint import open_tool_use_ids
 from questor.state.domain_state import Run
 from questor.state.reduce import reduce
@@ -267,94 +269,100 @@ class DefaultTurnLoop:
         repeat_sig: tuple | None = None
         repeat_count = 0
         empties = 0
-        while True:
-            run = await self._consume_commands(controller, run)
-            if run.status.is_terminal:
-                return run
-            if self.cancel_event.is_set():
-                run, events = reduce(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
-                controller.run = run
-                await self._emit(events)
-                return run
-            if run.budget.deadline_seconds is not None and (time.monotonic() - started) > run.budget.deadline_seconds:
-                return await self._fail(run, turn, ErrorKind.TIMEOUT, f"wall-clock deadline {run.budget.deadline_seconds}s exceeded", "deadline")
-
-            turn += 1
-            if turn > run.budget.max_turns:
-                return await self._fail(run, turn, ErrorKind.TIMEOUT, f"max_turns {run.budget.max_turns} exhausted", "budget_exhausted")
-
-            turn_start = run  # C10/X4 回滚点：本 turn 起始时的状态
-            run, events = reduce(run, AdvanceTurn(run_id=run.run_id, turn=turn))
-            controller.run = run
-            await self._emit(events)
-
-            run, assistant_msg, usage = await self._stream_turn(controller, run, turn)
-            if assistant_msg is None:
-                # 本轮没向 provider 发出请求，或请求已失败并归一：run 已终态就直接交回；
-                # 非终态只可能是关卡期间被取消——回循环顶走 Cancel→reduce（C7），
-                # 绝不在这条支路里造第二套终止路径（C13 恰一终态）。
+        # 关联作用域（α′，DESIGN §5；G-L5）：run_id 整轮一次绑定（覆盖新鲜+resume 两条路），
+        # turn 每轮从 loop 权威局部变量 ``turn`` 重盖章（同名覆盖→号不漂移）。ExitStack 退出时
+        # 统一 reset，绝不把本 run 的关联泄漏进调用方 task（http_sse 并发多 run 靠 task 作用域隔离）。
+        with ExitStack() as stack:
+            stack.enter_context(bind(run_id=run.run_id))
+            while True:
+                run = await self._consume_commands(controller, run)
                 if run.status.is_terminal:
                     return run
-                continue
-            total_tokens += _token_total(usage)
-            run, events = reduce(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
-            controller.run = run
-            await self._emit(events)
-            if not any(env.type == EventType.MESSAGE_COMPLETED for env in events):
-                # reduce **拒收**了这条 assistant（重复 tool_use_id）：Domain_State 没长。此时必须
-                # 出声——不能继续把本地 ``assistant_msg`` 当已落库的定稿：实测它会被后面的
-                # ``FinalizeRun(final=…)`` 原样写回 context，留下一条永远没有 tool_result 的悬空
-                # tool_use，且因终态而不进 ``--list``/resume（ADR-0028，比崩更难查）。
-                entry = ErrorEntry(
-                    kind=ErrorKind.FORMAT_ERROR,
-                    layer=ErrorLayer.PROVIDER,
-                    message="assistant message rejected by state: duplicate tool_use id in provider answer",
-                    at_turn=turn,
-                    hints=RecoveryHints(),
-                    cause="AppendAssistantMessageRejected",
-                    timestamp=utc_now(),
-                )
-                return await self._fail_with_entry(run, turn, entry, "provider_protocol_error")
-            await self._checkpoint(run, "auto")
+                if self.cancel_event.is_set():
+                    run, events = reduce(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
+                    controller.run = run
+                    await self._emit(events)
+                    return run
+                if run.budget.deadline_seconds is not None and (time.monotonic() - started) > run.budget.deadline_seconds:
+                    return await self._fail(run, turn, ErrorKind.TIMEOUT, f"wall-clock deadline {run.budget.deadline_seconds}s exceeded", "deadline")
 
-            if run.budget.max_tokens is not None and total_tokens > run.budget.max_tokens:
-                return await self._fail(run, turn, ErrorKind.INTERNAL, f"token budget {run.budget.max_tokens} exceeded (used {total_tokens})", "budget_exhausted")
+                turn += 1
+                stack.enter_context(bind(turn=turn))  # 每轮重盖章：inline 行据此携当前 turn（G-L5 判红点）
+                if turn > run.budget.max_turns:
+                    return await self._fail(run, turn, ErrorKind.TIMEOUT, f"max_turns {run.budget.max_turns} exhausted", "budget_exhausted")
 
-            has_text = _has_text(assistant_msg)
-            has_tool = any(b.type == "tool_use" for b in assistant_msg.content)
-            if not has_text and not has_tool:  # provider 连续“续跑”却返回空答
-                empties += 1
-                if empties > run.budget.max_consecutive_continuations:
-                    return await self._fail(run, turn, ErrorKind.INTERNAL, "repeated empty answers (no text/tool)", "no_progress")
-            else:
-                empties = 0
-
-            intent, faulted = self._ask_policy(run)
-            if faulted:
-                faults += 1
-                await self._live(run, turn, EventType.WARNING, {"message": "policy raised; rolling back turn (C10)"})
-                run = turn_start  # 回滚 Domain_State 到 turn 起点；已发出的 delta 不撤销
-                if faults > 2:
-                    return await self._fail(run, turn, ErrorKind.POLICY_VIOLATION, "policy raised repeatedly", "policy_error")
-                continue
-            faults = 0
-
-            if isinstance(intent, SuggestFinish):
-                if any(c.status in OPEN_TOOL_CALL_STATUSES for c in run.tool_ledger.calls):
-                    continue  # stop-gate：尚有未闭合工具调用时拒绝过早 Finish
-                final = assistant_msg if has_text else None
-                run, events = reduce(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
+                turn_start = run  # C10/X4 回滚点：本 turn 起始时的状态
+                run, events = reduce(run, AdvanceTurn(run_id=run.run_id, turn=turn))
                 controller.run = run
                 await self._emit(events)
-                return run
 
-            if isinstance(intent, ProposeToolCall):
-                sig = (intent.name, str(thaw(intent.args)))
-                repeat_count = repeat_count + 1 if sig == repeat_sig else 1
-                repeat_sig = sig
-                if repeat_count > run.budget.repeat_tool_limit:
-                    return await self._fail(run, turn, ErrorKind.INTERNAL, f"repeated identical tool call '{intent.name}' x{repeat_count}", "no_progress")
-                run = await self._handle_tool_call(controller, run, intent)
+                run, assistant_msg, usage = await self._stream_turn(controller, run, turn)
+                if assistant_msg is None:
+                    # 本轮没向 provider 发出请求，或请求已失败并归一：run 已终态就直接交回；
+                    # 非终态只可能是关卡期间被取消——回循环顶走 Cancel→reduce（C7），
+                    # 绝不在这条支路里造第二套终止路径（C13 恰一终态）。
+                    if run.status.is_terminal:
+                        return run
+                    continue
+                total_tokens += _token_total(usage)
+                run, events = reduce(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
+                controller.run = run
+                await self._emit(events)
+                if not any(env.type == EventType.MESSAGE_COMPLETED for env in events):
+                    # reduce **拒收**了这条 assistant（重复 tool_use_id）：Domain_State 没长。此时必须
+                    # 出声——不能继续把本地 ``assistant_msg`` 当已落库的定稿：实测它会被后面的
+                    # ``FinalizeRun(final=…)`` 原样写回 context，留下一条永远没有 tool_result 的悬空
+                    # tool_use，且因终态而不进 ``--list``/resume（ADR-0028，比崩更难查）。
+                    entry = ErrorEntry(
+                        kind=ErrorKind.FORMAT_ERROR,
+                        layer=ErrorLayer.PROVIDER,
+                        message="assistant message rejected by state: duplicate tool_use id in provider answer",
+                        at_turn=turn,
+                        hints=RecoveryHints(),
+                        cause="AppendAssistantMessageRejected",
+                        timestamp=utc_now(),
+                    )
+                    return await self._fail_with_entry(run, turn, entry, "provider_protocol_error")
+                await self._checkpoint(run, "auto")
+
+                if run.budget.max_tokens is not None and total_tokens > run.budget.max_tokens:
+                    return await self._fail(run, turn, ErrorKind.INTERNAL, f"token budget {run.budget.max_tokens} exceeded (used {total_tokens})", "budget_exhausted")
+
+                has_text = _has_text(assistant_msg)
+                has_tool = any(b.type == "tool_use" for b in assistant_msg.content)
+                if not has_text and not has_tool:  # provider 连续“续跑”却返回空答
+                    empties += 1
+                    if empties > run.budget.max_consecutive_continuations:
+                        return await self._fail(run, turn, ErrorKind.INTERNAL, "repeated empty answers (no text/tool)", "no_progress")
+                else:
+                    empties = 0
+
+                intent, faulted = self._ask_policy(run)
+                if faulted:
+                    faults += 1
+                    await self._live(run, turn, EventType.WARNING, {"message": "policy raised; rolling back turn (C10)"})
+                    run = turn_start  # 回滚 Domain_State 到 turn 起点；已发出的 delta 不撤销
+                    if faults > 2:
+                        return await self._fail(run, turn, ErrorKind.POLICY_VIOLATION, "policy raised repeatedly", "policy_error")
+                    continue
+                faults = 0
+
+                if isinstance(intent, SuggestFinish):
+                    if any(c.status in OPEN_TOOL_CALL_STATUSES for c in run.tool_ledger.calls):
+                        continue  # stop-gate：尚有未闭合工具调用时拒绝过早 Finish
+                    final = assistant_msg if has_text else None
+                    run, events = reduce(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
+                    controller.run = run
+                    await self._emit(events)
+                    return run
+
+                if isinstance(intent, ProposeToolCall):
+                    sig = (intent.name, str(thaw(intent.args)))
+                    repeat_count = repeat_count + 1 if sig == repeat_sig else 1
+                    repeat_sig = sig
+                    if repeat_count > run.budget.repeat_tool_limit:
+                        return await self._fail(run, turn, ErrorKind.INTERNAL, f"repeated identical tool call '{intent.name}' x{repeat_count}", "no_progress")
+                    run = await self._handle_tool_call(controller, run, intent)
 
     async def _consume_commands(self, controller: RunController, run: Run) -> Run:
         """按 FIFO 应用 inbox 中已到达的 Command；reduce 只在此处由 loop 调用。"""
