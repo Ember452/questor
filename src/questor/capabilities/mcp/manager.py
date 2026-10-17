@@ -22,6 +22,36 @@ from questor.capabilities.mcp.security import McpSecurityError, validate_server_
 
 _log = logging.getLogger("questor.mcp")
 
+#: 单个 server 的发现上限（C18 有界 / 防远程 server 一次性报海量工具撑爆 prompt 与工具面；
+#: 超限只接前 N 个并出声，对齐参考实现 DeepCode `core/mcp/connection.py:27` 的 MAX_DISCOVERED_TOOLS）。
+MAX_DISCOVERED_TOOLS = 256
+
+
+def _build_tools(conn: McpConnection, server_name: str, raw_tools: list[Any], *, limit: int = MAX_DISCOVERED_TOOLS) -> list[McpRemoteTool]:
+    """把发现到的远程 tool 定义映射成 `McpRemoteTool`：先按上限截断、再逐个容错。
+
+    单个畸形 descriptor（`McpRemoteTool` 构造抛错）只跳过该工具并出声，不拖垮整 server
+    的发现（C6/C18，DoD③ 不崩宿主）。超限截断也出声。
+    """
+    tools: list[McpRemoteTool] = []
+    if len(raw_tools) > limit:
+        _log.warning("MCP server '%s' advertised %d tools; capping at %d (C18 bounded)", server_name, len(raw_tools), limit)
+        raw_tools = raw_tools[:limit]
+    for tool_def in raw_tools:
+        try:
+            tools.append(
+                McpRemoteTool(
+                    connection=conn,
+                    server_name=server_name,
+                    raw_name=str(tool_def.name),
+                    description=str(getattr(tool_def, "description", "") or ""),
+                    input_schema=getattr(tool_def, "inputSchema", None),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - 单个远程工具描述畸形不得拖垮整批发现（C6）
+            _log.warning("skipping malformed remote tool on server '%s' (name=%r): %s", server_name, getattr(tool_def, "name", "?"), exc)
+    return tools
+
 
 class McpManager:
     """拥有到若干 stdio MCP server 的连接，并把远程工具适配成本地 `Tool`。"""
@@ -57,16 +87,7 @@ class McpManager:
             except Exception as exc:  # noqa: BLE001 - 单 server 发现失败出声、不拖垮其余（C6）
                 _log.warning("MCP server '%s' tool discovery failed: %s", cfg.name, exc)
                 continue
-            for tool_def in raw_tools:
-                tools.append(
-                    McpRemoteTool(
-                        connection=conn,
-                        server_name=cfg.name,
-                        raw_name=str(tool_def.name),
-                        description=str(getattr(tool_def, "description", "") or ""),
-                        input_schema=getattr(tool_def, "inputSchema", None),
-                    )
-                )
+            tools.extend(_build_tools(conn, cfg.name, raw_tools))
         return tools
 
     async def aclose(self) -> None:
