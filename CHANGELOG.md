@@ -22,8 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `mcp-stderr-<run_id>.log` + spawn 侧 `run_id` 显式注入（文件名主、首行辅）；跨进程关联 canary 真子进程实测通过
   （`contextvars` 不过进程边界，绝不靠 ambient `bind()`——`docs/pitfalls.md` 第 3 条）。C20：独立通道只放子进程自有输出。
 - **决策**：ADR-0029（`parallel_safe`/`barrier` 移出 P5、执行严格串行）、ADR-0030（采用官方 `mcp` SDK，pin `<2` 对齐参考实现）。
-- **进行中**：把 MCP 连接接入单次 run 工具面的**组合根 bootstrap**（per-run 连接 + teardown + C17 env 擦除在装配侧）
-  与端到端 ledger 测试仍在做；已交付的是可组合的、经真子进程测试的 MCP/Skills 能力层。
+- **端到端已接**：L6 组合根 bootstrap（`surfaces/mcp_bootstrap.py`）把 MCP 连接接入单次 run 的工具面（per-run 生命周期
+  + teardown）；C17 env 凭据门在装配侧拒绝 server.env 携带 provider 凭据；`test_mcp_loop_integration.py` 以真子进程
+  + 真 SQLiteStore 实测“远程工具→`event_log` 先入账”与“无网络围栏时 C17 floor fail-closed 拒但配对仍闭合”。
+  真实外网 MCP server / 真 key 端到端、HTTP sidecar 带外投影仍标 **UNVERIFIED**（见 `docs/plan/05` §0.4）。
 - 许可/provenance：crewAI / DeepCode / hermes / CowAgent 改造（MIT，改造处文件内标 provenance）；`mcp` SDK MIT；EvoFlow evopanel 零接触。
 
 ### Fixed — 日志骨架（刀 2）复审修正（分支 `fix/log-blade2-audit`；Issue #126–#139）

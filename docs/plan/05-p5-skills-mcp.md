@@ -247,3 +247,28 @@
 - ✅ §0.0 记入 **基线 = `main` @ `68a225b`**，并证 PR #140 已合入 → **C20（`HARD-CONSTRAINTS.md:110-116`）与 `docs/pitfalls.md` 存在**，P5 在其约束下规划。
 
 > **诚实边界**：本文为 READ-ONLY 规划，只落此文档，未改代码/未建分支/未 commit/未 push。所有 `file:line`（本仓与参考仓）为 2026-10-17 扫描快照，开工当天必重验；真机凭据/真远程 MCP server 的端到端效果标 UNVERIFIED。
+
+---
+
+## 8. 实现偏差回填（执行期，分支 `feat/p5-skills-mcp`，reality-wins）
+
+实现与本文计划的偏差（不改设计结论，只记落点）：
+
+1. **frontmatter 用依赖最小的严格手写解析，而非 `yaml.safe_load`（§0.2 Skills 行）**：`pyyaml` 未在 `pyproject` 声明，
+   赌 transitive 会随上游升级消失。对不支持结构（缩进块映射/顶层列表项）fail-closed 抛 `SkillParseError`，绝不误解析。
+2. **MCP 子进程由官方 `mcp` SDK 拥有，未走 `providers/process_runner.py`（§2 T1/T2、计划提过 ADR-0018）**：SDK 自带进程树终止
+   （Job Object / killpg）+ 安全 env 白名单（`get_default_environment`），比套 `ProcessRunner.run()`（run-to-completion 模型，
+   不适配长连双向 stdio）更合适。`check_layering_ast` 确认 `capabilities/mcp` 未 import `subprocess`/`process_runner`。另 SDK 默认拉 v2（API 已变），
+   pin `mcp<2` 对齐全部参考实现（v1）。
+3. **MCP 工具“可调用”需网络围栏（实现中发现的 C17 后果）**：`apply_capability_floor` 对 `capability=NETWORK` 且 sandbox 无
+   `fences_network` 时 fail-closed DENY（`full_auto` 不能放宽）。因此 MCP 工具只在网络围栏 sandbox 下可执行——这是 C17 正确行为，已写入
+   `capabilities/mcp/README.md` 与 `tests/integration/test_mcp_loop_integration.py`（两向都测：有围栏→执行入账；无围栏→拒但配对闭合）。
+4. **per-run MCP 连接生命周期**：bootstrap 每次 run 起→发现→teardown（匹配 §16.4 per-run stderr）。代价是 REPL 每轮重起 server；
+   长驻会话式连接为后续可优化项（会使 per-run stderr 命名失效，需重新权衡）。
+5. **渐进披露拆为独立模块 `disclosure.py`**（原计划写进 `loader.py`）：SRP，顺带使 C05/C06 各成单关注点 commit。
+6. **C22 非放宽的 approval 部分复用已有引擎**：`kernel/permission_policy.py::_apply_approval_mode` 已实现 MCP
+   「只收紧不放宽、unknown→deny」，McpRemoteTool 不设 `approval_mode`，无需重造。
+7. **DoD 覆盖**：① Skills 已实现+测（发现→catalog→system prompt）；②③④⑤ 由真 stdio 假 server roundtrip + 真子进程
+   event_log/断连测试 + 协议零 diff 覆盖。**仍 UNVERIFIED**：真实外网 MCP server / 真 key 端到端；HTTP sidecar 带外投影（§0.4 已知缺口）。
+8. **预存在失败（非本 Phase）**：`test_powershell_timeout_kills_parent_and_child` 在未改动的 `main` 上同样确定性失败，
+   与本 Phase 无关；待开 GitHub Issue 跟踪（普通 bug 走 Issue，不入 pitfalls）。
