@@ -31,8 +31,8 @@ struct Bootstrap {
     token: String,
 }
 
-/// tauri 管理状态：持有当前 sidecar 子进程句柄，供退出时优雅关闭。
-struct SidecarCell(Mutex<Option<(StdProcess, u64)>>);
+/// tauri 管理状态：持有当前 sidecar 子进程句柄 + 端口/token，供退出时优雅关闭。
+struct SidecarCell(Mutex<Option<(StdProcess, u64, u16, String)>>);
 
 fn bootstrap_path() -> PathBuf {
     std::env::var_os("QUESTOR_SIDECAR_BOOTSTRAP")
@@ -70,20 +70,29 @@ fn start_sidecar(fence: &Fence) -> Result<(StdProcess, u16, u64, String), String
     Ok((proc, boot.port, boot.generation, boot.token))
 }
 
-/// 两级优雅关闭：向 sidecar 发关闭意图 → 轮询 → 超时 force_kill；无论哪级都让 fail_all 语义在 sidecar 侧
-/// 由其自身 teardown 收尾（Rust 侧只需保证进程被回收，不留孤儿）。
+/// 向 sidecar 发一个真优雅关闭 RPC（POST /shutdown，带 token）。经裸 TcpStream 手写 HTTP（壳侧零依赖）；
+/// 任何失败都忽略（则两级关闭落到 grace 超时后的 force_kill 兜底）。
+fn send_shutdown(port: u16, token: &str) {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    let addr = format!("127.0.0.1:{port}");
+    if let Ok(mut stream) = TcpStream::connect(&addr) {
+        let req = format!(
+            "POST /shutdown HTTP/1.1\r\nHost: {addr}\r\nx-questor-token: {token}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+        );
+        let _ = stream.write_all(req.as_bytes());
+        let _ = stream.flush();
+        let mut buf = [0u8; 128];
+        let _ = stream.read(&mut buf); // 尽力读完响应，不阻塞关闭
+    }
+}
+
+/// 两级优雅关闭：① 向 sidecar POST /shutdown → ② 轮询子进程退出 → ③ 超时 force_kill。
+/// 正常路径下 sidecar 收到 /shutdown 后 uvicorn 应声优雅退→ poll 拿到退出码 → Exited（非恒 35s 硬杀）。
 fn shutdown_sidecar(cell: &SidecarCell) {
     let taken = cell.0.lock().map(|mut g| g.take()).unwrap_or(None);
-    if let Some((mut proc, _gen)) = taken {
-        let out = two_phase_shutdown(
-            || {
-                // 生产应经 HTTP 向 sidecar 发优雅关闭；本 Phase sidecar 尚无 /shutdown RPC 端点，
-                // 故请求为 no-op，落到 grace 超时后的 force_kill 兜底（诚实：非理想优雅路径）。
-            },
-            &mut proc,
-            GRACE,
-            POLL,
-        );
+    if let Some((mut proc, _gen, port, token)) = taken {
+        let out = two_phase_shutdown(|| send_shutdown(port, &token), &mut proc, GRACE, POLL);
         match out {
             Shutdown::Exited => log("sidecar exited gracefully"),
             Shutdown::ForceKilled => log("sidecar force-killed after grace"),
@@ -102,12 +111,12 @@ pub fn run() {
         .setup(move |app| {
             let (proc, port, _gen, token) =
                 start_sidecar(&fence).map_err(|e| format!("sidecar start failed: {e}"))?;
-            app.manage(SidecarCell(Mutex::new(Some((proc, _gen)))));
             // webview 指向 loopback sidecar，并把会话 token 经查询注入（前端据此带 header）。
-            // 桌面只是薄壳，全部业务在 Python（S5/S6）。
+            // 先构 URL（借用 token），再 manage（移动 token）——避免借用/移动顺序错。
             let url: tauri::Url = format!("http://127.0.0.1:{port}/?token={token}")
                 .parse()
                 .map_err(|e| format!("bad sidecar url: {e}"))?;
+            app.manage(SidecarCell(Mutex::new(Some((proc, _gen, port, token)))));
             let win =
                 tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
                     .title("Questor")
@@ -147,5 +156,11 @@ mod tests {
     fn shutdown_of_absent_sidecar_is_noop() {
         let cell = SidecarCell(Mutex::new(None));
         shutdown_sidecar(&cell); // 不应 panic
+    }
+
+    #[test]
+    fn send_shutdown_without_listener_is_ignored() {
+        // 端口 1 无监听 → TcpStream::connect 失败应静默忽略（优雅关闭降级到 force_kill 兜底），绝不 panic。
+        send_shutdown(1, "tok");
     }
 }

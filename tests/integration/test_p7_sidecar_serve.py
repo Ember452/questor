@@ -23,7 +23,11 @@ from pathlib import Path
 import httpx
 import pytest
 
+from questor.providers.fake import EchoProvider
+from questor.providers.store_sqlite import SQLiteStore
 from questor.surfaces import serve
+from questor.surfaces.cli import CliSurface
+from questor.surfaces.http_sse import EventServer, create_app
 
 _REPO_ROOT = str(Path(__file__).resolve().parents[2])
 
@@ -56,6 +60,22 @@ def test_write_bootstrap_rejects_wildcard_host(tmp_path: Path) -> None:
     """试图把 bootstrap 写成 0.0.0.0 必须当场拒绝（进程边界红线，不能只靠 socket 绑对）。"""
     with pytest.raises(ValueError):
         serve.write_bootstrap(tmp_path / "x.json", host="0.0.0.0", port=1, generation=0, pid=os.getpid(), token="t")
+
+
+async def test_shutdown_route_requests_graceful_stop(tmp_path: Path) -> None:
+    """POST /shutdown（带 token）置位 server.shutdown_event（serve 看门狗据此优雅停）；无 token → 401。"""
+    from fastapi.testclient import TestClient
+
+    store = await SQLiteStore(str(tmp_path / "sd.db")).connect()
+    try:
+        server = EventServer(CliSurface(workspace_root=tmp_path, store=store, provider=EchoProvider()), store)
+        with TestClient(create_app(server, token="t")) as client:
+            assert not server.shutdown_event.is_set()
+            assert client.post("/shutdown").status_code == 401  # 无 token 不发关闭（本机旁路被堵）
+            assert client.post("/shutdown", headers={"x-questor-token": "t"}).status_code == 200
+            assert server.shutdown_event.is_set()
+    finally:
+        await store.close()
 
 
 # --------------------------------------------------------------------------- #

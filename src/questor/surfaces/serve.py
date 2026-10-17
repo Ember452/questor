@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -89,8 +90,17 @@ async def serve(server: EventServer, *, generation: int, bootstrap_path: Path, s
     # 起手一条一方记录钉住"serve 面已就绪"（DoD A①：起手即有日志，由一方记录兑现）。
     _log.info("sidecar serve ready host=%s port=%s generation=%s", _LOOPBACK, port, generation)
     config = uvicorn.Config(app, log_level="warning", access_log=False)
+    uv_server = uvicorn.Server(config)
+
+    async def _watch_shutdown() -> None:
+        # 收到 /shutdown 信号 → 置 should_exit，uvicorn 优雅收尾在途请求后停机（不等壳的 grace 硬杀）。
+        await server.shutdown_event.wait()
+        uv_server.should_exit = True
+
+    watcher = asyncio.create_task(_watch_shutdown())
     try:
-        await uvicorn.Server(config).serve(sockets=[sock])
+        await uv_server.serve(sockets=[sock])
     finally:
+        watcher.cancel()
         sock.close()
     return boot

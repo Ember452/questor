@@ -72,6 +72,12 @@ class EventServer:
         # （收口 plan/05 §0.4 缺口：`stream()` 曾完全不投）。挂在此处一次，与 SSE 订阅者数量无关。
         self.bus.add_observer(log_envelope)
         self.registry = RunRegistry()
+        # 优雅关闭信号：`/shutdown` 置位，serve 面的看门狗据此让 uvicorn 应声停机（不等 grace 超时硬杀）。
+        self.shutdown_event = asyncio.Event()
+
+    def request_shutdown(self) -> None:
+        """请求优雅关闭（仅置信号，不硬杀）；serve 看门狗会拾起并让 uvicorn 退出。"""
+        self.shutdown_event.set()
 
     def _loop(self, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
         """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。"""
@@ -188,6 +194,12 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
     async def health() -> dict:
         """就绪探针（D-P7-B）：Rust 侧轮询本端口替代参考仓的 stdin `initialize`——只证 serve 面起来，不触碰任何状态。"""
         return {"status": "ok"}
+
+    @app.post("/shutdown", dependencies=[Depends(require_token)])
+    async def shutdown() -> dict:
+        """优雅关闭 RPC（§6-6）：壳关窗时 POST 此端点，serve 看门狗让 uvicorn 在 grace 内自退（Exited 非恒 ForceKilled）。"""
+        server.request_shutdown()
+        return {"status": "shutting_down"}
 
     @app.post("/run", dependencies=[Depends(require_token)])
     async def run(payload: dict) -> dict:
