@@ -69,7 +69,12 @@ pub enum Shutdown {
 ///
 /// 失败语义：本函数不抛错；无论哪一级都在返回时给出确定终态，调用方据 `Shutdown` 决定后续
 /// （通常紧接 `fail_all` 使在途 pending 全 fail）。
-pub fn two_phase_shutdown<P: Process, R: FnMut()>(mut request: R, proc: &mut P, grace: Duration, poll: Duration) -> Shutdown {
+pub fn two_phase_shutdown<P: Process, R: FnMut()>(
+    mut request: R,
+    proc: &mut P,
+    grace: Duration,
+    poll: Duration,
+) -> Shutdown {
     request(); // ① 优雅关闭请求（HTTP/RPC），不是硬杀
     let start = Instant::now();
     loop {
@@ -171,7 +176,11 @@ mod tests {
     #[test]
     fn two_phase_exits_gracefully() {
         // 子进程在收到请求后很快退出 → Exited，且**不应**走到 force_kill。
-        let mut proc = FakeProc { exit_after_polls: 2, polls: 0, killed: false };
+        let mut proc = FakeProc {
+            exit_after_polls: 2,
+            polls: 0,
+            killed: false,
+        };
         let mut requested = false;
         let out = two_phase_shutdown(
             || requested = true,
@@ -187,7 +196,11 @@ mod tests {
     #[test]
     fn two_phase_force_kills_on_grace_timeout() {
         // 子进程永不退出 → 到 grace 触发 force_kill → ForceKilled。
-        let mut proc = FakeProc { exit_after_polls: usize::MAX, polls: 0, killed: false };
+        let mut proc = FakeProc {
+            exit_after_polls: usize::MAX,
+            polls: 0,
+            killed: false,
+        };
         let out = two_phase_shutdown(
             || {},
             &mut proc,
@@ -201,9 +214,21 @@ mod tests {
     #[test]
     fn fail_all_marks_only_current_generation_pending() {
         let mut reqs = vec![
-            PendingRequest { id: "a".into(), generation: 1, state: RequestState::Pending },
-            PendingRequest { id: "b".into(), generation: 1, state: RequestState::Closed },
-            PendingRequest { id: "c".into(), generation: 2, state: RequestState::Pending },
+            PendingRequest {
+                id: "a".into(),
+                generation: 1,
+                state: RequestState::Pending,
+            },
+            PendingRequest {
+                id: "b".into(),
+                generation: 1,
+                state: RequestState::Closed,
+            },
+            PendingRequest {
+                id: "c".into(),
+                generation: 2,
+                state: RequestState::Pending,
+            },
         ];
         let n = fail_all(&mut reqs, 1);
         assert_eq!(n, 1, "只失效当前代 pending（b 已 Closed 不动、c 是别的代）");

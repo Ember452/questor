@@ -48,7 +48,8 @@ fn start_sidecar(fence: &Fence) -> Result<(StdProcess, u16, u64), String> {
     std::env::set_var("QUESTOR_SIDECAR_BOOTSTRAP", &bp);
     std::env::set_var("QUESTOR_SIDECAR_GENERATION", generation.to_string());
 
-    let proc = StdProcess::spawn("python", &["-m", "questor", "--serve"]).map_err(|e| format!("spawn sidecar: {e}"))?;
+    let proc = StdProcess::spawn("python", &["-m", "questor", "--serve"])
+        .map_err(|e| format!("spawn sidecar: {e}"))?;
 
     let deadline = Instant::now() + BOOTSTRAP_WAIT;
     let boot = loop {
@@ -98,17 +99,19 @@ pub fn run() {
     let fence = Fence::new();
     tauri::Builder::default()
         .setup(move |app| {
-            let (proc, port, _gen) = start_sidecar(&fence).map_err(|e| format!("sidecar start failed: {e}"))?;
+            let (proc, port, _gen) =
+                start_sidecar(&fence).map_err(|e| format!("sidecar start failed: {e}"))?;
             app.manage(SidecarCell(Mutex::new(Some((proc, _gen)))));
             // webview 指向 loopback sidecar —— 桌面只是薄壳，全部业务在 Python（S5/S6）。
             let url: tauri::Url = format!("http://127.0.0.1:{port}")
                 .parse()
                 .map_err(|e| format!("bad sidecar url: {e}"))?;
-            let win = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
-                .title("Questor")
-                .inner_size(1100.0, 760.0)
-                .build()
-                .map_err(|e| format!("window build failed: {e}"))?;
+            let win =
+                tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
+                    .title("Questor")
+                    .inner_size(1100.0, 760.0)
+                    .build()
+                    .map_err(|e| format!("window build failed: {e}"))?;
             win.set_focus().ok();
             Ok(())
         })

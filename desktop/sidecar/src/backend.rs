@@ -71,9 +71,20 @@ mod winjob {
     // kernel32 的 Job Object API（裸 FFI；x64 上 extern "system" == C 调用约定）。
     #[link(name = "kernel32")]
     extern "system" {
-        fn CreateJobObjectW(lpjobattributes: *mut core::ffi::c_void, lpname: *const u16) -> *mut core::ffi::c_void;
-        fn SetInformationJobObject(hjob: *mut core::ffi::c_void, jobobjectinformationclass: i32, lpjobobjectinformation: *const core::ffi::c_void, cbjobobjectinformation: u32) -> i32;
-        fn AssignProcessToJobObject(hjob: *mut core::ffi::c_void, hprocess: *mut core::ffi::c_void) -> i32;
+        fn CreateJobObjectW(
+            lpjobattributes: *mut core::ffi::c_void,
+            lpname: *const u16,
+        ) -> *mut core::ffi::c_void;
+        fn SetInformationJobObject(
+            hjob: *mut core::ffi::c_void,
+            jobobjectinformationclass: i32,
+            lpjobobjectinformation: *const core::ffi::c_void,
+            cbjobobjectinformation: u32,
+        ) -> i32;
+        fn AssignProcessToJobObject(
+            hjob: *mut core::ffi::c_void,
+            hprocess: *mut core::ffi::c_void,
+        ) -> i32;
         fn TerminateJobObject(hjob: *mut core::ffi::c_void, uexitcode: u32) -> i32;
         fn CloseHandle(hobject: *mut core::ffi::c_void) -> i32;
     }
@@ -148,8 +159,8 @@ mod winjob {
 
         pub fn assign(&self, child: &Child) -> io::Result<()> {
             unsafe {
-                // Child 的原始句柄即进程句柄；std 保证 Child 存活期间该句柄有效。
-                let process = child.as_raw_handle() as *mut core::ffi::c_void;
+                // Child 的原始句柄即进程句柄（RawHandle 已是 *mut c_void，无需再 cast）；std 保证 Child 存活期间该句柄有效。
+                let process = child.as_raw_handle();
                 if AssignProcessToJobObject(self.handle, process) == 0 {
                     Err(io::Error::last_os_error())
                 } else {
@@ -189,14 +200,19 @@ mod tests {
     #[test]
     fn real_child_is_recovered_by_two_phase() {
         // 起一个不会自退的命令；无优雅端点 → 到 grace 触发 force_kill；验证真 OS 上进程被回收、可 poll 到退出码。
-        let mut proc = StdProcess::spawn("cmd", &["/C", "ping", "-n", "30", "127.0.0.1"]).expect("spawn cmd ping");
+        let mut proc = StdProcess::spawn("cmd", &["/C", "ping", "-n", "30", "127.0.0.1"])
+            .expect("spawn cmd ping");
         let out = two_phase_shutdown(
             || {},
             &mut proc,
             Duration::from_millis(300),
             Duration::from_millis(30),
         );
-        assert_eq!(out, Shutdown::ForceKilled, "ping 30 不会在 300ms 内自退，应走强杀兜底");
+        assert_eq!(
+            out,
+            Shutdown::ForceKilled,
+            "ping 30 不会在 300ms 内自退，应走强杀兜底"
+        );
         thread::sleep(Duration::from_millis(50));
         assert!(proc.poll().is_some(), "force_kill 后子进程应已退出、可回收");
     }
@@ -205,7 +221,8 @@ mod tests {
     #[test]
     fn job_object_terminates_assigned_child() {
         // 真机验证 Job Object 链路：spawn 内已 create+assign job；force_kill 走 TerminateJobObject 结束整棵 job。
-        let mut proc = StdProcess::spawn("cmd", &["/C", "ping", "-n", "30", "127.0.0.1"]).expect("spawn into job");
+        let mut proc = StdProcess::spawn("cmd", &["/C", "ping", "-n", "30", "127.0.0.1"])
+            .expect("spawn into job");
         proc.force_kill(); // TerminateJobObject
         assert!(proc.poll().is_some(), "TerminateJobObject 后子进程应已退出");
     }
