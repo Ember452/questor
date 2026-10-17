@@ -3,3 +3,9 @@ node_modules/
 dist/
 .vite/
 *.tsbuildinfo
+
+# Rust 构建产物（Cargo.lock 例外：锁定与供应链可复现，要提交）。
+target/
+**/target/
+*.pdb
+*.exe

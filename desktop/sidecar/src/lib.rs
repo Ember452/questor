@@ -1,0 +1,234 @@
+//! Python sidecar 生命周期监管**核心状态机**（Phase 7 T8 / ADR-0032；HARD S5/C10/C19）。
+//!
+//! 这里是**纯逻辑、零外部依赖**，好让 `cargo test` 快速、确定性地验证最难的部分：
+//! - **generation 栅栏**：每次重启自增，携带旧 generation 的连接/回执一律判为陈旧丢弃
+//!   （防"重启后陈旧连接写新 run"，对应参考仓 `sidecar.rs` 的 `generation: AtomicU64` 形状）。
+//! - **两级优雅关闭**：先 `request`（sidecar 的 shutdown 调用）→ 轮询子进程 `poll` 到 `grace` 上限
+//!   → 超时 `force_kill` 兜底。无论走哪级，都在返回前给出确定终态。
+//! - **`fail_all`**：崩溃/关闭时把在途 pending 全标记为 Failed，使 pending 不撕裂状态（C10/C19 的
+//!   "先推部分事件后不得让消费方误解"在生命周期侧的对应物）。
+//! - **loopback 就绪探测**：轮询 `127.0.0.1:<port>` 可连即 ready（ADR-0007：替代参考仓 stdin `initialize`）。
+//!
+//! OS 进程/Windows Job Object 真后端在 `backend.rs`（生产用）；本模块只依赖 `trait` 抽象，便于 mock 测。
+
+use std::net::{SocketAddr, TcpStream};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+use std::time::{Duration, Instant};
+
+/// sidecar 代次。每次（重）起自增；`0` 表示从未启动。
+pub type Generation = u64;
+
+/// generation 栅栏：重启计数 + 陈旧判定。Rust 壳与 sidecar bootstrap 共用它的语义。
+#[derive(Default)]
+pub struct Fence {
+    current: AtomicU64,
+}
+
+impl Fence {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 当前 generation。
+    pub fn current(&self) -> Generation {
+        self.current.load(Ordering::SeqCst)
+    }
+
+    /// 记一次（重）启动：自增并返回新 generation。
+    pub fn bump(&self) -> Generation {
+        self.current.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// 给定 generation 是否仍是当前代（否则为陈旧连接/回执，应丢弃）。
+    pub fn is_current(&self, gen: Generation) -> bool {
+        self.current.load(Ordering::SeqCst) == gen
+    }
+}
+
+/// 抽象子进程句柄：生产实现见 `backend.rs`（`std::process::Child` + Job Object）；测试用假实现。
+pub trait Process {
+    /// 非阻塞轮询退出：`Some(code)` 已退出；`None` 仍在跑。
+    fn poll(&mut self) -> Option<i32>;
+    /// 强制杀（含进程树；Windows 走 Job Object）。
+    fn force_kill(&mut self);
+}
+
+/// 两级优雅关闭的终态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shutdown {
+    /// 收到 shutdown 请求后在 grace 内自行退出。
+    Exited,
+    /// grace 到点仍未退出，已 `force_kill` 兜底。
+    ForceKilled,
+}
+
+/// 两级优雅关闭：① `request`（向 sidecar 发 shutdown 调用）→ ② 轮询到 `grace` 上限 → ③ 超时 `force_kill`。
+///
+/// 失败语义：本函数不抛错；无论哪一级都在返回时给出确定终态，调用方据 `Shutdown` 决定后续
+/// （通常紧接 `fail_all` 使在途 pending 全 fail）。
+pub fn two_phase_shutdown<P: Process, R: FnMut()>(mut request: R, proc: &mut P, grace: Duration, poll: Duration) -> Shutdown {
+    request(); // ① 优雅关闭请求（HTTP/RPC），不是硬杀
+    let start = Instant::now();
+    loop {
+        if proc.poll().is_some() {
+            return Shutdown::Exited;
+        }
+        if start.elapsed() >= grace {
+            proc.force_kill(); // ③ 兜底强杀
+            return Shutdown::ForceKilled;
+        }
+        thread::sleep(poll);
+    }
+}
+
+/// 在途请求状态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RequestState {
+    Pending,
+    Failed,
+    Closed,
+}
+
+/// 一条在途请求（对应一个 sidecar 侧 pending tool_use / SSE 会话）。
+#[derive(Debug, Clone)]
+pub struct PendingRequest {
+    pub id: String,
+    pub generation: Generation,
+    pub state: RequestState,
+}
+
+/// 崩溃/关闭时把所有 `Pending` 置 `Failed` 并返回处理条数（pending 全 fail，不撕裂状态，C10/C19）。
+///
+/// 只动 `Pending`：`Closed`（已完成）不被误改；`Failed` 幂等（不重复计数）。
+pub fn fail_all(reqs: &mut [PendingRequest], generation: Generation) -> usize {
+    let mut n = 0;
+    for r in reqs.iter_mut() {
+        // 只失效**当前代**的 pending：旧代请求由栅栏另行处理，不在此翻案。
+        if r.generation == generation && r.state == RequestState::Pending {
+            r.state = RequestState::Failed;
+            n += 1;
+        }
+    }
+    n
+}
+
+/// 轮询 `127.0.0.1:<port>` 直到可连（就绪）或超时。ADR-0007/ADR-0032 的就绪探测（替代 stdin 握手）。
+///
+/// 只连 loopback，绝不接受外部 host（本地 IPC，无网络出口，呼应 C12）。
+pub fn wait_ready(port: u16, timeout: Duration) -> bool {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let deadline = Instant::now() + timeout;
+    loop {
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fence_bumps_and_rejects_stale() {
+        let fence = Fence::new();
+        assert_eq!(fence.current(), 0);
+        let g1 = fence.bump();
+        assert_eq!(g1, 1);
+        assert!(fence.is_current(1));
+        assert!(!fence.is_current(0), "重启前的 generation 0 应判为陈旧");
+        let g2 = fence.bump();
+        assert_eq!(g2, 2);
+        assert!(!fence.is_current(1), "上一代连接重启后应被栅栏丢弃");
+    }
+
+    struct FakeProc {
+        exit_after_polls: usize,
+        polls: usize,
+        killed: bool,
+    }
+    impl Process for FakeProc {
+        fn poll(&mut self) -> Option<i32> {
+            self.polls += 1;
+            if self.polls >= self.exit_after_polls {
+                Some(0)
+            } else {
+                None
+            }
+        }
+        fn force_kill(&mut self) {
+            self.killed = true;
+        }
+    }
+
+    #[test]
+    fn two_phase_exits_gracefully() {
+        // 子进程在收到请求后很快退出 → Exited，且**不应**走到 force_kill。
+        let mut proc = FakeProc { exit_after_polls: 2, polls: 0, killed: false };
+        let mut requested = false;
+        let out = two_phase_shutdown(
+            || requested = true,
+            &mut proc,
+            Duration::from_millis(500),
+            Duration::from_millis(5),
+        );
+        assert_eq!(out, Shutdown::Exited);
+        assert!(requested, "必须先发优雅关闭请求");
+        assert!(!proc.killed, "优雅退出路径不应强杀");
+    }
+
+    #[test]
+    fn two_phase_force_kills_on_grace_timeout() {
+        // 子进程永不退出 → 到 grace 触发 force_kill → ForceKilled。
+        let mut proc = FakeProc { exit_after_polls: usize::MAX, polls: 0, killed: false };
+        let out = two_phase_shutdown(
+            || {},
+            &mut proc,
+            Duration::from_millis(50),
+            Duration::from_millis(5),
+        );
+        assert_eq!(out, Shutdown::ForceKilled);
+        assert!(proc.killed, "超 grace 必须强杀兜底");
+    }
+
+    #[test]
+    fn fail_all_marks_only_current_generation_pending() {
+        let mut reqs = vec![
+            PendingRequest { id: "a".into(), generation: 1, state: RequestState::Pending },
+            PendingRequest { id: "b".into(), generation: 1, state: RequestState::Closed },
+            PendingRequest { id: "c".into(), generation: 2, state: RequestState::Pending },
+        ];
+        let n = fail_all(&mut reqs, 1);
+        assert_eq!(n, 1, "只失效当前代 pending（b 已 Closed 不动、c 是别的代）");
+        assert_eq!(reqs[0].state, RequestState::Failed);
+        assert_eq!(reqs[1].state, RequestState::Closed);
+        assert_eq!(reqs[2].state, RequestState::Pending);
+    }
+
+    #[test]
+    fn wait_ready_true_against_listener() {
+        // 真 loopback：起一个 listener → wait_ready 应在超时前返回 true。
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                drop(stream.ok());
+            }
+        });
+        assert!(wait_ready(port, Duration::from_millis(2000)));
+    }
+
+    #[test]
+    fn wait_ready_false_when_nothing_listens() {
+        // 占一个口再释放，得到一个大概率无人监听的口 → wait_ready 应超时返回 false。
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        assert!(!wait_ready(port, Duration::from_millis(200)));
+    }
+}
