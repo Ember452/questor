@@ -29,10 +29,12 @@ _SCALAR_TYPES: tuple[type, ...] = (str, int, float, bool)
 
 #: 在 DEBUG/INFO 太吵的第三方 logger（钉到 WARNING，否则 litellm/httpx 淹没有用行）。
 #: 参照 hermes ``_NOISY_LOGGERS``（MIT）；litellm 单列（其请求日志体量大且与 llm 通道重复）。
+#: 注意：stdlib logger 名**大小写敏感**——litellm 实际用的是首字母大写的 ``LiteLLM``，
+#: 只列小写等于从未生效（Issue #129）；aiosqlite 会把 SQL 参数元组整个打出来，必钉。
 NOISY_LOGGERS: tuple[str, ...] = (
     "openai", "openai._base_client", "httpx", "httpcore", "asyncio", "hpack", "hpack.hpack",
     "grpc", "modal", "urllib3", "urllib3.connectionpool", "websockets", "charset_normalizer",
-    "markdown_it", "litellm",
+    "markdown_it", "litellm", "LiteLLM", "LiteLLM Requests", "LiteLLM Exception", "aiosqlite",
 )
 
 
@@ -108,21 +110,56 @@ def _format_traceback(record: logging.LogRecord) -> str | None:
     return "\n".join(line for line in raw.splitlines() if line.strip())
 
 
+#: 桥自己占用的 fields 键：用户经 ``log_fields`` 传同名键时不直接覆盖，而是 ``f_`` 前缀保留双方。
+_RESERVED_KEYS: frozenset[str] = frozenset({"filename", "lineno", "args_coerced", "fields_collapsed"})
+
+
+def _build_fields(record: logging.LogRecord, context: dict) -> tuple[dict, bool, bool]:
+    """从 ``extra={"log_fields": ...}``（唯一入口）构造 fields，保两条命（Issue #133）。
+
+    - **非标量不静默丢行**：值复用 §16.1 args 政策的 ``_coerce_one`` 做有界 repr，并标记
+      ``args_coerced``。以前直接把领域对象交给 ``LogEntry``，撞 D11 白名单后异常落在 handler 里走
+      ``handleError``——业务调用处不炸、日志行静默消失，既不符合“当场炸”的宣称，也不符合
+      “观测面不拖垮被观测物”。现在两边都不发生：行留下、摘要可用、带标记可查。
+    - **撞键不丢整行**：与 ``context``（bind 的关联键）或桥保留键同名的键改为 ``f_`` 前缀并标记
+      ``fields_collapsed``；加前缀后仍撞则丢弃该一个键（而非丢整行）。
+
+    返回 ``(fields, coerced_any, collapsed_any)``。
+    """
+    fields: dict[str, str | int | float | bool | None] = {}
+    coerced_any = False
+    collapsed_any = False
+    log_fields = getattr(record, "log_fields", None)
+    if isinstance(log_fields, dict):  # 唯一入口：禁把任意 record 属性透传进 fields。
+        for raw_key, raw_value in log_fields.items():
+            value, coerced = _coerce_one(raw_value)
+            coerced_any = coerced_any or coerced
+            key = raw_key if isinstance(raw_key, str) else str(raw_key)
+            if key in context or key in _RESERVED_KEYS or key in fields:
+                key = f"f_{key}"
+                collapsed_any = True
+            if key in context or key in _RESERVED_KEYS or key in fields:
+                collapsed_any = True  # 加前缀仍冲突：只能丢这一个键，不能把整行搭进去
+                continue
+            fields[key] = value  # type: ignore[assignment]
+    fields["filename"] = record.filename  # 已是业务调用处（见模块 docstring 偏差说明）。
+    fields["lineno"] = record.lineno
+    return fields, coerced_any, collapsed_any
+
+
 class BridgeHandler(logging.Handler):
     """stdlib Handler：把 ``LogRecord`` 转 ``LogEntry`` 交 pipeline。"""
 
     def emit(self, record: logging.LogRecord) -> None:  # noqa: D102 - 遵循 logging.Handler.emit 契约
         try:
             is_questor = record.name == "questor" or record.name.startswith("questor.")
-            msg, coerced = _compose_msg(record, is_questor)
-            fields: dict[str, str | int | float | bool | None] = {}
-            log_fields = getattr(record, "log_fields", None)
-            if isinstance(log_fields, dict):  # 唯一入口：禁把任意 record 属性透传进 fields。
-                fields.update(log_fields)
-            fields["filename"] = record.filename  # 已是业务调用处（见模块 docstring 偏差说明）。
-            fields["lineno"] = record.lineno
-            if coerced:
+            msg, args_coerced = _compose_msg(record, is_questor)
+            context = current_context()  # 关联键取自 bind() 作用域（G-L5 依赖 loop bind）。
+            fields, val_coerced, collapsed = _build_fields(record, context)
+            if args_coerced or val_coerced:
                 fields["args_coerced"] = True
+            if collapsed:
+                fields["fields_collapsed"] = True
             entry = LogEntry(
                 ts=datetime.fromtimestamp(record.created, UTC),
                 level=_to_level(record.levelno),
@@ -131,7 +168,7 @@ class BridgeHandler(logging.Handler):
                 fields=fields,
                 traceback=_format_traceback(record),
                 source="inline",
-                context=current_context(),  # 关联键取自 bind() 作用域（G-L5 依赖 loop bind）。
+                context=context,
             )
             _pipeline_emit(entry)
         except Exception:  # noqa: BLE001 - 桥自身异常走 stdlib handleError，绝不冒回业务调用方

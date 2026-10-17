@@ -22,7 +22,9 @@ from questor.observability.entry import LogLevel
 @pytest.fixture
 def clean() -> Iterator[None]:
     root = logging.getLogger()
+    first_party = logging.getLogger("questor")
     saved_handlers, saved_level = list(root.handlers), root.level
+    saved_fp_level = first_party.level  # configure 会显式给 questor 子树定级，不还原会泄给后续用例
     saved_registry = list(exp_mod._registry)
     pipeline.reset()
     configure_mod._state = None
@@ -31,6 +33,7 @@ def clean() -> Iterator[None]:
     finally:
         root.handlers[:] = saved_handlers
         root.setLevel(saved_level)
+        first_party.setLevel(saved_fp_level)
         exp_mod._registry[:] = saved_registry
         pipeline.reset()
         configure_mod._state = None
@@ -97,3 +100,56 @@ def test_configure_is_env_free(clean: None, monkeypatch: pytest.MonkeyPatch, tmp
     configure_logging(log_dir=None)
     assert not (tmp_path / "should-be-ignored").exists()
     assert logging_status()["log_dir"] is None
+
+
+def test_configure_does_not_lower_root_to_debug(clean: None, tmp_path) -> None:  # noqa: ANN001
+    """#126：装配不得把 root 降到 DEBUG——那等于替全仓第三方库打开参数级日志。
+
+    root 已由其它组件定级时也不得覆写；一方子树自己开到 DEBUG 就能进桥（``callHandlers``
+    不遍历祖先级别）。
+    """
+    root = logging.getLogger()
+    root.setLevel(logging.WARNING)
+    configure_logging(log_dir=tmp_path / "logs", console_level=LogLevel.INFO, file_level=LogLevel.DEBUG)
+    assert root.level == logging.WARNING, "不得擅改调用方给 root 定的级别"
+    assert logging.getLogger("questor").level == logging.DEBUG, "一方 DEBUG 仍要能进桥"
+
+
+def test_third_party_debug_does_not_land_in_main_file(clean: None, tmp_path) -> None:  # noqa: ANN001
+    """#126 端到端：第三方 DEBUG（带 prompt 形状的参数）不得落进主干 JSONL，一方 DEBUG 照落。
+
+    用一个**不在降噪名单里**的外来 logger 名（``thirdparty.db``），确保拦下它的是 pipeline 的来源门
+    而不是 stdlib 级别门或降噪白名单——否则本用例会因为"错误的原因"而变绿。
+    """
+    import json
+
+    logs = tmp_path / "logs"
+    configure_logging(log_dir=logs, console_level=LogLevel.CRITICAL, file_level=LogLevel.DEBUG)
+    outsider = logging.getLogger("thirdparty.db")
+    saved = outsider.level
+    outsider.setLevel(logging.DEBUG)  # 保证记录一定能进桥，只考来源门这一道
+    try:
+        outsider.debug("executing INSERT INTO checkpoints VALUES (%s)", ("run1", '{"text":"user-prompt"}'))
+        logging.getLogger("questor.store").debug("first-party-detail")
+        pipeline.flush()
+    finally:
+        outsider.setLevel(saved)
+    content = "".join(p.read_text(encoding="utf-8") for p in logs.glob("*.jsonl"))
+    assert "user-prompt" not in content, "外来 DEBUG 穿透了来源门"
+    assert "first-party-detail" in content, "一方 DEBUG 被误杀"
+    loggers = {json.loads(line)["logger"] for line in content.splitlines() if line.strip()}
+    assert "thirdparty.db" not in loggers
+
+
+def test_reconfigure_flushes_pending_throttle_windows(clean: None, tmp_path, capsys) -> None:  # noqa: ANN001
+    """#136：窗尾补行不能只存在于测试里——重配/拆装配时必须先 flush。
+
+    旧行为：``_teardown`` 直接 ``reset()`` 把抑制计数连同窗一起清掉，``repeated N times`` 永不出现。
+    """
+    configure_logging(console_level=LogLevel.DEBUG, log_dir=None)
+    log = logging.getLogger("questor.spam")
+    for _ in range(3):
+        log.info("same-line-for-flush-check")  # 同形状同窗 → 后两条被抑制
+    configure_logging(console_level=LogLevel.DEBUG, log_dir=tmp_path / "logs2")  # force 重配→拆旧
+    cap = capsys.readouterr()
+    assert "repeated=2" in cap.err, f"拆装配时应补发窗尾，实际 stderr:\n{cap.err}"

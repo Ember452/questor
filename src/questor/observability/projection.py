@@ -47,8 +47,22 @@ _LEVEL_MAP: dict[str, LogLevel] = {
     EventType.RUN_CANCELLED: LogLevel.INFO,
 }
 
-#: G-L11 静态载荷白名单——只这些标量键允许进日志（prompt/result/arguments 等一律不进）。
-_DATA_KEYS: tuple[str, ...] = ("status", "exit_reason", "name", "tool_use_id", "gseq")
+#: G-L11 静态载荷白名单——只这些标量键允许进日志（prompt/result/arguments/tool 输出等一律不进）。
+#: ``message``/``reason``/``expected``/``current`` 是为错误类事件补的（Issue #137）：
+#: ``warning`` 的全部载荷就是 ``message``，``resync_required`` 就是 ``reason``/``expected``/``current``——
+#: 不收它们则日志行只剩 "event warning"，级别对、内容空，排障时“知道出事了但不知道出了什么事”。
+#: 这些值全部由内核自己写入且已过 ``isinstance`` 标量，扩大的名单由 scripts/check_projection_whitelist.py 机器守。
+_DATA_KEYS: tuple[str, ...] = (
+    "status",
+    "exit_reason",
+    "name",
+    "tool_use_id",
+    "gseq",
+    "message",
+    "reason",
+    "expected",
+    "current",
+)
 #: ``data["error"]`` 容器下允许的子键（归一化错误的 code/message）。
 _ERROR_CONTAINER_KEY = "error"
 _ERROR_SUB_KEYS: tuple[str, ...] = ("code", "message")

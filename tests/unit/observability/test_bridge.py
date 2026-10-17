@@ -14,7 +14,7 @@ from collections.abc import Iterator
 import pytest
 
 from questor.observability import pipeline
-from questor.observability.bridge import BridgeHandler, quiet_noisy_loggers
+from questor.observability.bridge import NOISY_LOGGERS, BridgeHandler, quiet_noisy_loggers
 from questor.observability.entry import LogEntry
 from questor.observability.exporter import register
 
@@ -135,3 +135,58 @@ def test_level_mapping(harness: _Sink) -> None:
 def test_noisy_whitelist_pins_warning() -> None:
     quiet_noisy_loggers()
     assert logging.getLogger("httpx").getEffectiveLevel() == logging.WARNING
+
+
+def test_noisy_whitelist_uses_the_real_logger_names() -> None:
+    """#129：stdlib logger 名大小写敏感——白名单必须用 litellm 真实写的 ``LiteLLM``。
+
+    旧名单只列了小写 ``litellm``，所以整条降噪对其从未生效（实测 quiet 后 ``LiteLLM`` 仍为 NOTSET）。
+    同理 ``aiosqlite``——它会把 SQL + 完整参数元组打出来，必须一起钉住。
+    """
+    quiet_noisy_loggers()
+    for name in ("litellm", "LiteLLM", "aiosqlite"):
+        assert name in NOISY_LOGGERS, f"{name} 未列入降噪名单"
+        assert logging.getLogger(name).level == logging.WARNING, f"{name} 没被钉到 WARNING"
+
+
+# ---------------------------------------------------------------------------
+# Issue #133：桥里撞关联键 / 非标量字段都不得把整行弄丢。
+# ---------------------------------------------------------------------------
+
+
+def test_log_fields_colliding_with_bind_context_keeps_the_line(harness: _Sink) -> None:
+    """撞键旧行为：fields 与 context 同名 → ``LogEntry`` 不变式 5 抛错 → 整行静默消失。
+
+    现在关联键优先留在 context，用户那份改 ``f_`` 前缀保留，并标 ``fields_collapsed``。
+    """
+    from questor.observability.scope import bind
+
+    with bind(run_id="r7"):
+        logging.getLogger("questor.demo").info("collision", extra={"log_fields": {"run_id": "explicit"}})
+    e = harness.got[-1]
+    assert e.msg == "collision", "撞键不得丢整行"
+    assert e.context["run_id"] == "r7"
+    assert e.fields["f_run_id"] == "explicit"
+    assert e.fields.get("fields_collapsed") is True
+
+
+def test_non_scalar_log_field_is_coerced_not_dropped(harness: _Sink) -> None:
+    """D11 的端到端真相：领域对象进 ``log_fields`` 后行仍在，值被有界 repr 而非丢行。
+
+    旧行为只在建 LogEntry 时抛 TypeError（在 handler 里→handleError），业务调用处不炸、日志行没——
+    与 entry.py docstring “当场炸”的宣称不符。现在走与 §16.1 args 政策同一套强转。
+    """
+    logging.getLogger("questor.demo").info("obj-field", extra={"log_fields": {"run": _RunLike()}})
+    e = harness.got[-1]
+    assert e.msg == "obj-field"
+    assert e.fields["run"] == "<Run run_id=abc>"
+    assert e.fields.get("args_coerced") is True
+
+
+def test_reserved_field_name_is_prefixed_not_overwritten(harness: _Sink) -> None:
+    """用户传 ``filename`` 不该被桥的调用点覆盖掉（静默改义比报错更难查）。"""
+    logging.getLogger("questor.demo").info("reserved", extra={"log_fields": {"filename": "mine.py"}})
+    e = harness.got[-1]
+    assert e.fields["filename"] != "mine.py"  # 桥的权威调用点保留
+    assert e.fields["f_filename"] == "mine.py"
+    assert e.fields.get("fields_collapsed") is True

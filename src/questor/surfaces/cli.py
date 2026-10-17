@@ -37,12 +37,12 @@ from questor.kernel.permissions import DefaultPermissionEngine
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.memory.distill import flush_run_to_daily
-from questor.observability.configure import configure_logging
 from questor.observability.projection import log_envelope
 from questor.policy.react_policy import ReActPolicy
 from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.state.domain_state import Run
+from questor.surfaces._assembly import assemble_logging
 from questor.surfaces.approval import prompt_approval
 from questor.surfaces.run_registry import RunRegistry
 
@@ -282,9 +282,11 @@ async def interactive(surface: CliSurface | None = None) -> int:
 def main() -> int:
     """独立模块入口（``python -m questor.surfaces.cli``）：跑交互 REPL；Ctrl-C 退出码 130。
 
-    与 ``__main__._amain`` 同为入口，各自显式装配日志（生产入口走 ``python -m questor``）。
+    与 ``__main__._amain`` 同为生产入口，因此**共用同一装配口径**（``surfaces._assembly``）——
+    以前这里裸调 ``configure_logging()``，既不建文件面也无视 ``QUESTOR_LOG_*`` 与 payload 门
+    （Issue #138）。
     """
-    configure_logging()
+    assemble_logging()
     try:
         return asyncio.run(interactive())
     except KeyboardInterrupt:

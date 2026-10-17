@@ -133,6 +133,26 @@
 
 **未进本 PR 门（诚实边界，§4）**：G-L7 跨进程按日写标 `[非阻塞·夜间]`、Windows 门控；真 key 下多 provider 4xx 回显脱敏效果 UNVERIFIED；`strip_prompt_echo` 仅纯函数 + 单测、接线后置。
 
+### 复审轮（2026-10-17，分支 `fix/log-blade2-audit`，Issue #126–#139）
+
+上面的“完成状态”在对抗式复实下**不成立**：把日志面所有能走的路跑一遍（真子进程跑四入口、真 IO 落盘、真并发
+ task、真跳线程、真降级、真取消）后，发现 3 BLOCKER + 6 MAJOR + 4 MINOR，且 DoD 有几条只在单测里成立：
+
+- **A① “起手有日志”靠第三方噪声凑数**：一方在启动路径上零条日志（全仓只有 `questor.bus`/`questor.llm`/`questor.cli`
+  三个 getLogger 点），`--list`/`--dream` 的 stderr 实测 0 行，而测试只断言 rc==0 + stdout 洁净。
+- **A③/G-L10 从未真生效**：stdout 被 litellm 自挂的 `LevelRoutingStreamHandler`（INFO/DEBUG→stdout）污染，
+  `_LOG_LINE_RE` 要求同行 level 后再出现 `questor` → 结构性漏检。
+- **B① 在生产 happy path 是空集**：“每条 inline 行带 run_id”——真 run 里 `questor.*` 的 inline 行是 0 条，
+  80/85 行是来自 aiosqlite **工作者线程**的 `context={}`（`contextvars` 不过线程边界）。
+- **B② 只测了 dataclass 未测端到端**：经真实桥时，`log_fields` 撞关联键会**整行静默丢失**，非标量值也不在调用处炸。
+- **B⑤/B⑥ 面仍有旁路**：`aiosqlite` 的 SQL 参数元组把 prompt 与 checkpoint 原文写进主干文件（D4 被旁路）。
+- **B⑦ 的 G-L11 AST 守卫根本不存在**：往 `_DATA_KEYS` 加 `"arguments"` 后全量 527 用例与所有守卫仍绿。
+
+修正口径与逐条详情见 [ADR-0027 复审修正](../adr/0027-observability-logging-foundation.md)、
+[`docs/pitfalls.md`](../pitfalls.md)（可观测性分区，4 条架构级归档）、[HARD C20](../design/HARD-CONSTRAINTS.md)
+与 `CHANGELOG.md` 的 Fixed 段。新判据均经 `git stash` 突变验证：
+在未修复源码上 21 条全红，修复后 557 passed / 5 skipped。
+
 ## 8. 依赖图与时序
 
 ```

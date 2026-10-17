@@ -6,6 +6,46 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed — 日志骨架（刀 2）复审修正（分支 `fix/log-blade2-audit`；Issue #126–#139）
+
+把刀 2 的所有可走路径全量跑了一遍（真子进程、真 IO、真并发），发现并修掉 3 个 BLOCKER + 6 个 MAJOR + 4 个 MINOR：
+
+- **#126（BLOCKER，零原文）**：装配不再把 root logger 降到 DEBUG，pipeline 新增**来源门**——非 `questor.*` 的
+  记录有效下界恒为 INFO。旧行为下 `aiosqlite` 会把 `INSERT INTO checkpoints ...` 的**完整参数元组**（含用户 prompt
+  原文与 `state_digest` 全量快照）经带内桥写进主干 JSONL，D4「零原文默认」实际被旁路。
+- **#127（BLOCKER，stdout 洁净）**：在 `providers/litellm_adapter.py`（全仓唯一 import litellm 处）摘掉 litellm 自己挂在
+  stdout 上的 handler（`LevelRoutingStreamHandler`：按级别分流，INFO/DEBUG 写 stdout）；`--list`/`--dream` 的 stdout
+  现在逐行必须是机器可读行（哨兵 / run id / `deep_dream:` 摘要）。旧判据正则要求同行 level 后再出现 `questor`，
+  对第三方行天然免疫，所以 G-L10 从未真生效。（复审过程中先误归因为 loguru sink，按实测推翻后改了修法——
+  可见性不丢：那些 logger `propagate=True`，记录仍进 root 上的桥。）
+- **#128/#131（BLOCKER/MAJOR，错误不静默）**：ERROR/CRITICAL 完全绕过节流；节流签名改为
+  `(logger, level, msg 形状, run_id)`，形状归一（数字/十六进制/引号串 → `<*>`）。旧行为下同秒两个 run 各失败一次时
+  第二个 run 的 `run_failed` 在日志里一行都不剩；反向则是“同形状不同值”的风暴零抑制。
+- **#129**：`NOISY_LOGGERS` 补真实 logger 名 `LiteLLM`（大小写敏感，旧条目 `litellm` 从未生效）与 `aiosqlite`。
+- **#132**：`pipeline.emit/flush` 补顶层兜底（兑现 docstring 的“绝不上冒”）；`redact` 的 fail-closed 分支与节流窗尾
+  补行都不再因 `fields`/`context` 撞键反过来抛 `ValueError`。
+- **#133**：带内桥不再丢整行——`log_fields` 与关联键/保留键撞名时改 `f_` 前缀并标 `fields_collapsed`，非标量值走
+  §16.1 的有界 repr 并标 `args_coerced`。
+- **#134/#137（MAJOR，守卫可信）**：新建 `scripts/check_projection_whitelist.py`（G-L11 真正的 AST 守卫：内联读键必须
+  ∈ 白名单 + 白名单不得含敏感键，带 `--self-test` 判红与 fail-on-empty）并接入 CI `boundaries`；
+  `check_log_kernel_isolation.py` 补“防作用域变宽”。投影白名单同时补上 `message`/`reason`/`expected`/`current`，
+  让 `warning`/`resync_required`/`run_cancelled` 的日志行不再级别对、内容空。
+- **#135/#136/#138**：软阈值提级改为**按日**记账与重置（不再进程终身制把此后所有分片永久降到 INFO）；`atexit` +
+  拆装配时先 flush 再注销 sink，使窗尾 `repeated N times` 在生产路径成立；`surfaces/_assembly.assemble_logging()`
+  统一两个生产入口的 env 族与 payload 门（旧 `cli.main()` 裸装配，既不建文件面也不拒非法 payload 值）。
+- **A① 真实成立**：组合根与装配面各补一方记录（`questor.assembly` / `questor.composition`）——旧“起手有日志”是
+  靠第三方噪声凑数，修完来源门后那些噪声已不再进入。
+- 回归：全量 `559 passed / 5 skipped`（基线 527，新增 32 条判据，无新增 skip）；新判据在未修复源码上经
+  `git stash` 突变验证 **21 条全红**，确认不是装饰性测试。
+
+### Changed — 建立陷阱档案与一条新红线（同一轮复审的制度产出）
+
+- 新增 [`docs/pitfalls.md`](docs/pitfalls.md)：只收“跨子系统 + 理解成本高 + 会再踩”的架构级陷阱（按分区）。
+  **普通 bug 不进来**——它们走带 `bug` 标签的 GitHub Issue，由 commit 正文的 `Fixes #N` 在合进 `main` 时自动关闭。
+- 新增工程红线 **C20（观测面不得成为载荷的第二载体）**，并在 C6 例外款下补一行：“静默”不限于丢弃，
+  节流折叠/合并不比丢弃轻。本区间的范围提法（AGENTS / CLAUDE / VISION / `plan/_TEMPLATE`）同步抬到 C1–C20，
+  `plan/_TEMPLATE` §3 加一行“开工先查 pitfalls”的自检项。
+
 ### Changed (文档对齐 / dead-pointer 清除，附 ADR-0028 同分支)
 扫描并修掉会让下一位读者走错路的文档漂移（**不改任何阶段结论、不回改历史验收判据**，只加“当时至 Cxx”型注记）：
 - **死链**：`AGENTS.md`（仓库根）的 `./design/HARD-CONSTRAINTS.md`、`./VISION.md`、`./ROADMAP.md` 与 `../CONTRIBUTING.md` 均指不到目标（真源在 `docs/`）——`AGENTS.md` 本身要求“读链接后的文档、不要凭记忆工作”，链接断则规则书自相矛盾；`CLAUDE.md` 同步修两条同类死链。

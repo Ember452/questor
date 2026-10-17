@@ -6,25 +6,47 @@ cordis ``_resolveConfig`` 同构——配置由容器注入，内核不知道 en
 
 幂等口径：默认 ``force=True`` 重配——**先拆旧再建新**（移除旧 ``BridgeHandler``、注销旧 sink、
 重置管线），故反复调用不叠 handler/sink（G-L8）。``force=False`` 且已初始化则 no-op。
+
+级别口径（Issue #126）：**root 不被下调到 DEBUG**。以前把 root 拉到 DEBUG 是为了让一方 DEBUG 能进
+桥，但副作用是把**所有**第三方库的 DEBUG 一起打开（aiosqlite 会把 SQL 参数元组——即账本内容与
+prompt 原文——整个打进日志）。正确做法：root 保持 INFO（只要求未设时显式定住），只对 ``questor``
+子树开低级别——``Logger.callHandlers`` 不遍历祖先级别，所以一方记录仍能进桥，而第三方默认安静。
+
+窗尾刷新（Issue #136）：装配时注册 ``atexit`` 跑一次 ``pipeline.flush()``，否则被节流抑制的条数
+会随进程直接丢掉（“窗尾补 repeated N times”就只存在于测试里）。
 """
 
 from __future__ import annotations
 
+import atexit
 import logging
 from pathlib import Path
 
 from questor.observability.bridge import BridgeHandler, quiet_noisy_loggers
 from questor.observability.entry import LogLevel
 from questor.observability.exporter import register
+from questor.observability.pipeline import flush as _pipeline_flush
 from questor.observability.pipeline import reset as _pipeline_reset
 from questor.observability.pipeline import stats as _pipeline_stats
 from questor.observability.sink_console import ConsoleSink
 from questor.observability.sink_file import FileSink
 
 _ROOT = logging.getLogger()
+#: 一方 logger 子树根：只它降到文件/console 的较低门，不碰 root（Issue #126）。
+_FIRST_PARTY = "questor"
 
 # 模块级单例装配态；force 重配据此拆旧。
 _state: dict | None = None
+# atexit 只注册一次（重配不叠加回调）。
+_atexit_registered = False
+
+
+def _register_atexit_flush() -> None:
+    global _atexit_registered
+    if _atexit_registered:
+        return
+    atexit.register(_pipeline_flush)
+    _atexit_registered = True
 
 
 def _teardown() -> None:
@@ -33,9 +55,10 @@ def _teardown() -> None:
         return
     bridge = _state.get("bridge")
     if bridge is not None and bridge in _ROOT.handlers:
-        _ROOT.removeHandler(bridge)
+        _ROOT.removeHandler(bridge)  # 1) 先断新记录来源
+    _pipeline_flush()  # 2) 再补窗尾——此时 sink **仍在注册表里**，补行才真的落得出得去
     for unreg in _state.get("unregs", ()):
-        unreg()
+        unreg()  # 3) 最后才拆 sink
     _pipeline_reset()  # 清节流窗/禁用集/丢弃计数，避免重建后残留态。
     _state = None
 
@@ -70,10 +93,14 @@ def configure_logging(
 
     bridge = BridgeHandler()
     _ROOT.addHandler(bridge)
-    # root 级别设到足够低，让记录能进桥；真正的 console/file 分级由各 sink 的 min_level 把关。
-    if _ROOT.level == logging.NOTSET or _ROOT.level > logging.DEBUG:
-        _ROOT.setLevel(logging.DEBUG)
+    # root 只要求“未设时定在 INFO”，绝不降到 DEBUG（Issue #126：那会把第三方参数日志全部打开）。
+    if _ROOT.level == logging.NOTSET:
+        _ROOT.setLevel(logging.INFO)
+    # 一方子树开到 console/file 两门的较低值，保证 questor.* 的 DEBUG 能进桥并落主干文件。
+    # 真正的分级收录由各 sink 的 min_level 把关；外来记录另受 pipeline 来源门封顶 INFO。
+    logging.getLogger(_FIRST_PARTY).setLevel(min(console_level, file_level))
     quiet_noisy_loggers()
+    _register_atexit_flush()
 
     _state = {
         "bridge": bridge,
