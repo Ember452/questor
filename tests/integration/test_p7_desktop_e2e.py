@@ -1,14 +1,14 @@
-"""P7 T12：桌面端到端能力矩阵（脚本化 provider，真 HTTP+SSE / 真 reducer+store 侧断言，非像素）。
+"""P7 能力回归：桌面**真 HTTP+SSE 流式**用例（A）+ reducer/CLI 层不变式（B/C），断言在 durable/reducer 侧。
 
-覆盖 DoD① 里能在无人值守下**真跑**的能力，断言落在 durable 事件/reducer，而非 UI：
-- **问答流式**：真 uvicorn 子进程 + 真 httpx，`text_delta` 上屏、`message_completed` 携 D-P7-C 的
-  `final_text`、`run_completed` 终态，durable 尾 seq 连续不重（承 DoD②）。
-- **取消闭合**：EventServer 路径投 `Cancel` → `run_cancelled`，且历史里每个 tool_use 都配对到 result
-  （C7/C19，不留悬空 `tool_use`）。
-- **Skills 生效**：tmp `QUESTOR_SKILLS_DIR` 放合法 SKILL.md → 注入 system prompt（provider 侧可观察）。
+范围划分（不冒充“全是桌面端到端”）：
+- **A = 真桌面路径**：真 uvicorn 子进程 + 真 httpx，`/run`→`/events` 跑流式（text_delta 上屏、
+  `message_completed.final_text`、终态、durable seq 不重，交叉校 `store.replay`）。
+- **B = reducer 层不变式**（非子进程路径）：`Cancel`→`run_cancelled`+未闭合 `tool_use` 回填；跨真子进程的
+  取消时机竞态属 UNVERIFIED（交 Tauri 壳监控循环 + 真机崩溃重启覆盖）。
+- **C = CLI 层**（`surface.run_once`）：Skills 目录注入 system prompt；非 sidecar `/run`。
+- MCP 经**真 sidecar 路径**的接线另见 `test_p7_mcp_over_sidecar.py`。
 
-诚实边界（不用 fake 冒充真机，一律 UNVERIFIED）：真 LLM、真远程 MCP server 端到端、真 PyInstaller
-打包桌面崩溃重启——本机无 cargo/无显示/无网络真供应商，故不在本用例伪造。
+诚实边界（不用 fake 冒充真机，一律 UNVERIFIED）：真 LLM、真远程 MCP server、真打包桌面、跨子进程取消/崩溃重启。
 """
 
 from __future__ import annotations
@@ -157,7 +157,7 @@ async def _replay(db: str, run_id: str) -> list[dict]:
 # --------------------------------------------------------------------------- #
 # B：取消回填——reducer 侧不变式（C7/C19），桌面 `/cancel` 路径依赖它（真组件、无竞态）
 # --------------------------------------------------------------------------- #
-def test_e2e_cancel_backfills_no_dangling_tool_use() -> None:
+def test_cancel_backfill_invariant_reducer_level() -> None:
     """一个未闭合 tool_use 经 Cancel 后必须被回填为 cancelled 结果（不留悬空 tool_use）。
 
     这是 EventServer `/cancel`→`Cancel` Command→reduce 的收口不变式；在 reducer 层确定性验证
@@ -205,7 +205,7 @@ class _RecordingProvider(ProviderPort):
         yield StreamChunk(kind="finish", finish_reason="stop")
 
 
-async def test_e2e_skills_dir_injects_system(tmp_path: Path) -> None:
+async def test_skills_injection_cli_path(tmp_path: Path) -> None:
     # 合法发现布局：每个技能一个子目录，内含 SKILL.md（front-matter 带 name/description）。
     skill_dir = tmp_path / "skills" / "greeting"
     skill_dir.mkdir(parents=True)
