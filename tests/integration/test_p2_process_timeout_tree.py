@@ -28,8 +28,11 @@ def _encoded_command(script: str) -> str:
 
 
 def _process_alive(pid: int) -> bool:
-    output = subprocess.check_output(["tasklist", "/FI", f"PID eq {pid}", "/NH"], text=True)
-    return str(pid) in output
+    # tasklist 在“无匹配项”时把提示写到 stdout，且用的是 OEM 代码页（zh-CN 为 cp936）。
+    # `text=True` 会按 locale/UTF-8 解码——开 PYTHONUTF8 时中文提示直接 UnicodeDecodeError。
+    # PID 是 ASCII 数字，与代码页无关：按字节在原始输出里找，彻底不依赖子进程输出解码。
+    output = subprocess.check_output(["tasklist", "/FI", f"PID eq {pid}", "/NH"])
+    return str(pid).encode("ascii") in output
 
 
 # 先等进程树真的起来，再让 deadline 到期去杀。
