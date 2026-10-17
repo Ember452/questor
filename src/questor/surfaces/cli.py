@@ -31,7 +31,7 @@ from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
 from questor.contracts.memory import MemoryStorePort
 from questor.contracts.ports import ProviderPort, StorePort
 from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role, RunStatus
-from questor.contracts.tool import RunToolSurface
+from questor.contracts.tool import RunToolSurface, Tool
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.permissions import DefaultPermissionEngine
@@ -45,6 +45,7 @@ from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.state.domain_state import Run
 from questor.surfaces._assembly import assemble_logging
 from questor.surfaces.approval import prompt_approval
+from questor.surfaces.mcp_bootstrap import Teardown, discover_mcp_tools
 from questor.surfaces.run_registry import RunRegistry
 
 _TERMINAL_EVENTS = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
@@ -53,6 +54,11 @@ _log = logging.getLogger("questor.cli")
 
 #: run-完成 flush 摘要的字符上限（与 ``reduce`` 的 16KiB 写上限对称，防单次长跑回答撑爆 daily）。
 _FLUSH_SUMMARY_MAX_CHARS = 16 * 1024
+
+
+async def _noop_teardown() -> None:
+    """MCP 未启用时的空 teardown（与 bootstrap 的 teardown 同签名）。"""
+    return None
 
 
 def _final_answer_text(run: Run) -> str:
@@ -99,12 +105,16 @@ class CliSurface:
         store: StorePort | None = None,
         memory_store: MemoryStorePort | None = None,
         skills_dir: Path | None = None,
+        mcp_json_path: Path | None = None,
+        log_dir: Path | None = None,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
         self.model = model
         self.store = store
         self.memory_store = memory_store
+        self.mcp_json_path = mcp_json_path  # None → MCP 禁用（不改动既有 run 行为）
+        self.log_dir = log_dir
         self.read = ReadTool()
         self.registry = _default_registry()
         # 技能生效（DoD①）：把发现的 SKILL.md 目录并入 system prompt。skills_dir=None（默认）
@@ -130,6 +140,24 @@ class CliSurface:
             cancel_event=cancel,
         )
 
+    async def _discover_mcp(self, run_id: str) -> tuple[list[Tool], Teardown]:
+        """若配了 mcp.json 则 per-run 起 MCP 连接发远程工具；否则空+noop teardown（不改动既有行为）。"""
+        if self.mcp_json_path is None:
+            return [], _noop_teardown
+        log_dir = self.log_dir or (self.workspace_root / ".questor" / "logs")
+        return await discover_mcp_tools(mcp_json=self.mcp_json_path, log_dir=log_dir, run_id=run_id)
+
+    def _freeze_surface(self, run_id: str, extra_tools: list[Tool]) -> RunToolSurface:
+        """冻结本次 run 的工具面：内置工具 + 本次发现的 MCP 远程工具（per-run 拼，run 内不变）。"""
+        if not extra_tools:
+            return self.registry.freeze_for_run(run_id)
+        run_registry = ToolRegistry()
+        for tool in self.registry.list_available():
+            run_registry.register(tool)
+        for tool in extra_tools:
+            run_registry.register(tool)  # 命名冲突由 registry first-writer-wins 拒盖（C21）
+        return run_registry.freeze_for_run(run_id)
+
     async def run_once(self, text: str, *, on_delta=None) -> Run:  # noqa: ANN001
         """跑一轮用户输入直到终态：用户文本与审批都以 Command 经 inbox 进入 loop。
 
@@ -140,7 +168,8 @@ class CliSurface:
         bus = InProcessEventBus(self.store)
         cancel = asyncio.Event()
         run = Run(run_id=new_id("run"), budget=Budget())
-        surface = self.registry.freeze_for_run(run.run_id)
+        mcp_tools, mcp_teardown = await self._discover_mcp(run.run_id)
+        surface = self._freeze_surface(run.run_id, mcp_tools)
         loop = self._loop(bus, cancel, surface)
         controller = RunController(run)
         registry = RunRegistry()
@@ -168,6 +197,7 @@ class CliSurface:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
+            await mcp_teardown()  # per-run MCP 连接与 stderr 句柄收尾（不留悬空子进程/文件）
         return final
 
     async def _flush_run_to_daily(self, run: Run) -> None:

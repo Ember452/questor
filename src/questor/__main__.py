@@ -30,7 +30,7 @@ from pathlib import Path
 from questor.memory.distill import DistillOutcome, deep_dream
 from questor.providers.store_memory_sqlite import SQLiteMemoryStore
 from questor.providers.store_sqlite import SQLiteStore
-from questor.surfaces._assembly import assemble_logging
+from questor.surfaces._assembly import assemble_logging, log_dir_from_env
 from questor.surfaces.cli import CliSurface, interactive
 
 #: 组合根自述行 logger（一方 inline 记录；DoD A① 的"起手即有日志"靠它兑现）。
@@ -54,6 +54,13 @@ def _skills_dir_from_env() -> str:
 
     与 ``QUESTOR_STORE_PATH``/``QUESTOR_LOG_DIR`` 同族命名；目录不存在时 catalog 为空（合法，不报错）。"""
     return os.environ.get("QUESTOR_SKILLS_DIR", str(Path.cwd() / ".questor" / "skills"))
+
+
+def _mcp_json_from_env() -> str:
+    """MCP 配置文件取自 ``QUESTOR_MCP_JSON``（默认 ``<cwd>/mcp.json``，已在 PROTECTED_IN_ROOTS 写保护）。
+
+    文件不存在时 bootstrap 发现为空（无 MCP server 是合法的，不报错、不改动 run）。"""
+    return os.environ.get("QUESTOR_MCP_JSON", str(Path.cwd() / "mcp.json"))
 
 
 def _model_from_env() -> str:
@@ -109,7 +116,14 @@ async def _amain(argv: list[str]) -> int:
                 f"input_hash={str(result.get('input_hash', ''))[:12]}"
             )
             return 0
-        surface = CliSurface(store=store, memory_store=memory, model=_model_from_env(), skills_dir=Path(_skills_dir_from_env()))
+        surface = CliSurface(
+            store=store,
+            memory_store=memory,
+            model=_model_from_env(),
+            skills_dir=Path(_skills_dir_from_env()),
+            mcp_json_path=Path(_mcp_json_from_env()),
+            log_dir=Path(log_dir_from_env()),
+        )
         if argv and argv[0] == "--list":
             unfinished = await store.list_unfinished_runs()
             for run_id in unfinished:
