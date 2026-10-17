@@ -41,12 +41,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `two_phase_shutdown`（优雅请求→轮询到 grace→`force_kill` 兜底）、`fail_all`（按代失效当前代 pending，C10/C19 不撕裂）、
   `wait_ready`（轮询 loopback `127.0.0.1:<port>` 就绪，替代参考仓 stdin 握手）；`backend.rs` 把 `Process` 接到真
   `std::process::Child`，**真子进程**跑通强杀兜底并回收（DoD③ 崩溃/teardown 在真 OS 上验证，非 mock）。`cargo test` 8 passed。
+- **Tauri v2 桌面壳（T8，本地编译验证）**：`desktop/src-tauri` 复用 `questor-sidecar`——setup 里 bump generation → spawn
+  `python -m questor --serve` 为独立进程 → 读 bootstrap 拿 loopback 端口 → webview 指 `http://127.0.0.1:<port>`
+  （S5/ADR-0007：仅 HTTP+SSE、不进程内直调 Python）；ExitRequested 走 `two_phase_shutdown`。`tauri.conf.json` 锁 CSP
+  （`default-src 'self'`、`object-src 'none'`、`connect-src` 仅 loopback），capabilities 不授 fs/shell。本机
+  `cargo check` Finished + `cargo test` 2 passed（bootstrap 契约解析 + 无 sidecar 时 shutdown no-op）。
 - **决策**：ADR-0032（sidecar serve 接线与进程边界）、ADR-0033（bus 级只读投影）、ADR-0034（D-P7-C 重连文本=选型①
   有界 `final_text`）、ADR-0035（工具/节点事件 additive 定形）。
-- **诚实边界（UNVERIFIED，不用 fake 冒充真机）**：真 Rust **Tauri GUI 壳本体**（`src-tauri` 的 tauri crate/wry/webview 接线、
-  `tauri.conf.json` bundle.resources）、Windows **Job Object 杀进程树**（MCP 孙进程回收；不交未实测的 FFI）、PyInstaller onedir
+- **诚实边界（UNVERIFIED，不用 fake 冒充真机）**：真**开窗口**（需显示环境）、全量 `tauri build` 打包（需先接 web 的 vite 产物 + tauri CLI）、Windows **Job Object 杀进程树**（MCP 孙进程回收；不交未实测的 FFI）、PyInstaller onedir
   真冻结、`verify_release_bundle --verify-runtime` 真产物冒烟、真远程 MCP server 端到端、真 LLM、在途半条 live-delta 文本恢复、
-  webview 像素渲染——本机无 pyinstaller/显示（cargo 可用但 Tauri 全量构建需 WebView2 SDK+tauri CLI），未实现亦未伪造。
+  webview 像素渲染——本机 cargo/WebView2 可用（已编译并链接跑测）但缺 pyinstaller/显示，未实现亦未伪造。
 
 ### Added — P5 Skills / MCP（分支 `feat/p5-skills-mcp`；详 `docs/plan/05-p5-skills-mcp.md`）
 
