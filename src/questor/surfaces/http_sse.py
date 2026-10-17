@@ -83,16 +83,32 @@ class EventServer:
         """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。"""
         return self.surface._loop(self.bus, cancel, surface)
 
+    async def _run_with_mcp(self, controller: RunController, run_id: str) -> None:
+        """发现 MCP → 冻结工具面 → 驱动到终态 → per-run teardown。四步**必须同任务**。
+
+        MCP stdio 会话的 anyio cancel scope 在哪个 task 进入就必须在那个 task 退出；若把 discover 放在
+        start_run（调用方 task）而 teardown 放在驱动 task，会“exit cancel scope in a different task”崩。
+        故发现/驱动/回收集中在此一个 task 内；无 mcp.json 时 discover 返回 ([], noop)，不改变既有行为。
+        """
+        mcp_tools, mcp_teardown = await self.surface._discover_mcp(run_id)
+        tool_surface = self.surface._freeze_surface(run_id, mcp_tools)
+        try:
+            await self._loop(asyncio.Event(), tool_surface).drive_controller(controller)
+        finally:
+            await mcp_teardown()  # 关连接+回收子进程树+stderr 句柄，防泄漏
+
     async def start_run(self, text: str, run_id: str | None = None) -> str:
-        """后台启动一次 run（用户文本经 SubmitMessage Command 进入 inbox）。"""
+        """后台启动一次 run（用户文本经 SubmitMessage Command 进入 inbox）。
+
+        MCP per-run 发现接进桌面路径（审计 §6-7），且与驱动/teardown 同任务（anyio 会话作组作用域）。
+        """
         run_id = run_id or new_id("run")
         run = Run(run_id=run_id, budget=Budget())
-        tool_surface = self.surface.registry.freeze_for_run(run_id)
         controller = RunController(run)
         self.registry.register(controller)
         msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
         await self.registry.submit(run_id, SubmitMessage(run_id=run_id, content=msg), source="http", idempotency_key=f"submit:{run_id}")
-        task = asyncio.create_task(self._loop(asyncio.Event(), tool_surface).drive_controller(controller))
+        task = asyncio.create_task(self._run_with_mcp(controller, run_id))
         self.registry.set_task(run_id, task)
         return run_id
 
@@ -142,10 +158,9 @@ class EventServer:
         run = await rebuild_run(self.store, run_id)
         if run is None:
             raise HTTPException(status_code=404, detail=f"no checkpoint for run {run_id}")
-        tool_surface = self.surface.registry.freeze_for_run(run_id)
         controller = RunController(run)
         self.registry.register(controller)
-        task = asyncio.create_task(self._loop(asyncio.Event(), tool_surface).drive_controller(controller))
+        task = asyncio.create_task(self._run_with_mcp(controller, run_id))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）
         self.registry.set_task(run_id, task)
         return run_id
 
