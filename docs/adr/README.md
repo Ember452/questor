@@ -37,6 +37,10 @@
 | [0029](./0029-parallel-tools-deferred-beyond-p5.md) | `parallel_safe`/`barrier` 从 P5 移出、推迟到专门的并行化 Phase（P5 执行严格串行）；修正 ADR-0028「并行归 P5」一句 | ✅ |
 | [0030](./0030-adopt-official-mcp-sdk.md) | MCP 客户端采用官方 `mcp` Python SDK（stdio transport）；依赖随首个真连接提交落地，env/凭据/账本/配对仍在 Harness | ✅ |
 | [0031](./0031-reference-repo-reuse-no-attribution.md) | 参考仓复用已获全体作者授权；取消文件内 provenance/许可标记要求（P0–P5 既有记录保持不变，仅面向未来）；同步修订 AGENTS §4.5/§5.6 + CONTRIBUTING | ✅ |
+| [0032](./0032-p7-sidecar-serve-and-process-boundary.md) | P7 sidecar serve 接线与进程边界（D-P7-B）：HTTP+SSE loopback `127.0.0.1:0` + generation bootstrap；具体 store 装配留组合根 `__main__ --serve`、`surfaces/serve` 不 import store 实现（补 ADR-0007 落地细节） | ✅ |
+| [0033](./0033-p7-bus-level-out-of-band-projection.md) | 带外投影收口为 bus 级只读订阅（D-P7-A）：一 run 恰投一份、删 `cli._stream` 逐消费者 `log_envelope`；协议零 diff、九内核零依赖不破（收口 plan/05 §0.4 缺口） | ✅ |
+| [0034](./0034-p7-reconnect-message-completed-final-text.md) | 断线重连在途文本恢复 = `message_completed` additive 有界 `final_text`（D-P7-C 选型①）：定稿正文进 durable 事件帧、`after_seq` 重放自足恢复、单一真源不另开 /transcript 第二读面；有界+artifact 溢出、不进投影白名单；半条在途 delta 标 UNVERIFIED | ✅ |
+| [0035](./0035-p7-additive-tool-event-and-node-shape.md) | 工具事件 additive `preview`/`artifact_ref`/`truncated` + `node_updated` 定形（T7/T11）：只加可选字段不破 type/关联键/版本、三处 lockstep、C20 白名单不含原文 | ✅ |
 
 > **0027 已落地**（原为日志骨架刀 2 预留号）：详 [`../log/DESIGN.md`](../log/DESIGN.md) §17、[`../log/PLAN.md`](../log/PLAN.md) 刀 2。
 
