@@ -28,6 +28,7 @@ struct Bootstrap {
     host: String,
     port: u16,
     generation: u64,
+    token: String,
 }
 
 /// tauri 管理状态：持有当前 sidecar 子进程句柄，供退出时优雅关闭。
@@ -40,7 +41,7 @@ fn bootstrap_path() -> PathBuf {
 }
 
 /// 启动（或重启）sidecar：bump generation → 设 env → spawn `python -m questor --serve` → 读 bootstrap → 就绪探测。
-fn start_sidecar(fence: &Fence) -> Result<(StdProcess, u16, u64), String> {
+fn start_sidecar(fence: &Fence) -> Result<(StdProcess, u16, u64, String), String> {
     let generation = fence.bump();
     let bp = bootstrap_path();
     let _ = std::fs::remove_file(&bp);
@@ -66,7 +67,7 @@ fn start_sidecar(fence: &Fence) -> Result<(StdProcess, u16, u64), String> {
     if !wait_ready(boot.port, Duration::from_secs(20)) {
         return Err(format!("sidecar port {} never became ready", boot.port));
     }
-    Ok((proc, boot.port, boot.generation))
+    Ok((proc, boot.port, boot.generation, boot.token))
 }
 
 /// 两级优雅关闭：向 sidecar 发关闭意图 → 轮询 → 超时 force_kill；无论哪级都让 fail_all 语义在 sidecar 侧
@@ -99,11 +100,12 @@ pub fn run() {
     let fence = Fence::new();
     tauri::Builder::default()
         .setup(move |app| {
-            let (proc, port, _gen) =
+            let (proc, port, _gen, token) =
                 start_sidecar(&fence).map_err(|e| format!("sidecar start failed: {e}"))?;
             app.manage(SidecarCell(Mutex::new(Some((proc, _gen)))));
-            // webview 指向 loopback sidecar —— 桌面只是薄壳，全部业务在 Python（S5/S6）。
-            let url: tauri::Url = format!("http://127.0.0.1:{port}")
+            // webview 指向 loopback sidecar，并把会话 token 经查询注入（前端据此带 header）。
+            // 桌面只是薄壳，全部业务在 Python（S5/S6）。
+            let url: tauri::Url = format!("http://127.0.0.1:{port}/?token={token}")
                 .parse()
                 .map_err(|e| format!("bad sidecar url: {e}"))?;
             let win =
@@ -133,10 +135,12 @@ mod tests {
     /// bootstrap 解析必须与 Python `write_bootstrap` 的字段契约一致（跨语言 wire 面，C15 精神）。
     #[test]
     fn bootstrap_json_parses() {
-        let raw = r#"{"host":"127.0.0.1","port":54321,"generation":7,"pid":4242}"#;
+        let raw =
+            r#"{"host":"127.0.0.1","port":54321,"generation":7,"pid":4242,"token":"tok-abc"}"#;
         let b: Bootstrap = serde_json::from_str(raw).unwrap();
         assert_eq!(b.port, 54321);
         assert_eq!(b.generation, 7);
+        assert_eq!(b.token, "tok-abc");
     }
 
     #[test]

@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import secrets
 import socket
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -42,15 +43,16 @@ def make_loopback_socket() -> tuple[socket.socket, int]:
     return sock, port
 
 
-def write_bootstrap(path: Path, *, host: str, port: int, generation: int, pid: int) -> dict[str, int | str]:
-    """原子写 sidecar 握手 bootstrap（`{host, port, generation, pid}`）并返回该 dict。
+def write_bootstrap(path: Path, *, host: str, port: int, generation: int, pid: int, token: str) -> dict[str, int | str]:
+    """原子写 sidecar 握手 bootstrap（`{host, port, generation, pid, token}`）并返回该 dict。
 
     - 拒绝 `host != 127.0.0.1`：进程边界红线不因调用方笔误而破（C12/ADR-0032）。
     - 先写临时文件再 `replace`：Rust 侧不会读到半截 JSON（写一半被读会 JSONDecodeError）。
+    - `token`：会话密钥，供壳/前端带在身上过端点鉴权（不泄到事件协议，仅本地启动握手）。
     """
     if host != _LOOPBACK:
         raise ValueError(f"sidecar bootstrap host 必须为 {_LOOPBACK!r}（本地 IPC），拒 {host!r}")
-    data = {"host": host, "port": port, "generation": generation, "pid": pid}
+    data = {"host": host, "port": port, "generation": generation, "pid": pid, "token": token}
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -64,12 +66,13 @@ def read_bootstrap(path: Path) -> dict[str, int | str]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-async def serve(server: EventServer, *, generation: int, bootstrap_path: Path, static_dir: Path | None = None) -> dict[str, int | str]:
+async def serve(server: EventServer, *, generation: int, bootstrap_path: Path, static_dir: Path | None = None, token: str | None = None) -> dict[str, int | str]:
     """把 `EventServer` 挂上 uvicorn，bind loopback 临时口，先写 bootstrap 再常驻服务。
 
     依赖：`EventServer`（组合根已构建、已持 `StorePort` 抽象）；`generation` 由启动方（Rust 注入的
     env）分配并随 bootstrap 落盘，用于陈旧连接栅栏；`static_dir`（可选）为桌面前端产物，给定则
-    由 sidecar 一并伺服，webview 直接指本服务根路径（ADR-0007）。返回写入的 bootstrap dict（仅在服务退出后可达）。
+    由 sidecar 一并伺服，webview 直接指本服务根路径（ADR-0007）；`token` 为会话密钥（未给则自动生成），
+    写入 bootstrap 供壳/前端取用并强制端点鉴权。返回写入的 bootstrap dict（仅在服务退出后可达）。
     失败语义：uvicorn 常驻直至被信号/关闭中断；期间任何 HTTP 错误由 FastAPI 侧按既有映射出声。
     """
     # 延迟 import：uvicorn 属 dev/打包依赖（非 core），serve 面才需要；`create_app` 同层、避免模块期拉 fastapi。
@@ -77,9 +80,12 @@ async def serve(server: EventServer, *, generation: int, bootstrap_path: Path, s
 
     from questor.surfaces.http_sse import create_app
 
-    app = create_app(server, static_dir=static_dir)
+    if token is None:
+        token = secrets.token_urlsafe(24)  # 安全默认：--serve 总是启用会话 token，防本机任意进程旁路 HITL。
+
+    app = create_app(server, static_dir=static_dir, token=token)
     sock, port = make_loopback_socket()
-    boot = write_bootstrap(bootstrap_path, host=_LOOPBACK, port=port, generation=generation, pid=os.getpid())
+    boot = write_bootstrap(bootstrap_path, host=_LOOPBACK, port=port, generation=generation, pid=os.getpid(), token=token)
     # 起手一条一方记录钉住"serve 面已就绪"（DoD A①：起手即有日志，由一方记录兑现）。
     _log.info("sidecar serve ready host=%s port=%s generation=%s", _LOOPBACK, port, generation)
     config = uvicorn.Config(app, log_level="warning", access_log=False)

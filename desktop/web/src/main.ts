@@ -12,7 +12,10 @@ const EVENT_TYPES: string[] = [
   "run_failed", "run_completed", "resync_required", "warning", "memory_written",
 ];
 
-const client = new CommandClient(window.location.origin);
+// 会话 token：壳把 bootstrap 里的 token 经 URL 查询注入（http://127.0.0.1:port/?token=…）；前端读取后
+// 随写命令头/事件流查询带上。无 token 的本地其它进程会被服务端 401 拒（HITL 不被本机旁路）。
+const bootToken = new URLSearchParams(window.location.search).get("token") ?? undefined;
+const client = new CommandClient(window.location.origin, (...a) => fetch(...a), bootToken);
 const log = document.getElementById("log") as HTMLDivElement;
 const input = document.getElementById("input") as HTMLInputElement;
 const composer = document.getElementById("composer") as HTMLFormElement;
@@ -130,7 +133,8 @@ function openStream(runId: string): void {
       stopStream();
     },
   });
-  const es = new EventSource(`/events/${runId}`);
+  const query = bootToken ? `?token=${encodeURIComponent(bootToken)}` : "";
+  const es = new EventSource(`/events/${runId}${query}`);
   source = es;
   const handle = (ev: MessageEvent): void => {
     try {

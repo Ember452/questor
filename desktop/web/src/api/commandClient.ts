@@ -36,12 +36,16 @@ export class CommandClient {
   constructor(
     private readonly baseUrl: string,
     private readonly fetchImpl: FetchLike = (...a) => fetch(...a),
+    private readonly token?: string,
   ) {}
 
   private async postJson<T>(path: string, body: unknown): Promise<T> {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    // 会话 token：壳从 bootstrap 取、经 URL 注入前端；每个写命令都带上，服务端校验（缺→401）。
+    if (this.token) headers["x-questor-token"] = this.token;
     const resp = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(body ?? {}),
     });
     // >=400 时后端已抛 HTTPException（映射 receipt 码），这里把非 2xx 显式出声、绝不吞。

@@ -14,7 +14,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
@@ -164,47 +164,59 @@ class EventServer:
                 return
 
 
-def create_app(server: EventServer, static_dir: Path | None = None) -> FastAPI:
+def create_app(server: EventServer, static_dir: Path | None = None, token: str | None = None) -> FastAPI:
     """构建 FastAPI 应用：run/cancel/approve/permissions/events 全部只投 Command 或投事件。
 
     ``static_dir``（存在时）挂载到 ``/``：桌面壳把 webview 指向本服务（ADR-0007），前端静态产物
     由 sidecar 一并伺服（前端只同源调本 API，不新增跨源面）。属控制平面装配，不触事件协议/契约。
+
+    ``token``（给定则启用）为**会话 token**：除 `/health` 就绪探针外，所有命令/事件端点都要校验
+    请求头 `x-questor-token` 或查询参数 `token`，缺失/不符→401。堵住"本机任意进程驱动 agent 跑 run、
+    伪造审批"的裸 loopback 暴露面（HITL 是安全边界，不能被本地旁路）。None=不强制（REPL/测试/headless）。
     """
     app = FastAPI(title="questor", version="0.1.0")
+
+    def require_token(request: Request) -> None:
+        """会话 token 门：token=None 放行；否则头或查询参数须匹配，否则 401（fail-closed）。"""
+        if token is None:
+            return
+        provided = request.headers.get("x-questor-token") or request.query_params.get("token")
+        if provided != token:
+            raise HTTPException(status_code=401, detail="missing or invalid sidecar token")
 
     @app.get("/health")
     async def health() -> dict:
         """就绪探针（D-P7-B）：Rust 侧轮询本端口替代参考仓的 stdin `initialize`——只证 serve 面起来，不触碰任何状态。"""
         return {"status": "ok"}
 
-    @app.post("/run")
+    @app.post("/run", dependencies=[Depends(require_token)])
     async def run(payload: dict) -> dict:
         run_id = await server.start_run(payload.get("text", ""), payload.get("run_id"))
         return {"run_id": run_id}
 
-    @app.post("/runs/{run_id}/cancel")
+    @app.post("/runs/{run_id}/cancel", dependencies=[Depends(require_token)])
     async def cancel_run(run_id: str) -> JSONResponse:
         return _receipt_response(await server.cancel(run_id))
 
     # 兼容 P1 端点。
-    @app.post("/cancel/{run_id}")
+    @app.post("/cancel/{run_id}", dependencies=[Depends(require_token)])
     async def cancel_legacy(run_id: str) -> JSONResponse:
         return _receipt_response(await server.cancel(run_id))
 
-    @app.post("/runs/{run_id}/approvals/{request_id}/resolve")
+    @app.post("/runs/{run_id}/approvals/{request_id}/resolve", dependencies=[Depends(require_token)])
     async def resolve(run_id: str, request_id: str, payload: dict) -> JSONResponse:
         return _receipt_response(await server.resolve_approval(run_id, request_id, payload.get("decision", "")))
 
-    @app.post("/runs/{run_id}/permissions")
+    @app.post("/runs/{run_id}/permissions", dependencies=[Depends(require_token)])
     async def permissions(run_id: str, payload: dict) -> JSONResponse:
         return _receipt_response(await server.set_permission_mode(run_id, payload.get("mode", "")))
 
-    @app.post("/runs/{run_id}/resume")
+    @app.post("/runs/{run_id}/resume", dependencies=[Depends(require_token)])
     async def resume_run(run_id: str) -> dict:
         """从持久态续跑被 kill/重启的 run（P3）；提交驱动，不直 reduce。"""
         return {"run_id": await server.resume(run_id)}
 
-    @app.get("/events/{run_id}")
+    @app.get("/events/{run_id}", dependencies=[Depends(require_token)])
     async def events(request: Request, run_id: str, after_seq: int = 0) -> EventSourceResponse:
         """SSE 事件流；优先用 ``Last-Event-ID`` 头作续传游标，并接住客户端契约版本闸门。"""
         header = request.headers.get("last-event-id")

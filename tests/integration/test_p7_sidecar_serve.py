@@ -43,11 +43,11 @@ def test_make_loopback_socket_is_ephemeral_and_never_wildcard() -> None:
 
 
 def test_write_and_read_bootstrap(tmp_path: Path) -> None:
-    """bootstrap 落 JSON 含 host/port/generation/pid，回读一致；host 恒 127.0.0.1。"""
+    """bootstrap 落 JSON 含 host/port/generation/pid/token，回读一致；host 恒 127.0.0.1。"""
     path = tmp_path / "sidecar.json"
-    wrote = serve.write_bootstrap(path, host="127.0.0.1", port=54321, generation=7, pid=4242)
+    wrote = serve.write_bootstrap(path, host="127.0.0.1", port=54321, generation=7, pid=4242, token="tok-xyz")
     raw = json.loads(path.read_text(encoding="utf-8"))
-    assert raw == {"host": "127.0.0.1", "port": 54321, "generation": 7, "pid": 4242}
+    assert raw == {"host": "127.0.0.1", "port": 54321, "generation": 7, "pid": 4242, "token": "tok-xyz"}
     assert wrote["generation"] == 7
     assert serve.read_bootstrap(path) == raw
 
@@ -55,7 +55,7 @@ def test_write_and_read_bootstrap(tmp_path: Path) -> None:
 def test_write_bootstrap_rejects_wildcard_host(tmp_path: Path) -> None:
     """试图把 bootstrap 写成 0.0.0.0 必须当场拒绝（进程边界红线，不能只靠 socket 绑对）。"""
     with pytest.raises(ValueError):
-        serve.write_bootstrap(tmp_path / "x.json", host="0.0.0.0", port=1, generation=0, pid=os.getpid())
+        serve.write_bootstrap(tmp_path / "x.json", host="0.0.0.0", port=1, generation=0, pid=os.getpid(), token="t")
 
 
 # --------------------------------------------------------------------------- #
@@ -111,9 +111,14 @@ def test_sidecar_serve_headless_run_flow(tmp_path: Path) -> None:
 
         assert boot["generation"] == 7
         assert boot["host"] == "127.0.0.1"
+        token = boot["token"]
         base = f"http://127.0.0.1:{boot['port']}"
-        with httpx.Client(base_url=base, timeout=None, trust_env=False) as client:
-            # 就绪探测：/health 通（D-P7-B 的"轮询端口 + 健康"替代参考仓 stdin initialize）。
+        auth = {"x-questor-token": token}
+        with httpx.Client(base_url=base, timeout=None, trust_env=False, headers=auth) as client:
+            # 无 token 的本地进程必须被 401 拒（HITL 不能被本机旁路）。
+            with httpx.Client(base_url=base, timeout=None, trust_env=False) as anon:
+                assert anon.post("/run", json={"text": "hi"}).status_code == 401
+            # 就绪探测：/health 通（无需 token，壳轮询用）。
             health_ready = False
             hdeadline = time.monotonic() + 30
             while time.monotonic() < hdeadline:
@@ -130,7 +135,7 @@ def test_sidecar_serve_headless_run_flow(tmp_path: Path) -> None:
             # 故用预置 run_id，后台线程延时 POST（保证 GET 的 bus 订阅队列先建立），再阻塞式收流。
             def _delayed_post() -> None:
                 time.sleep(1.0)
-                with httpx.Client(base_url=base, timeout=None, trust_env=False) as poster:
+                with httpx.Client(base_url=base, timeout=None, trust_env=False, headers=auth) as poster:
                     poster.post("/run", json={"text": "hello", "run_id": run_id})
 
             poster = threading.Thread(target=_delayed_post)

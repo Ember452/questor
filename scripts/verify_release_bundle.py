@@ -95,11 +95,13 @@ def _runtime_smoke(exe: Path) -> tuple[bool, str]:
         return False, f"cannot launch frozen sidecar: {exc}"
     try:
         port = None
+        token = None
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             if bp.exists():
                 try:
-                    port = json.loads(bp.read_text(encoding="utf-8")).get("port")
+                    boot = json.loads(bp.read_text(encoding="utf-8"))
+                    port, token = boot.get("port"), boot.get("token")
                     if port:
                         break
                 except json.JSONDecodeError:
@@ -110,16 +112,18 @@ def _runtime_smoke(exe: Path) -> tuple[bool, str]:
         if not port:
             return False, "bootstrap never appeared (60s)"
         base = f"http://127.0.0.1:{port}"
+        headers = {"x-questor-token": token} if token else {}
         try:
             with urllib.request.urlopen(f"{base}/health", timeout=10) as r:  # noqa: S310 - loopback fixed
                 if r.status != 200:
                     return False, f"/health status {r.status}"
-            req = urllib.request.Request(  # noqa: S310 - loopback fixed
-                f"{base}/run", data=b'{"text":"hello"}', headers={"content-type": "application/json"}, method="POST"
+            req = urllib.request.Request(  # noqa: S310
+                f"{base}/run", data=b'{"text":"hello"}', headers={"content-type": "application/json", **headers}, method="POST"
             )
             with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310
                 run_id = json.loads(r.read())["run_id"]
-            with urllib.request.urlopen(f"{base}/events/{run_id}", timeout=40) as r:  # noqa: S310
+            ev_req = urllib.request.Request(f"{base}/events/{run_id}", headers=headers)  # noqa: S310
+            with urllib.request.urlopen(ev_req, timeout=40) as r:  # noqa: S310
                 body = r.read().decode("utf-8", "ignore")
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError) as exc:
             return False, f"runtime HTTP smoke failed: {exc}"
