@@ -39,7 +39,8 @@ INTERNAL_ONLY: frozenset[str] = frozenset({"checkpoint_recorded", "reduce_reject
 
 #: 每个对外事件的 data 白名单字段（design/02 §3/§5；ADR-0019）。只有列出的键才会
 #: 进入外部 Envelope：完整 args、abs path、env values、provider state 都不在白名单，默认不外发。
-#: 值为 ``None`` 表示该类型的 data 原样透传（仅用于尚未定形的 node_updated）。
+#: 注：`project` 对"不在本表 / 值为 None"的类型均按"未知外部类型"处理（错误类保留、余下丢弃）；
+#: 故任何要外发的类型都必须在表里给显式白名单 frozenset（P7 T11 已把 draft 的 node_updated 定为此）。
 EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.RUN_STARTED: frozenset({"run_id"}),
     EventType.TURN_STARTED: frozenset({"turn"}),
@@ -52,7 +53,9 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.APPROVAL_REQUEST: frozenset({"request_id", "tool_call_id", "name", "args_summary", "risk", "reason", "expires_at"}),
     EventType.APPROVAL_RESOLVED: frozenset({"request_id", "tool_call_id", "decision", "decided_by", "resolved_at"}),
     EventType.PERMISSION_MODE_CHANGED: frozenset({"mode", "changed_by", "effective_from_turn"}),
-    EventType.NODE_UPDATED: None,
+    # node_updated（任务树/DAG 属 P8，当前无生产者）：P7 T11 additive 定形为有界白名单，
+    # 去"None 透传"隐患——一旦 P8 产出富节点，也不会把 prompt/result 类载荷原样外发（C18/C13）。
+    EventType.NODE_UPDATED: frozenset({"node_id", "status", "title", "parent_id"}),
     EventType.USAGE_DELTA: frozenset({"input_tokens", "output_tokens", "total_tokens"}),
     EventType.HEARTBEAT: frozenset(),
     EventType.RUN_CANCELLED: frozenset({"reason"}),

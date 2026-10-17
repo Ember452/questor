@@ -95,7 +95,7 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         "approval_request": _envelope("approval_request", {"request_id": "apr1", "tool_call_id": "tc1", "name": "write", "args_summary": "out.txt", "risk": "high", "reason": "needs approval", "expires_at": "2026-01-01T00:05:00+00:00"}),
         "approval_resolved": _envelope("approval_resolved", {"request_id": "apr1", "tool_call_id": "tc1", "decision": "allow", "decided_by": "user", "resolved_at": "2026-01-01T00:01:00+00:00"}),
         "permission_mode_changed": _envelope("permission_mode_changed", {"mode": "full_auto", "changed_by": "user", "effective_from_turn": 2}),
-        "node_updated": _envelope("node_updated", {"node": {"id": "n1"}}),
+        "node_updated": _envelope("node_updated", {"node_id": "n1", "status": "pending"}),
         "usage_delta": _envelope("usage_delta", {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}),
         "heartbeat": _envelope("heartbeat", {}),
         "run_cancelled": _envelope("run_cancelled", {"reason": "user"}),

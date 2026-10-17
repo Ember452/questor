@@ -160,7 +160,15 @@
     },
     "node_updated": {
       "type": "object",
-      "description": "Task-tree node projection; shape finalized in P5. Kept permissive but typed."
+      "description": "Task-tree node projection (DAG belongs to P8; no producer yet). P7 T11 additive-shaped to a bounded whitelist (C18/C13): node identity/status only, never payload.",
+      "required": ["node_id", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "node_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "status": { "type": "string", "maxLength": 64 },
+        "title": { "type": ["string", "null"], "maxLength": 256 },
+        "parent_id": { "type": ["string", "null"], "maxLength": 128 }
+      }
     },
     "usage_delta": {
       "type": "object",
