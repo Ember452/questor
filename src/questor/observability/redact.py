@@ -21,6 +21,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # 仅类型：运行时不 import questor.*，保持内核零外部依赖（G-L1）。
     from questor.observability.entry import LogEntry
 
+#: 命中脱敏后注入 fields 的标记键（与 ``context`` 撞键时优先保留它，见 ``_drop_context_clash``）。
+_REDACTED_FLAG = "redacted"
+
 #: pattern 簇（非穷举）：(编译正则, 替换)。顺序应用、任一命中即标 ``redacted``。
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # OpenAI/Anthropic 风格密钥。
@@ -56,11 +59,21 @@ def _redact_text(text: str) -> tuple[str, bool]:
     return out, hit
 
 
+def _drop_context_clash(context: dict[str, str | int | float | bool | None]) -> dict:
+    """从 ``context`` 里去掉与待注入标记键 ``redacted`` 同名的项（不变式 5 禁同键）。
+
+    为什么弃关联键而不是弃标记键：标记键（``redacted``）是"这条日志被脱敏过"的安全信号，
+    排障时不可缺；关联键少一个只影响归属，而 ``replace`` 一旦抛 ``ValueError`` 会直接把整行弄没。
+    脱敏绝不能反过来造成丢日志（Issue #132）。
+    """
+    return {k: v for k, v in context.items() if k != _REDACTED_FLAG}
+
+
 def redact(entry: LogEntry) -> LogEntry:
     """对一条 ``LogEntry`` 做唯一一处脱敏：``msg``/``fields`` 值/``traceback`` 三面全覆盖。
 
     命中任一 → 返回新实例并置 ``fields["redacted"]=True``（使"这次排障是否被脱敏挡住"可查询）；
-    未命中 → 原样返回（不复制）。**fail-closed**：脱敏自身抛异常 → 整条替换为 ``<unredactable>``，
+    未命中 → 原样返回（不复制）。**fail-closed**：脱敏自身抛异常 → 整条替换 ``<unredactable>``，
     原文绝不穿过（DESIGN §8）。
     """
     try:
@@ -79,11 +92,18 @@ def redact(entry: LogEntry) -> LogEntry:
             else:
                 new_fields[key] = value
         if h_msg or h_tb or h_fields:
-            new_fields["redacted"] = True
-            return replace(entry, msg=msg, traceback=tb, fields=new_fields)
+            new_fields[_REDACTED_FLAG] = True
+            return replace(entry, msg=msg, traceback=tb, fields=new_fields, context=_drop_context_clash(entry.context))
         return entry
     except Exception:  # noqa: BLE001 - fail-closed：判不了敏感就按敏感处理，宁可丢信息不可漏凭据
-        return replace(entry, msg="<unredactable>", traceback=None, fields={"redacted": True})
+        # fail-closed 分支自身也绝不能抛（否则异常会冒过 pipeline，Issue #132）。
+        return replace(
+            entry,
+            msg="<unredactable>",
+            traceback=None,
+            fields={_REDACTED_FLAG: True},
+            context=_drop_context_clash(entry.context),
+        )
 
 
 def strip_prompt_echo(text: str, prompts: list[str], min_len: int = 24) -> str:

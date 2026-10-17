@@ -98,6 +98,39 @@ def test_fail_closed_on_internal_error(monkeypatch: pytest.MonkeyPatch) -> None:
     assert e.fields.get("redacted") is True
 
 
+def _entry_with_context(msg: str, context: dict) -> LogEntry:
+    return LogEntry(
+        ts=datetime.now(UTC), level=LogLevel.INFO, logger="questor.test", msg=msg,
+        source="inline", context=context,
+    )
+
+
+def test_fail_closed_path_does_not_raise_when_context_clashes_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#132：fail-closed 重建自己也不能抛。
+
+    旧写法 ``replace(entry, fields={"redacted": True})`` 会在 ``context`` 已有 ``redacted`` 时撞
+    不变式 5 再抛 ``ValueError``，直接从 ``redact()`` 冒到 pipeline 之外——而 ``pipeline.emit`` 当时
+    没有顶层兜底，带外投影的调用点在宿主 await 循环里。
+    """
+
+    def _boom(_text: str) -> tuple[str, bool]:
+        raise RuntimeError("redactor crashed")
+
+    monkeypatch.setattr(redact_mod, "_redact_text", _boom)
+    out = redact(_entry_with_context(f"secret {_SECRET}", {"redacted": "stale"}))  # 不得抛
+    assert out.msg == "<unredactable>"
+    assert out.fields["redacted"] is True
+    assert "redacted" not in out.context, "安全标记优先，让位的只能是关联键"
+
+
+def test_hit_path_does_not_raise_when_context_clashes_flag() -> None:
+    """#132：命中脱敏的正常路径同样不能因撞键而抛。"""
+    out = redact(_entry_with_context(f"leak {_SECRET}", {"redacted": "stale"}))
+    assert _SECRET not in out.msg
+    assert out.fields["redacted"] is True
+    assert "redacted" not in out.context
+
+
 # ---------------- strip_prompt_echo：纯函数（接线后置，仅测函数本体）----------------
 
 def test_strip_prompt_echo_removes_long_overlap() -> None:
