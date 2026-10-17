@@ -1,0 +1,5 @@
+# Node/前端构建产物不进仓（生成的事件类型 event.ts 例外，它是要提交的契约产物）。
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo

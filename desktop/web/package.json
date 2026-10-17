@@ -1,0 +1,13 @@
+{
+  "name": "@questor/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "generate:protocol": "node scripts/generate-protocol.mjs",
+    "check:protocol": "node scripts/generate-protocol.mjs --check"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "^15.0.4"
+  }
+}
