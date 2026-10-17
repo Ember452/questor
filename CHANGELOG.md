@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — P5 Skills / MCP（分支 `feat/p5-skills-mcp`；详 `docs/plan/05-p5-skills-mcp.md`）
+
+- **Skills 加载（DoD①）**：`capabilities/skills`——`SKILL.md` 严格 frontmatter 解析（依赖最小、不新增第三方）、
+  name/目录名校验、**单坏文件降级+出声不拖垮发现**（C6）、METADATA→INSTRUCTIONS→RESOURCES 渐进披露、
+  正文有界告警；发现的技能目录注入 agent system prompt（生效）。改造自 crewAI `skills/{parser,validation,loader}.py`（MIT）。
+- **MCP 客户端（DoD②③）**：`capabilities/mcp`——`mcp.json` 载入（整体坏 fail-closed / 单条坏出声跳过）+ 配置文件名
+  与 `PROTECTED_IN_ROOTS` 写保护的机器耦合测试；载入/spawn **双门**安全（裸 shell 解释器 / egress / exfil / 持久化，
+  hermes `mcp_security.py` 思路）；stdio 连接生命周期（官方 `mcp` SDK v1，ADR-0030；握手限时、失败清理不留半初始化、
+  aclose 回收子进程树）；远程 `inputSchema` 归一（DeepCode `core/mcp/schema.py`）、`mcp_<server>_<tool>` 命名、
+  描述过共享 `bound_description` 有界、远程→`ToolSpec` 非放宽（capability=NETWORK、read_only 默认 False、
+  approval unknown→deny）；`ToolRegistry` 命名冲突拒覆盖+出声；`McpManager` 编排（env/stderr 工厂注入，L3 不 import L5）。
+  真 stdio 假 server roundtrip + 断连/失败恢复测试通过（非 mock 冒充真进程）。
+- **子进程观测（DoD⑤ / DESIGN §16.4 D-16.4-A/B）**：`providers/mcp_stderr.py`——MCP server stderr 落**独立 per-run 文件**
+  `mcp-stderr-<run_id>.log` + spawn 侧 `run_id` 显式注入（文件名主、首行辅）；跨进程关联 canary 真子进程实测通过
+  （`contextvars` 不过进程边界，绝不靠 ambient `bind()`——`docs/pitfalls.md` 第 3 条）。C20：独立通道只放子进程自有输出。
+- **决策**：ADR-0029（`parallel_safe`/`barrier` 移出 P5、执行严格串行）、ADR-0030（采用官方 `mcp` SDK，pin `<2` 对齐参考实现）。
+- **端到端已接**：L6 组合根 bootstrap（`surfaces/mcp_bootstrap.py`）把 MCP 连接接入单次 run 的工具面（per-run 生命周期
+  + teardown）；C17 env 凭据门在装配侧拒绝 server.env 携带 provider 凭据；`test_mcp_loop_integration.py` 以真子进程
+  + 真 SQLiteStore 实测“远程工具→`event_log` 先入账”与“无网络围栏时 C17 floor fail-closed 拒但配对仍闭合”。
+  真实外网 MCP server / 真 key 端到端、HTTP sidecar 带外投影仍标 **UNVERIFIED**（见 `docs/plan/05` §0.4）。
+- 许可/provenance：crewAI / DeepCode / hermes / CowAgent 改造（MIT，改造处文件内标 provenance）；`mcp` SDK MIT；EvoFlow evopanel 零接触。
+
 ### Fixed
 
 - **`test_powershell_timeout_kills_parent_and_child` 在 UTF-8 模式下确定性报 `UnicodeDecodeError`**：

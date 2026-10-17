@@ -7,10 +7,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import replace
 
 from questor.contracts.tool import RunToolSurface, Tool, ToolSpec
+
+_log = logging.getLogger("questor.tools")
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _WHITESPACE = re.compile(r"\s+")
@@ -23,18 +26,28 @@ def _sanitize_description(spec: ToolSpec) -> ToolSpec:
 
     只收紧不外传原文：过长/含注入字符的 description 不能进入 provider 工具面。
     """
-    cleaned = _WHITESPACE.sub(" ", _CONTROL_CHARS.sub("", spec.description)).strip()
-    limit = max(_DESCRIPTION_MIN, min(spec.description_max_chars or _DESCRIPTION_MAX, _DESCRIPTION_MAX))
+    cleaned = bound_description(spec.description, name=spec.name, max_chars=spec.description_max_chars)
+    if cleaned != spec.description:
+        return replace(spec, description=cleaned)
+    return spec
+
+
+def bound_description(text: str, *, name: str, max_chars: int | None) -> str:
+    """共享描述净化（C08 单一真源）：内置工具、skills 目录、未来的 MCP 远程描述都走这一套规则。
+
+    去控制字符 → 折叠空白 → 过短退化（含工具名、绝不空）→ 超界截断加省略号。行为与原
+    `_sanitize_description` 逐字一致（抽出仅为复用，不改语义）。
+    """
+    cleaned = _WHITESPACE.sub(" ", _CONTROL_CHARS.sub("", text)).strip()
+    limit = max(_DESCRIPTION_MIN, min(max_chars or _DESCRIPTION_MAX, _DESCRIPTION_MAX))
     if len(cleaned) < _DESCRIPTION_MIN:
         # 退化：保证 provider 永远看到含工具名、达下限的说明，而不是空/过短 description。
-        cleaned = f"{spec.name} tool: {cleaned}".strip()
+        cleaned = f"{name} tool: {cleaned}".strip()
         if len(cleaned) < _DESCRIPTION_MIN:
             cleaned = f"{cleaned} - minimal tool description".strip()
     if len(cleaned) > limit:
         cleaned = cleaned[: limit - 1].rstrip() + "…"
-    if cleaned != spec.description:
-        return replace(spec, description=cleaned)
-    return spec
+    return cleaned
 
 
 class ToolRegistry:
@@ -45,8 +58,17 @@ class ToolRegistry:
         self._specs: dict[str, ToolSpec] = {}
 
     def register(self, tool: Tool) -> None:
-        """注册工具（新工具=加注册；改既有工具语义=契约变更，走评审）。"""
+        """注册工具（新工具=加注册；改既有工具语义=契约变更，走评审）。
+
+        C21 命名冲突守卫：若同名已被**另一个**工具占用，**拒绝覆盖 + 出声**（first-writer-wins）——
+        远程工具伪装/撞内置名时不能静默顶掉既有工具（C17 capability floor 不因远程放宽）。同对象重注册
+        （幂等 reload）不算冲突。
+        """
         spec = _sanitize_description(tool.spec)
+        existing = self._tools.get(spec.name)
+        if existing is not None and existing is not tool:
+            _log.warning("refusing to register tool '%s': name already claimed (collision kept existing)", spec.name)
+            return
         self._tools[spec.name] = tool
         self._specs[spec.name] = spec
 
@@ -82,4 +104,4 @@ class ToolRegistry:
         )
 
 
-__all__ = ["RunToolSurface", "ToolRegistry"]
+__all__ = ["RunToolSurface", "ToolRegistry", "bound_description"]

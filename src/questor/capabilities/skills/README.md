@@ -1,5 +1,8 @@
-# capabilities/skills — reserved stub (empty until P5)
+# capabilities/skills — skill loading (P5, implemented)
 
-Skills loading is a P5 capability (ROADMAP §1). This directory stays empty in
-P0/P1 so the L3 seam exists without speculative code (STRUCTURE S2). The
-`ToolSpec`/registry shape already accommodates skill-provided tools.
+Discovers `<dir>/SKILL.md` (YAML frontmatter via a strict, dependency-free parser —
+no pyyaml dependency), validates `name`/dir-name, and **isolates per-file failures**
+(bad `SKILL.md` → WARNING + skip, never aborts the batch; HARD C6). Progressive
+disclosure METADATA→INSTRUCTIONS→RESOURCES keeps bodies out of context until needed.
+Discovered skills render into the agent system prompt as a bounded catalog (wired in
+`surfaces/cli.py` via `build_skill_catalog`). See `docs/plan/05-p5-skills-mcp.md`.

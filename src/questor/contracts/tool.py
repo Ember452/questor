@@ -51,10 +51,10 @@ class ToolSpec:
     read_only: bool = False  # 权威布尔；缺 metadata 一律 fail-closed 视为非只读
     available: bool = True  # 静态默认值；**动态可用性的唯一真源是 `Tool.available()`**，本字段不被注册表读取
     timeout_s: float | None = None  # None → Budget 默认；0/负值注册期拒绝（Harness 武装，见 loop）
-    parallel_safe: bool = False  # NOT enforced until P5：仅契约占位，v1 执行严格串行（ROADMAP §2.5）
+    parallel_safe: bool = False  # 未强制：完整并行 gate 已移出 P5（ADR-0029），待专门并行化 Phase；P5 执行严格串行
     approval_mode: str | None = None  # MCP：只收紧不放宽，unknown→deny
     orchestrator: bool = False  # NOT enforced until P8：子代理 gate 尚未实现，不得当成已生效
-    barrier: bool = False  # NOT enforced until P5：同批独占 gate 尚未实现
+    barrier: bool = False  # 未强制：同批独占 gate 随并行一并移出 P5（ADR-0029），尚未实现
     description_max_chars: int = 2000  # 描述长度上限（防超长/注入面）
 
     def __post_init__(self) -> None:
