@@ -81,7 +81,7 @@ A change is done only when, as applicable: it **compiles + passes tests + lints 
   file an ADR (ROADMAP §5). New fields/params: additive only (HARD-CONSTRAINTS C6/C11).
 - Enforce the red lines with *mechanism*, not discipline: single-writer, read-only state view (COW),
   only `Command` mutates, events append-only & internal-not-stored-as-external, permission/sandbox
-  live in the Harness (C1–C19).
+  live in the Harness (C1–C20).
 - **A change is not done until its implied doc updates are made** (see §5.5).
 - **Peer-scan gate** (§4.5): before implementing any capability, the corresponding row in the phase's
   `docs/plan/NN-*.md` §0 table must be filled (repos scanned + `file:line` + verdict). Unfilled = not ready
@@ -94,6 +94,11 @@ Docs are the source of truth the *next* session reads; stale docs cause wrong wo
 - **A contract changes** (layering / state / event / tool / loop) → update `docs/design/*` (keep the
   locked-vs-draft markers honest).
 - **New engineering red-line discovered** → add a `C…` entry to `HARD-CONSTRAINTS.md`.
+- **Architectural trap that will bite again** (cross-subsystem + high comprehension cost + recurring
+  trigger) → add it to the right section of [`docs/pitfalls.md`](./docs/pitfalls.md): 现象 / 触发条件 /
+  为什么容易复发 / 纪律 / 关联. **Ordinary bugs do NOT go here** — they go to a GitHub Issue labelled
+  `bug`, fixed by a commit whose body says `Fixes #N` (auto-closed on merge to `main`). If a pitfall has
+  a one-line enforceable rule, that rule belongs in `HARD-CONSTRAINTS.md` (a `C…` entry), not in pitfalls.
 - **Reality diverges from plan** → follow VISION §0.4 (reality wins) and **write the deviation back**;
   update the active `docs/plan/NN-*.md`.
 - **Phase order/scope added/removed/moved or cross-phase shift** → record an **ADR first**, then edit

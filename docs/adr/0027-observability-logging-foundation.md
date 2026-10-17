@@ -35,7 +35,7 @@
 ## 复审修正（2026-10-17，刀 2 对抗式审计 → Issue #126–#139）
 
 全量跑过一遍所有路径后发现 3 个 BLOCKER + 6 个 MAJOR，其中四条**改本 ADR 的决策口径**（其余为纯缺陷修复，只
-进 Issue 与 `docs/log/BUGLOG.md`）：
+进 Issue 与 [`docs/pitfalls.md`](../pitfalls.md)）：
 
 1. **D10 加“来源门”、root 不再降到 DEBUG**（#126/#129）：原决策“console INFO / file DEBUG”默认了 DEBUG 只给一方看，
    而实现把 root 降到 DEBUG → aiosqlite 的 `executing <SQL> <参数元组>` 经桥落进主干文件，**prompt 与 checkpoint
@@ -64,4 +64,5 @@
 
 未改结论但补记的边界（#130）：`contextvars` **不过 `threading.Thread`/进程边界**——真 run 里 80/85 行日志来自
 aiosqlite 工作者线程、`context` 恒空。这是语言事实不是 bind 的实现缺陷，纪律定为“跳线程/子进程必须显式传关联键”，
-并把 MCP 子进程的 `run_id` 注入方式锁为 P5 前置决策（原 §16.4 已列，本轮拿到实测证据）。归档见 `docs/log/BUGLOG.md`。
+并把 MCP 子进程的 `run_id` 注入方式锁为 P5 前置决策（原 §16.4 已列，本轮拿到实测证据）。归档见 [`docs/pitfalls.md`](../pitfalls.md)。
+另本轮提炼出一条新红线 **HARD C20（观测面不得成为载荷的第二载体）**，并在 C6 例外款补了“折叠/合并同罪”的延伸。

@@ -1,6 +1,6 @@
 """Issue #127 判据：litellm 自带的 stdout 型 handler 必须在 provider 装配时被摘掉。
 
-真实机制（复审时纠正过一次误判，记在 BUGLOG/ADR-0027）：litellm 的 ``_logging`` 用的是它自己的
+真实机制（复审时纠正过一次误判，记在 ``docs/pitfalls.md`` 第 4 条 / ADR-0027）：litellm 的 ``_logging`` 用的是它自己的
 ``LevelRoutingStreamHandler``——**stdlib Handler，不是 loguru**——按级别分流，INFO/DEBUG 写
 ``sys.stdout``、WARNING+ 写 ``sys.stderr``。observability 的降噪名单与级别门只能决定"要不要生成记录"，
 管不住第三方库自己往哪个流写；而 ``--list`` 的 stdout 是机器可读输出。

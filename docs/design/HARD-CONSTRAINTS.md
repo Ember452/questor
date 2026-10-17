@@ -39,6 +39,7 @@
 - **为什么**：内部重构不外泄、不炸旧客户端；否则迭代几版后各模块事件结构对不齐。
 - **强制**：外部事件 schema 快照测试；CI diff 外部契约，删/改字段=红。
 - **例外（评审补）**：“未知 type 静默忽略”**不适用于错误类事件**；未知的 error 类事件至少打告警日志（不能静默吐掉）。
+- **例外的延伸（ADR-0027 复审补）**：“静默”不限于丢弃——**折叠、合并、丢行同罪**。观测面的节流窗不得吸收 ERROR/CRITICAL 记录（否则同秒两个 run 各失败一次时，第二个 run 在日志里一行都不剩）；治理管线也不得因自身异常把记录丢掉。见 [`pitfalls.md`](../pitfalls.md) 第 2 条。
 
 ## C7 终止权在 Harness（走命令）
 - **约束**：策略可*建议*终止，但**全局终止**（超时/资源超限/用户停止/安全告警）由 Harness 决定；且终止经 `Cancel` **Command→reduce**，**不 out-of-band 硬杀**。
@@ -106,9 +107,16 @@
 - **强制**：关卡写在**全仓唯一**的 provider 调用点内部（`kernel/loop.py::_stream_turn`）；判据取 context 侧 `state/checkpoint.py::open_tool_use_ids`（账本驱动的回填盖不住“context 有、ledger 无”的分叉）；补执行复用 ADR-0021 的 `_settle_open_calls`（含权限/floor，绝不绕过 ask）；`tests/integration/test_pairing_gate_and_provider_fault.py` 含源码级“调用点唯一且关卡在请求前”的 fail-on-empty 守卫。
 - **不是并行通行证**：本条只保证“发出前成对”，执行仍严格串行；reader/writer gate 与真并发属 P5（ROADMAP §2.5）。
 
+## C20 观测面不得成为载荷的第二载体（ADR-0027 复审补）
+
+- **约束**：日志/trace 一类旁路面**默认只收自有记录**：非 `questor.*` 的外来记录有效级别下界恒为 INFO，**不因 `file_level=DEBUG` 放宽**；装配**不得下调 root logger** 换取自有 DEBUG（只给 `questor` 子树定级）；投影/LLM 通道的载荷只取静态白名单标量键，白名单本身不得含 prompt/参数/结果类键。第三方库自带 sink 写向何处时，**由引入它的那一个适配器模块治理**（不得让内核 import 它）。
+- **为什么**：账本已经装不下的东西（SQL 参数元组、请求体、工具输出）会经由**第三方库的 DEBUG 日志**整份落进主干文件——一次实测里，用户 prompt 原文与 `state_digest` 全快照共写进 4 行。这直接旁路 D4「零原文默认」，并把 C13（日志非第二真相）从纪律退化成泄漏面：日志比 DB 更容易被顺手贴进 issue。逐库加降噪名单永远追不上（本轮就踩过一次：名单写小写 `litellm`，真实名是 `LiteLLM`，整整一条降噪从未生效）。
+- **强制**：`pipeline._fanout` 的来源门（`tests/unit/observability/test_pipeline.py`、`test_configure.py`）+ `scripts/check_projection_whitelist.py`（内联读键 ⊆ 白名单 **且** 白名单 ∩ 敏感键禁词 = ∅，`--self-test` 自证能判红）+ `tests/integration/test_log_zero_plaintext.py`（真子进程 canary：不得入文件，且一方记录必须真落盘，防空集假绿）。
+- **不越界**：本条只管“载荷能不能进观测面”，不管账本本身怎么写（C13/C16）；也不禁止 P7/P10 在**显式授权 + 独立通道 + 有界截断**下开 preview（刀 3）。
+
 ## 天花板（诚实标注，别当免费）
 "扩事件协议就能到分布式"是错觉。**跨机**的**状态排序、租约、exactly-once、部分失败恢复**是独立的硬骨头（hermes `hermes_state_*`、wuu `agentcontrol` 就在啃）。本架构*容许*演进到那，但那一跳要单独设计，别写进"只是加事件"。
 
 ## 与三份文档的挂点
 - 每条 C 对应到 `00-layering` 的某条边界 / `01-state-model` 的某字段；CI 规则清单待实现阶段落进 `pyproject`（ruff/import-linter/契约快照测试）。
-- 评审口径：任何 PR 触发 C1-C19 之一 = 打回，附本文件对应条目。
+- 评审口径：任何 PR 触发 C1-C20 之一 = 打回，附本文件对应条目。

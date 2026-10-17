@@ -35,8 +35,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   统一两个生产入口的 env 族与 payload 门（旧 `cli.main()` 裸装配，既不建文件面也不拒非法 payload 值）。
 - **A① 真实成立**：组合根与装配面各补一方记录（`questor.assembly` / `questor.composition`）——旧“起手有日志”是
   靠第三方噪声凑数，修完来源门后那些噪声已不再进入。
-- 回归：全量 `557 passed / 5 skipped`（新增 30 条判据，旧基线 527 零回归）；新判据在未修复源码上经
-  `git stash` 突变验证 **21 条全红**，确认不是装饰性测试。疑难面归档见 [`docs/log/BUGLOG.md`](docs/log/BUGLOG.md)。
+- 回归：全量 `559 passed / 5 skipped`（基线 527，新增 32 条判据，无新增 skip）；新判据在未修复源码上经
+  `git stash` 突变验证 **21 条全红**，确认不是装饰性测试。
+
+### Changed — 建立陷阱档案与一条新红线（同一轮复审的制度产出）
+
+- 新增 [`docs/pitfalls.md`](docs/pitfalls.md)：只收“跨子系统 + 理解成本高 + 会再踩”的架构级陷阱（按分区）。
+  **普通 bug 不进来**——它们走带 `bug` 标签的 GitHub Issue，由 commit 正文的 `Fixes #N` 在合进 `main` 时自动关闭。
+- 新增工程红线 **C20（观测面不得成为载荷的第二载体）**，并在 C6 例外款下补一行：“静默”不限于丢弃，
+  节流折叠/合并不比丢弃轻。本区间的范围提法（AGENTS / CLAUDE / VISION / `plan/_TEMPLATE`）同步抬到 C1–C20，
+  `plan/_TEMPLATE` §3 加一行“开工先查 pitfalls”的自检项。
 
 ### Changed (文档对齐 / dead-pointer 清除，附 ADR-0028 同分支)
 扫描并修掉会让下一位读者走错路的文档漂移（**不改任何阶段结论、不回改历史验收判据**，只加“当时至 Cxx”型注记）：

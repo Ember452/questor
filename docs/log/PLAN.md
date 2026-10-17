@@ -149,7 +149,8 @@
 - **B⑦ 的 G-L11 AST 守卫根本不存在**：往 `_DATA_KEYS` 加 `"arguments"` 后全量 527 用例与所有守卫仍绿。
 
 修正口径与逐条详情见 [ADR-0027 复审修正](../adr/0027-observability-logging-foundation.md)、
-[`BUGLOG.md`](./BUGLOG.md)（3 条架构级归档）与 `CHANGELOG.md` 的 Fixed 段。新判据均经 `git stash` 突变验证：
+[`docs/pitfalls.md`](../pitfalls.md)（可观测性分区，4 条架构级归档）、[HARD C20](../design/HARD-CONSTRAINTS.md)
+与 `CHANGELOG.md` 的 Fixed 段。新判据均经 `git stash` 突变验证：
 在未修复源码上 21 条全红，修复后 557 passed / 5 skipped。
 
 ## 8. 依赖图与时序
