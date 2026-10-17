@@ -137,6 +137,28 @@ pub fn wait_ready(port: u16, timeout: Duration) -> bool {
     }
 }
 
+/// 一次崩溃检测/重启决策（DoD③）：若子进程已退出（poll Some）且非主动关闭，则 `fail_all` 当前代 pending
+/// （在途请求不摊塌状态）+ `bump`  generation（陈旧连接从此作废），返回 Some(新代)=应重启；否则 None。
+///
+/// 这是壳的重启监控循环每一拍调用的**纯决策**（真 spawn/restart 由调用方注入），以便用假 `Process` 确定性单测。
+/// 重启次数上限等策略由调用方控制（`max_restarts` 达限则返回 None 停止重启）。
+pub fn on_crash_detect<P: Process>(
+    fence: &Fence,
+    generation: Generation,
+    proc: &mut P,
+    pending: &mut [PendingRequest],
+    shutting_down: bool,
+) -> Option<Generation> {
+    if shutting_down {
+        return None; // 主动关闭路径：不当崩溃处理，不重启。
+    }
+    if proc.poll().is_some() {
+        fail_all(pending, generation); // 崩溃时在途 pending 全 fail（C10/C19）
+        return Some(fence.bump()); // 代次自增：旧 SSE/回执栅栏丢弃
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,6 +231,45 @@ mod tests {
         );
         assert_eq!(out, Shutdown::ForceKilled);
         assert!(proc.killed, "超 grace 必须强杀兜底");
+    }
+
+    struct Running; // 永不退出
+    impl Process for Running {
+        fn poll(&mut self) -> Option<i32> {
+            None
+        }
+        fn force_kill(&mut self) {}
+    }
+
+    struct Crashed; // 立刻报已退出
+    impl Process for Crashed {
+        fn poll(&mut self) -> Option<i32> {
+            Some(1)
+        }
+        fn force_kill(&mut self) {}
+    }
+
+    #[test]
+    fn crash_detect_bumps_and_fails_only_when_exited_not_shutting_down() {
+        let fence = Fence::new();
+        let gen = fence.bump(); // gen=1
+        let mut pending = vec![PendingRequest {
+            id: "p".into(),
+            generation: gen,
+            state: RequestState::Pending,
+        }];
+        // 运行中：不触发。
+        assert!(
+            on_crash_detect(&fence, gen, &mut Running, pending.as_mut_slice(), false).is_none()
+        );
+        // 主动关闭：不触发、不 fail。
+        assert!(on_crash_detect(&fence, gen, &mut Crashed, pending.as_mut_slice(), true).is_none());
+        assert_eq!(pending[0].state, RequestState::Pending);
+        // 崩溃（非主动）：fail_all + bump → 返回新代 2。
+        let next = on_crash_detect(&fence, gen, &mut Crashed, pending.as_mut_slice(), false);
+        assert_eq!(next, Some(2));
+        assert_eq!(pending[0].state, RequestState::Failed);
+        assert_eq!(fence.current(), 2);
     }
 
     #[test]
