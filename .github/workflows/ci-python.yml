@@ -122,6 +122,12 @@ jobs:
         run: |
           uv run python scripts/check_thin_client.py --self-test
           uv run python scripts/check_thin_client.py
+      # P7 T9 (C14/C17; ADR-0007): lock the desktop shell's CSP + capabilities -- loopback-only connect-src,
+      # no inline scripts, object-src 'none', no fs/shell/http grants. fail-on-empty + --self-test prove red.
+      - name: Desktop CSP/capabilities lock (self-test proves it can go red)
+        run: |
+          uv run python scripts/check_desktop_csp.py --self-test
+          uv run python scripts/check_desktop_csp.py
 
   # P2 T20：平台分相真机跑 shell 工具的 DoD —— Windows 真 PowerShell、Ubuntu 真 bash；
   # 缺平台时对应测试自行 skip（不 fake 冒充覆盖）。
