@@ -162,6 +162,11 @@ def create_app(server: EventServer) -> FastAPI:
     """构建 FastAPI 应用：run/cancel/approve/permissions/events 全部只投 Command 或投事件。"""
     app = FastAPI(title="questor", version="0.1.0")
 
+    @app.get("/health")
+    async def health() -> dict:
+        """就绪探针（D-P7-B）：Rust 侧轮询本端口替代参考仓的 stdin `initialize`——只证 serve 面起来，不触碰任何状态。"""
+        return {"status": "ok"}
+
     @app.post("/run")
     async def run(payload: dict) -> dict:
         run_id = await server.start_run(payload.get("text", ""), payload.get("run_id"))

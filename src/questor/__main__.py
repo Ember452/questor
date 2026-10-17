@@ -5,6 +5,7 @@
 ``StorePort``/``MemoryStorePort`` 抽象（C4/C14）。
 
 - ``python -m questor``：交互 REPL（每轮真实落库到 store，支撑 resume）。
+- ``python -m questor --serve``：起 HTTP+SSE sidecar 服务（bind ``127.0.0.1:0`` + 写 bootstrap，ADR-0032）。
 - ``python -m questor --resume <run_id>``：从持久态续跑被 kill/重启的 run（P3）。
 - ``python -m questor --list``：列出未完成的 run id（供选择续跑）。
 - ``python -m questor --dream``：离线 Deep Dream 蒸馏（夜间批处理，把近期 daily 固化回 core）。
@@ -32,6 +33,8 @@ from questor.providers.store_memory_sqlite import SQLiteMemoryStore
 from questor.providers.store_sqlite import SQLiteStore
 from questor.surfaces._assembly import assemble_logging, log_dir_from_env
 from questor.surfaces.cli import CliSurface, interactive
+from questor.surfaces.http_sse import EventServer
+from questor.surfaces.serve import serve
 
 #: 组合根自述行 logger（一方 inline 记录；DoD A① 的"起手即有日志"靠它兑现）。
 _LOG = logging.getLogger("questor.composition")
@@ -70,6 +73,19 @@ def _model_from_env() -> str:
     在 litellm 的 ``request.model or self.model`` 里以非空真值 "echo" 覆盖 ``LiteLLMProvider`` 自带的
     ``QUESTOR_MODEL``，模型名就到不了真实供应商（P4 复审发现的接线缺陷）。"""
     return os.environ.get("QUESTOR_MODEL") or "echo"
+
+
+def _sidecar_generation_from_env() -> int:
+    """sidecar 代次由启动方（Rust 注入的 env）指定、默认 1；随 bootstrap 落盘作陈旧连接栅栏基（ADR-0032）。解析失败回落 1，绝不在装配期崩。"""
+    try:
+        return int(os.environ.get("QUESTOR_SIDECAR_GENERATION", "1"))
+    except ValueError:
+        return 1
+
+
+def _sidecar_bootstrap_from_env() -> str:
+    """bootstrap 落盘路径取自 ``QUESTOR_SIDECAR_BOOTSTRAP``（默认 ``<cwd>/.questor/sidecar-bootstrap.json``）；env 读属组合根职责。"""
+    return os.environ.get("QUESTOR_SIDECAR_BOOTSTRAP", str(Path.cwd() / ".questor" / "sidecar-bootstrap.json"))
 
 
 class _HeuristicDistiller:
@@ -124,6 +140,12 @@ async def _amain(argv: list[str]) -> int:
             mcp_json_path=Path(_mcp_json_from_env()),
             log_dir=Path(log_dir_from_env()),
         )
+        if argv and argv[0] == "--serve":
+            # sidecar 常驻服务：EventServer 复用已装配的 surface + store（surface 只持 StorePort 抽象，C4），
+            # serve 面只 bind loopback 临时口 + 写 bootstrap，不 import 具体 store（ADR-0032 / S6）。
+            server = EventServer(surface, store)
+            await serve(server, generation=_sidecar_generation_from_env(), bootstrap_path=Path(_sidecar_bootstrap_from_env()))
+            return 0
         if argv and argv[0] == "--list":
             unfinished = await store.list_unfinished_runs()
             for run_id in unfinished:
