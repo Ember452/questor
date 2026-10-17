@@ -31,3 +31,37 @@
   8. 网络 exporter / 远程收集：日志可能含 prompt 片段，网络出口是凭据外泄新表面积 → 否（永久红线，DESIGN §1 / HARD C12）。
 - provenance / 许可（改造思路 + 文件内标注，AGENTS §5.6；六仓均 MIT 兼容，autogen 代码走 `LICENSE-CODE`=MIT）：桥 depth 爬栈配方 + 按记录时间戳无状态日切 + LLM 独立 JSONL 通道/sha256/preview ← **DeepCode** `core/observability/bus.py:58-92`/`464-470`/`123-221`+`records.py`（MIT）；降噪白名单钉 WARNING + Unicode 安全 stderr + 幂等 `setup_logging` ← **hermes** `hermes_logging.py:216-227`/`147-163`/`326-404`（MIT，Windows 轮转死结 `:75-101` 为反面、不采纳其 CLH 解）；控制台/文件双级别 ← **MetaGPT** `metagpt/logs.py:40-52`（MIT）；路径不可写降级 console-only、import 期不崩 ← **CowAgent** `common/log.py:37-57`（MIT）；协议留内/sink 可独立发布/配置容器注入的**形状**参照 ← **cordis** `packages/core/src/logger.ts`（MIT，本仓不拆包）；结构化事件即日志行的自我描述风格参照 ← **autogen-core** `autogen_core/logging.py`（MIT code license）。
 - 关联：[`../log/DESIGN.md`](../log/DESIGN.md) §2/§9/§10/§16/§17；HARD-CONSTRAINTS C5（事件不反哺/协议 schema 零 diff）/C6（错误绝不静默）/C12（进程内、无网络 exporter）/C13（日志非第二真相）/C14（结构边界机器守）/C15（守卫可信）/C18（有界）；STRUCTURE S7；`.importlinter` 第五契约；ADR-0020（event_log 唯一真相、日志旁路镜像）/ADR-0011（seq 语义）/ADR-0028（`_settle_open_calls` 改名 → bind 落点）。
+
+## 复审修正（2026-10-17，刀 2 对抗式审计 → Issue #126–#139）
+
+全量跑过一遍所有路径后发现 3 个 BLOCKER + 6 个 MAJOR，其中四条**改本 ADR 的决策口径**（其余为纯缺陷修复，只
+进 Issue 与 `docs/log/BUGLOG.md`）：
+
+1. **D10 加“来源门”、root 不再降到 DEBUG**（#126/#129）：原决策“console INFO / file DEBUG”默认了 DEBUG 只给一方看，
+   而实现把 root 降到 DEBUG → aiosqlite 的 `executing <SQL> <参数元组>` 经桥落进主干文件，**prompt 与 checkpoint
+   原文整份写进日志**（D4 零原文被旁路、C13 退化）。修正取“默认拒绝”而非“逐库打名单”：非 `questor.*` 的记录有效
+   下界恒为 INFO，root 仅在 NOTSET 时定 INFO、另对 `questor` 子树显式定级。原方案“降噪名单只列小写 `litellm`”也属
+   无效（真实 logger 名是 `LiteLLM`，大小写敏感）。
+2. **节流不得吞错误：ERROR/CRITICAL 完全绕过节流窗，签名并入关联 `run_id` 与形状归一**（#128/#131）：原设计只写
+   “(logger, level, 指纹) 1s 窗合并”，未规定错误类例外，且实现用**完整 msg** 当指纹——两个方向都错：同秒两个 run 各
+   失败一次时，第二个 run 的 `run_failed` 在日志里**一行都没有**（违 C6）；而“同形状不同值”的风暴又零抑制。现有
+   PLAN T2.6 的“指纹”口径才是本意，本节把它定为强制规则并双向补测。
+3. **G-L11 从“承诺的 AST 守卫”变成存在的守卫**（#134/#137）：原 ADR 写“由 G-L11 AST 守卫守投影载荷键 ⊆ 白名单”，
+   实测**该守卫根本不存在**——往 `_DATA_KEYS` 加 `"arguments"`（工具入参）后 527 个用例与全部守卫仍绿。本轮新建
+   `scripts/check_projection_whitelist.py`（内联读键必须 ∈ 白名单 + 白名单不得含敏感键，双层，带 `--self-test`）并接入
+   CI；同时为错误/告警事件补 `message`/`reason`/`expected`/`current` 四个标量键（否则 WARNING 行级别对、内容空）。
+4. **装配口径单点化 + 窗尾刷新上生产**（#138/#136）：原写“组合根唯一调用”，但实际有两个装配点且参数不同（
+   `surfaces/cli.main()` 裸调 `configure_logging()` → 无文件面、payload 门被绕）；现收拢为
+   `surfaces/_assembly.assemble_logging()` 共用于两入口。另：`pipeline.flush()` 此前无生产调用点（只在测试里），现由
+   `atexit` + `_teardown`（先 flush 再注销 sink）接管。
+5. **新增纪律：“stdout 洁净”不只靠我们的 console sink 绑对流**（#127）：第三方库会给自己挂 handler 并直写
+   stdout（litellm 的 `LevelRoutingStreamHandler`：INFO/DEBUG → stdout，WARNING+ → stderr）。observability 的
+   降噪名单与级别门只能管“要不要生成记录”，管不住对方向哪个流写——所以定为**谁引入副作用谁治**：
+   在全仓唯一 import litellm 的 `providers/litellm_adapter.py` 里摘掉它写 stdout 的 handler（可见性不丢：那些
+   logger `propagate=True`，记录仍进 root 上的桥）。
+   本轮诚实记录一次误判：第一轮修法按“loguru sink”写（`remove()`/`add()`），实测抛 `AttributeError` 使判据
+   静默 skip——即“用假机制写了个永远不跑的绿色用例”。按实测推翻后重写，并补上不得 skip 的行为判据。
+
+未改结论但补记的边界（#130）：`contextvars` **不过 `threading.Thread`/进程边界**——真 run 里 80/85 行日志来自
+aiosqlite 工作者线程、`context` 恒空。这是语言事实不是 bind 的实现缺陷，纪律定为“跳线程/子进程必须显式传关联键”，
+并把 MCP 子进程的 `run_id` 注入方式锁为 P5 前置决策（原 §16.4 已列，本轮拿到实测证据）。归档见 `docs/log/BUGLOG.md`。

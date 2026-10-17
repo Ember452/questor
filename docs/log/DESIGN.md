@@ -52,7 +52,7 @@
 | D7 | 轮转 | **按记录自身日期推文件名**，无状态、跨进程天然安全；超阈值只告警不 rename | `RotatingFileHandler` → Windows 下第二进程持 append 句柄时 `os.rename` 必 `WinError 32`，文件钉死在阈值、每次 emit 刷 stderr |
 | D8 | 新依赖 | **不引入**（stdlib only）；`concurrent-log-handler` 因 D7 不再需要 | 引 loguru/structlog → 需维护 stdlib↔自有双栈桥接，且第二套 sink 语义与 D1 的"可抽包"争夺同一份治理逻辑 |
 | D9 | 落盘格式 | **JSONL**（机器可断言），人读视图由渲染器从同一 `LogEntry` 产出 | 纯文本 → 无法写"载荷脱敏"这类验收断言，只能人读 |
-| D10 | 级别策略 | **双档**：console `INFO` / file `DEBUG` | 单档 → 要么终端刷屏，要么落盘丢掉排障最需要的细节 |
+| D10 | 级别策略 | **双档**：console `INFO` / file `DEBUG`，但 **`DEBUG` 只对一方记录开**——非 `questor.*` 的记录有效下界恒为 `INFO`（来源门，见 §11）。root logger 也**不被降到 DEBUG**，只给 `questor` 子树定低级别 | 单档 → 要么终端刷屏，要么落盘丢掉排障最需要的细节；把 root 降到 DEBUG → 所有第三方库的参数级日志（含 aiosqlite 把 SQL+参数元组整个打出来）灌进主干文件，D4 的零原文当场被旁路 |
 | D11 | `fields` 值域 | **白名单标量**，非白名单对象当场 `TypeError` | 收 `object` → "不许把 `Run`/`Envelope` 塞进日志"只能靠 ADR 自律与 review 人眼 |
 | D12 | 脱敏点 | `LogEntry` 构造完成后、进 exporter 前的**唯一一处 filter** | 构造时脱敏 → 两个构造点两次会忘，且覆盖不到 `msg`/`fields`/`traceback` 三个面 |
 | D13 | exporter 异常 | **绝不上冒**：计数 + 一次性自我禁用 + stderr 一行 | 冒泡 → 一个磁盘满/文件锁把 agent loop 带崩，观测面拖垮被观测物 |
@@ -134,6 +134,15 @@ def bind(**kv: str | int | float | bool | None) -> Iterator[None]:
    串行补执行多个工具，而它跑在 `turn += 1` 之后——所以带内 `turn` 盖章仍覆盖得到，无需新增 bind 点。
 4. `turn` 每轮重盖章 ⇒ 号不可能漂移。这比"手工在 N 个地方 bind 一次"强，因为后者随代码演进必然漏点。
 5. `seq` **不在带内**（带内代码不知道 seq），只在带外投影里由 `Envelope.seq` 带上。
+6. **关联不过线程/进程边界（纪律，Issue #130）**：`contextvars` 只随 asyncio task 复制，不进入
+   `threading.Thread`，更不出进程。因此：
+   - 在工作者线程里打的日志（典型：aiosqlite 的 SQL 日志）**拿不到 `run_id`**——这是语言事实，
+     不靠包管理或额外锁去“补上”；它们本身也已因来源门不进主干，不是关联面的责任。
+     实测：未加来源门前一次真 run 的 85 行里 80 行来工作者线程且 `context={}`。
+   - **我们自己的代码跳线程/子进程时，关联键必须显式传**（`extra={"log_fields": {"run_id": ...}}`），
+     不得依赖 ambient `bind()`。
+   - P5 的 MCP server 是**子进程**，边界更严：`run_id` 注入方式（日志文件名还是首行前缀）必须在
+     `plan/05` 的 §0 扫描表里先定案，不得默认它能继承上下文。
 
 合规性说明：`S7` 原文"observability **可被各层调用**，但只依赖 contracts"，且 AST 检查器把 `observability` 列入 `CROSS_CUTTING`（"any layer may import these"）。**kernel → observability 的 import 是明文允许的**，本设计不与之冲突。真正的红线只在反向（见 §11）。
 
@@ -206,11 +215,20 @@ llm-<YYYYMMDD>.jsonl       可选独立通道，默认不写
 ```
 
 - **按日切，无 rename**（D7）。同一进程跨日自动换文件；文件名从记录自身 `ts` 推得 → 无状态、跨进程安全、**且天然可 GC**（删过期文件即可，无需读内容）。
-- **软阈值**：单文件超 `max_size_mb`（默认 50）→ 追加一条 `WARNING` 自告警 entry，**不做轮转/改名**。硬上限由"按日切 + 保留 N 天"提供。
+- **软阈值**：单文件超 `max_size_mb`（默认 50）→ 追加一条 `WARNING` 自告警 entry，**不做轮转/改名**。
+  硬上限由"按日切 + 保留 N 天"提供。**提级只对“当日”生效，不是进程终身制**（Issue #135）：字节预算按
+  记录日期分桶、三个 lane 都计入，换日自动回到调用方要求的 `file_level`——否则“第一天很噪”会把此后
+  所有分片永久降到 INFO，而除了 `logging_status()` 无处发现。
 - **保留期**：`QUESTOR_LOG_KEEP_DAYS` 默认 14；由 `configure_logging` 启动时懒清理一次，不在写路径删文件。
 - **`llm-<date>.jsonl` 独立成文件的理由是隐私而非整洁**：它是唯一可能含 prompt 截断 preview 的通道，独立文件才能单独授权、单独清理、单独在打包/分享诊断包时排除。
 - **best-effort 落盘**：日志目录不可创建/不可写（桌面装到 `Program Files` 下非管理员运行、或 CWD 只读）→ 降级为 console-only + **一次性** WARNING，**绝不在 import 期或启动期崩进程**。降级状态必须可查询（`logging_status()`），否则"日志没写"本身会变成一个待排的故障。
 - **只写 stderr，永不写 stdout**：`--list` 等机器可读输出走 stdout，带内 sink 走 stdout 会污染它。
+  **不只管我们自己怎么写**：第三方库会给自己挂 handler 并直写 stdout——litellm 用的
+  `LevelRoutingStreamHandler`（**是 stdlib Handler，不是 loguru**）按级别分流，INFO/DEBUG 落 stdout、
+  WARNING+ 落 stderr——所以"把 logger 钉到 WARNING"只能挡住一部分，消不掉绑在 stdout 上的那条流。
+  口径定为"谁引入副作用谁治"：在 `providers/litellm_adapter.py`（全仓唯一 import litellm 处）摘掉它
+  写 stdout 的 handler（Issue #127；可见性不丢——那些 logger `propagate=True`，记录仍进 root 上的桥）。
+  验收判据必须是白名单式“stdout 每行 ∈ 机器可读集”，带关键字的正则对第三方行天然免疫，不算判据。
 - **编码**：所有流包装 `errors="replace"`；stderr 非 UTF-8（Windows 中文 locale）时不得抛 `UnicodeEncodeError`。
 - **v1 同步写，不引 QueueListener**：buffered append 单行 µs 级，当前规模（每 run 数百行）不需要线程；`QueueHandler/QueueListener` 是 hermes 为多 handler 大体量引入的，在骨架期是**纯风险**（teardown 时 `join()` 是测试挂死的经典源，本项目已知进程/线程竞态教训）。**升级触发条件**（写进文档而非记忆）：`dropped_records>0` 或 p95 写延迟超标或出现真实现场证明写阻塞 loop。teardown 期 `ValueError("closed file")`/`OSError(EBADF)` 一律吞掉。
 - **跨进程行原子性的取舍**：Windows 上无跨进程锁的并发 append 可能交错；约束“单行一次 flush + `max_msg_chars`≤8KiB”把风险压到极小但非零。**接受 rare 交错**：JSONL 读取器跳过损坏行并计入 `malformed_lines`，不引跨进程锁（DeepCode 的按日无状态 sink 同样取此舍）。
@@ -219,11 +237,23 @@ llm-<YYYYMMDD>.jsonl       可选独立通道，默认不写
 
 ## 11. 装配
 
-`configure_logging(...)` 由**组合根唯一调用**（`__main__._amain` 起始处），四条现存入口（REPL / `--resume` / `--list` / `--dream`）共用。这是当前最严重的缺口：今天它只在 `interactive()` 里调用，而 `--resume` 恰恰是崩溃恢复场景——**最该有日志的路径没有日志**。
+`configure_logging(...)` 由**组合根唯一调用**。四条现存入口（REPL / `--resume` / `--list` / `--dream`）
+都经 `__main__._amain` 起手的装配；env 解析与 payload 门住在 `surfaces/_assembly.assemble_logging()`，
+第二个生产入口（`python -m questor.surfaces.cli`）**调同一个函数**——Issue #138 的教训：它以前裸调
+`configure_logging()`，既不建文件面也无视 `QUESTOR_LOG_*` 与 payload 门，"唯一装配口径"事实上碎成两半。
 
-- 幂等 + `force=True` 重配；重复调用不叠加 handler（否则每条日志打 N 遍）。
+- **root 不被降到 DEBUG**（D10/Issue #126）：那等于替全仓每个第三方库打开参数级日志，而参数里装着
+  prompt 与账本内容。root 仅在 NOTSET 时定在 INFO，另对 `questor` 子树显式 `setLevel(console/file 较低门)`
+  ——`Logger.callHandlers` 不遍历祖先级别，所以一方 DEBUG 照样能进桥。同时在管线侧加**来源门**做纵深
+  防御：非 `questor.*` 的记录有效下界恒为 INFO（逐个库打降噪名单永远追不上，默认拒绝才可扩展）。
+- **一方记录要自述**：装配完落一条 `questor.assembly` INFO（目录/门/是否降级），组合根再落一条
+  `questor.composition`（store/记忆库就绪）。DoD A① 的"起手即有日志"必须由一方记录兑现——
+  此前它能"绿"全靠第三方噪声凑数，而修完来源门后那些噪声就不来了。
+- 幂等 + `force=True` 重配；重复调用不叠加 handler（否则每条日志打 N 遍）。拆装配时**先 flush 窗尾、
+  再注销 sink**（顺序反了补行就无处可写），并在装配时注册 `atexit` flush（Issue #136：否则"窗尾补
+  repeated N times"只存在于测试里）。
 - **参数由调用方传入，日志器绝不自己读 config**：`observability ⟂ config` 是既有 independence 契约，且"配置由外部注入"正是可发布内核的必备形状（cordis 的 `_resolveConfig` 同构）。`QUESTOR_LOG_*` 这类环境变量的读取放在组合根，不放内核。
-- sidecar（`http_sse`）由宿主进程入口调用同一 `configure_logging`，不自配一套。
+- sidecar（`http_sse`）由宿主进程入口调用同一 `assemble_logging`，不自配一套。
 
 ---
 
