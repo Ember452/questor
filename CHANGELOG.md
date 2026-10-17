@@ -28,6 +28,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   真实外网 MCP server / 真 key 端到端、HTTP sidecar 带外投影仍标 **UNVERIFIED**（见 `docs/plan/05` §0.4）。
 - 许可/provenance：crewAI / DeepCode / hermes / CowAgent 改造（MIT，改造处文件内标 provenance）；`mcp` SDK MIT；EvoFlow evopanel 零接触。
 
+### Fixed
+
+- **`test_powershell_timeout_kills_parent_and_child` 在 UTF-8 模式下确定性报 `UnicodeDecodeError`**：
+  测试辅助 `_process_alive` 用 `check_output(..., text=True)` 解码 `tasklist` 输出；无匹配项时 tasklist
+  把提示写向 stdout 且用 OEM 代码页（zh-CN=cp936），开 `PYTHONUTF8`/PEP 540 时按 UTF-8 解码崩溃。
+  改为按字节在原始输出里查 ASCII PID，不再依赖子进程输出解码（与代码页/locale 无关）。
+  产品路径不受影响（`process_runner._read_stream` 早已 `errors="replace"`）。另见对应 GitHub Issue。
+
 ### Fixed — 日志骨架（刀 2）复审修正（分支 `fix/log-blade2-audit`；Issue #126–#139）
 
 把刀 2 的所有可走路径全量跑了一遍（真子进程、真 IO、真并发），发现并修掉 3 个 BLOCKER + 6 个 MAJOR + 4 个 MINOR：
