@@ -108,3 +108,37 @@ def test_turn_none_stays_out_of_context() -> None:
     e = project(_env(EventType.RUN_STARTED, turn=None))
     assert e is not None
     assert "turn" not in e.context
+
+
+# ---------------------------------------------------------------------------
+# Issue #137：错误/告警类事件的载荷键必须进日志（级别对、内容也要在）。
+# ---------------------------------------------------------------------------
+
+
+def test_warning_message_is_projected() -> None:
+    """``warning`` 的全部载荷就是 ``message``——丢了它就只剩 "event warning" 一行空级别。"""
+    e = project(_env(EventType.WARNING, {"message": "policy raised; rolling back turn (C10)"}))
+    assert e is not None
+    assert e.level is LogLevel.WARNING
+    assert "policy raised" in e.fields["message"]
+
+
+def test_resync_required_payload_is_projected() -> None:
+    e = project(_env(EventType.RESYNC_REQUIRED, {"reason": "seq gap", "expected": 4, "current": 7}))
+    assert e is not None
+    assert e.fields["reason"] == "seq gap"
+    assert e.fields["expected"] == 4
+    assert e.fields["current"] == 7
+
+
+def test_run_cancelled_reason_is_projected() -> None:
+    e = project(_env(EventType.RUN_CANCELLED, {"reason": "user"}))
+    assert e is not None
+    assert e.fields["reason"] == "user"
+
+
+def test_whitelisted_key_with_non_scalar_value_is_still_dropped() -> None:
+    """白名单扩了也不能开住值的口子：非标量一律不进（D11/G-L4）。"""
+    e = project(_env(EventType.WARNING, {"message": {"nested": "no"}}))
+    assert e is not None
+    assert "message" not in e.fields
