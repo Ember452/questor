@@ -79,7 +79,7 @@ desktop/
 ## 7. 落地边界补充（评审采纳 S1–S7）
 > 共同落点：**目录只是提示，真正防错靠 `.importlinter` 契约 + Port 抽象**——见 [HARD-CONSTRAINTS](./design/HARD-CONSTRAINTS.md) C14。
 - **S1 providers 命名**：`providers/` 含 LLM+存储+时钟/ID 的**适配器**，易被误读为"模型提供商列表"。保留名 + 放目录 `README.md` 说明"所有底层基础设施 Port 的实现"即可（不改名）。
-- **S2 capabilities 膨胀**：v1 只实现**内置 tools**；`skills/ mcp/ subagent/` **预留 stub**，早期不塞大量代码（对齐 ROADMAP P2/P5/P8）。
+- **S2 capabilities 膨胀**：P2 只实现内置 tools；P5 起 `mcp/`（官方 SDK 连接、远程工具→`ToolSpec`、per-run stderr+run_id 关联）与 `skills/`（`SKILL.md` 发现/加载/目录注入）落**实体**（`docs/plan/05`）；`subagent/` 仍为 stub 至 P8。
 - **S3 注册/注入必须落地**：policy/MCP 经注册表+端口挂进 kernel；**禁止 kernel 直接 import policy 具体实现**，由 import-linter 强制（非口头约定）。
 - **S4 抽象 vs 实现分家**：`contracts/` 只放**抽象 Port 协议 + 数据模型**；`providers/capabilities/policy` 放具体实现。实现写进 contracts 会让"最稳定层"持续膨胀、破 C11。
 - **S5 进程边界（Tauri）**：Python Harness 是**独立 sidecar 进程**，Rust 壳与它**只经 HTTP+SSE 事件协议通信**，**严禁进程内直调 Python 函数**（否则破"Shell 只消费事件"铁律）。
