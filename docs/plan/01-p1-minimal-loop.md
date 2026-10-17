@@ -170,7 +170,7 @@ P0 已产八层包骨架 + 分层三防线 + 冷导入/CI；P1 仅在 `pyproject
 → verify:故意返回不存在工具名 → 不崩、产 error、下一轮继续。
 
 ### T12 轻量可观测/错误栈（`observability/`，依赖 T2/T8）
-> **兑现状态（2026-10-16，日志刀 1 PR-A）：部分兑现**——装配缺口（`configure_logging` 覆盖四入口、`questor.bus` 报总线故障、console 绑 stderr）已由 `docs/log/PLAN.md` PR-A 补齐；**脱敏/节流/白名单/文件面/双通道汇流**随 PR-B（刀 2，`docs/log/DESIGN.md` 全套骨架、对抗评审门后）。规格真源已迁至 `docs/log/DESIGN.md`（原 `ErrorEntry` 路线由 `LogEntry` 中间表示取代，见 DESIGN D3）。
+> **兑现状态（2026-10-17，日志刀 2 PR-B / ADR-0027）：骨架已兑现**——装配缺口（四入口 + `questor.bus` 出声 + console 绑 stderr）由刀 1 PR-A 补齐；**双通道汇流（带内桥 + 带外投影）/ `LogEntry` 中间表示 / 白名单值域 / 脱敏 / 节流 / 关联 id（run_id/turn）/ 按日 JSONL 文件面（errors/llm 分流 + 软阈值降级）/ LLM 零原文观测 / G-L1..L12 守卫**由刀 2 PR-B（`docs/log/` 全套）落地，组合根 `__main__` 已接完整管线（运行时首次生效）。规格真源 `docs/log/DESIGN.md`（原 `ErrorEntry` 路线由 `LogEntry` 中间表示取代，见 DESIGN D3）。**仍随刀 3**：§14 `questor logs` 消费命令、`--log-payload` preview 实装、OTel/metrics。
 - 结构化日志 + `ErrorEntry` envelope 汇总（`layer∈{kernel,tool,provider,persist}`）+ 事件流即观测面；**只依赖 contracts、只读、不改状态**(S7)；热路径打点带节流窗（R08 E-P3）。
 → verify:observability import kernel/policy 实现被禁；错误事件载荷脱敏（不记凭据，R08 E-6）。
 

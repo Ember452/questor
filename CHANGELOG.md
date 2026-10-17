@@ -22,6 +22,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - 仓库治理：README、LICENSE、CONTRIBUTING、SECURITY、CODE_OF_CONDUCT、.github 模板与 dependabot、工程卫生配置。
 - 阶段计划：`docs/plan/02-p2-tools-permission.md`（P2 工具 + 权限 lite；按 2026-10-15 对抗审计全面修订，固化 Command Inbox、PermissionCtx 单一真源、capability floor、审批生命周期、Shell IR、ProcessRunner、有界 Artifact 与字段级投影）。
 
+### Added — 日志骨架（刀 2 / PR-B，ADR-0027；补 ROADMAP §1.5“轻量可观测从 P1 就落”的欠债）
+把日志从刀 1 的 console-only 升为完整“两入口 → 一个中间表示 → 一条治理管线 → 多个 exporter”闭环（`docs/log/DESIGN.md` 三层形状）：
+- **九内核文件**（零 `questor.*` 依赖、连 contracts 都不许，可整体抽包）：`entry`（`LogEntry` frozen + 白名单值域 fail-closed，D3/D11）、`scope`（`contextvars` `bind` 加键语义，D5/D6）、`redact`（唯一脱敏 filter、msg/fields/traceback 三面 fail-closed，D12）、`exporter`（协议 + 幂等注册）、`sink_console`（stderr、Unicode 安全）、`sink_file`（按记录 `ts` 日切 JSONL + `errors`/`llm` 分流 + 软阈值主动降级 + 懒清理 + 只读降级，D7/§16.3）、`bridge`（stdlib Handler→LogEntry、降噪白名单、§16.1 args 强转）、`pipeline`（脱敏→节流→级别→fan-out、exporter 异常绝不上冒 D13）、`configure`（参数化幂等装配 + `logging_status`、env-free）；适配层 `projection`（唯一 import contracts、Envelope→LogEntry 白名单载荷、live-only 丢弃、错误类非静默 C6）。
+- **组合根接线**（`__main__`）：读 env 族 `QUESTOR_LOG_DIR`/`QUESTOR_LOG_KEEP_DAYS`/`QUESTOR_LOG_LEVEL`/`QUESTOR_LOG_PAYLOAD`（preview 归刀 3、本期非 off 拒绝启动）传入 `configure_logging`——带内桥 + 按日文件面在生产运行时**首次生效**（此前 `__main__` 只调 console-only 兼容层，刀 2 管线是“写完没接线”的死代码，且半成品迁移把带外投影改走 pipeline 后无人接→`--resume` 零日志）。
+- **关联 id α′**（`kernel/loop.py`）：`_drive_controller` 两处 `bind`（run_id 整轮、turn 每轮从权威局部变量重盖章）→ inline 行携 `run_id`/`turn`（G-L5；`test_log_correlation_via_real_loop.py` 真 loop + 真 IO 锁死，注释 `bind(turn=...)` 即判红）。
+- **LLM 观测零原文**（`providers/litellm_adapter.py`）：每次 `stream` 结束（成功/失败/取消）产一条 `questor.llm` DEBUG 行，携 `provider/model/duration_ms/status/finish_reason/prompt_tokens/completion_tokens/request_sha256/response_sha256/error_class`，**无任何 prompt/响应片段**（D4/B⑤，`test_llm_observation_no_payload.py`）。
+- **守卫 G-L1/G-L2**：`scripts/check_log_kernel_isolation.py`（内核零依赖 + 类型不泄漏，含 `--self-test` 判红 + fail-on-empty + 抓动态 import，复用 `check_layering_ast` 单一 walker）接入 CI `boundaries` blocking job；`.importlinter` 第五契约同步。
+- 迁移：删 `observability/logging.py` 兼容层（`configure_logging` 迁至 `configure.py`、`log_event`/`error_from_failed_event` 由 `projection.log_envelope` 取代）及其 `test_configure_logging_idempotent.py`（G-L8 幂等由 `tests/unit/observability/test_configure.py` 承接）；`surfaces/cli.py` 走 `log_envelope` + `configure.configure_logging`。
+- provenance（改造思路 + 文件内标注，六仓 MIT/兼容，详见 ADR-0027）：栈桥日切 + LLM 通道/sha256 ← DeepCode；降噪白名单/幂等/Unicode ← hermes；双级别 ← MetaGPT；不可写降级 ← CowAgent；协议留内/容器注入形状 ← cordis；结构化事件行风格 ← autogen-core。
+- **刀 3 后置（未做，诚实标注）**：§14 `questor logs` 消费命令、`--log-payload` preview 实装、OTel/metrics；HTTP sidecar 路径的带外投影仍只在 CLI 消费者处挂（bus 级只读订阅为将来收口点）；`strip_prompt_echo` 仅纯函数 + 单测、接线后置。G-L7 跨进程按日写为 `[非阻塞·夜间]`、不入 PR 门。
+
 ### Added — P0 (interface skeleton)
 - `src/questor` 8-layer package skeleton with L0 contracts (commands/events/state-schema/policy/tool/ports) and stub base classes.
 - Mechanical layering guards: `.importlinter` + ruff `banned-api` + a self-written AST checker (dynamic imports, fail-on-empty, self-test).
