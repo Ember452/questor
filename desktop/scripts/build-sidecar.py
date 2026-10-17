@@ -10,6 +10,7 @@ onedir（非 onefile）：persistent 资源目录、无需系统 Python、避免
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -60,7 +61,27 @@ def main() -> int:
         cmd += ["--collect-all", pkg]
     cmd.append(str(_ENTRY))
     print("$ " + " ".join(cmd), flush=True)
-    return subprocess.call(cmd, cwd=str(_ROOT))
+    code = subprocess.call(cmd, cwd=str(_ROOT))
+    if code == 0:
+        _stage_for_bundle()
+    return code
+
+
+def _stage_for_bundle() -> None:
+    """把 onedir 产物拷到 tauri `bundle.resources` 期望的位置（step③输入），使 `tauri build` 能打包。
+
+    目标 `desktop/src-tauri/sidecar/questor-sidecar/`（与 tauri.conf resources + 壳 resolve 路径一致）。
+    """
+    src = _OUT / "dist" / "questor-sidecar"
+    dst = _ROOT / "desktop" / "src-tauri" / "sidecar" / "questor-sidecar"
+    if not src.is_dir():
+        print(f"warn: expected onedir output missing at {src}", file=sys.stderr)
+        return
+    # 不 rmtree：保留被跟踪的占位 README（使 tauri-build 在 clean checkout 下不因缺目录而失败），
+    # 只把 onedir 内容合并进去（dirs_exist_ok）。
+    dst.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, dst, dirs_exist_ok=True)
+    print(f"staged sidecar bundle for tauri at {dst}", flush=True)
 
 
 if __name__ == "__main__":

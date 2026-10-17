@@ -9,3 +9,6 @@ target/
 **/target/
 *.pdb
 *.exe
+# tauri 打包时由 build-sidecar.py 暂存的冻结产物内容不入库；仅保留占位目录（tauri-build 需路径存在）。
+src-tauri/sidecar/questor-sidecar/*
+!src-tauri/sidecar/questor-sidecar/README.md

@@ -159,6 +159,60 @@ pub fn on_crash_detect<P: Process>(
     None
 }
 
+/// sidecar 启动命令解析（§6-1 专项5：“发布态绝不回退系统 Python”）。
+///
+/// 优先级：**env 覆盖** `QUESTOR_SIDECAR_BIN`（指向冻结产物）→ **发布态资源目录内的二进制**（若存在）
+/// → **开发态** `python -m questor --serve`（仅当 env 与打包二进制都不在）。返回 (program, args)。
+/// 冻结产物入口自带 `--serve`，故 args 为空；开发态需 `-m questor --serve`。
+pub fn resolve_sidecar(
+    env_bin: Option<String>,
+    packaged: Option<std::path::PathBuf>,
+    dev_python: &str,
+) -> (String, Vec<String>) {
+    if let Some(bin) = env_bin.filter(|s| !s.trim().is_empty()) {
+        return (bin, vec![]);
+    }
+    if let Some(path) = packaged.filter(|p| p.exists()) {
+        return (path.to_string_lossy().into_owned(), vec![]);
+    }
+    (
+        dev_python.to_string(),
+        vec!["-m".into(), "questor".into(), "--serve".into()],
+    )
+}
+
+#[cfg(test)]
+mod resolve_tests {
+    use super::resolve_sidecar;
+
+    #[test]
+    fn env_override_wins_and_takes_no_args() {
+        let (prog, args) = resolve_sidecar(Some("/opt/questor-sidecar".into()), None, "python");
+        assert_eq!(prog, "/opt/questor-sidecar");
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn packaged_binary_used_when_present() {
+        let dir = std::env::temp_dir();
+        let exe = dir.join(format!("qs-packaged-{}", std::process::id()));
+        std::fs::write(&exe, b"x").unwrap();
+        let (prog, args) = resolve_sidecar(None, Some(exe.clone()), "python");
+        assert_eq!(prog, exe.to_string_lossy());
+        assert!(args.is_empty());
+        let _ = std::fs::remove_file(&exe);
+    }
+
+    #[test]
+    fn falls_back_to_dev_python_only_when_nothing_else() {
+        // env 空 + 打包二进制不存在 → 开发态 python -m questor --serve。
+        let missing = std::path::PathBuf::from("/nonexistent/questor-sidecar");
+        let (prog, args) = resolve_sidecar(Some("".into()), Some(missing), "python");
+        assert_eq!(prog, "python");
+        assert_eq!(args, vec!["-m", "questor", "--serve"]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

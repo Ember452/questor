@@ -16,6 +16,7 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "resources": ["sidecar/questor-sidecar"]
   }
 }

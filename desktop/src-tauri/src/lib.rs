@@ -8,7 +8,7 @@
 //! 诚实边界：真窗口渲染 / 全量 `tauri build` 需 WebView2 runtime + tauri CLI + 显示，本机无法验证 → UNVERIFIED。
 
 use questor_sidecar::backend::StdProcess;
-use questor_sidecar::{two_phase_shutdown, wait_ready, Fence, Shutdown};
+use questor_sidecar::{resolve_sidecar, two_phase_shutdown, wait_ready, Fence, Shutdown};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -40,8 +40,13 @@ fn bootstrap_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(".questor").join("sidecar-bootstrap.json"))
 }
 
-/// 启动（或重启）sidecar：bump generation → 设 env → spawn `python -m questor --serve` → 读 bootstrap → 就绪探测。
-fn start_sidecar(fence: &Fence) -> Result<(StdProcess, u16, u64, String), String> {
+/// 启动（或重启）sidecar：bump generation → 设 env → 按 resolve 出的 (program,args) spawn → 读 bootstrap → 就绪探测。
+/// program/args 由 `resolve_sidecar`（env→发布资源→开发态）决定；发布态不写死 `python`（§6-1）。
+fn start_sidecar(
+    fence: &Fence,
+    program: &str,
+    args: &[String],
+) -> Result<(StdProcess, u16, u64, String), String> {
     let generation = fence.bump();
     let bp = bootstrap_path();
     let _ = std::fs::remove_file(&bp);
@@ -49,8 +54,8 @@ fn start_sidecar(fence: &Fence) -> Result<(StdProcess, u16, u64, String), String
     std::env::set_var("QUESTOR_SIDECAR_BOOTSTRAP", &bp);
     std::env::set_var("QUESTOR_SIDECAR_GENERATION", generation.to_string());
 
-    let proc = StdProcess::spawn("python", &["-m", "questor", "--serve"])
-        .map_err(|e| format!("spawn sidecar: {e}"))?;
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let proc = StdProcess::spawn(program, &arg_refs).map_err(|e| format!("spawn sidecar: {e}"))?;
 
     let deadline = Instant::now() + BOOTSTRAP_WAIT;
     let boot = loop {
@@ -109,8 +114,23 @@ pub fn run() {
     let fence = Fence::new();
     tauri::Builder::default()
         .setup(move |app| {
-            let (proc, port, _gen, token) =
-                start_sidecar(&fence).map_err(|e| format!("sidecar start failed: {e}"))?;
+            // 解析 sidecar 可执行体：env 覆盖 → 发布态资源目录二进制 → 开发态 python（§6-1：发布态绝不回退系统 Python）。
+            let packaged = app.path().resource_dir().ok().map(|r| {
+                r.join("sidecar")
+                    .join("questor-sidecar")
+                    .join(if cfg!(windows) {
+                        "questor-sidecar.exe"
+                    } else {
+                        "questor-sidecar"
+                    })
+            });
+            let (program, args) = resolve_sidecar(
+                std::env::var("QUESTOR_SIDECAR_BIN").ok(),
+                packaged,
+                "python",
+            );
+            let (proc, port, _gen, token) = start_sidecar(&fence, &program, &args)
+                .map_err(|e| format!("sidecar start failed: {e}"))?;
             // webview 指向 loopback sidecar，并把会话 token 经查询注入（前端据此带 header）。
             // 先构 URL（借用 token），再 manage（移动 token）——避免借用/移动顺序错。
             let url: tauri::Url = format!("http://127.0.0.1:{port}/?token={token}")
