@@ -1,5 +1,8 @@
 """T2.11 带外投影 ``observability/projection.py`` 判例（DESIGN §7/§9；G-L11/C6/C5）。
 
+（文件名带 ``log_`` 前缀：pytest 以 basename 作模块名，需区别于事件投影单测
+``tests/unit/test_projection.py``〔kernel/events.project〕。）
+
 投影是**唯一允许 import questor.contracts 的文件**。覆盖：级别映射（错误类绝不静默 C6、里程碑
 INFO、余 DEBUG）、live-only 丢弃集（含补齐的 usage_delta/node_updated）、载荷只取白名单键
 （G-L11）、``source="event"``、经 pipeline 汇流。
