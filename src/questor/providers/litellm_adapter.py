@@ -3,7 +3,8 @@
 产出归一化的 ``StreamChunk`` 交内核定稿：text / reasoning / tool_call 片段 / usage /
 finish。按 R08 C 处理若干坑：usage 只要出现就读（不假设只在末块）、reasoning 多别名
 归一、tool_call 的参数分片按 index 透传交内核累积。``litellm`` 只在此 import
-（ruff banned-api 对 providers/* 豁免）。
+（ruff banned-api 对 providers/* 豁免），**它的 stdout 日志副作用也只在此治**（见
+``_tame_litellm_logging``，Issue #127）。
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import sys
 import time
 from collections.abc import AsyncIterator
 from typing import Any
@@ -22,6 +24,80 @@ from questor.contracts.common import JsonObject, thaw
 from questor.contracts.ports import ProviderPort, ProviderRequest, StreamChunk
 from questor.contracts.state_schema import Message, Role
 from questor.contracts.tool import ToolSpec
+
+#: litellm 自带 handler 的那几个包级 logger（都在 ``litellm._logging`` 里）。
+_LITELLM_LOGGERS: tuple[str, ...] = ("verbose_logger", "verbose_router_logger", "verbose_proxy_logger")
+
+
+def _writes_to_stdout(handler: logging.Handler) -> bool:
+    """该 handler 是否会把记录写向 stdout。
+
+    litellm 用的是它自己的 ``LevelRoutingStreamHandler``（stdlib ``logging.Handler``，**不是 loguru**）：
+    按级别分流——INFO/DEBUG 进 ``sys.stdout``，WARNING+ 进 ``sys.stderr``。所以 ``--list`` 的
+    机器可读 stdout 会被它的 DEBUG/INFO 行弄脏（Issue #127）。
+    """
+    stream = getattr(handler, "stream", None)
+    if stream is sys.stdout or getattr(stream, "name", "") == "<stdout>":
+        return True
+    return type(handler).__name__ == "LevelRoutingStreamHandler"
+
+
+def _tame_litellm_logging() -> int:
+    """摘掉 litellm 自带的 stdout 型 handler，返回摘掉个数（幂等；拿不到模块返回 -1）。
+
+    为什么要本模块动手（Issue #127；G-L10 / DoD A③）：observability 的降噪名单与级别门只能管
+    “要不要生成记录”，管不住第三方库自己把记录往哪个流写；而 ``--list`` 的 stdout 是机器可读输出，
+    被脏了后 ``questor --list | xargs questor --resume`` 这类用法直接坏掉。
+    摘掉不丢可见性：litellm 的 logger ``propagate=True``，记录仍会冒到 root 上我们的桥，由 console
+    sink 统一写 stderr（并且主干文件来由 pipeline 的来源门把关）——还顺带消除了双份输出。
+
+    为什么放在本文件：这里是全仓 **唯一** import litellm 的地方——谁引入副作用谁治；observability
+    内核绝不能 import 它（G-L1 零依赖）。整段 fail-soft：litellm 版本变动导致内部名字没了也不能
+    拖住 provider 装配。
+    """
+    try:
+        litellm.suppress_debug_info = True  # 不再转储请求/响应体
+    except Exception:  # noqa: BLE001 - 观测面设置失败不得影响请求路径
+        pass
+    try:
+        import litellm._logging as _ll
+    except Exception:  # noqa: BLE001
+        return -1
+    removed = 0
+    for name in _LITELLM_LOGGERS:
+        logger = getattr(_ll, name, None)
+        handlers = getattr(logger, "handlers", None)
+        if handlers is None:
+            continue
+        for handler in list(handlers):
+            if _writes_to_stdout(handler):
+                logger.removeHandler(handler)
+                removed += 1
+    return removed
+
+
+#: 装配时摘掉的 stdout handler 个数；-1 表示拿不到 ``litellm._logging``（版本变动）。
+_LITELLM_STDOUT_HANDLERS_REMOVED = _tame_litellm_logging()
+
+
+def litellm_stdout_handlers() -> list[tuple[str, logging.Handler]]:
+    """列出 litellm 各 logger 上**仍会写 stdout** 的 handler（供 #127 判据核对）。
+
+    为什么暴露这个而不是 logger 本身：tests/ 直接 import litellm 会破 banned-api（TID251），
+    而“不得往 stdout 写”这条判据必须能看见那些 handler。
+    """
+    try:
+        import litellm._logging as _ll
+    except Exception:  # noqa: BLE001
+        return []
+    out: list[tuple[str, logging.Handler]] = []
+    for name in _LITELLM_LOGGERS:
+        logger = getattr(_ll, name, None)
+        for handler in list(getattr(logger, "handlers", ()) or ()):
+            if _writes_to_stdout(handler):
+                out.append((name, handler))
+    return out
+
 
 # reasoning/thinking 在不同 provider 字段名各异，统一按这些键探测归一。
 _REASONING_KEYS = ("reasoning_content", "reasoning", "thinking")

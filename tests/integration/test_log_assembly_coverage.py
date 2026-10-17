@@ -30,11 +30,22 @@ from questor.state.snapshot import to_snapshot
 _REPO_ROOT = str(Path(__file__).resolve().parents[2])
 
 # 一条日志行的形状：format = "%(asctime)s %(levelname)s %(name)s: %(message)s"。
-_LOG_LINE_RE = re.compile(r"\b(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b.*questor")
+#
+# 旧写法 ``r"\b(DEBUG|INFO|...)\b.*questor"`` 对 stdout 污染天生免疫——它要求同一行里 level 之后
+# 再出现 ``questor``，而第三方库的行（如 ``09:46:53 - LiteLLM:DEBUG: logging_worker.py:561 - ...``）
+# 里 ``LiteLLM`` 在 ``DEBUG`` 之前，永不匹配。所以 A③ 的"stdout 零日志行"其实从未被断言到
+# （Issue #127）。现在改成白名单式：stdout 上只允许出现机器可读行，其余一律判污。
+_LOG_LINE_RE = re.compile(r"\b(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b")
+_STDOUT_OK = re.compile(r"^(\(no unfinished runs\)|run_[0-9a-z]+|deep_dream: .*)$")
+
+
+def _polluted_stdout(stdout: str) -> list[str]:
+    """返回 stdout 上不该出现的行（非空且不属于机器可读白名单）。"""
+    return [line for line in stdout.splitlines() if line.strip() and not _STDOUT_OK.match(line.strip())]
 
 
 async def _seed_resumable_run(store_path: str, run_id: str) -> None:
-    """落一条 ``run_started`` + turn 边界 checkpoint，使 ``--resume`` 能重建并 replay（触发 log_event）。"""
+    """落一条 ``run_started`` + turn 边界 checkpoint，使 ``--resume`` 能重建并 replay（事件经 ``log_envelope`` 投影）。"""
     store = await SQLiteStore(store_path).connect()
     run = Run(run_id=run_id, budget=Budget(max_turns=2, approval_timeout_seconds=1))
     run, _ = reduce(
@@ -93,22 +104,30 @@ def test_resume_has_stderr_log_lines(tmp_path: Path) -> None:
 
 
 def test_list_stdout_has_no_log_lines(tmp_path: Path) -> None:
-    """A③：``--list`` 的 stdout 只含 run id 哨兵，零日志行。"""
+    """A③/G-L10：``--list`` 的 stdout 只含机器可读行，零日志行。"""
     db = str(tmp_path / "state.db")
     proc = _run_cli(["--list"], db)
     assert proc.returncode == 0, proc.stderr
     assert "(no unfinished runs)" in proc.stdout, proc.stdout
-    # 任何日志行都绝不出现在机器可读的 stdout 上。
+    # 任何日志行（以及任何第三方库自带 sink 的输出）都绝不出现在机器可读的 stdout 上。
+    bad = _polluted_stdout(proc.stdout)
+    assert not bad, f"stdout polluted by non-machine-readable lines: {bad}"
     assert _LOG_LINE_RE.search(proc.stdout) is None, f"stdout polluted by log lines: {proc.stdout!r}"
 
 
 def test_dream_has_stderr_log_lines(tmp_path: Path) -> None:
-    """A①：``--dream`` 起手即有 stderr 日志行（装配覆盖四入口的另一证明）。
+    """A①：``--dream`` 起手即有**一方** stderr 日志行，同时 stdout 保持机器可读。
 
-    仅断言"进程不因缺日志装配而崩" + "若配置生效则 stderr 可见 questor 日志"。dream 走
-    _amain 起手的 configure_logging，即便无可萃取也有可观测装配面。"""
+    旧断言只查"进程不崩 + stdout 洁净"，于是装配生效但一条一方日志都没有也能绿——实测
+    ``--dream`` 的 stderr 当时是 0 行。"起手有日志"必须由 ``questor.*`` 记录兑现，不能靠第三方
+    噪声凑数（Issue #126 修后外来 DEBUG 已不进主干，凑数的噪声也没了）。
+    """
     db = str(tmp_path / "state.db")
     proc = _run_cli(["--dream"], db)
     assert proc.returncode == 0, proc.stderr
     # --dream 的机器输出（deep_dream: ...）走 stdout，不得有日志行；日志（若有）走 stderr。
+    bad = _polluted_stdout(proc.stdout)
+    assert not bad, f"stdout polluted: {bad}"
     assert _LOG_LINE_RE.search(proc.stdout) is None, f"stdout polluted: {proc.stdout!r}"
+    first_party = [line for line in proc.stderr.splitlines() if re.search(r"\bquestor\.[a-z]", line)]
+    assert first_party, f"--dream 的 stderr 没有一方日志行（装配或自述记录缺失）：\n{proc.stderr}"
