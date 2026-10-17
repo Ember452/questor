@@ -119,9 +119,19 @@
 - [ ] 偏差回填 ADR-0027 与本文 §7（实现偏差节）
 - [ ] §0 表行号终检（交付前防 stale）
 
-## 7. 实现偏差回填（执行期追加；本节规划期为空）
+## 7. 实现偏差回填（执行期追加）
 
-（无——实现开工后由执行者按 reality wins 回填。）
+**完成状态（2026-10-17，PR-B 刀 2 收尾）**：T1.1–T1.4 已合入（刀 1）；T2.0–T2.16 已落地。全量回归 **527 passed / 5 skipped 零回归**；ruff clean；lint-imports **5 kept**；protocol schema **20 types 零 diff**；六既有守卫 + 新 `check_log_kernel_isolation` self-test 全判红。闭环实证：`test_log_correlation_via_real_loop.py` 走真 loop + 真 IO，断言 inline 行落 `questor-<date>.jsonl` 并携 `run_id`/`turn`。
+
+**reality-wins 偏差**（不改设计结论，只记实现落点）：
+1. **LLM 观测级别 DEBUG（非 T2.13 文案的 `.info`）**：DESIGN §12/DoD B⑤ 要「llm 行不进 console、主干按 DEBUG 收录」——`.info` 会被 console（INFO 门）收下、与"不进 console"矛盾。故 `providers/litellm_adapter.py` 以 `questor.llm` logger 打 **DEBUG** 行；行为判据（§12）优先于文案措辞。sha256=对规范化请求 JSON / 累积响应块的哈希（零原文）。
+2. **带内 `turn` 盖章用 `ExitStack` 内联于 `_drive_controller`**：`bind` 是 `@contextmanager`，DESIGN §5.3 的「两处 `bind(...)`」以 `with ExitStack()` 承载——`run_id` 整轮 enter 一次、`turn` 每轮 enter（同名覆盖、号不漂移）、退出统一 reset 不泄漏进调用方 task。落点仍在 `_drive_controller` 两处，语义与 α′ 一致。
+3. **组合根由兼容层切到新 `configure.configure_logging`**：`__main__`/`cli.main` 均改调 `observability.configure.configure_logging`（装桥 + console + 文件 sink），不再用 `observability.logging` 兼容层（刀 2 收尾已删该兼容层 + 其 `test_configure_logging_idempotent.py`，G-L8 幂等由 `test_configure.py` 承接）。`QUESTOR_LOG_PAYLOAD` 非 off 值按 T2.14 拒绝启动（preview 归刀 3）。
+4. **带外投影仍挂在 surfaces 消费者（非 bus 只读订阅）**：沿用 T2.11 已提交的 `log_envelope`（在 `cli._stream` 消费点调用），未改为 bus 级订阅——避免与既有消费者双重投影。后果：HTTP sidecar 路径的带外投影暂未覆盖（inline 关联因 loop bind 仍生效）。收口点记为刀 3/backlog，CHANGELOG 诚实标注。
+5. **测试隔离修复**：新增 `test_log_correlation_via_real_loop.py`、`test_llm_observation_no_payload.py` 用快照/还原 fixture 回滚进程级装配；`test_composition_root_model.py`（在进程内跑 `_amain`）补装 `QUESTOR_LOG_DIR=tmp` + 回滚 root/exporter/pipeline/`_state`，否则装配单例泄进后续用例。另修 pytest basename 冲突：`observability/test_projection.py` → `test_log_projection.py`（区别于事件投影 `tests/unit/test_projection.py`，此为 T2.11 引入、因 T2.16 从未跑而漏检的潜在回归）。
+6. **§0 扫描重验（T2.0）**：本轮以既有 DESIGN §19/PLAN §0 锚点为准，未再逐行 `file:line` 复验外部参考仓（本任务不搬新码，仅接线）；随 PR-B 合入前按 AGENTS §4.5 复核。
+
+**未进本 PR 门（诚实边界，§4）**：G-L7 跨进程按日写标 `[非阻塞·夜间]`、Windows 门控；真 key 下多 provider 4xx 回显脱敏效果 UNVERIFIED；`strip_prompt_echo` 仅纯函数 + 单测、接线后置。
 
 ## 8. 依赖图与时序
 

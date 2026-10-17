@@ -32,9 +32,10 @@
 | [0024](./0024-memory-contract-evolution.md) | 记忆契约演进：typed `WriteMemory` + `memory_written` 事件 + `recovery_pointers` covered_hash + 快照 v3 | ✅ |
 | [0025](./0025-memory-distill-atomicity.md) | Deep Dream 离线蒸馏的单写者边界与原子性纪律 | ✅ |
 | [0026](./0026-memory-retrieval-bounded-projection.md) | 混合检索栈（rank-normalize 融合/时间衰减/降级）与有界投影 | ✅ |
+| [0027](./0027-observability-logging-foundation.md) | 日志骨架：双通道 + LogEntry 中间表示 + 零原文载荷 + 按日切 + 主动降级（补债，实现见 `docs/log/` 刀 2） | ✅ |
 | [0028](./0028-pairing-gate-and-provider-fault-normalization.md) | 回发前配对关卡（provider 请求唯一闸口）+ provider 故障归一终态；接上 ADR-0010/plan-01 T4 的错误归一 | ✅ |
 
-> **0027 为预留号**：已分配给日志骨架刀 2（详 [`../log/PLAN.md`](../log/PLAN.md) §6、[`../log/DESIGN.md`](../log/DESIGN.md) §17），尚未落文件；其它决策不得占用。
+> **0027 已落地**（原为日志骨架刀 2 预留号）：详 [`../log/DESIGN.md`](../log/DESIGN.md) §17、[`../log/PLAN.md`](../log/PLAN.md) 刀 2。
 
 ## 模板
 ```

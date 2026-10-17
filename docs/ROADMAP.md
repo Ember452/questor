@@ -33,10 +33,10 @@
 ### 1.5 Phase 落地备注（约束写备注、上表保持简洁）
 - **P0**：只产**接口桩(stub)**，无业务逻辑、**不能跑 Agent 任务**；可跑从 P1 起（R5）。
 - **P2**：v1 主干**串行工具**；`parallel_safe` 仅 schema 占位，**完整并行后置 P5**（R7）。
-- **P5**：进入条件以 **P3**（MCP 调用需账本/持久化）；早期可只做**适配器 stub**（R小文本）。
+- **P5**：进入条件以 **P3**（MCP 调用需账本/持久化）；早期可只做**适配器 stub**（R小文本）。**新增前置：日志骨架刀 2 已合入（ADR-0027）**——B①–B⑧ 为其进入条件；且 P5 的 `plan/05` §0 扫描表**必须含"MCP server stderr 重定向到独立文件 + spawn 侧注入 `run_id`（文件名或首行标记）"决策**（`contextvar` 不跨进程、不能继承 `bind`，详 DESIGN §16.4），不假装骨架能解决子进程关联。
 - **P7**：“可早接”=**只做极简调试面板、仅消费外部事件协议**，**禁止把业务/状态/校验下沉到 Shell**（R1）。前端**尽量改造参考项目已有 UI 代码**（**同栈优先：DeepCode Tauri v2 `web`+`src-tauri` + EvoFlow `evopanel`(Tauri+pnpm)**；GenericAgent(tauri)、Cow/wuu/hermes 的 Electron 前端可迁 Tauri；hermes `web`/`ui-tui` 与 wuu `clients/` 参照），**仓库列表以 `project-main/` 目录当下为准、写计划前重看**，复用后仍守“瘦客户端、零业务下沉”（AGENTS §4.5）。
 - **P4**：记忆走 **Command→Reduce→StorePort**、算法作可插拔策略不耦合 Kernel；**依赖 P3、不提前做**（R3）。**P4 落定修正**：① daily 生产者 = 显式 `WriteMemory` + run-完成边界 flush（压缩丢弃→L2' 蒸馏活路随 `disable_compaction=True` 后置 P10，ADR-0025）；② `PolicyView.memory` 自动填充会耦合进 L2 内核、违"换策略不动 loop"，故 P4 的 DoD④ 由可插拔 `MemoryStrategyConfig` + `memory_search` 工具承载，policy 仅作 L4 消费 `view.memory` 的接缝示例。
-- **P10**：横切 concern——**轻量可观测/错误栈从 P1 就落**；完整可恢复压缩、回归评测套件后期（R4）。
+- **P10**：横切 concern——**轻量可观测/错误栈从 P1 就落**（**已由日志骨架刀 2 落地，ADR-0027**：双通道 + `LogEntry` + 脱敏/节流/关联 id/按日文件面；此前 ROADMAP 373 文件规划里 observability **零配额**是它欠债到 P4 之后的结构性原因，本行起记其文件配额归口）；追踪面板 / `questor logs` 消费命令 / OTel/metrics / `--log-payload` preview 实装随**刀 3**（DESIGN §14）；完整可恢复压缩、回归评测套件后期（R4）。
 - **契约占位在前期**：MCP/子agent/多模态的 ToolSpec/事件 type/state 字段，**P0-P2 先写 draft/unimplemented 占位**，别等 P5/P6 回头改 02/03 造成破坏性变更（R2）。
 
 ## 2. v1 范围建议（最优：先把"可长期演进的核心"做扎实，重且不确定的后置）

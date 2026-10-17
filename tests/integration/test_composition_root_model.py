@@ -11,11 +11,15 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 from questor import __main__ as questor_main
 from questor.contracts.ports import ProviderPort, ProviderRequest, StreamChunk
+from questor.observability import configure as log_configure
+from questor.observability import exporter as log_exporter
+from questor.observability import pipeline as log_pipeline
 from questor.surfaces.cli import CliSurface
 
 
@@ -44,7 +48,20 @@ async def _capture_surface(tmp_path: Path, monkeypatch, argv: list[str]) -> CliS
     monkeypatch.setenv("QUESTOR_STORE_PATH", str(tmp_path / "state.db"))
     monkeypatch.setenv("QUESTOR_MEMORY_DB", str(tmp_path / "memory.db"))
     monkeypatch.setenv("QUESTOR_MEMORY_ROOT", str(tmp_path / "memory_store"))
-    await questor_main._amain(argv)  # noqa: SLF001 - 组合根入口本身就是被测对象
+    monkeypatch.setenv("QUESTOR_LOG_DIR", str(tmp_path / "logs"))  # 组合根会建文件面，别落在仓库 cwd
+    # ``_amain`` 起手装完整日志装配（带内桥 + console + 文件 sink），是进程级单例；跑完必须整体回滚，
+    # 否则残留的桥/console 泄进后续 ``test_configure`` 用例（幂等断言变 2 桥）。T2.14 引入的行为。
+    root = logging.getLogger()
+    saved = (list(root.handlers), root.level, list(log_exporter._registry), log_configure._state)
+    try:
+        await questor_main._amain(argv)  # noqa: SLF001 - 组合根入口本身就是被测对象
+    finally:
+        log_configure._teardown()  # noqa: SLF001
+        root.handlers[:] = saved[0]
+        root.setLevel(saved[1])
+        log_exporter._registry[:] = saved[2]
+        log_configure._state = saved[3]
+        log_pipeline.reset()
     return captured["surface"]
 
 
