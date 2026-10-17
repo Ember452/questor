@@ -26,6 +26,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from questor.contracts.events import EventType
+from questor.kernel.events import EXTERNAL_EVENT_FIELDS
 
 SCHEMA_PATH = Path("protocol/event.schema.json")
 
@@ -55,6 +56,33 @@ def _branch_types(schema: dict) -> set[str]:
     return branches
 
 
+def _def_prop_names(def_body: object) -> set[str]:
+    """一个 type 的 $defs 体内声明的属性名集（非对象/无 properties → 空集）。"""
+    if isinstance(def_body, dict):
+        props = def_body.get("properties")
+        if isinstance(props, dict):
+            return set(props)
+    return set()
+
+
+def _field_drift(schema: dict) -> list[str]:
+    """字段级漂移（C15 / design/02 §6）：每个 type 的 `$defs` 属性名集必须 == contracts 的 `EXTERNAL_EVENT_FIELDS` 白名单键集。
+
+    这是把三处 lockstep 从“type 集”下推到“字段集”的门：改名/增删字段只改 schema 不改 contracts（或反之）就判红。
+    白名单为 `None`（尚未定形的透传 draft，当前无）跳过，不强行要求。
+    """
+    defs = schema.get("$defs", {})
+    drift: list[str] = []
+    for t in sorted(_contract_types()):
+        allowed = EXTERNAL_EVENT_FIELDS.get(t)
+        if allowed is None:
+            continue
+        props = _def_prop_names(defs.get(t))
+        if props != set(allowed):
+            drift.append(f"field drift on '{t}': schema $defs props {sorted(props)} != contracts whitelist {sorted(set(allowed))}")
+    return drift
+
+
 def check() -> int:
     schema = _load_schema()
     Draft202012Validator.check_schema(schema)  # raises if malformed
@@ -74,7 +102,12 @@ def check() -> int:
     if branches ^ contract:
         print(f"if/then branch coverage mismatch vs EventType: {sorted(branches ^ contract)}", file=sys.stderr)
         return 1
-    print(f"protocol schema OK: {len(contract)} event types in lockstep (enum + $defs + branches)")
+    drift = _field_drift(schema)  # 字段级：$defs 属性集 == contracts 白名单键集
+    if drift:
+        for line in drift:
+            print(line, file=sys.stderr)
+        return 1
+    print(f"protocol schema OK: {len(contract)} event types in lockstep (enum + $defs + branches + per-type field sets)")
     return 0
 
 
@@ -138,8 +171,17 @@ def self_test() -> int:
     drift = set(_schema_types(schema)) | {"bogus_event"}
     detects = drift != contract
 
-    ok = not bad_accept and not bad_reject and detects
-    print(f"self-test: valid_all_pass={not bad_accept} ({bad_accept}) bad_all_reject={not bad_reject} ({bad_reject}) detects-drift={detects}")
+    # 字段级门能判红：把某 type 的 $defs 属性改名（不动 contracts）→ _field_drift 必报；不改则不报。
+    field_ok_when_aligned = not _field_drift(schema)
+    import copy
+
+    tampered = copy.deepcopy(schema)
+    mc = tampered["$defs"]["message_completed"]["properties"]
+    mc["final_text_TAMPERED"] = mc.pop("final_text")  # 只改 schema 字段名
+    field_drift_caught = bool(_field_drift(tampered))
+
+    ok = not bad_accept and not bad_reject and detects and field_ok_when_aligned and field_drift_caught
+    print(f"self-test: valid_all_pass={not bad_accept} ({bad_accept}) bad_all_reject={not bad_reject} ({bad_reject}) detects-drift={detects} field-lockstep-green={field_ok_when_aligned} field-drift-caught={field_drift_caught}")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 
