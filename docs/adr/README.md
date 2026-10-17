@@ -36,6 +36,7 @@
 | [0028](./0028-pairing-gate-and-provider-fault-normalization.md) | 回发前配对关卡（provider 请求唯一闸口）+ provider 故障归一终态；接上 ADR-0010/plan-01 T4 的错误归一 | ✅ |
 | [0029](./0029-parallel-tools-deferred-beyond-p5.md) | `parallel_safe`/`barrier` 从 P5 移出、推迟到专门的并行化 Phase（P5 执行严格串行）；修正 ADR-0028「并行归 P5」一句 | ✅ |
 | [0030](./0030-adopt-official-mcp-sdk.md) | MCP 客户端采用官方 `mcp` Python SDK（stdio transport）；依赖随首个真连接提交落地，env/凭据/账本/配对仍在 Harness | ✅ |
+| [0031](./0031-reference-repo-reuse-no-attribution.md) | 参考仓复用已获全体作者授权；取消文件内 provenance/许可标记要求（P0–P5 既有记录保持不变，仅面向未来）；同步修订 AGENTS §4.5/§5.6 + CONTRIBUTING | ✅ |
 
 > **0027 已落地**（原为日志骨架刀 2 预留号）：详 [`../log/DESIGN.md`](../log/DESIGN.md) §17、[`../log/PLAN.md`](../log/PLAN.md) 刀 2。
 

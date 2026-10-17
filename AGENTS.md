@@ -58,9 +58,9 @@ GenericAgent, Agent-S. **Re-list `project-main/` at plan time** (new repos appea
   battle-tested, in one of them.
 - **If a peer has a proven / better implementation, adapt and reuse it** rather than writing fresh — lower
   bug risk. **Do not trim scope or cut corners to save code volume** (volume is explicitly not a concern).
-- Guardrails: keep it behind the correct layer / port (HARD-CONSTRAINTS C1/C14); respect each project's
-  **license + attribution** — when actually porting code, mark provenance in-file (never present others'
-  code as our original); prefer adapting to our contracts over verbatim copy.
+- Guardrails: keep it behind the correct layer / port (HARD-CONSTRAINTS C1/C14). **All sibling-repo
+  authors have authorized reuse and waive attribution** — adapted/ported code is merged in as our own and
+  carries **no in-file source / license / attribution markers**; prefer adapting to our contracts over verbatim copy.
 - Record it in the plan, per capability: which repos scanned, `file:line`, verdict (reuse / adapt / write-fresh + why).
 - **Frontend especially:** for the desktop/web UI (React/Svelte + TS, Tauri), strongly prefer **adapting
   existing UI code from the reference repos** over writing fresh — chat/streaming render, SSE event-subscribe
@@ -70,7 +70,7 @@ GenericAgent, Agent-S. **Re-list `project-main/` at plan time** (new repos appea
   to Tauri; hermes `web/`/`ui-tui/` and wuu `clients/` for reference. Re-check the repo list at plan time —
   new UI-bearing repos may appear. Still keep the iron rule:
   **UI is a thin client that only consumes the event protocol — never sink business/state/validation into the
-  shell** (C14/ADR-0007); preserve license + attribution.
+  shell** (C14/ADR-0007).
 
 ## 5. Quality Bar (Definition of Done) — never "looks done", only "verifiably works"
 A change is done only when, as applicable: it **compiles + passes tests + lints clean + cold-imports
@@ -112,11 +112,10 @@ Chinese**. Detailed conventions live in [`CONTRIBUTING.md`](./CONTRIBUTING.md)�
 - **File/module header**: one-line responsibility + which layer (L0–L7) it belongs to + what it may import.
 - **Docstring (Chinese) on every public class / Port / function**: what it does, how to use it, dependencies,
   invariants / pre-post conditions, and **failure semantics**.
-- **Explain *why*, not *what*** at non-obvious decisions. Cite references inline: `ADR-0005`, `HARD C2`,
-  `参照 wuu internal/loopdriver/contract.go:14-76`.
+- **Explain *why*, not *what*** at non-obvious decisions. Cite **our own** artifacts inline: `ADR-0005`,
+  `HARD C2`, `docs/design/02-event-protocol.md §10` (do NOT cite reference-repo sources — see §4.5).
 - **Mandatory comments** at: permission checks, fail-closed branches, cancel/rollback paths, event-persistence
-  boundaries, concurrency/gate code, and anywhere code was adapted from a reference repo (**must note source +
-  license**, §4.5).
+  boundaries, and concurrency/gate/lease code.
 - **No bare `TODO`**: every TODO/FIXME carries context + owning Phase/ADR; `NotImplementedError` states which
   phase implements it.
 - Don't comment self-evident lines (§2); **when behavior changes, update its comment** — a stale comment is a
