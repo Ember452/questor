@@ -12,7 +12,7 @@
   5. **验证诚实**：**用两个真 OS 子进程共享一套 SQLite 的集成测试端到端验**（本机 Windows 可跑）：两进程对同一 run 争租约只一个赢、同 `delivery_id` 二次 claim/ack 幂等、崩溃重启不留孤儿双回灌 → DoD⑦ 升为**"单机多进程 = 已验证"**；**跨机故障切换 = UNVERIFIED（不冒充）**。
   6. **schema 单一 authority**：新表进 `store_sqlite._SCHEMA` 幂等 `IF NOT EXISTS`、`store_schema_version` 递增、读时未知版本 fail-closed（承 [`ADR-0022`](./0022-dual-cursor-watermark.md)）；写路径继续 `BEGIN IMMEDIATE`（C2）。
 - 后果：
-  - 正面：还 P8 欠债（ADR-0021/0038 明写"P9"）；单机多进程 exactly-once 有真判据；与 [`ADR-0043`](./0043-openai-compat-projection-adapter.md) 咬合——鉴权外部 API lane 作独立进程跑正是本 run-lease 防双驱的首个真实单机多进程消费者；投递视图从事件派生不新增第二真相。
+  - 正面：还 P8 欠债（ADR-0021/0038 明写"P9"）；单机多进程 exactly-once 有真判据；run-lease 的**生产消费者 = resume 驱动路径**（`CliSurface.resume`/`EventServer.resume` 前取租约、收尾释放、他方持有则 409/None 拒）——独立复核 MA-2 后已真接线（非"原语无人调"）；外部 API lane 每请求起新 run_id、无冲突故不取租约；投递视图从事件派生不新增第二真相。
   - 代价 / 需持续守：多一张投递/租约物化视图需与事件流同步（重建逻辑）；lease TTL/heartbeat 参数经配置（只增不改）；跨机永远另记 ADR；`--self-test` 覆盖投递/租约幂等。
 - 备选(被否)：
   1. 现在就上跨机分布式锁/共识 → 否（C12/天花板：跨机排序是独立硬骨头，提前做拖累）。

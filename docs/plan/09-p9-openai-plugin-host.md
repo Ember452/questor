@@ -4,7 +4,7 @@
 > **§0 未填完 = 本 Phase 计划未就绪、不能开工**（ROADMAP §0 硬门槛）。
 > 本文最初为 **READ-ONLY 规划产物**；**两路对抗式评审已执行并收口（见 §4.3，M1/M2/S1/S2/S3/R1 全关）**，Blocker/Major 已闭 → 已按 ADR-0012 建 worktree 分支 `feat/p9-openai-plugin-host`（基线 `090e5cb`）进入实现。
 > **实现状态（2026-10-18）**：T0–T11 已全序落地、每条 TDD 先红后绿、每步过守卫、细粒度原子提交；详 §9 落地偏差回填。push/merge 逐次征询（PR-only）。
-> 状态：`docs/plan/09-p9-openai-plugin-host.md`，基于 `main` HEAD `090e5cb`（PR #149 合入 P8）。ADR-0043~0047 已落册转正。测试基线：继承 P8 `739 passed / 5 skipped`；P9 收尾 **797 passed / 5 skipped**（+58 用例）。
+> 状态：`docs/plan/09-p9-openai-plugin-host.md`，基于 `main` HEAD `090e5cb`（PR #149 合入 P8）。ADR-0043~0047 已落册转正。测试基线：继承 P8 `739 passed / 5 skipped`；P9 收尾 **800 passed / 5 skipped**（+61 用例）。
 > 规范：Conventional Commits 标题**小写动词开头**（`feat: add …`），CI `pr-lint` 会拦；commit/push **逐次征求许可**（AGENTS §6，绝不擅自提交/推送）。
 
 ---
@@ -260,7 +260,7 @@
 - **安全硬边界**（OpenAI wire 无审批通道→必钉）：经本 lane 起 run 采保守权限默认（`permission_mode=default`、`ask` 工具**超时 fail-closed deny**、lane 工具 capability floor 默认收窄，高危 write/exec 不因"外部可调"降 allow，承 C17）。
 
 **D-2 ✅ 已拍板（用户 2026-10-18）：取全局最优、为后续大扩展铺路的最完整底座。**
-- 定夺：**建完整、可演进的 durable claim/delivery_state 账本 + 单机多进程 run lease**（接口按"未来跨机=换后端非重构"设计，但**本 Phase 仍不实现跨机**，C12）；**真接 `ReportChildTerminal`/投递路径**；**用两个真 OS 子进程共享一套 SQLite 在集成测试里端到端验单机多进程**（本机 Windows 可跑）→ DoD⑦ 升 **"单机多进程=已验证"**、**跨机=UNVERIFIED（天花板）**。与 D-1 咬合：鉴权外部 API lane 若作独立进程跑，正是本 run-lease 防双驱的首个真实单机多进程消费者。落 **ADR-0047**。
+- 定夺：**建完整、可演进的 durable claim/delivery_state 账本 + 单机多进程 run lease**（接口按"未来跨机=换后端非重构"设计，但**本 Phase 仍不实现跨机**，C12）；**真接 `ReportChildTerminal`/投递路径**；**用两个真 OS 子进程共享一套 SQLite 在集成测试里端到端验单机多进程**（本机 Windows 可跑）→ DoD⑦ 升 **"单机多进程=已验证"**、**跨机=UNVERIFIED（天花板）**。与 D-1 咬合：run-lease 的**生产消费者 = resume 驱动路径**（`CliSurface.resume`/`EventServer.resume` 前取租约、收尾释放、被他方持有则 409/None 拒）；外部 API lane 每次起**新 run_id** 无冲突故不取租约。落 **ADR-0047**。
 
 **D-3 热插拔是否新增 `tools_changed` 事件类型？**
 - 选项：(a) **additive 新增 `tools_changed`（domain: tools|skills|mcp|plugins|settings），承 design/02 §7 预留名（推荐）**；(b) 用现有 `warning` 携带变更、不新增类型。
@@ -275,7 +275,7 @@
 ## 9. 落地偏差回填（实现收尾，AGENTS §5.5 Reality-wins，2026-10-18）
 
 - **实际 vs 计划**：T0–T11 全序落地，无偷工减料。**两处计划内细化**：① T1/T2 的事件 additive（`tools_changed` + `run_started.policy_ref`）合并为一个 lockstep 提交（含 TS codegen + `check_protocol_schema` fixture 扩面），避免跨提交留协议守卫判红（"每 commit 绿"优先于"按 T 边界切开"）；② `--serve-openai` 外部 lane 的组合根入口在 T6c 之后补，默认 loopback + fail-closed（无 key 拒起），与 ADR-0043 一致。
-- **已机器验证**：`test_openai_wire`(11)/`test_openai_projection`(4)/`test_openai_endpoint`(5：流式+聚合+401 fail-closed+400 非文本拒+断连→Cancel)/`test_policy_registry`(7)/`test_policy_assembly`(4)/`test_plugin_host`(8)/`test_capability_generation`(3)/`test_claim_delivery_lease`(4)/`test_run_lease_multiprocess`(1：**两真 OS 子进程共享 SQLite 端到端验单机多进程单写者**)/`test_p9_policy_hotswap`(1)/`test_tools_changed_lockstep`(5)。全量 **797 passed / 5 skipped**（继承 P8 739 + P9 新增 58）。守卫全绿：协议 23 types lockstep、新 `check_openai_compat_schema --check/--self-test`（进 `boundaries`）、`check_layering_ast` 0 违规（114 文件）、replay 5 fixtures、projection whitelist、cross-run no-bypass、secret-projection、output-budgets、verify_p0 冷导入；全树 ruff clean。信封/关联键/终止序零动、`v` 不 bump、四处 lockstep。
+- **已机器验证**：`test_openai_wire`(11)/`test_openai_projection`(4)/`test_openai_endpoint`(5：流式+聚合+401 fail-closed+400 非文本拒+断连→Cancel)/`test_policy_registry`(7)/`test_policy_assembly`(4)/`test_plugin_host`(8)/`test_capability_generation`(3)/`test_claim_delivery_lease`(4)/`test_run_lease_multiprocess`(1：**两真 OS 子进程共享 SQLite 端到端验单机多进程单写者**)/`test_p9_policy_hotswap`(1)/`test_tools_changed_lockstep`(5)。全量 **800 passed / 5 skipped**（继承 P8 739 + P9 新增 61）。守卫全绿：协议 23 types lockstep、新 `check_openai_compat_schema --check/--self-test`（进 `boundaries`）、`check_layering_ast` 0 违规（114 文件）、replay 5 fixtures、projection whitelist、cross-run no-bypass、secret-projection、output-budgets、verify_p0 冷导入；全树 ruff clean。信封/关联键/终止序零动、`v` 不 bump、四处 lockstep。
 - **UNVERIFIED（诚实边界，不冒充）**：真 LLM 驱动 OpenAI 面（本机无 key，ASGITransport + 脚本化 provider 覆盖 wire 逻辑而非真模型）；真跨机 exactly-once（**单机多进程两真子进程=已验**，跨机属 C12 天花板未做）；真广网部署/TLS 终结（属算子侧，`--serve-openai` 默认 loopback）；OpenAI lane 的 `ask`-超时-deny 真审批交互（C9 fail-closed 既有，本 lane 无审批 UI 故默认拒）。
 - **对抗评审收口**：见 §4.3——M1（tools_changed live-only 发射语义）/M2（resume 冻结 policy_ref）/S1（鉴权 lane 权限面）/S2（多进程双驱 run-lease）/S3（密钥/载荷不外泄）/R1（不植 cordis 容器）均已落进对应 ADR/T 并在代码/守卫/测试兑现。
 - **对抗审计记录**：`docs/audit/P9-review-2026-10-18.md`（两路 inline 自审 findings 全闭 + DoD ①–⑧ 逐条判定 + §6 UNVERIFIED 边界）；新增回归 canary `test_p9_openai_out_of_band_projection.py`（CLI+SSE+OpenAI 三消费者每 seq 恰一行，锁 pitfalls #5）。
