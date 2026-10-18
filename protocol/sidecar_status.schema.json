@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://questor.local/protocol/sidecar_status.schema.json",
+  "title": "Questor sidecar lifecycle status (process-scoped, not per-run)",
+  "description": "Additive-only process-level state emitted by the desktop shell (§6-5). Distinct from the per-run event envelope: it carries no run_id. Producer = Rust shell (on_crash_detect); consumer = UI. Strict whitelist (additionalProperties:false); detail is bounded and never carries crash traces/secrets (C20).",
+  "type": "object",
+  "required": ["state", "generation"],
+  "additionalProperties": false,
+  "properties": {
+    "state": {
+      "type": "string",
+      "enum": ["starting", "ready", "stopping", "stopped", "crashed"]
+    },
+    "generation": { "type": "integer", "minimum": 0, "description": "Shell Fence generation; increments on crash-restart so the UI can drop stale status." },
+    "detail": { "type": ["string", "null"], "maxLength": 256, "description": "Bounded short attribution; never raw traceback or secrets (C20)." }
+  }
+}

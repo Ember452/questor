@@ -93,7 +93,13 @@
       "type": "object",
       "required": ["message_id"],
       "additionalProperties": false,
-      "properties": { "message_id": { "type": "string", "minLength": 1, "maxLength": 128 } }
+      "description": "A finalized message (D-P7-C option (1); ADR-0034). final_text is the bounded committed body so after_seq replay alone recovers text for every surface; oversized bodies set truncated (full text stays authoritative in checkpoint). Not logged (C20).",
+      "properties": {
+        "message_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "item_id": { "type": ["string", "null"], "maxLength": 128 },
+        "final_text": { "type": "string", "maxLength": 8192 },
+        "truncated": { "type": "boolean" }
+      }
     },
     "tool_started": {
       "type": "object",
@@ -119,7 +125,10 @@
       "additionalProperties": false,
       "properties": {
         "tool_call_id": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "status": { "type": "string", "enum": ["success", "error", "critical_error", "timed_out", "cancelled", "denied"] }
+        "status": { "type": "string", "enum": ["success", "error", "critical_error", "timed_out", "cancelled", "denied"] },
+        "preview": { "type": "string", "maxLength": 4096, "description": "Bounded tool-output preview for the card (C18/ADR-0019). Never the full text; read full body via artifact_ref. Not logged (C20)." },
+        "artifact_ref": { "type": ["string", "null"], "maxLength": 128, "description": "Opaque artifact:// pointer for the full output when archived. Never an absolute path." },
+        "truncated": { "type": "boolean", "description": "True when preview was cut or the full body lives behind artifact_ref." }
       }
     },
     "approval_request": {
@@ -160,7 +169,15 @@
     },
     "node_updated": {
       "type": "object",
-      "description": "Task-tree node projection; shape finalized in P5. Kept permissive but typed."
+      "description": "Task-tree node projection (DAG belongs to P8; no producer yet). P7 T11 additive-shaped to a bounded whitelist (C18/C13): node identity/status only, never payload.",
+      "required": ["node_id", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "node_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "status": { "type": "string", "maxLength": 64 },
+        "title": { "type": ["string", "null"], "maxLength": 256 },
+        "parent_id": { "type": ["string", "null"], "maxLength": 128 }
+      }
     },
     "usage_delta": {
       "type": "object",

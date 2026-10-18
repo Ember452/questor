@@ -1,0 +1,20 @@
+[package]
+name = "questor-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "Tauri v2 桌面壳：把 Python harness 当 sidecar 子进程经 HTTP+SSE 连（S5/ADR-0007）。生命周期逻辑复用 questor-sidecar crate。"
+
+# rlib 供 cargo test；staticlib/cdylib 供 tauri 移动端/宿主绑定（桌面只用 bin）。
+[lib]
+name = "questor_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+# 生命周期核心复用已 cargo 验证的 sidecar crate（generation 栅栏/两级关闭/fail_all/就绪探测）。
+questor-sidecar = { path = "../sidecar" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

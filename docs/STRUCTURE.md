@@ -47,13 +47,25 @@ src/questor/
 
 ```
 desktop/
-├── src-tauri/       # Rust 壳：窗口/生命周期/打包；把 Python 后端作为 sidecar 子进程拉起
+├── src-tauri/       # Rust 壳：窗口/生命周期/打包；把 Python 后端作为 sidecar 子进程拉起（P7 尚未建，UNVERIFIED）
 │   ├── src/  tauri.conf.json  build.rs  capabilities/  icons/
-└── web/             # 前端（React/Svelte + TS）：瘦客户端，仅消费事件协议（SSE）
-    ├── src/（pages · components · state · api 客户端）  index.html  vite.config.ts  package.json
+├── sidecar-requirements.{in,lock}  # sidecar 冻结窄锁（比根 pyproject 更窄；uv pip compile 产出）
+└── web/             # 前端（TS）：瘦客户端，仅消费事件协议（SSE）
+    ├── package.json · tsconfig.json · scripts/generate-protocol.mjs   # 协议 codegen + --check 防漂移
+    └── src/
+        ├── generated/event.ts        # 由 protocol/event.schema.json codegen（DO NOT EDIT）
+        └── api/{eventStream,commandClient}.ts   # 瘦客户端：仅投 Command + 消费事件（无业务下沉）
 ```
 - **铁律**：`web/` 只做 UI 与"订阅外部事件"，**禁止把业务/状态/校验逻辑下沉到壳**（ROADMAP §1.5 / ADR-0007）。
 - `src-tauri` 不碰内核逻辑，只负责启动 sidecar + 暴露窗口能力。
+- **P7 现状（`feat/p7-desktop-shell`，含审计后加固）**：`web/src/{generated,api}` + Vite 薄客户端 app（`tsc`+`vite build` 产 dist）、
+  `scripts/generate-protocol.mjs`（含 per-type `*Data` 字段级接口 + 漂移 `--check`）、`sidecar-requirements.{in,lock}`、
+  **`desktop/sidecar` Rust crate**（generation 栅栏/两级优雅关闭/`fail_all`/loopback 就绪/Job Object 杀进程树/`resolve_sidecar`，
+  `cargo test`）、**`desktop/src-tauri` Tauri v2 壳**（spawn 冻结产物、读 bootstrap、注入 token、退出走 `/shutdown`）均已本地
+  **cargo `check`/`clippy`/`test` 编译验证**；sidecar serve 生产入口 `src/questor/surfaces/serve.py`（loopback `127.0.0.1:0` +
+  generation bootstrap + 会话 token，ADR-0032）由组合根 `__main__.py --serve` 装配；PyInstaller onedir 已用 `build-sidecar.py`
+  实产并经 `verify_release_bundle --verify-runtime` 启动验证；本轮另以 clean-PATH（无 `python`）直跑冻结 exe 证伪 `/health`=200 与 `/shutdown` 优雅自退（Exited）。
+  **§6-5/6-6 生命周期**：`contracts/sidecar_status.py`（Starting/Ready/Stopping/Stopped/Crashed，独立进程级 status 面、不进 per-run 信封）+ `protocol/sidecar_status.schema.json` + codegen TS 判别类型 + `check_protocol_schema` 字段级漂移门；Rust 壳 `monitor_sidecar_loop` 崩溃→emit→respawn（bump generation）→重导航，UI 订阅渲染 Crashed 横幅（capability 限 `core:event:allow-listen` 到 `http://127.0.0.1:*`）。**仍 UNVERIFIED**：真开窗口/像素渲染、真机 kill→Crashed→重启端到端与 after_seq 重挂（§6-8）、全量 `tauri build` 安装介质（需显示 + WiX）、真远程 MCP/真 LLM。
 
 ## 4. 测试 `tests/`
 - 单元测试随模块镜像目录；**任务级评测/回归网**单列（如 `tests/evals/`），改内核前必备（ROADMAP P10）。

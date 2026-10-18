@@ -27,7 +27,14 @@
 | sidecar/HTTP serve 入口 | **未接线**：`__main__.py` 仅 REPL/`--resume`/`--list`/`--dream`；`EventServer`/`create_app` 有类但无生产入口跑 uvicorn | `src/questor/__main__.py:94-146`；`surfaces/http_sse.py:58-203`；全仓 grep `uvicorn`/`--serve` 在非测试码零命中 |
 | 带外投影消费者现状 | `log_envelope` **仅挂在 CLI 单消费者** | `surfaces/cli.py:264`（`_stream` 内调用）；`surfaces/http_sse.py:148-158`（`stream` 出 SSE 帧但**不投带外日志**） |
 
-> **结论**：**本计划基线 = `main` @ `290375e`**。#142/#143/#144 已合入 → **C20 / `docs/pitfalls.md` / MCP / Skills 均为当前有效基线的一部分**，P7 在其约束下规划（而非照"可能不存在 C20"的旧基线）。`protocol/event.schema.json` **已存在并已被 `check_protocol_schema.py` 守**，故 P7 不是"引入协议真源"，而是"在其上做 TS codegen + 防漂移 --check"。桌面/sidecar 全为**新面**（`desktop/` 空、无 serve 入口）。
+> **结论**：**本计划基线 = `main` @ `290375e`**。#142（`eb1da31`）/#143（`114fb0f`）/#144（`290375e`，内含审计 `29821de`）已合入 → **C20 / `docs/pitfalls.md` / MCP / Skills 均为当前有效基线的一部分**，P7 在其约束下规划（而非照"可能不存在 C20"的旧基线）。`protocol/event.schema.json` **已存在并已被 `check_protocol_schema.py` 守**，故 P7 不是"引入协议真源"，而是"在其上做 TS codegen + 防漂移 --check"。桌面/sidecar 全为**新面**（`desktop/` 空、无 serve 入口）。
+
+> **GATE-0 开工重验（2026-10-17，据实更新，非凭记忆）**：开工当天现场重跑 `git`/文件系统，逐项核对上方 §0.0/§0.1 全部成立——
+> - 当前分支 `main`、HEAD **`759918a`**（= `290375e` 基线之上仅多一条**文档提交**"docs(plan): add P7 …"，未动任何代码 → §0.0 代码相关结论全部沿用）；`git status` 干净、与 `origin/main` 同步；#142/#143/#144 均在 `git log` 历史内（`eb1da31`/`114fb0f`/`290375e`）。
+> - §0.0 现场重列 `project-main/` 排除 `questor*`/`.ruff_cache` = **12 仓**，与 §0.1 一致，无新增参考仓。
+> - 现状代码真源逐条命中：`kernel/events.py`（LIVE_ONLY `:31-33`、`EXTERNAL_EVENT_FIELDS` `:43-64`、`MESSAGE_COMPLETED={message_id}` `:48`、`TOOL_COMPLETED={tool_call_id,status}` `:51`、`NODE_UPDATED=None` `:55`、first-writer-wins `:108-111`）；`surfaces/cli.py:264` 逐消费者 `log_envelope`；`surfaces/http_sse.py:148-158` `stream()` 出 SSE **不投带外日志**（缺口坐实）；`surfaces/_assembly.assemble_logging()` 在位；`observability/projection.log_envelope()` 在位；`desktop/` 与 `surfaces/serve.py` 均**不存在**（P7 从零建）；`EventType` 真数 **20**（`protocol/README.md` 旧写 "19" 待 T3 校正）。
+> - **peer-scan file:line 重验**（§0.2 承重两条）：DeepCode `sidecar.rs` 实存 **715** 行（审计复校修正：先前 `Measure-Object -Line` 少计），`generation:AtomicU64` `:112,123`、`prepare_for_start`/`SIDECAR_ALREADY_RUNNING` `:287,296`、两级关闭 `force_kill`+`fail_all("SIDECAR_STOPPED")` `:221,273-275` **全部命中**（verdict 维持"改造=搬形状、换 HTTP+SSE"）；DeepCode `threadEventStream.ts` 游标去重 `sequence<=cursor :34`/`==cursor+1 :38`/"Streamed text is not in that log" `:8` 命中；文件实为 **83** 行（原计划写的 `:47-82` 区间封顶到 ~`:77`，不影响结论，仅按思路参照）。
+> - **开工当场发现的落点修正（reality-wins，先行记 ADR-0032）**：`scripts/check_layering_ast.py` 的 `FORBIDDEN_IMPORTS["surfaces"]` **明禁** `questor.providers.store_sqlite`/`store_memory_sqlite`/`subprocess`。故 T1 原述"`serve.py`（surfaces）装配 `SQLiteStore`/`SQLiteMemoryStore`"若照搬会判红。**定案**：具体 store 实例化留在**组合根 `__main__.py --serve` 分支**（与 REPL 同构、本就 import 具体适配器），`surfaces/serve.py` 只**接收注入**的 server/store + 跑 uvicorn（bind `127.0.0.1:0`、读实际端口、写 generation bootstrap），不 import 具体 store（守 S6/C4/AST 守卫）。
 
 ### 0.1 现场重列 `project-main/`（新增自动纳入，排除本仓自身）
 
@@ -83,6 +90,7 @@
 - **事实**：`text_delta`/`reasoning_delta` 属 `LIVE_ONLY`（`kernel/events.py:31-33`），只转发不入库；`subscribe(after_seq)` 仅重放 durable（`kernel/events.py:147-153`）。当前 durable 对外表示（`message_completed`→`{message_id}`、`run_completed`→`{usage,exit_reason}`）**不含文本**（`kernel/events.py:48,60`）。故**断线重连会丢在途未收尾的可见文本**，且 DeepCode 注释亦证实"streamed text 不在 durable log"。
 - **定案（二选一，均走 ADR，开工前定）**：① 对 `message_completed`/`run_completed` **additive** 加有界 `final_text`（或 `item_id` 归属），令重连可从 durable 帧恢复该消息文本；或 ② 新增**只读** `GET /runs/{id}/transcript`（从 `event_log`/checkpoint 重建，属 surfaces 转发、不改 state、不违 S6）。选①须守 C18 有界 + C13（派生态不回写成第二真相）；选②须守只读、不进 reduce。
 - **未定案前**：重连"在途文本恢复"端到端标 **UNVERIFIED**（诚实边界），DoD②只保证 **durable 事件不丢不重**，delta 尽力而为。
+- **✅ 开工定案（2026-10-17，GATE-1 / ADR-0034）= 选型①**（用户取向：面向超大型多端项目、长远最优、不计工作量）：`state/reduce.py:107` 发 `MESSAGE_COMPLETED` 时把定稿正文写入 durable 事件帧（additive 有界 `final_text` + `item_id`，超限 `truncated`+`artifact_ref`，复用 ADR-0019 工具卡纪律），令 `after_seq` 重放对**所有 surface/客户端**自足恢复定稿文本；**不另开 `GET /transcript` 第二读契约**（守 C15 单一真源）。`message_completed` 仅在定稿边界产生，**未定稿的半条在途 delta 仍补不回→标 UNVERIFIED**。落点：`contracts/events.py:48` + `protocol/event.schema.json` `$defs.message_completed` + `--self-test` fixture 三处 lockstep；`final_text` **不进 `projection._DATA_KEYS`**（C20）。
 
 ### 0.4 已知观测缺口（承 `plan/05 §0.4`，P7 收口）
 
@@ -268,3 +276,20 @@
 - ✅ §0.0 记入 **本计划基线 = `main` @ `290375e`**，并证 #142（`eb1da31`）/#143（`114fb0f`）/#144（`290375e`，内含审计 `29821de`）已合入 → **C20（`HARD-CONSTRAINTS.md:110-115`）/`docs/pitfalls.md`/MCP/Skills 均存在**，P7 在其约束下规划；并记 `protocol/event.schema.json` 已在、`desktop/` 不存在、无 `--serve` 入口、`EventType`=20（`protocol/README.md:18` "19" stale 须校正）等现场事实。
 
 > **诚实边界**：本文为 READ-ONLY 规划，只落此文档，未改代码/未建分支/未 commit/未 push。所有 `file:line`（本仓与参考仓）为 2026-10-17 扫描快照，开工当天必重验；真机桌面打包、真 sidecar 崩溃重启、真远程 MCP server 端到端、以及未定案的在途 live-delta 文本恢复均标 **UNVERIFIED**，不用 fake 冒充真机。
+
+---
+
+## 8. 实现偏差回填（reality-wins，执行期追写；AGENTS §5.5）
+
+> 开工分支 `feat/p7-desktop-shell`。以下为实现与本文/设计的偏差与定案，按“现实胜”回写。
+
+- **T1 serve 落点修正（已记 ADR-0032 + 本文 §0.0 GATE-0）**：`check_layering_ast.py` FORBIDDEN_IMPORTS[surfaces] 禁 `providers.store_sqlite`/`store_memory_sqlite`/`subprocess` → 具体 store 实例化留**组合根 `__main__.py --serve`**，`surfaces/serve.py` 只接注入 server + 跑 uvicorn + 写 bootstrap，不 import 具体 store。本文原 T1 “serve.py 装配 SQLiteStore” 描述按此修正。
+- **D-P7-C 定案=选型①**（非②/非未定）：`message_completed` additive 有界 `final_text`+`item_id`（≤ 8192 字，`truncated` 标志），单一真源不另开 `/transcript`。未定稿半条 live-delta 仍 **UNVERIFIED**。详 ADR-0034。
+- **`check_protocol_schema` 一处 doc/code 偏差修正（T11 发现）**：`project()` 对 `EXTERNAL_EVENT_FIELDS` 值为 `None`/未列类型实际是**丢弃**（非注释所说的“原样透传”）；node_updated 定形同时改正了该注释。
+- **T6 合入 T5 客户端**：审批面板的**行为契约**（request_id 幂等、fail-closed deny）由服务端既有测试 + `commandClient.resolveApproval`（decision 域锁 allow|deny）覆盖；React 面板像素渲染属 webview（UNVERIFIED）。
+- **T8 分两步：监管核心已落+cargo 验证；壳/打包 UNVERIFIED**。已做：sidecar 三段式步骤①窄锁 `desktop/sidecar-requirements.{in,lock}`（`uv pip compile` 实产）+ `scripts/verify_release_bundle.py`（结构门 self-test 判红/绿）+ **Rust `desktop/sidecar` crate**（零依赖生命周期核心：generation 栅栏 `Fence`、`two_phase_shutdown`、`fail_all`、loopback `wait_ready`；`backend.rs` 接真 `std::process::Child` 并**真子进程**跑通强杀兜底；`cargo test` 8 passed）**。已接上 **Tauri v2 壳 `desktop/src-tauri`**（复用 `questor-sidecar`：setup bump generation → spawn `--serve` → 读 bootstrap → webview 指 loopback 端 → ExitRequested 走 `two_phase_shutdown`；tauri.conf.json 锁 CSP、capabilities 不授 fs/shell）：本机 `cargo check` Finished + `cargo test` 2 passed。**已验新增**：Vite 薄客户端 app（`tsc`+`vite build` 产 dist）+ `create_app(server, static_dir)` 挂静态伺服（TestClient 验 / 返回首页）+ Windows **Job Object 杀进程树**（`StdProcess` 裸 kernel32 FFI，真子进程 `cargo test` 绿）+ `build-sidecar.py` PyInstaller onedir 冻结 + `verify_release_bundle --verify-runtime`（启动冻结 exe、无系统 Python，/run→/events 实跑全流）。**仍 UNVERIFIED**：真开窗口/像素渲染、全量 `tauri build` 桌面 bundle（需 `@tauri-apps/cli`+WebView2+vite 产物链）——本机无头不跑真窗口（cargo/WebView2/pyinstaller 均已实测可用）。
+- **T9 CSP/capabilities 锁定（已补）**：`src-tauri`/`tauri.conf.json`/`capabilities/` 已建→`scripts/check_desktop_csp.py` 实装（扫 CSP：禁 script-src unsafe-inline、强制 object-src 'none'、connect-src 仅 loopback；禁 fs/shell/http 能力），fail-on-empty + `--self-test` 判红，已进 `boundaries`；实扫当前壳 0 违规。
+- **脚本命名**：本文 `verify-release-bundle` → 实文件 `scripts/verify_release_bundle.py`（下划线，与仓内其他守卫一致）。
+- **DoD 能力面**：按 §1.1 现实验 P1–P5（P5 已合入）；e2e 用脚本化 provider，真 LLM/真远程 MCP/真打包 = **UNVERIFIED**。
+- **§4.5 verdict 与现实的偏差（诚实标注）**：§0.2 将前端定为“改造（DeepCode React）”，实际 shipped `desktop/web` 是**自写 vanilla-TS**（无 React，未搬 `ApprovalCard.tsx` 组件树）；SSE 游标/两级关闭的**形状**确参照 DeepCode，但 UI 组件未搬。理由：本 Phase 交付以“仅消费协议 + 可验证”为先，框架选型非铁律；如后续要真“改造”DeepCode React，另开子任务。
+- **对抗式审计后加固（`docs/audit/P7-review-2026-10-17.md` NO-GO → 修复）**：已修 §6-1 resolve_sidecar(env→packaged→dev、不写死 python)+bundle+staging；§6-2 ci-desktop lane；§6-3 clippy/fmt 绿；§6-4 字段级漂移两道门；§6-6 会话 token + 真 `/shutdown` + 崩溃检测/重启决策原语；§6-7 MCP 接进 sidecar 路径；§6-8 resync 分因 + stream_end；§6-9 e2e 划域。仍待：真开窗口/全量 `tauri build`/真远程 MCP/真 LLM（环境受限，UNVERIFIED）。

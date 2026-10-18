@@ -14,7 +14,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import replace
 from datetime import datetime
 
@@ -39,20 +39,27 @@ INTERNAL_ONLY: frozenset[str] = frozenset({"checkpoint_recorded", "reduce_reject
 
 #: 每个对外事件的 data 白名单字段（design/02 §3/§5；ADR-0019）。只有列出的键才会
 #: 进入外部 Envelope：完整 args、abs path、env values、provider state 都不在白名单，默认不外发。
-#: 值为 ``None`` 表示该类型的 data 原样透传（仅用于尚未定形的 node_updated）。
+#: 注：`project` 对"不在本表 / 值为 None"的类型均按"未知外部类型"处理（错误类保留、余下丢弃）；
+#: 故任何要外发的类型都必须在表里给显式白名单 frozenset（P7 T11 已把 draft 的 node_updated 定为此）。
 EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.RUN_STARTED: frozenset({"run_id"}),
     EventType.TURN_STARTED: frozenset({"turn"}),
     EventType.TEXT_DELTA: frozenset({"delta", "item_id"}),
     EventType.REASONING_DELTA: frozenset({"delta"}),
-    EventType.MESSAGE_COMPLETED: frozenset({"message_id"}),
+    # 重连定稿正文（D-P7-C 选型①；ADR-0034）：additive 有界 final_text + item_id（单一真源，不另开 /transcript）。
+    # final_text 只进事件协议，绝不进带外投影白名单（projection._DATA_KEYS 不含，C20）。
+    EventType.MESSAGE_COMPLETED: frozenset({"message_id", "item_id", "final_text", "truncated"}),
     EventType.TOOL_STARTED: frozenset({"tool_call_id", "name", "capability", "risk", "args_summary"}),
     EventType.TOOL_PROGRESS: frozenset({"message"}),
-    EventType.TOOL_COMPLETED: frozenset({"tool_call_id", "status"}),
+    # 工具卡（P7 T7）additive：有界 preview + artifact 指针 + truncated（C18/C20；ADR-0035）。
+    # preview/artifact_ref 只进事件协议（给前端），绝不进带外投影白名单（projection._DATA_KEYS 不含）。
+    EventType.TOOL_COMPLETED: frozenset({"tool_call_id", "status", "preview", "artifact_ref", "truncated"}),
     EventType.APPROVAL_REQUEST: frozenset({"request_id", "tool_call_id", "name", "args_summary", "risk", "reason", "expires_at"}),
     EventType.APPROVAL_RESOLVED: frozenset({"request_id", "tool_call_id", "decision", "decided_by", "resolved_at"}),
     EventType.PERMISSION_MODE_CHANGED: frozenset({"mode", "changed_by", "effective_from_turn"}),
-    EventType.NODE_UPDATED: None,
+    # node_updated（任务树/DAG 属 P8，当前无生产者）：P7 T11 additive 定形为有界白名单，
+    # 去"None 透传"隐患——一旦 P8 产出富节点，也不会把 prompt/result 类载荷原样外发（C18/C13）。
+    EventType.NODE_UPDATED: frozenset({"node_id", "status", "title", "parent_id"}),
     EventType.USAGE_DELTA: frozenset({"input_tokens", "output_tokens", "total_tokens"}),
     EventType.HEARTBEAT: frozenset(),
     EventType.RUN_CANCELLED: frozenset({"reason"}),
@@ -97,6 +104,14 @@ class InProcessEventBus(EventBus):
         self._store = store
         self._subs: dict[str, list[asyncio.Queue[Envelope]]] = defaultdict(list)
         self._closed: set[str] = set()
+        # bus 级只读 observer（ADR-0033 / D-P7-A）：每条**投影后**的对外 Envelope 恰触发一次，
+        # 与消费者/订阅者数量无关——带外投影（log_envelope）由此挂载，杜绝"逐消费者各投 = 多 surface 双投"。
+        # 依赖方向：observer 由 surfaces/组合根注入回调，kernel 不 import observability（S7 九内核零依赖不破）。
+        self._observers: list[Callable[[Envelope], None]] = []
+
+    def add_observer(self, observer: Callable[[Envelope], None]) -> None:
+        """挂一个只读 observer：每次 ``emit`` 对投影后的 Envelope 调用一次（旁路观测，不改状态/扇出）。"""
+        self._observers.append(observer)
 
     def add_subscriber(self, run_id: str) -> asyncio.Queue[Envelope]:
         queue: asyncio.Queue[Envelope] = asyncio.Queue()
@@ -123,6 +138,9 @@ class InProcessEventBus(EventBus):
         projected = project(env)
         if projected is None:
             return
+        # 先触发 bus 级 observer（带外投影）：恰一次，与下面订阅扇出/订阅者数量无关（ADR-0033）。
+        for observer in self._observers:
+            observer(projected)
         for queue in self._subs.get(env.run_id, ()):
             try:
                 queue.put_nowait(projected)
@@ -140,6 +158,15 @@ class InProcessEventBus(EventBus):
             yield Envelope(v=EVENT_SCHEMA_VERSION, seq=after_seq, run_id=run_id, type=EventType.RESYNC_REQUIRED,
                            data={"reason": "version_mismatch", "expected": expected_version, "current": EVENT_SCHEMA_VERSION})
             return
+
+        # 分因闸门（§6-8）：after_seq 超过当前 durable 头 = 请求了尚未产生的游标（ahead），
+        # 不静默空重放，而是发一条 resync_required 让客户端重新对齐（错误类必出声，C6）。
+        if self._store is not None:
+            head = await self._store.sequence_head(run_id)
+            if after_seq > head:
+                yield Envelope(v=EVENT_SCHEMA_VERSION, seq=head, run_id=run_id, type=EventType.RESYNC_REQUIRED,
+                               data={"reason": "after_ahead", "expected": after_seq, "current": head})
+                return
 
         queue = self.add_subscriber(run_id)  # 先订阅后重放，避免两路之间的缺口
         seen = after_seq

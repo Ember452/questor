@@ -15,12 +15,16 @@ desktop/web TS client via codegen (P7). HARD C6/C15; see `docs/design/02-event-p
 Drift guard (blocking CI job, independent of change classifiers):
 
 ```
-uv run python scripts/check_protocol_schema.py --check      # 19 event types in lockstep
+uv run python scripts/check_protocol_schema.py --check      # 20 event types in lockstep
 uv run python scripts/check_protocol_schema.py --self-test  # proves the guard can go red
 ```
 
 It asserts this schema's `type` enum equals `questor.contracts.events.EventType` exactly — so
 the JSON Schema, the Python contract and the codegen'd TS can never silently diverge.
+
+TS codegen (P7 T3): `cd desktop/web && npm run generate:protocol` writes `src/generated/event.ts`
+from this schema via `json-schema-to-typescript`; `npm run check:protocol` re-generates in-memory
+and exits non-zero if the committed `event.ts` is stale (drift gate, mirrors the Python `--check`).
 
 **Boundary vs `src/questor/contracts/`**: this directory is the *wire* contract for other
 languages; `contracts/` is the *in-process Python* vocabulary. Generated TS types land in the

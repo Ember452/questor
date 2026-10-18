@@ -166,6 +166,9 @@ class CliSurface:
         抽象、不 import 具体 store 实现（S6/T20/C4）。
         """
         bus = InProcessEventBus(self.store)
+        # 带外投影改挂 bus 级唯一只读订阅（ADR-0033）：不再逐消费者调 log_envelope，
+        # 与 run 内 printer/approver 两个订阅队列并存也不会双投。
+        bus.add_observer(log_envelope)
         cancel = asyncio.Event()
         run = Run(run_id=new_id("run"), budget=Budget())
         mcp_tools, mcp_teardown = await self._discover_mcp(run.run_id)
@@ -228,6 +231,7 @@ class CliSurface:
         if run is None:
             return None
         bus = InProcessEventBus(self.store)
+        bus.add_observer(log_envelope)  # bus 级唯一投影订阅（ADR-0033）
         cancel = asyncio.Event()
         tool_surface = self.registry.freeze_for_run(run.run_id)
         loop = self._loop(bus, cancel, tool_surface)
@@ -258,10 +262,12 @@ class CliSurface:
         return final
 
     async def _stream(self, queue: asyncio.Queue, on_delta) -> None:  # noqa: ANN001
-        """从预挂的订阅队列消费：text_delta 打印/回调，终态后换行退出。"""
+        """从预挂的订阅队列消费：text_delta 打印/回调，终态后换行退出。
+
+        不再在此逐消费者调 ``log_envelope``——带外投影已收口到 bus 级唯一只读订阅（ADR-0033 / D-P7-A）。
+        """
         while True:
             env = await queue.get()
-            log_envelope(env)
             if env.type == EventType.TEXT_DELTA:
                 piece = env.data.get("delta", "")
                 if on_delta is not None:
