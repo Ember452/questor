@@ -18,6 +18,7 @@ JSON 以 ``allow_nan=False`` 存、时间为 tz-aware UTC（R03 B-P3）。``aios
 from __future__ import annotations
 
 import json
+import time
 
 import aiosqlite
 
@@ -66,6 +67,19 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS deliveries (
+    delivery_id  TEXT    PRIMARY KEY,
+    state        TEXT    NOT NULL,
+    claimed_at   REAL    NOT NULL,
+    ttl_seconds  REAL    NOT NULL
+);
+CREATE TABLE IF NOT EXISTS run_leases (
+    run_id       TEXT    PRIMARY KEY,
+    holder       TEXT    NOT NULL,
+    epoch        INTEGER NOT NULL,
+    expires_at   REAL    NOT NULL,
+    ttl_seconds  REAL    NOT NULL
 );
 """
 
@@ -220,6 +234,114 @@ class SQLiteStore(StorePort):
             _TERMINAL_TYPES,
         )
         return tuple(r[0] for r in await cur.fetchall())
+
+    async def claim_delivery(self, delivery_id: str, ttl_seconds: float = 30.0) -> bool:
+        """claim-then-deliver（ADR-0047）：原子取投递所有权。``BEGIN IMMEDIATE`` 跨进程串行化。
+
+        新建 claim 返 True；已 acked 或他人未过期持有返 False；前次 claim 超 TTL（崩溃）可重取。"""
+        db = self._dbp()
+        now = time.time()
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await db.execute("SELECT state, claimed_at, ttl_seconds FROM deliveries WHERE delivery_id = ?", (delivery_id,))
+            row = await cur.fetchone()
+            if row is None:
+                await db.execute("INSERT INTO deliveries (delivery_id, state, claimed_at, ttl_seconds) VALUES (?, 'claimed', ?, ?)", (delivery_id, now, ttl_seconds))
+            else:
+                state, claimed_at, ttl = row
+                if state == "acked" or now - claimed_at < ttl:
+                    await db.commit()
+                    return False
+                await db.execute("UPDATE deliveries SET state = 'claimed', claimed_at = ?, ttl_seconds = ? WHERE delivery_id = ?", (now, ttl_seconds, delivery_id))
+            await db.commit()
+            return True
+        except BaseException:
+            await db.execute("ROLLBACK")
+            raise
+
+    async def delivery_state(self, delivery_id: str) -> str | None:
+        cur = await self._dbp().execute("SELECT state FROM deliveries WHERE delivery_id = ?", (delivery_id,))
+        row = await cur.fetchone()
+        return row[0] if row else None
+
+    async def ack_delivery(self, delivery_id: str) -> bool:
+        db = self._dbp()
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await db.execute("SELECT state FROM deliveries WHERE delivery_id = ?", (delivery_id,))
+            row = await cur.fetchone()
+            if row is None:
+                await db.commit()
+                return False  # 从未 claim，不能凭空 ack
+            if row[0] != "acked":
+                await db.execute("UPDATE deliveries SET state = 'acked' WHERE delivery_id = ?", (delivery_id,))
+            await db.commit()
+            return True
+        except BaseException:
+            await db.execute("ROLLBACK")
+            raise
+
+    async def acquire_lease(self, run_id: str, holder: str, epoch: int, ttl_seconds: float) -> bool:
+        """获取 run 驱动租约（单机多进程单写者）：同 holder/已过期可取，他人未过期拒。"""
+        db = self._dbp()
+        now = time.time()
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await db.execute("SELECT holder, epoch, expires_at FROM run_leases WHERE run_id = ?", (run_id,))
+            row = await cur.fetchone()
+            if row is not None:
+                held_by, held_epoch, expires = row
+                if held_by == holder and held_epoch == epoch:
+                    await db.execute("UPDATE run_leases SET expires_at = ?, ttl_seconds = ? WHERE run_id = ?", (now + ttl_seconds, ttl_seconds, run_id))
+                    await db.commit()
+                    return True
+                if now < expires:
+                    await db.commit()
+                    return False
+            await db.execute(
+                "INSERT INTO run_leases (run_id, holder, epoch, expires_at, ttl_seconds) VALUES (?,?,?,?,?) "
+                "ON CONFLICT(run_id) DO UPDATE SET holder=excluded.holder, epoch=excluded.epoch, expires_at=excluded.expires_at, ttl_seconds=excluded.ttl_seconds",
+                (run_id, holder, epoch, now + ttl_seconds, ttl_seconds),
+            )
+            await db.commit()
+            return True
+        except BaseException:
+            await db.execute("ROLLBACK")
+            raise
+
+    async def renew_lease(self, run_id: str, holder: str, epoch: int) -> bool:
+        """续租：仅当前 holder+epoch 匹配时按 ttl 延长到期；否则 False（已被夺走）。"""
+        db = self._dbp()
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await db.execute("SELECT holder, epoch, ttl_seconds, expires_at FROM run_leases WHERE run_id = ?", (run_id,))
+            row = await cur.fetchone()
+            if row is None or row[0] != holder or row[1] != epoch:
+                await db.commit()
+                return False
+            await db.execute("UPDATE run_leases SET expires_at = ? WHERE run_id = ?", (max(row[3], time.time() + row[2]), run_id))
+            await db.commit()
+            return True
+        except BaseException:
+            await db.execute("ROLLBACK")
+            raise
+
+    async def release_lease(self, run_id: str, holder: str, epoch: int) -> bool:
+        """释放租约：仅当前 holder+epoch 匹配时删除；否则 False。"""
+        db = self._dbp()
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await db.execute("SELECT holder, epoch FROM run_leases WHERE run_id = ?", (run_id,))
+            row = await cur.fetchone()
+            if row is None or row[0] != holder or row[1] != epoch:
+                await db.commit()
+                return False
+            await db.execute("DELETE FROM run_leases WHERE run_id = ?", (run_id,))
+            await db.commit()
+            return True
+        except BaseException:
+            await db.execute("ROLLBACK")
+            raise
 
     async def save_checkpoint(self, checkpoint: JsonObject) -> None:
         """写入/覆盖一个 checkpoint（幂等：cp_id 主键 + OR REPLACE）。

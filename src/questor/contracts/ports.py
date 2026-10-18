@@ -93,6 +93,35 @@ class StorePort(Protocol):
         """从 log 派生非终态 run id（有事件但无终态事件）；供 ``--resume`` 枚举。"""
         ...
 
+    # ---- P9/ADR-0047：跨进程 exactly-once 的投递账本 + 单机多进程 run 租约（纯增量）----
+    async def claim_delivery(self, delivery_id: str, ttl_seconds: float = 30.0) -> bool:
+        """claim-then-deliver：拿到投递所有权返 True（首次 claim，或前次 claim 已过 TTL 的崩溃重取）。
+
+        已 acked 或他人持有未过期 claim → False（防跨进程双投）。投递视图从事件重放重建，
+        本表只是去重/认领账、不是第二事件真相（C13/C15）。"""
+        ...
+
+    async def delivery_state(self, delivery_id: str) -> str | None:
+        """查询投递状态：None=未投、``"claimed"``=进行中、``"acked"``=已确认。"""
+        ...
+
+    async def ack_delivery(self, delivery_id: str) -> bool:
+        """投递完成确认：置 acked（幂等；对未知/已 acked 返回当前是否处于 acked）。"""
+        ...
+
+    async def acquire_lease(self, run_id: str, holder: str, epoch: int, ttl_seconds: float) -> bool:
+        """获取 run 驱动租约（单机多进程单写者）：无租约/已过期/同 holder 同 epoch → True 并盖章；
+        他人未过期持有 → False。靠 SQLite ``BEGIN IMMEDIATE`` 串行化保证原子（跨进程有效）。"""
+        ...
+
+    async def renew_lease(self, run_id: str, holder: str, epoch: int) -> bool:
+        """续租：仅当前 holder+epoch 匹配时刷新到期时间；否则 False（已被夺走）。"""
+        ...
+
+    async def release_lease(self, run_id: str, holder: str, epoch: int) -> bool:
+        """释放租约：仅当前 holder+epoch 匹配时删除；否则 False。"""
+        ...
+
 
 @runtime_checkable
 class Clock(Protocol):

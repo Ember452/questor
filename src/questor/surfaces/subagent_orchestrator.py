@@ -170,18 +170,27 @@ class SubagentOrchestrator:
         父若已终态则得 REJECTED_TERMINAL（不复活，诚实 at-least-once；子已在自己账本落终态）。"""
         self._children.get(parent_run_id, set()).discard(child_run_id)
         bounded = (summary or "")[:_MAX_CHILD_SUMMARY_CHARS]
-        await self._registry.submit(
-            parent_run_id,
-            ReportChildTerminal(
-                run_id=parent_run_id,
-                child_run_id=child_run_id,
-                node_id=node_id,
-                terminal_status=terminal,
-                resumable_hint=terminal == "cancelled",
-            ),
-            source="subagent",
-            idempotency_key=f"report:{parent_run_id}:{child_run_id}",
-        )
+        # P9/ADR-0047：claim-then-deliver-then-ack——稳定投递 id 使跨进程/崩溃重放的
+        # 同一子终态只投一次（exactly-once）；claim 不中=已被投/持有，跳过重投但仍解 waiter。
+        delivery_id = f"report:{parent_run_id}:{child_run_id}"
+        claimed = True
+        if self._store is not None:
+            claimed = await self._store.claim_delivery(delivery_id)
+        if claimed:
+            await self._registry.submit(
+                parent_run_id,
+                ReportChildTerminal(
+                    run_id=parent_run_id,
+                    child_run_id=child_run_id,
+                    node_id=node_id,
+                    terminal_status=terminal,
+                    resumable_hint=terminal == "cancelled",
+                ),
+                source="subagent",
+                idempotency_key=delivery_id,
+            )
+            if self._store is not None:
+                await self._store.ack_delivery(delivery_id)
         fut = self._pending.pop(child_run_id, None)
         if fut is not None and not fut.done():
             fut.set_result((terminal, bounded))
