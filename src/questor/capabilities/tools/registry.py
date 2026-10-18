@@ -56,6 +56,14 @@ class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, Tool] = {}
         self._specs: dict[str, ToolSpec] = {}
+        # P9/ADR-0046：能力名册版本号——每次成功 register/unregister 递增，注入 loop 作 capability_probe
+        # → 观测到变化即在安全点发 live-only tools_changed（热更只影响下次 freeze，活 run 面不变）。
+        self._generation = 0
+
+    @property
+    def generation(self) -> int:
+        """当前名册版本（供 capability_probe 读）。"""
+        return self._generation
 
     def register(self, tool: Tool) -> None:
         """注册工具（新工具=加注册；改既有工具语义=契约变更，走评审）。
@@ -71,10 +79,13 @@ class ToolRegistry:
             return
         self._tools[spec.name] = tool
         self._specs[spec.name] = spec
+        self._generation += 1
 
     def unregister(self, name: str) -> None:
-        self._tools.pop(name, None)
+        existed = self._tools.pop(name, None) is not None
         self._specs.pop(name, None)
+        if existed:
+            self._generation += 1
 
     def has(self, name: str) -> bool:
         return name in self._tools

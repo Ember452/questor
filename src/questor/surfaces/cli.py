@@ -14,6 +14,7 @@ import os
 import sys
 from pathlib import Path
 
+from questor.capabilities._host import PluginHost
 from questor.capabilities.skills.catalog import build_skill_catalog
 from questor.capabilities.subagent.delegate import DelegateTool
 from questor.capabilities.tools.apply_patch import ApplyPatchTool
@@ -141,6 +142,8 @@ class CliSurface:
         self.policy_registry = _default_policy_registry()
         self.policy_id = policy_id
         self.ab_table = ab_table
+        # P9/ADR-0046：能力热插拔宿主（统一 init/teardown + 熔断隔离）；generation 与工具注册表共构探针。
+        self.plugin_host = PluginHost()
         # 技能生效（DoD①）：把发现的 SKILL.md 目录并入 system prompt。skills_dir=None（默认）
         # 时 catalog 为空、system 不变——不影既有 run。描述已在 catalog 内过 `bound_description` 有界。
         catalog = build_skill_catalog(skills_dir)
@@ -149,6 +152,10 @@ class CliSurface:
     def _resolve_for_run(self, run_id: str) -> tuple[PolicyPort, PolicyRef]:
         """按 run 解析策略（fail-open 回落默认）→ (PolicyPort, 冻结 PolicyRef)。"""
         return self.policy_registry.resolve_or_default(self.policy_id, split_key=run_id, ab_table=self.ab_table)
+
+    def capability_probe(self) -> int:
+        """能力名册合成版本：工具注册表 + 插件宿主 generation 之和（注入 loop 探测热插拔→发 tools_changed）。"""
+        return self.registry.generation + self.plugin_host.generation
 
     def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface, subagent_spawner: SubagentSpawnerPort | None = None, *, run_id: str = "") -> DefaultTurnLoop:
         """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。
@@ -171,6 +178,7 @@ class CliSurface:
             system=self.system,
             cancel_event=cancel,
             subagent_spawner=subagent_spawner,
+            capability_probe=self.capability_probe,
         )
 
     async def _discover_mcp(self, run_id: str) -> tuple[list[Tool], Teardown]:
