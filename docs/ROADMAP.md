@@ -21,9 +21,9 @@
 | **P2 工具 + 权限 lite** | 文件/shell 核心工具集 + 三态权限 + json-schema 校验 + capability floor | P1 | 危险操作触发 `ask`；`deny`/敏感路径不可越；非法参数被拒；审批/取消/超时幂等可恢复 | [plan/02](./plan/02-p2-tools-permission.md) ✅（ADR-0013-0019 已实现；[P2 交付报告](./delivery/P2-completion-report.md)；**已合入 main**：PR #19，`1f5c171`，2026-10-16） |
 | **P3 持久化 + 断点续传** | 事件溯源 + 快照 + resume | P2 | kill 进程后重启能续跑/回放；`after_seq` 重连不丢不重 | [plan/03](./plan/03-p3-persistence-resume.md) ✅（ADR-0020-0022 已实现；分支 `feat/p3-persistence-resume`：真 OS 进程 kill→`--resume` + 真 uvicorn SSE `after_seq` 重连实测通过） |
 | **P4 记忆 v1（灵魂）** | 短期 → 三层 + Deep Dream + 检索（详 `design/06-memory.md`） | P3 | 跨会话记住并检索到一件事；夜间蒸馏产出 | [plan/04](./plan/04-memory-soul.md) ✅（ADR-0023~0026 已实现；分支 `feat/p4-memory-soul`：DoD①②③④⑤ 集成测试通过、405 passed；真 LLM/embedding 与压缩生产者后置 P10 标 UNVERIFIED） |
-| **P5 Skills / MCP** | 技能加载 + MCP 接入 | P3（仅适配器 stub 可早；完整需账本/持久化） | 丢一个 SKILL.md 即生效；挂一个 MCP server 出工具 | plan/05 |
+| **P5 Skills / MCP** | 技能加载 + MCP 接入 | P3（仅适配器 stub 可早；完整需账本/持久化） | 丢一个 SKILL.md 即生效；挂一个 MCP server 出工具 | [plan/05](./plan/05-p5-skills-mcp.md) ✅（PR #143 `114fb0f` + 对抗审计加固 PR #144 `290375e` 已合入 main；真 stdio 子进程 roundtrip / 断连恢复实测；真远程 MCP server 端到端标 UNVERIFIED） |
 | ~~**P6 多模态 / 语音**~~ | **已整阶段移除**（[ADR-0036](./adr/0036-p6-dropped-from-roadmap.md)）：语音 + 图像全砍，不再占阶段编号；日后按 L5 provider / L6 surface 接缝作按需扩展回归 | — | — | 无（`plan/06` 从未开工） |
-| **P7 桌面壳（Tauri）** | Web UI 订阅事件协议 | P1（可早接） | 桌面窗口跑通 P1-P4 全部能力，断线能重连 | plan/07 |
+| **P7 桌面壳（Tauri）** | Web UI 订阅事件协议 | P1（可早接） | 桌面窗口跑通 **P1–P5** 全部能力（§1.5 已按现实上修，原"P1-P4"是旧口径），断线能重连 | [plan/07](./plan/07-p7-desktop-shell.md) ✅（对抗审计 NO-GO → 逐条加固，PR #145 `b2361ff` 已合入 main；**v1 = P0-P4 + P7 能力面凑齐**；仍 UNVERIFIED：真开窗口/像素渲染、全量 `tauri build` 安装介质、真远程 MCP、真 LLM——详 §1.5 P7 备注 ③） |
 | **P8 多 agent / 子 agent + DAG** | 编排引擎、DAG 依赖 | P4 | 两 agent 协作完成一任务；DAG reduce 校验通过 | plan/08 |
 | **P9 对外 + 插件宿主** | OpenAI 兼容 API；cordis 式 DI/热插拔（策略注册表/热替换/AB 详 `design/05-policy.md`，在此落） | P7 | 外部 OpenAI 客户端能调；能力可热插拔不崩内核 | plan/09 |
 | **P10 加固** | 可恢复压缩 / 评测回归网 / observability | P3起持续 | 任务级回归网跑通；压缩不丢事实召回；追踪面板基于事件流 | plan/10 |
@@ -63,7 +63,7 @@
 ## 4. 对外发布里程碑（附加标记，不改技术阶段/顺序）
 - **节点 A｜P0 完成**：仅架构文档开源（design/adr/roadmap），面向硬核开发者，无运行码；
 - **节点 B｜P1 完成**：最小可运行原型（终端 Demo）开源，拿第一批真实反馈；
-- **节点 C｜v1（P0-P4+P7）**：完整 Tauri 桌面版，对外正式 Release。
+- **节点 C｜v1（P0-P4+P7）**：完整 Tauri 桌面版，对外正式 Release。→ **阶段条件已满足**（P7 已合入 `b2361ff`）；实际发布仍需先消掉"全量 `tauri build` 安装介质 + 真开窗口验收"两项 UNVERIFIED（§1.5 P7 备注 ③）。
 > 不必等 v1 全做完才开源；P1 即可放出最小原型。
 
 ## 5. 路线图变更规则（防指南针腐化）
