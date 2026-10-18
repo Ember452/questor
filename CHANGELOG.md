@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — 路线图：P6（多模态/语音）整阶段移除（[ADR-0036](docs/adr/0036-p6-dropped-from-roadmap.md)）
+
+- **决策**：语音 + 图像识别两半**全砍**，不再占 Phase 编号；v1 后既定序列收敛为 **P7（已合入）→ P8 → P9 → P10**。
+  依据：P6 在依赖图上是叶子（P8 进条件=P4、P9=P7、P10=P3 起持续，无 Phase 消费其产出）；`SCALE-ESTIMATE §3` 估其
+  80–150 commit/文件 + 10+ provider，且 DoD 全压在本机无法证伪的外部云服务上。
+- **编号不重排**：P7–P10 保持原号（已作为锚点散布于 ADR-0029~0035、已合并分支 `feat/p7-desktop-shell`、
+  `docs/audit/*`、`docs/delivery/*` 与本文），重排等于回改历史快照。`plan/06` 从未开工，无需作废。
+- **逆转路径写死**：将来确有需求 → 按 ROADMAP §5 另记 ADR，落点 = **L5 新增 vision/ASR/TTS provider + L6 接收面 +
+  事件面只加 `type`（不碰信封/关联键/终止序）+ 大载荷复用 ADR-0019**；与 `SCALE-ESTIMATE §6` 既有归口一致。
+- **P9 新增一条硬判据**（本次砍出的唯一工程欠债）：OpenAI 兼容面收到 `image_url` / `input_audio` 等非文本
+  content part 时**必须归一化拒绝**（走 ADR-0028 故障归一终态），绝不崩、绝不静默降级成纯文本继续跑。
+- **文档偏差记账**：核实发现 ROADMAP §1.5 R2、`delivery/P1-completion-report.md:110`、`plan/01:44,112` 宣称的
+  "多模态事件 `type` 占位"**从未落地**——`contracts/events.py:251-273` 的 20 个 `EventType` 无一多模态类，全 `src/`
+  对 `voice|audio|tts|asr|vision|attachment|modalit` 零命中。→ 移除 P6 无孤儿占位需清理；已把 §1.5 R2 改为实况口径，
+  **历史交付报告不回改**（与既有纪律一致），只在 ADR-0036 记账。
+- **同步修订**：`docs/ROADMAP.md` §1（P6 行）/§1.5（R2 + 新增 P9 备注）/§2；`docs/VISION.md` §8（原"待拍：多模态/语音
+  哪些进第一版" → 已拍）；`docs/adr/README.md`（索引 0036）；`docs/SCALE-ESTIMATE.md` §2/§3/§4/§6（总量下调至
+  ~1020–1650 commit）。
+- **零代码/零契约变更**：无任何 Python/TS/Rust 文件改动，事件协议、状态模型、分层守卫均不受影响。
+
 ### Added — P7 桌面壳（Tauri）地基（分支 `feat/p7-desktop-shell`；详 `docs/plan/07-p7-desktop-shell.md`）
 
 - **sidecar serve 生产入口（DoD①/⑤，ADR-0032/D-P7-B）**：`surfaces/serve.py` 把 `EventServer` 挂上 uvicorn，
