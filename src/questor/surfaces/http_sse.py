@@ -197,7 +197,7 @@ class EventServer:
                 return
 
 
-def create_app(server: EventServer, static_dir: Path | None = None, token: str | None = None) -> FastAPI:
+def create_app(server: EventServer, static_dir: Path | None = None, token: str | None = None, openai_api_keys: list[str] | None = None) -> FastAPI:
     """构建 FastAPI 应用：run/cancel/approve/permissions/events 全部只投 Command 或投事件。
 
     ``static_dir``（存在时）挂载到 ``/``：桌面壳把 webview 指向本服务（ADR-0007），前端静态产物
@@ -264,6 +264,13 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
         version_header = request.headers.get("x-questor-contract-version")
         expected_version = int(version_header) if version_header and version_header.isdigit() else None
         return EventSourceResponse(server.stream(run_id, after_seq, expected_version=expected_version))
+
+    # OpenAI 兼容投影适配器（鉴权外部 lane，ADR-0043）：仅在配了 api_keys 时挂载；强制 fail-closed。
+    # 延迟 import 避免模块期循环；本面只投 Command + 订总线，不再是第二写者/第二真相。
+    if openai_api_keys:
+        from questor.surfaces.openai_compat import mount_openai_routes
+
+        mount_openai_routes(app, server, api_keys=openai_api_keys)
 
     # 静态前端（桌面壳的 webview 入口）：仅在给定且存在时挂载，挂载于所有 API 路由之后，
     # 故 /run·/events 等精确路由优先匹配，其余（含 /）走静态目录。
