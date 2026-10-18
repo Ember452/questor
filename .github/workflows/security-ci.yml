@@ -36,7 +36,15 @@ jobs:
           echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" \
             | sha256sum --check
           tar -xzf gitleaks.tar.gz gitleaks
-          ./gitleaks git --redact --no-banner --exit-code 1
+          ./gitleaks git --redact --no-banner --exit-code 1 \
+            --report-format json --report-path gitleaks-report.json
+      - name: Upload gitleaks report (locations redacted, secrets masked)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.json
+          retention-days: 7
 
   # PR 只审"新增/变更"的依赖（对比基线），命中高危即拦——比全量审计更稳、适合阻断。
   dependency-review:
