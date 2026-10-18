@@ -42,6 +42,12 @@
 | [0034](./0034-p7-reconnect-message-completed-final-text.md) | 断线重连在途文本恢复 = `message_completed` additive 有界 `final_text`（D-P7-C 选型①）：定稿正文进 durable 事件帧、`after_seq` 重放自足恢复、单一真源不另开 /transcript 第二读面；有界+artifact 溢出、不进投影白名单；半条在途 delta 标 UNVERIFIED | ✅ |
 | [0035](./0035-p7-additive-tool-event-and-node-shape.md) | 工具事件 additive `preview`/`artifact_ref`/`truncated` + `node_updated` 定形（T7/T11）：只加可选字段不破 type/关联键/版本、三处 lockstep、C20 白名单不含原文 | ✅ |
 | [0036](./0036-p6-dropped-from-roadmap.md) | **P6（多模态/语音）整阶段从路线图移除**：语音+图像全砍、编号不重排；v1 后序列 = P8→P9→P10；逆转路径定为 L5 provider + L6 surface 接缝上的按需扩展（复用 ADR-0019 有界载荷）；P9 新增非文本请求体归一化拒绝判据；核实多模态事件 `type` 占位从未落地（旧文档误记） | ✅ |
+| [0037](./0037-dag-validation-scope-in-p8.md) | I6 语义修订 + P8 的 DAG 启用范围：拆开"reduce 校验/拓扑调度器/fan-in 恢复"，P8 只落**依赖校验**（无环/悬空/自环/终态唯一，在 reduce 内 I1）+ 读侧就绪判定；拓扑调度器与 `edge_kind/path/depth`、`WAITING_CHILDREN` 后置；快照 schema 保持 v3、fail-closed 不放松；细化 ADR-0008 DAG 条款 | ✅ |
+| [0038](./0038-subagent-as-independent-run.md) | 子 agent 本体 = **独立 Run**（同进程 asyncio 多 run、经 `assigned_run_id` 关联）：跨 run 通信一律 Command→reduce（无旁路直写）；seq 走两游标、快照各落、`--resume` 用 `list_unfinished_runs`；取消=冻结子树经 `Cancel(owner)` 不硬杀；exactly-once v1=**at-least-once+去重键**（claim 账本后置 P9、跨机属 C12）；载荷走 artifact 指针 | ✅ |
+| [0039](./0039-parallel-gate-attribution-recut.md) | 并行 gate 归口再决（收 ADR-0029 悬置）：**子代理 fan-out admission gate 落 P8**（run 级、wuu spawn_slot reservation）；**工具 reader/writer gate + 真并发派发显式再推后**（P10 或独立 Phase）；执行仍严格串行、不读 `parallel_safe`/`barrier` 改派发 | ✅ |
+| [0040](./0040-child-permission-inheritance-narrowing.md) | 子权限继承收缩（**fail-closed、子⊆父永不放大**）：`denylist` 只扩大、`rules⊆父`、`mode` 不继承（子默认 default）、floor 同 OS 不放宽；子 ask 归子自审、`request_id` 前缀 `child_run_id` 跨 run 幂等；策略层无裸句柄（hermes 子集判据） | ✅ |
+| [0041](./0041-fanout-budget-and-runaway-control.md) | fan-out 预算与失控终止：`max_parallel_children`(默认4)/`max_tree_depth`(默认1) reservation 防超发；usage 归 per-run 不汇聚父（聚合归 P10）；超限终止序 E2 取消>安全>超时>预算、父耗尽递归 Cancel 子树 | ✅ |
+| [0042](./0042-peer-event-additive-shape.md) | 事件 additive：`peer_started`/`peer_ended` 定形（20→22 type、**不 bump `v`**）；只带关联键+有界 status+`result_ref` 指针、无正文；`node_updated` 白名单不扩；三处 lockstep + C20 不进投影白名单；兑现 design/02 §7 生长场景 | ✅ |
 
 > **0027 已落地**（原为日志骨架刀 2 预留号）：详 [`../log/DESIGN.md`](../log/DESIGN.md) §17、[`../log/PLAN.md`](../log/PLAN.md) 刀 2。
 

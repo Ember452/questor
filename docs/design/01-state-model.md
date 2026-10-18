@@ -53,16 +53,16 @@ Run            一次执行（断点/回放/续传的单位）
 - **压缩**：只压中段、**user/assistant 文本不删**，删的进 `summary`+`recovery_pointers`（可恢复，对齐 hermes）。
 
 ## 3. 任务树 TaskTree（森林，决策①④）
-计划进状态，不是接口。策略每步可增删节点；一个节点可 kind=subagent（v1 只占位）。
+计划进状态，不是接口。策略每步可增删节点（经 `UpdateTaskTree` 命令归约，**P8 起 `deps` 在 reduce 内强校验**）；一个节点可 kind=subagent（**P8 启用**：subagent 节点 = 独立 Run，见 [ADR-0038](../adr/0038-subagent-as-independent-run.md)）。
 
 ```
 TaskNode {
   id, parent_id?,            # 森林；顶层任务 parent=null
-  kind: task | subagent,     # v1 只用 task；subagent 结构预留
+  kind: task | subagent,     # P8 启用 subagent（= 独立 Run，ADR-0038）
   title, objective,
-  status: pending|active|blocked|done|failed|cancelled,
-  deps[],                    # 依赖的其它 node（构成 DAG）
-  assigned_run_id?,          # 将来子agent执行绑定
+  status: pending|active|blocked|done|failed|cancelled,   # waiting_children 仍占位，启用随拓扑调度器(后置)
+  deps[],                    # 依赖的其它 node；P8 起 reduce 强校验无环/悬空/自环(ADR-0037)
+  assigned_run_id?,          # P8 起：kind=subagent 时绑定的独立子 Run id
   result?                    # 该步产出摘要
 }
 ```
@@ -161,7 +161,7 @@ StorePort→SQLite：`sessions / runs / messages(+content) / task_nodes / tool_c
 | ① 单步接口 + 计划进状态 | §3 任务树森林 + §7 Command |
 | ② 权限一等、沙箱可插拔 | §6 PermissionCtx + ToolCall.permission_decision |
 | ③ HTTP+SSE 续传 | Run.seq + §5 Checkpoint(after_seq) + §9 events append-only |
-| ④ 预留多agent | §3 TaskNode.kind=subagent + assigned_run_id |
+| ④ 多agent（P8 已启用） | §3 TaskNode.kind=subagent + assigned_run_id→独立 Run（[ADR-0038](../adr/0038-subagent-as-independent-run.md)） |
 
 ## 11. 已定 / 未决 / 下一份
 - **已定**：存储走**事件溯源（append-only `events` + 投影）为主、turn 边界快照为辅**——天然支持续传/回放/审计，与 §7 投影模型自洽；快照做读加速。
@@ -178,7 +178,7 @@ StorePort→SQLite：`sessions / runs / messages(+content) / task_nodes / tool_c
 - **I3 瞬态 delta 绝不持久化**：`Message`=完整最终块才写 `context.items`；`text_delta/reasoning_delta`=SSE 传输分片，**不落状态、不持久化**。UI 调试严禁图省事把 delta 塞进 state（最易越界，对应 C2/C5）。
 - **I4 快照=轻量投影+指针**：turn 边界生成轻量 `Domain_State` 快照，可只存 seq 游标/引用而非全量消息拷贝；**恢复=取最近快照 + 重放其后 append-only 事件**。两种机制都要有，别只做一种。
 - **I5 mode/权限变更=Command、不回溯**：mode 属 `Command`走 reduce；**已发生的 tool_call 历史 decision 不重算**，只对**未来调用**生效（否则审计/回放的 decision 会漂移）。
-- **I6 TaskTree v1 只用森林**：父子层级即可；**DAG 跨节点依赖只预留、v2 再启用**（DAG 会暴涨 reduce 校验/调度/断点恢复复杂度）。
+- **I6 TaskTree v1 森林拓扑 + P8 依赖校验**（[ADR-0037](../adr/0037-dag-validation-scope-in-p8.md)）：父子层级成森林；**P8 在 reduce 内强制 `deps` 依赖校验（无环/无悬空/无自环/终态唯一）+ 读侧就绪判定**；**拓扑调度器（内核主动 fan-out/fan-in 派发）与 `edge_kind/path/depth` 后置**（那会暴涨调度/断点恢复复杂度，非 P8 所需）。
 - **I7 Event 不可反哺**：只有 Command 改状态（C5）；回滚只回 Domain_State、**已发 Event 不撒销**（C10）。
 - **I8 Command Inbox 串行化**：外部 surfaces 只提交 Command，Kernel 的 RunController 是唯一消费/串行化入口；禁止 surfaces 直接 reduce（C16/ADR-0013）。
 - **I9 状态快照必须完整**：checkpoint 的 `state_version`、task_tree、permission_ctx、tool_ledger 全字段、error_stack 必须可 round-trip；未知版本 fail-closed，不静默丢权限/审批状态（ADR-0014/0016）。
@@ -189,5 +189,5 @@ StorePort→SQLite：`sessions / runs / messages(+content) / task_nodes / tool_c
 - 权威判据："恢复永远从持久态出发，内存视图+事件账本=可丢弃投影"。
 - **两类游标**：per-run 逻辑 `seq`（after_seq 回放）+ 全局单调物理序（跨 run catch-up/watermark）（→ ADR-0011）。
 - Checkpoint：落**完整快照**、**不截断**（原案“写门截断到 closed_prefix”已由 [ADR-0020](../adr/0020-durable-write-gate-and-log-authority.md) 就地修正为“完整快照 + 派发侧补齐”；`closed_prefix` 仅识别在途集）；配对靠进入 provider 前 settle 未闭合调用保证（ADR-0021 + ADR-0028 关卡）；补悬空 user-turn 修复；投递幂等 claim；取消=冻结子树+保留 partial（`resumable`）。
-- TaskNode 加 `edge_kind(spawn|branch|delegate|reset|compact)/path/depth/resumable`、status 补 `waiting_children`；subagent 节点→独立 Run/Delegation 记录（外部句柄 TEXT 不 FK）；**DAG v1 严格森林、deps 仅读校验**。
+- TaskNode 预留 `edge_kind(spawn|branch|delegate|reset|compact)/path/depth/resumable` + status `waiting_children`——**P8 均未启用/未新增**（属拓扑调度器时代，C11）；`resumable` 语义经 `assigned_run_id`+`list_unfinished_runs`+`peer_ended.resumable_hint` 组合达成。P8 落：**subagent 节点→独立 Run（`assigned_run_id`，外部句柄 TEXT 不 FK）**、**`deps` 从"仅读校验"升级为 reduce 强依赖校验**（[ADR-0037](../adr/0037-dag-validation-scope-in-p8.md)/[ADR-0038](../adr/0038-subagent-as-independent-run.md)）。
 - §9 持久化写死：log 权威→**先 append 后更新 snapshot/index**→损坏回退重放；**单一 schema authority + 幂等 DDL + `BEGIN IMMEDIATE` 重建**；JSON 禁 NaN/Inf、时间 UTC tz-aware；大对象内容寻址去重；防 ABA 永不回收水位；task/runs 与 messages 故障隔离。
