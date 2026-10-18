@@ -35,14 +35,14 @@ from questor.providers.store_memory_sqlite import SQLiteMemoryStore
 from questor.providers.store_sqlite import SQLiteStore
 from questor.surfaces._assembly import assemble_logging, log_dir_from_env
 from questor.surfaces.cli import CliSurface, interactive
-from questor.surfaces.http_sse import EventServer
+from questor.surfaces.http_sse import EventServer, create_app
 from questor.surfaces.serve import serve
 
 #: 组合根自述行 logger（一方 inline 记录；DoD A① 的"起手即有日志"靠它兑现）。
 _LOG = logging.getLogger("questor.composition")
 
 #: 可识别的入口选项；`--resume` 需带 run_id，但选项名本身在此。
-_KNOWN_COMMANDS: frozenset[str] = frozenset({"--serve", "--resume", "--list", "--dream"})
+_KNOWN_COMMANDS: frozenset[str] = frozenset({"--serve", "--serve-openai", "--resume", "--list", "--dream"})
 
 #: CLI 用法文本（Issue #148）：与上方模块 docstring 的入口清单同源，供 `-h/--help` 与未知选项提示共用。
 #: **必须 ASCII-only**：这是用户可见输出（AGENTS §5.6：一方输出用英文，中文只进注释/docstring）。
@@ -53,6 +53,7 @@ _USAGE = """usage: python -m questor [command]
 commands:
   (none)             start the interactive REPL (every turn is persisted; supports --resume)
   --serve            run the HTTP+SSE sidecar (bind 127.0.0.1:0 + write bootstrap)
+  --serve-openai     run the authenticated external OpenAI-compat API lane (requires QUESTOR_OPENAI_API_KEYS)
   --resume <run_id>  resume a killed/restarted run from durable state
   --list             list unfinished run ids
   --dream            run offline Deep Dream distillation
@@ -62,7 +63,8 @@ env (read by the composition root only; the kernel stays env-free):
   QUESTOR_MODEL, QUESTOR_STORE_PATH, QUESTOR_MEMORY_DB, QUESTOR_MEMORY_ROOT,
   QUESTOR_SKILLS_DIR, QUESTOR_MCP_JSON, QUESTOR_LOG_DIR, QUESTOR_LOG_LEVEL,
   QUESTOR_LOG_KEEP_DAYS, QUESTOR_LOG_PAYLOAD, QUESTOR_SIDECAR_GENERATION,
-  QUESTOR_SIDECAR_BOOTSTRAP, QUESTOR_WEB_DIST, QUESTOR_DREAM_LOOKBACK
+  QUESTOR_SIDECAR_BOOTSTRAP, QUESTOR_WEB_DIST, QUESTOR_DREAM_LOOKBACK,
+  QUESTOR_OPENAI_API_KEYS, QUESTOR_OPENAI_HOST, QUESTOR_OPENAI_PORT
 """
 
 
@@ -201,6 +203,24 @@ async def _amain(argv: list[str]) -> int:
                 bootstrap_path=Path(_sidecar_bootstrap_from_env()),
                 static_dir=_web_dist_from_env(),
             )
+            return 0
+        if argv and argv[0] == "--serve-openai":
+            # 鉴权外部 OpenAI lane（ADR-0043）：fail-closed——无 API key 直接拒起，绝不开无鉴权对外端点。
+            keys = [k.strip() for k in os.environ.get("QUESTOR_OPENAI_API_KEYS", "").split(",") if k.strip()]
+            if not keys:
+                print("--serve-openai refuses to start without QUESTOR_OPENAI_API_KEYS (fail-closed)", file=sys.stderr)
+                return 2
+            host = os.environ.get("QUESTOR_OPENAI_HOST", "127.0.0.1")  # 默认 loopback；跨机暴露属算子显式配置（C12）。
+            try:
+                port = int(os.environ.get("QUESTOR_OPENAI_PORT", "8000"))
+            except ValueError:
+                port = 8000
+            import uvicorn  # 延迟 import：仅服务入口需要。
+
+            server = EventServer(surface, store)
+            app = create_app(server, openai_api_keys=keys)
+            _LOG.info("openai lane serving host=%s port=%s", host, port)
+            await uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning")).serve()
             return 0
         if argv and argv[0] == "--list":
             unfinished = await store.list_unfinished_runs()

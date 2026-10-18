@@ -23,7 +23,8 @@ Questor 是一个从零构建的 **Agent Harness**（运行时底座）+ 其上*
 - 🧩 工具 + Skills + MCP，统一权限/账本
 - 💾 事件溯源 + 断点续传 + 可恢复上下文压缩
 - 🗂 三层长期记忆 + Deep Dream 蒸馏
-- 🖥 桌面（Tauri）+ CLI + OpenAI 兼容 API，多端共享同一事件协议
+- 🖥 桌面（Tauri）+ CLI + **OpenAI 兼容 API**（鉴权外部 lane；**仅文本模态**——非文本/语音请求归一化拒绝而非静默降级，[ADR-0036](docs/adr/0036-p6-dropped-from-roadmap.md)/[ADR-0044](docs/adr/0044-non-text-content-normalize-reject.md)），多端共享同一事件协议
+- 🔌 策略/工具/技能/MCP 可热插拔（薄插件宿主 + 故障熔断、cordis 式注册形状而非通用 DI；策略 registry 支持热替换/A-B），换能力不动内核（[ADR-0045](docs/adr/0045-policy-registry-and-run-policy-ref.md)/[ADR-0046](docs/adr/0046-capability-hot-plug-host.md)）
 
 ## 文档
 

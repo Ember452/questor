@@ -16,7 +16,7 @@
 - 条目 `{id, factory, trust(system|user|project), tools?, broken?}`；信任优先级 project>user>system、最近根覆盖重名。
 - **错误二分**：`UnknownPolicyError`（id 写错，附名册）vs `BrokenPolicyError`（加载/部署错，附 reason）；破损**留名不静默消失**。
 - **降级 fail-open**：目标策略不可用 → 回落默认策略 + WARN，**绝不让 run 起不来**（C10）。
-- P1 用**进程内硬编码单策略**即可（只验证"非法意图不崩"）；注册表/发现归 P9。
+- P1 用**进程内硬编码单策略**即可（只验证"非法意图不崩"）；注册表/发现归 P9。**P9 落地（ADR-0045）**：`PolicyRegistry` 落 L4 `policy/registry.py`、进程内固定名册、**无磁盘扫描/HMR**；kernel **不 import registry**（解析在组合根/surface 得到 `PolicyPort` 再注入 loop，保 C1）；`Run` 与 `run_started` 带 additive `policy_ref{id,fingerprint}`（不 bump `v`）。
 
 ## 3. 三条关键语义（→ ADR-0009）
 1. **热替换 = run 内快照冻结、换=新 run**：创建 run 时解析一次、按值快照 `policy_id+fingerprint`，整 run 用同一份；严禁活 run 中途 swap（撕裂状态/回放/审计）。
@@ -30,4 +30,4 @@
 后台"只读分支快照重放"，写操作经 `WriteMemory` Command，绝不在活 run 上改权威态（04 X4/C10）。
 
 ## 6. 待定（v0 后锁）
-`PolicyView` 精确字段、`PlanOp` 形态、AB 分桶算法。
+`PolicyView` 精确字段、`PlanOp` 形态。（**AB 分桶算法已于 P9/ADR-0045 定死**：`stable_hash(fingerprint) % n` + 算子可覆写显式 split 表，默认 n=1=不分流的安全默认。）

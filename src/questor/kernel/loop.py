@@ -242,6 +242,7 @@ class DefaultTurnLoop:
         system: str | None = None,
         cancel_event: asyncio.Event | None = None,
         subagent_spawner: SubagentSpawnerPort | None = None,
+        capability_probe: Callable[[], int] | None = None,
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -261,6 +262,9 @@ class DefaultTurnLoop:
         self.cancel_event = cancel_event or asyncio.Event()
         # P8：子 agent 编排端口（未接线时单 run 行为逐字不变）。spawn 建子与子树冻结均走此端口。
         self.subagent_spawner = subagent_spawner
+        # P9/ADR-0046：能力名册探针（未注入则不发 tools_changed）。loop 每安全点比对、变化即发 live-only。
+        self.capability_probe = capability_probe
+        self._capability_gen = capability_probe() if capability_probe is not None else 0
 
     def _tool(self, name: str) -> Tool | None:
         """工具解析优先走冻结 surface（run 内工具面不变），否则走兼容入口。"""
@@ -334,6 +338,9 @@ class DefaultTurnLoop:
                     return run
                 if run.budget.deadline_seconds is not None and (time.monotonic() - started) > run.budget.deadline_seconds:
                     return await self._fail(run, turn, ErrorKind.TIMEOUT, f"wall-clock deadline {run.budget.deadline_seconds}s exceeded", "deadline")
+
+                # P9 安全点：能力名册变了→发 live-only tools_changed（活 run 面不变，仅告知外部观察者）。
+                await self._maybe_announce_capability(run, turn)
 
                 turn += 1
                 stack.enter_context(bind(turn=turn))  # 每轮重盖章：inline 行据此携当前 turn（G-L5 判红点）
@@ -829,6 +836,19 @@ class DefaultTurnLoop:
     async def _live(self, run: Run, turn: int, etype: str, data: dict) -> None:
         # live-only delta：只转发给订阅者，永不持久化（design/01 I3）。
         await self.bus.emit(Envelope(v=1, seq=run.seq, run_id=run.run_id, type=etype, turn=turn, data=data))
+
+    async def _maybe_announce_capability(self, run: Run, turn: int) -> None:
+        """安全点比对能力名册 generation：变化则发一条 live-only ``tools_changed``（ADR-0046）。
+
+        不 reduce、不入库（TOOLS_CHANGED ∈ LIVE_ONLY）；活 run 的冻结工具面不受影响——事件只告知
+        外部观察者“名册变了、下一次 freeze 生效”。kernel 只持注入的 Callable 探针，不 import 能力层（C1）。"""
+        if self.capability_probe is None:
+            return
+        gen = self.capability_probe()
+        if gen == self._capability_gen:
+            return
+        self._capability_gen = gen
+        await self._live(run, turn, EventType.TOOLS_CHANGED, {"domain": "tools"})
 
 
 def _has_text(message: Message) -> bool:

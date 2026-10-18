@@ -189,8 +189,14 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         ctx = replace(run.context, items=(*run.context.items, command.content))
         new = replace(run, context=ctx, status=RunStatus.RUNNING if was_idle else run.status)
         seq = new.seq + 1
-        events = [_event(seq, new, None, EventType.RUN_STARTED, {"run_id": new.run_id})] if was_idle else []
-        return replace(new, seq=seq) if events else new, events
+        if was_idle:
+            # run_started additive 带 policy_ref（P9/ADR-0045）：None 则不发该键（optional，不破旧消费者）。
+            started_data: dict[str, object] = {"run_id": new.run_id}
+            if new.policy_ref is not None:
+                started_data["policy_ref"] = {"id": new.policy_ref.id, "fingerprint": new.policy_ref.fingerprint}
+            events = [_event(seq, new, None, EventType.RUN_STARTED, started_data)]
+            return replace(new, seq=seq), events
+        return new, []
 
     if isinstance(command, AdvanceTurn):
         new = replace(run, turn=command.turn, seq=run.seq + 1)

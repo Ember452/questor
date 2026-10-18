@@ -36,7 +36,8 @@
         "warning",
         "memory_written",
         "peer_started",
-        "peer_ended"
+        "peer_ended",
+        "tools_changed"
       ]
     },
     "data": { "type": "object" }
@@ -63,14 +64,27 @@
     { "if": { "properties": { "type": { "const": "warning" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/warning" } } } },
     { "if": { "properties": { "type": { "const": "memory_written" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_written" } } } },
     { "if": { "properties": { "type": { "const": "peer_started" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/peer_started" } } } },
-    { "if": { "properties": { "type": { "const": "peer_ended" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/peer_ended" } } } }
+    { "if": { "properties": { "type": { "const": "peer_ended" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/peer_ended" } } } },
+    { "if": { "properties": { "type": { "const": "tools_changed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/tools_changed" } } } }
   ],
   "$defs": {
     "run_started": {
       "type": "object",
       "required": ["run_id"],
       "additionalProperties": false,
-      "properties": { "run_id": { "type": "string", "minLength": 1, "maxLength": 128 } }
+      "description": "Run accepted. policy_ref is an additive snapshot identity (P9/ADR-0045): resolved once at run creation and frozen for the whole run; A/B routes by fingerprint. Optional keeps v1 additive (no bump).",
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "policy_ref": {
+          "type": "object",
+          "required": ["id", "fingerprint"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "fingerprint": { "type": "string", "maxLength": 128 }
+          }
+        }
+      }
     },
     "turn_started": {
       "type": "object",
@@ -280,6 +294,13 @@
         "result_ref": { "type": ["string", "null"], "maxLength": 128 },
         "resumable_hint": { "type": "boolean" }
       }
+    },
+    "tools_changed": {
+      "type": "object",
+      "required": ["domain"],
+      "additionalProperties": false,
+      "description": "Capability roster changed (P9/ADR-0046): live-only advisory, no payload; consumers re-fetch the roster for future runs. Not persisted, never logged (C20).",
+      "properties": { "domain": { "type": "string", "enum": ["tools", "skills", "mcp", "plugins", "settings"] } }
     }
   }
 }

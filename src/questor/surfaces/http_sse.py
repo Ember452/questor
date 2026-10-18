@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -38,8 +39,11 @@ from questor.surfaces.subagent_orchestrator import SubagentOrchestrator
 
 # 终态事件集：流式跟到这些即停。
 TERMINAL = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
-# 传输级收尾帧名（§6-8）：非 harness 领域事件、不入库、不进 event.schema，仅告知“流已结束、勿自动重连”。
+#: 传输级收尾帧名（§6-8）：非 harness 领域事件、不入库、不进 event.schema，仅告知“流已结束、勿自动重连”。
 STREAM_END = "stream_end"
+
+#: P9/ADR-0047：resume 驱动租约 TTL（秒）。与 cli 面同值，防两进程 /resume 同 run 双驱。
+_RUN_LEASE_TTL_SECONDS = 300.0
 
 
 def envelope_to_json(env: Envelope) -> str:
@@ -85,13 +89,14 @@ class EventServer:
         """请求优雅关闭（仅置信号，不硬杀）；serve 看门狗会拾起并让 uvicorn 退出。"""
         self.shutdown_event.set()
 
-    def _loop(self, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
+    def _loop(self, cancel: asyncio.Event, surface: RunToolSurface, run_id: str = "") -> DefaultTurnLoop:
         """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。
 
-        注入 orchestrator 使本服务驱的 run 可调 `delegate` 起子 run（P8）；不调则无副作用。"""
-        return self.surface._loop(self.bus, cancel, surface, subagent_spawner=self.orchestrator)
+        注入 orchestrator 使本服务驱的 run 可调 `delegate` 起子 run（P8）；不调则无副作用。
+        策略按 run 经 surface 的 PolicyRegistry 解析（P9）：活 run 端口不变、换 registry 只影响新 run。"""
+        return self.surface._loop(self.bus, cancel, surface, subagent_spawner=self.orchestrator, run_id=run_id)
 
-    async def _run_with_mcp(self, controller: RunController, run_id: str) -> None:
+    async def _run_with_mcp(self, controller: RunController, run_id: str, lease_holder: str | None = None) -> None:
         """发现 MCP → 冻结工具面 → 驱动到终态 → per-run teardown。四步**必须同任务**。
 
         MCP stdio 会话的 anyio cancel scope 在哪个 task 进入就必须在那个 task 退出；若把 discover 放在
@@ -101,9 +106,12 @@ class EventServer:
         mcp_tools, mcp_teardown = await self.surface._discover_mcp(run_id)
         tool_surface = self.surface._freeze_surface(run_id, mcp_tools)
         try:
-            await self._loop(asyncio.Event(), tool_surface).drive_controller(controller)
+            await self._loop(asyncio.Event(), tool_surface, run_id=run_id).drive_controller(controller)
         finally:
             await mcp_teardown()  # 关连接+回收子进程树+stderr 句柄，防泄漏
+            # P9/ADR-0047：resume 取的租约在驱动任务收尾释放（start_run 不取→None）。
+            if lease_holder is not None:
+                await self.store.release_lease(run_id, lease_holder, 1)
 
     async def start_run(self, text: str, run_id: str | None = None) -> str:
         """后台启动一次 run（用户文本经 SubmitMessage Command 进入 inbox）。
@@ -111,7 +119,8 @@ class EventServer:
         MCP per-run 发现接进桌面路径（审计 §6-7），且与驱动/teardown 同任务（anyio 会话作组作用域）。
         """
         run_id = run_id or new_id("run")
-        run = Run(run_id=run_id, budget=Budget())
+        # P9/ADR-0045：创建 run 时按 run 解析策略、冻结 policy_ref（reduce 会在 run_started 带出）。
+        run = Run(run_id=run_id, budget=Budget(), policy_ref=self.surface._resolve_for_run(run_id)[1])
         controller = RunController(run)
         self.registry.register(controller)
         msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
@@ -166,9 +175,13 @@ class EventServer:
         run = await rebuild_run(self.store, run_id)
         if run is None:
             raise HTTPException(status_code=404, detail=f"no checkpoint for run {run_id}")
+        # P9/ADR-0047：取 run 租约防两进程 /resume 同 run 双驱；取不到→409（诚实拒绝，不双驱）。
+        holder = f"http-resume:{os.getpid()}"
+        if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
+            raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
         controller = RunController(run)
         self.registry.register(controller)
-        task = asyncio.create_task(self._run_with_mcp(controller, run_id))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）
+        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约
         self.registry.set_task(run_id, task)
         return run_id
 
@@ -195,7 +208,7 @@ class EventServer:
                 return
 
 
-def create_app(server: EventServer, static_dir: Path | None = None, token: str | None = None) -> FastAPI:
+def create_app(server: EventServer, static_dir: Path | None = None, token: str | None = None, openai_api_keys: list[str] | None = None) -> FastAPI:
     """构建 FastAPI 应用：run/cancel/approve/permissions/events 全部只投 Command 或投事件。
 
     ``static_dir``（存在时）挂载到 ``/``：桌面壳把 webview 指向本服务（ADR-0007），前端静态产物
@@ -262,6 +275,13 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
         version_header = request.headers.get("x-questor-contract-version")
         expected_version = int(version_header) if version_header and version_header.isdigit() else None
         return EventSourceResponse(server.stream(run_id, after_seq, expected_version=expected_version))
+
+    # OpenAI 兼容投影适配器（鉴权外部 lane，ADR-0043）：仅在配了 api_keys 时挂载；强制 fail-closed。
+    # 延迟 import 避免模块期循环；本面只投 Command + 订总线，不再是第二写者/第二真相。
+    if openai_api_keys:
+        from questor.surfaces.openai_compat import mount_openai_routes
+
+        mount_openai_routes(app, server, api_keys=openai_api_keys)
 
     # 静态前端（桌面壳的 webview 入口）：仅在给定且存在时挂载，挂载于所有 API 路由之后，
     # 故 /run·/events 等精确路由优先匹配，其余（含 /）走静态目录。

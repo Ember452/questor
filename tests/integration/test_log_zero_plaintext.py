@@ -48,6 +48,10 @@ def _env_for(tmp: Path) -> dict[str, str]:
         "QUESTOR_LOG_LEVEL": "INFO",
         "LITELLM_LOCAL_MODEL_COST_MAP": "True",  # 去掉 runner/本机联网拉 cost map 的噪声，判据才确定
         "PYTHONPATH": str(Path(_REPO_ROOT) / "src"),
+        # 钉住宿主编码（MA-1，同 test_log_entry_parity）：cp936/cp1252 上子进程输出需以 UTF-8 读，
+        # 否则 reader 线程 UnicodeDecodeError → 假绿。
+        "PYTHONUTF8": "1",
+        "PYTHONIOENCODING": "utf-8",
     }
 
 
@@ -60,6 +64,8 @@ def _run(args: list[str], tmp: Path, stdin_text: str | None = None) -> subproces
         cwd=_REPO_ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=120,
         **feed,
     )

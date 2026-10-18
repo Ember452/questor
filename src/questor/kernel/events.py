@@ -29,7 +29,7 @@ _log = logging.getLogger("questor.bus")
 
 #: live-only 事件：只转发给订阅者、永不持久化（design/01 I3）。
 LIVE_ONLY: frozenset[str] = frozenset(
-    {EventType.TEXT_DELTA, EventType.REASONING_DELTA, EventType.TOOL_PROGRESS, EventType.HEARTBEAT, EventType.USAGE_DELTA}
+    {EventType.TEXT_DELTA, EventType.REASONING_DELTA, EventType.TOOL_PROGRESS, EventType.HEARTBEAT, EventType.USAGE_DELTA, EventType.TOOLS_CHANGED}
 )
 # 终态事件：一轮至多一个（C13）。
 TERMINAL: frozenset[str] = frozenset({EventType.RUN_CANCELLED, EventType.RUN_FAILED, EventType.RUN_COMPLETED})
@@ -42,7 +42,7 @@ INTERNAL_ONLY: frozenset[str] = frozenset({"checkpoint_recorded", "reduce_reject
 #: 注：`project` 对"不在本表 / 值为 None"的类型均按"未知外部类型"处理（错误类保留、余下丢弃）；
 #: 故任何要外发的类型都必须在表里给显式白名单 frozenset（P7 T11 已把 draft 的 node_updated 定为此）。
 EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
-    EventType.RUN_STARTED: frozenset({"run_id"}),
+    EventType.RUN_STARTED: frozenset({"run_id", "policy_ref"}),  # policy_ref additive（P9/ADR-0045）；None/缺字段被 project 过滤
     EventType.TURN_STARTED: frozenset({"turn"}),
     EventType.TEXT_DELTA: frozenset({"delta", "item_id"}),
     EventType.REASONING_DELTA: frozenset({"delta"}),
@@ -72,6 +72,8 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     # 注：两者均不进 projection._DATA_KEYS（C20：日得不复制载荷）。
     EventType.PEER_STARTED: frozenset({"parent_run_id", "child_run_id", "node_id"}),
     EventType.PEER_ENDED: frozenset({"parent_run_id", "child_run_id", "node_id", "terminal_status", "result_ref", "resumable_hint"}),
+    # tools_changed（P9/ADR-0046）：live-only 能力名册变更告警，只一个 domain 枚举、无任何正文（C18/C20）。
+    EventType.TOOLS_CHANGED: frozenset({"domain"}),
 }
 
 

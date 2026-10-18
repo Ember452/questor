@@ -71,6 +71,14 @@ jobs:
         run: |
           uv run python scripts/check_protocol_schema.py --self-test
           uv run python scripts/check_protocol_schema.py --check
+      # ADR-0043 (C6/C15): the OpenAI-compat wire is an INDEPENDENT contract (openai_compat.schema.json).
+      # This gate asserts the projection adapter's consumed questor types are all real EventType members and
+      # that the Python wire builders (make_chunk/error_object) match the declared schema; --self-test proves
+      # it can go red (tamper-reject + drift-detect); fail-on-empty. questor event `v` is unaffected.
+      - name: OpenAI-compat wire drift check (independent contract)
+        run: |
+          uv run python scripts/check_openai_compat_schema.py --self-test
+          uv run python scripts/check_openai_compat_schema.py --check
       # P7 T3 (C15): the codegen'd TS must not silently drift from the same schema the
       # Python contract is checked against. --check regenerates in-memory and exits non-zero
       # if the committed desktop/web/src/generated/event.ts is stale. Local equivalent

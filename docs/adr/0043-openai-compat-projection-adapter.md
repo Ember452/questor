@@ -1,0 +1,23 @@
+# ADR-0043: OpenAI 兼容 = 投影适配器（wire 单一真源 + 断连即取消 + 独立鉴权外部 API lane）
+
+- 状态：✅（2026-10-18，P9 已实现并验证；实现见 [`../plan/09-p9-openai-plugin-host.md`](../plan/09-p9-openai-plugin-host.md) T2/T6/T9）
+- 背景：ROADMAP §1 P9 行 DoD"外部 OpenAI 客户端能调"；[`ADR-0007`](./0007-transport.md) 已定"OpenAI 兼容 = 同一股流的另一投影"；[`02-event-protocol`](../design/02-event-protocol.md) §9 **X5** 写死"OpenAI 兼容=投影适配器，**内核状态/权限/账本不为它简化**"、§10 写死映射纪律（标准字段走 OpenAI 语义、专有收进扩展位 `x_questor`、**无原生续传=断连即取消、`[DONE]` 终结、错误编进 `finish_reason`、内核三终态不因兼容面简化**）。现状：`surfaces/http_sse.py` 已有 `EventServer`/`create_app`，且模块 docstring 注明 SSE 帧风格改形自 CowAgent `channel/web/api/openai_compat.py`——OpenAI 端点应在此挂载。三处真矛盾需钉死：① 兼容面不得成第二写者/第二事件真相（C2/C13/C15/C16/C20、[`ADR-0033`](./0033-p7-bus-level-out-of-band-projection.md)/pitfalls #5）；② OpenAI wire 契约放哪、如何漂移门、且不 bump questor 事件 `v`；③ 用户 2026-10-18 拍板要**加鉴权、可网络暴露**，可违 [`ADR-0032`](./0032-p7-sidecar-serve-and-process-boundary.md)"绝不 bind `0.0.0.0`"的旧口径。
+- 决策：
+  1. **入站只经 Command Inbox**：`POST /v1/chat/completions` 解析 body → 取末条 user 文本 → 造 `Message(role=USER)` → **`SubmitMessage` 经该 run 的 Command Inbox** 提交（C16/[`ADR-0013`](./0013-run-command-inbox.md)）；**绝不在 surfaces 直接 `reduce`/写态**。出站**只读** `bus.subscribe(run_id)` 投影，不改状态、不入库。
+  2. **投影映射表（钉死，design/02 §10）**：`run_started`→首帧 `delta:{role:"assistant"}`；`text_delta`→`choices[].delta.content`；`reasoning_delta`→`delta.reasoning_content` 或 `x_questor`；`tool_started`/`tool_completed`→`delta.tool_calls`（questor `tool_call_id`↔OpenAI `tool_calls[].id`、按 index 归组）；`run_completed`→`finish_reason:"stop"` + `data:[DONE]`；`run_cancelled`→`finish_reason` + `[DONE]`；`run_failed`→末帧 `finish_reason` + `{error:{type,code,message,retryable}}`（或 `x_questor.error`）+ `[DONE]`。标准字段走 OpenAI 语义、专有只进 `x_questor`。
+  3. **OpenAI wire 单一真源 = 独立契约，questor 事件契约不承载它**：新建 `protocol/openai_compat.schema.json`（chat `request`+`chat.completion.chunk`+error object）+ `contracts/openai_wire.py`（请求/choice/chunk/error 数据类 = Python 侧权威形状）；questor `protocol/event.schema.json` **不收任何 OpenAI 形状**、**`EVENT_SCHEMA_VERSION` 不 bump**（兼容面是消费者，不新增 questor 事件类型）。漂移门 = 新建 `scripts/check_openai_compat_schema.py`（复刻 `check_protocol_schema` 的 `--check`/`--self-test`/fail-on-empty：映射表引用的 questor type ⊆ `EventType`、wire schema 良构、**拒未知 content part**、能判红）。
+  4. **无原生续传 = 断连即取消、不假装 resume**：外部客户端断 SSE → 服务端经 inbox 提 `Cancel`（该 run 落 `run_cancelled`），OpenAI 面**不提供** `after_seq` 续传（区别于桌面 `/events` 的 ADR-0021 续传）。内核三终态（completed/cancelled/failed）**不因兼容面合并或简化**。
+  5. **带外投影零双投**：兼容面**绝不**再调 `log_envelope`；复用 `EventServer` 已挂的**唯一** bus 级只读 observer（[`ADR-0033`](./0033-p7-bus-level-out-of-band-projection.md)、pitfalls #5）。多消费者（CLI+SSE+OpenAI）同 run 每 seq 主干日志恰一行。
+  6. **独立"鉴权外部 OpenAI API lane"（用户拍板，对 ADR-0032 分道 scoping、非推翻）**：这是与桌面 sidecar `--serve`（loopback bootstrap）**并行的第二条 L6 面**——独立 serve 入口（组合根 `--serve-openai`）、可由算子配置 **opt-in 非 loopback bind + 强制 API-key/bearer fail-closed**（无/错 key→401；密钥经 env/config 管理、**绝不入库/进事件/进日志**，C20/`ADR-0019`），非 loopback 建议 TLS（TLS 终结属部署侧）。**桌面 sidecar `--serve` 的 loopback 红线（`ADR-0032`）原样保留不动。**
+  7. **安全硬边界（OpenAI wire 无审批通道 → 必钉）**：经本 lane 起的 run 采**保守权限默认**——`permission_mode=default`、`ask` 工具**超时 fail-closed deny**（外部客户端不得自动批准）、lane 工具 **capability floor 默认收窄**（高危 write/exec 不因"外部可调"降为 allow，承 C17）。
+- 后果：
+  - 正面：任意外部 OpenAI-SDK 客户端可用；兼容面是纯投影、不破单写者/单真相；wire 契约独立单一真源 + 机械漂移门；`v` 不 bump、内核不为其退化；外部暴露有 fail-closed 鉴权 + 权限收窄护栏。
+  - 代价 / 需持续守：`/v1/chat/completions` 的有状态 run + 无状态 wire 之间的生命周期映射（一次请求↔一个 run）需钉死；鉴权外部 lane 与桌面 sidecar 共享 store 时的同 run_id 双驱风险由 [`ADR-0047`](./0047-cross-process-claim-delivery-run-lease.md) run-lease 兜；非 ASCII 入站须两端钉 `utf-8`（承 cp1252 教训）；`check_openai_compat_schema` 与 `check_protocol_schema` 双门都须 `--self-test`+fail-on-empty（C15）。
+- 备选(被否)：
+  1. 兼容面自持状态/直 reduce → 否（第二写者，破 C2/C16/C20）。
+  2. 把 OpenAI chunk 形状塞进 questor `event.schema.json`、或给兼容面加新 questor 事件类型 → 否（两契约混一、违 C15 单一真源、且逼 bump `v`）。
+  3. 给 OpenAI 面接 `after_seq` 续传假装可 resume → 否（违 design/02 §10"无原生续传"）。
+  4. 兼容面逐消费者各调 `log_envelope` → 否（pitfalls #5 多 surface 双投）。
+  5. 复用桌面 sidecar 的会话 token 兼作对外鉴权 → 否（桌面 token 是本地启动握手、非对外 API 长期凭据；对外须独立 API-key + fail-closed + 权限收窄）。
+  6. 直接把桌面 sidecar 改 bind `0.0.0.0` → 否（违 `ADR-0032` 进程边界红线、把裸 loopback 暴露升级成全网暴露）；本 ADR 以**并行独立 lane**分道，不动 sidecar 边界。
+- 关联：`ADR-0007`/`ADR-0032`（本 ADR 对其分道 scoping）/`ADR-0033`/`ADR-0013`/`ADR-0016`/`ADR-0019`/`ADR-0028`/`ADR-0036`（决策5 非文本拒见 [`ADR-0044`](./0044-non-text-content-normalize-reject.md)）/`ADR-0047`（跨进程 run-lease 兜双驱）；HARD-CONSTRAINTS C2/C13/C14/C15/C16/C17/C18/C19/C20；`docs/design/02-event-protocol.md` §9 X5/§10；`docs/pitfalls.md` #5/#1；peer：CowAgent `channel/web/api/openai_compat.py`（MIT，取 wire 形状）。

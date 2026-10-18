@@ -29,7 +29,7 @@ Kernel 内部事件(细粒度、私有、可随实现演进)
 ## 3. 外部事件 v0（type → 触发 → data 关键字段 → 是否终态）
 | type | 触发 | data（关键字段） | 终态 |
 |---|---|---|---|
-| `run_started` | 受理 SubmitMessage | run_id | 否 |
+| `run_started` | 受理 SubmitMessage | run_id, `policy_ref`?(P9/ADR-0045 additive、不 bump `v`) | 否 |
 | `turn_started` | 每轮开始 | turn | 否 |
 | `text_delta` | 可见文本流式分片 | delta | 否（**不持久化**） |
 | `reasoning_delta` | 推理流式分片 | delta | 否（不持久化） |
@@ -70,7 +70,7 @@ Kernel 内部事件(细粒度、私有、可随实现演进)
 - `protocol/event.schema.json` 采用 `type → $defs payload schema` 的 `oneOf`；每 payload `additionalProperties:false`。新增可选字段先 schema、再代码、再 TS codegen。
 
 ## 7. 生长场景验收（证明"只增不改"够用）
-语音附件→`voice_attached`（P6 已移除、仍作协议纪律例证，ADR-0036）；**子agent→`peer_started/peer_ended`+`node(kind=subagent)` 已于 P8 定形（[ADR-0042](../adr/0042-peer-event-additive-shape.md)，additive、不 bump `v`）**；产物→`artifact`；MCP 热增→`tools_changed`；预算→`budget_update`。**均不碰信封/关联键/终止序**——若某扩展逼着改这三样，即协议设计错。
+语音附件→`voice_attached`（P6 已移除、仍作协议纪律例证，ADR-0036）；**子agent→`peer_started/peer_ended`+`node(kind=subagent)` 已于 P8 定形（[ADR-0042](../adr/0042-peer-event-additive-shape.md)，additive、不 bump `v`）**；产物→`artifact`；MCP 热增→`tools_changed`（**P9/ADR-0046 定形：live-only 告警、`domain∈{tools,skills,mcp,plugins,settings}`、不占 durable seq、不 bump `v`**）；预算→`budget_update`。**均不碰信封/关联键/终止序**——若某扩展逼着改这三样，即协议设计错。
 
 ## 8. 待定（v0 后锁，C11）
 - 每事件的**精确 data 字段**：先给上面核心集，跑通 2-3 个策略变体后 lock。
