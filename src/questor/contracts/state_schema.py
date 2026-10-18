@@ -319,6 +319,10 @@ class Budget:
     max_consecutive_continuations: int = 8
     approval_timeout_seconds: float = 300
     tool_default_timeout_seconds: float = 120
+    # P8 fan-out 预算（ADR-0041）：默认 None = 不允许 fan-out（保守）；由 capabilities/subagent 的
+    # admission gate 强制（wuu spawn_slot reservation），非硬杀。
+    max_parallel_children: int | None = None  # 单个父 run 同时在世的子 run 上限
+    max_tree_depth: int | None = None  # 编排树深度上限（默认语义由调用侧取 1：父不直接生孙）
 
     def __post_init__(self) -> None:
         # 审批/工具超时是 fail-closed 默认；非法值必须在状态构造期拒绝。
@@ -326,3 +330,8 @@ class Budget:
             raise ValueError("Budget.approval_timeout_seconds must be positive")
         if self.tool_default_timeout_seconds <= 0:
             raise ValueError("Budget.tool_default_timeout_seconds must be positive")
+        # fan-out 上限非正即非法（None 表"未设置"合法）；避免零/负宽度被误读为"无限"。
+        if self.max_parallel_children is not None and self.max_parallel_children < 1:
+            raise ValueError("Budget.max_parallel_children must be >= 1 or None")
+        if self.max_tree_depth is not None and self.max_tree_depth < 1:
+            raise ValueError("Budget.max_tree_depth must be >= 1 or None")

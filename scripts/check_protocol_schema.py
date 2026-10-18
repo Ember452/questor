@@ -192,6 +192,11 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         "resync_required": _envelope("resync_required", {"reason": "version_mismatch", "expected": 1, "current": 1}),
         "warning": _envelope("warning", {"message": "be careful"}),
         "memory_written": _envelope("memory_written", {"kind": "daily", "chunk_count": 2}),
+        "peer_started": _envelope("peer_started", {"parent_run_id": "rp", "child_run_id": "rc", "node_id": "n1"}),
+        "peer_ended": _envelope(
+            "peer_ended",
+            {"parent_run_id": "rp", "child_run_id": "rc", "node_id": "n1", "terminal_status": "completed", "resumable_hint": False},
+        ),
     }
 
 
@@ -202,7 +207,16 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     missing_required = json.loads(json.dumps(_valid_fixtures()["approval_request"]))
     del missing_required["data"]["reason"]  # 缺 required 判红
     oversized = _envelope("text_delta", {"delta": "x" * 9000})  # 超 maxLength 判红
-    return {"over_field": over_field, "missing_required": missing_required, "oversized": oversized}
+    # P8 peer_*：非枚举终态 + 未知载荷字段（additionalProperties:false）都必被拒。
+    peer_bad_status = _envelope("peer_ended", {"parent_run_id": "rp", "child_run_id": "rc", "node_id": "n1", "terminal_status": "weird"})
+    peer_over_field = _envelope("peer_started", {"parent_run_id": "rp", "child_run_id": "rc", "node_id": "n1", "prompt": "leak"})
+    return {
+        "over_field": over_field,
+        "missing_required": missing_required,
+        "oversized": oversized,
+        "peer_bad_status": peer_bad_status,
+        "peer_over_field": peer_over_field,
+    }
 
 
 def self_test() -> int:
