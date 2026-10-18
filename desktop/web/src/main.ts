@@ -160,7 +160,11 @@ composer.addEventListener("submit", (e) => {
   void client
     .run(text)
     .then((ack) => openStream(ack.run_id))
-    .catch(() => log.appendChild(el("div", "error", "启动 run 失败")));
+    .catch((err: unknown) => {
+      // 错误类必出声（C6）：带上 CommandClient 抛出的真实 HTTP 状态，便于定位 401/5xx/断连。
+      const msg = err instanceof Error ? err.message : String(err);
+      log.appendChild(el("div", "error", `启动 run 失败：${msg}`));
+    });
 });
 
 cancelBtn.addEventListener("click", () => {
@@ -176,8 +180,11 @@ const tauriEvents = (window as unknown as {
   __TAURI__?: { event?: { listen: <T>(name: string, handler: (e: { payload: T }) => void) => Promise<unknown> } };
 }).__TAURI__;
 if (tauriEvents?.event?.listen) {
-  void tauriEvents.event.listen<SidecarStatus>("sidecar_status", (e) => {
-    const banner = statusBanner(e.payload);
-    if (banner) log.appendChild(el("div", banner.level === "warn" ? "error" : "warn", banner.text));
-  });
+  void tauriEvents.event
+    .listen<SidecarStatus>("sidecar_status", (e) => {
+      const banner = statusBanner(e.payload);
+      if (banner) log.appendChild(el("div", banner.level === "warn" ? "error" : "warn", banner.text));
+    })
+    // capability 未对当前 origin 授权时静默降级（横幅不显示，不冲击命令/事件流主链路），不刷未捕获拒绝。
+    .catch(() => undefined);
 }

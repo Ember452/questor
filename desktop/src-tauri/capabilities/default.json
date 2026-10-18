@@ -3,5 +3,8 @@
   "identifier": "default",
   "description": "主窗口默认能力：只加载 loopback sidecar，不授予 fs/shell（薄客户端，S6/C14）。",
   "windows": ["main"],
-  "permissions": ["core:event:default"]
+  "permissions": ["core:event:allow-listen"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*"]
+  }
 }
