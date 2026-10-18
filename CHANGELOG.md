@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — P8 多 agent / 子 agent + DAG（分支 `feat/p8-multi-agent-dag`；详 `docs/plan/08-p8-multi-agent-dag.md`；ADR-0037~0042）
+- **契约/事件（T1/T2，ADR-0042）**：新增外部事件 `peer_started`/`peer_ended`（20→22 type、additive、不 bump `v`），`contracts` ⟂ `protocol/event.schema.json` ⟂ TS `event.ts` 三处 lockstep（`check_protocol_schema` 守、`--self-test` 扩 fixture）；新增 `SpawnSubagent`/`ReportChildTerminal`/`UpdateTaskTree` Command 与 `Budget.max_parallel_children`/`max_tree_depth`。
+- **状态机（T3/T4，ADR-0037/0038）**：`reduce` 首次处理 `task_tree`——DAG 依赖校验（无环/悬空/自环/唯一，I1）+ spawn 绑定 `assigned_run_id` + 子终态回填 `peer_ended`；非法命令拒+发错误事件、不改树、不崩。快照 schema 保持 v3（TaskNode 字段未变）；`check_replay_determinism` `_canonical` 纳入 `task_tree` + spawn/report fixture + 子顺序无关判据。
+- **子 agent=独立 Run（T5/T6/T8，ADR-0038）**：`SubagentSpawnerPort`/`CommandRouterPort` 抽象 + `surfaces/subagent_orchestrator.py` 实现（同进程 asyncio 起子 run、跨 run 只经 Command、子终态 `ReportChildTerminal` 回父、父 terminal→`Cancel(owner)` 冻结子树不硬杀）；L3 `delegate` 工具复用既有工具生命周期。
+- **安全边界（T7/T13，ADR-0040/0041）**：子 `PermissionCtx` 投影 fail-closed（mode 不继承、rules⊆父、denylist 只扩大、floor 同 OS）；fan-out 宽度/深度 admission gate（默认 4/1）。
+- **判据（均机器验证）**：`test_p8_two_run_collaboration`（两 run 协作端到端、无旁路写）、`test_p8_reduce`/`test_p8_dag`（非法 DAG 拒+不崩）、`test_p8_permission_inherit`（子⊆父）、`test_p8_cancel_and_fanout`（取消传播+gate）、`test_p8_resume_roundtrip`（快照 round-trip/幂等）。全量 730 passed / 5 skipped、四守卫绿、`cargo`/TS codegen 无回归。
+- **UNVERIFIED/后置（诚实边界）**：真 LLM/真开窗口驱动多 agent；跨进程 exactly-once（claim/delivery_state 账本归 P9，ADR-0021/0038）；工具 reader/writer gate（ADR-0039 显式再推后）。未合 main（PR-only，push/merge 待授权）。
+
 ### Fixed — `python -m questor --help` 掉进 REPL（Issue #148）
 
 实地验证复现：`--help` / `-h` **不打印任何用法**而是直接起交互 REPL（rc=0），且拼错的选项（如 `--resum`）

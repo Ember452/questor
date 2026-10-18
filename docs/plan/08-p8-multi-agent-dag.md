@@ -251,3 +251,13 @@
 **D-6 `peer_*` 事件是否进带外日志投影？**
 - 选项：(a) **只进事件协议、不进 `projection._DATA_KEYS`（推荐，最贴 C20，落 ADR-0042）**；(b) 把 `child_run_id`（关联键、非载荷）纳入日志白名单便于排障。
 - 推荐先 (a)，P10 observability 刀 3 再评估 (b)。代价：(a) 下排障要看事件流而非日志。
+
+---
+
+## 9. 落地偏差回填（实现收尾，AGENTS §5.5 Reality-wins）
+
+- **机制细化（不改契约/不变式）**：计划的"ProposeSpawn 意图 + loop 消费点建子"改为 **`delegate` 工具走既有工具生命周期 + "委派即 await 子终态"**。原因：① `design/00` 本就把子 agent 编排归 L3 能力，工具路径复用权限/沙箱/超时/配对，改动面最小（AGENTS §2/§3）；② 若父 loop 阻塞在"等子"上就不能同时 drain 自己 inbox 去 `materialize_child`（会死锁），故子由端口**直接起跑**、`SpawnSubagent`/`ReportChildTerminal` 仍经父 inbox 做记账+发 peer 事件（跨 run 只经 Command 不变，C2/C16）。loop `_consume_commands` 的 materialize 钩子保留且幂等，用于崩溃/回放重实体化。
+- **`orchestrator`/`parallel_safe`/`barrier` 口径**：`orchestrator` 现为"会 spawn 子 run"的标记，真正的 fan-out 上限由 `SubagentSpawnerPort` admission gate 强制（非派发读位改并发）——刻意不重演 ADR-0029 的"字段存在≠gate 存在"。工具 reader/writer gate 经 ADR-0039 显式再推后至 P10/独立 Phase。
+- **已机器验证 vs UNVERIFIED（定死不冒充）**：DoD①②③④⑤⑦ + spawn 幂等/快照 round-trip 全绿（`tests/{unit,integration}/test_p8_*` + `test_p8_two_run_collaboration` 两真 run 端到端）。**UNVERIFIED**：真 LLM/真开窗口驱动多 agent；跨进程 exactly-once（claim/delivery_state 账本，ADR-0021/0038 归 P9）；工具级真并发 gate。
+- **守卫现状**：`check_protocol_schema` 22 类型 lockstep、`check_replay_determinism` 4 fixture（含 task_tree + 子顺序无关）、`check_projection_whitelist`/`check_layering_ast`(110 文件 0 违规) 全绿；全量 730 passed。
+- **收尾**：ADR-0037~0042 已落册、design/01 I6+§3/§13 与 design/02 §3/§7 已就地修订、ROADMAP §1/§1.5、CHANGELOG、subagent README 去 stub 均已同步。未合 main（PR-only，push/merge 待逐次授权）。
