@@ -14,6 +14,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const schemaPath = resolve(here, "../../../protocol/event.schema.json");
 const outputPath = resolve(here, "../src/generated/event.ts");
 const banner = "/* AUTO-GENERATED from protocol/event.schema.json. DO NOT EDIT. */";
+// §6-5：进程级 sidecar_status 面（独立于 per-run 信封），单独生成一份 TS 类型。
+const statusSchemaPath = resolve(here, "../../../protocol/sidecar_status.schema.json");
+const statusOutputPath = resolve(here, "../src/generated/sidecarStatus.ts");
+const statusBanner = "/* AUTO-GENERATED from protocol/sidecar_status.schema.json. DO NOT EDIT. */";
 
 const toPascal = (snake) =>
   snake.split("_").map((s) => s[0].toUpperCase() + s.slice(1)).join("");
@@ -45,19 +49,43 @@ const generated =
   dataInterfaces.join("\n") +
   "\n";
 
+// §6-5：把 sidecar_status.schema.json 编成具名 TS 类型（state 枚举→字面量联合）；
+// 改 schema 不重生成则 --check 判红，与 Python 侧字段级门同经同纬。
+const statusSchema = JSON.parse(await readFile(statusSchemaPath, "utf8"));
+const { $schema: _dropSchema, $id: _dropId, title: _dropTitle, ...statusRest } = statusSchema;
+const statusGenerated =
+  statusBanner +
+  "\n" +
+  (await compile(statusRest, "SidecarStatus", {
+    bannerComment: "",
+    cwd: dirname(statusSchemaPath),
+    unreachableDefinitions: false,
+  }));
+
+const outputs = [
+  { path: outputPath, content: generated },
+  { path: statusOutputPath, content: statusGenerated },
+];
+
 if (process.argv.includes("--check")) {
-  const current = await readFile(outputPath, "utf8").catch(() => "");
-  if (current !== generated) {
-    process.stderr.write(
-      "Generated protocol types are stale. Run `npm run generate:protocol`.\n",
-    );
+  let stale = false;
+  for (const { path, content } of outputs) {
+    const current = await readFile(path, "utf8").catch(() => "");
+    if (current !== content) {
+      process.stderr.write(`Generated protocol types are stale for ${path}. Run \`npm run generate:protocol\`.\n`);
+      stale = true;
+    }
+  }
+  if (stale) {
     process.exitCode = 1;
   } else {
     process.stdout.write("protocol TS types are up to date.\n");
   }
 } else {
   // 目标目录可能尚未建（新面首次生成）；writeFile 不自动建目录，先 mkdir -p。
-  await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, generated, "utf8");
-  process.stdout.write(`wrote ${outputPath}\n`);
+  for (const { path, content } of outputs) {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, content, "utf8");
+    process.stdout.write(`wrote ${path}\n`);
+  }
 }
