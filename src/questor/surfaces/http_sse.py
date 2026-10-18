@@ -34,6 +34,7 @@ from questor.state.domain_state import Run
 from questor.surfaces.approval import http_status_for_receipt
 from questor.surfaces.cli import CliSurface
 from questor.surfaces.run_registry import RunRegistry
+from questor.surfaces.subagent_orchestrator import SubagentOrchestrator
 
 # 终态事件集：流式跟到这些即停。
 TERMINAL = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
@@ -74,6 +75,9 @@ class EventServer:
         # （收口 plan/05 §0.4 缺口：`stream()` 曾完全不投）。挂在此处一次，与 SSE 订阅者数量无关。
         self.bus.add_observer(log_envelope)
         self.registry = RunRegistry()
+        # P8 子 agent 编排：把 SubagentSpawnerPort 实现接到本服务共享的 bus/store/registry 上。
+        # 仅当 run 调 `delegate` 时才起子；不调则行为与 P7 逐字一致。
+        self.orchestrator = SubagentOrchestrator(surface=surface, store=self.store, bus=self.bus, registry=self.registry)
         # 优雅关闭信号：`/shutdown` 置位，serve 面的看门狗据此让 uvicorn 应声停机（不等 grace 超时硬杀）。
         self.shutdown_event = asyncio.Event()
 
@@ -82,8 +86,10 @@ class EventServer:
         self.shutdown_event.set()
 
     def _loop(self, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
-        """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。"""
-        return self.surface._loop(self.bus, cancel, surface)
+        """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。
+
+        注入 orchestrator 使本服务驱的 run 可调 `delegate` 起子 run（P8）；不调则无副作用。"""
+        return self.surface._loop(self.bus, cancel, surface, subagent_spawner=self.orchestrator)
 
     async def _run_with_mcp(self, controller: RunController, run_id: str) -> None:
         """发现 MCP → 冻结工具面 → 驱动到终态 → per-run teardown。四步**必须同任务**。

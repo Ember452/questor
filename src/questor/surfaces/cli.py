@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from questor.capabilities.skills.catalog import build_skill_catalog
+from questor.capabilities.subagent.delegate import DelegateTool
 from questor.capabilities.tools.apply_patch import ApplyPatchTool
 from questor.capabilities.tools.bash import BashTool
 from questor.capabilities.tools.edit import EditTool
@@ -31,6 +32,7 @@ from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
 from questor.contracts.memory import MemoryStorePort
 from questor.contracts.ports import ProviderPort, StorePort
 from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role, RunStatus
+from questor.contracts.subagent import SubagentSpawnerPort
 from questor.contracts.tool import RunToolSurface, Tool
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
@@ -87,7 +89,7 @@ def sys_stdin_tty() -> bool:
 def _default_registry() -> ToolRegistry:
     """P2 默认内置工具集（注册表只收 available() 为真的，缺 bash 的平台自动隐藏）。"""
     registry = ToolRegistry()
-    for tool in (ReadTool(), WriteTool(), EditTool(), ApplyPatchTool(), LsTool(), GlobTool(), GrepTool(), BashTool(), PowerShellTool(), MemorySearchTool()):
+    for tool in (ReadTool(), WriteTool(), EditTool(), ApplyPatchTool(), LsTool(), GlobTool(), GrepTool(), BashTool(), PowerShellTool(), MemorySearchTool(), DelegateTool()):
         registry.register(tool)
     return registry
 
@@ -122,8 +124,10 @@ class CliSurface:
         catalog = build_skill_catalog(skills_dir)
         self.system = f"{system}\n\n{catalog}".strip() if catalog else system
 
-    def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
-        """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。"""
+    def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface, subagent_spawner: SubagentSpawnerPort | None = None) -> DefaultTurnLoop:
+        """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。
+
+        ``subagent_spawner`` 由组合根注入（P8 多 agent）；未注入时单 run 行为逐字不变。"""
         return DefaultTurnLoop(
             provider=self.provider,
             policy=ReActPolicy(),
@@ -138,6 +142,7 @@ class CliSurface:
             model=self.model,
             system=self.system,
             cancel_event=cancel,
+            subagent_spawner=subagent_spawner,
         )
 
     async def _discover_mcp(self, run_id: str) -> tuple[list[Tool], Teardown]:
