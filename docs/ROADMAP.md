@@ -22,13 +22,14 @@
 | **P3 持久化 + 断点续传** | 事件溯源 + 快照 + resume | P2 | kill 进程后重启能续跑/回放；`after_seq` 重连不丢不重 | [plan/03](./plan/03-p3-persistence-resume.md) ✅（ADR-0020-0022 已实现；分支 `feat/p3-persistence-resume`：真 OS 进程 kill→`--resume` + 真 uvicorn SSE `after_seq` 重连实测通过） |
 | **P4 记忆 v1（灵魂）** | 短期 → 三层 + Deep Dream + 检索（详 `design/06-memory.md`） | P3 | 跨会话记住并检索到一件事；夜间蒸馏产出 | [plan/04](./plan/04-memory-soul.md) ✅（ADR-0023~0026 已实现；分支 `feat/p4-memory-soul`：DoD①②③④⑤ 集成测试通过、405 passed；真 LLM/embedding 与压缩生产者后置 P10 标 UNVERIFIED） |
 | **P5 Skills / MCP** | 技能加载 + MCP 接入 | P3（仅适配器 stub 可早；完整需账本/持久化） | 丢一个 SKILL.md 即生效；挂一个 MCP server 出工具 | plan/05 |
-| **P6 多模态 / 语音** | 图/文件；语音**全走 LiteLLM** | P3 | 发图能识别；语音 ASR/TTS 通 | plan/06 |
+| ~~**P6 多模态 / 语音**~~ | **已整阶段移除**（[ADR-0036](./adr/0036-p6-dropped-from-roadmap.md)）：语音 + 图像全砍，不再占阶段编号；日后按 L5 provider / L6 surface 接缝作按需扩展回归 | — | — | 无（`plan/06` 从未开工） |
 | **P7 桌面壳（Tauri）** | Web UI 订阅事件协议 | P1（可早接） | 桌面窗口跑通 P1-P4 全部能力，断线能重连 | plan/07 |
 | **P8 多 agent / 子 agent + DAG** | 编排引擎、DAG 依赖 | P4 | 两 agent 协作完成一任务；DAG reduce 校验通过 | plan/08 |
 | **P9 对外 + 插件宿主** | OpenAI 兼容 API；cordis 式 DI/热插拔（策略注册表/热替换/AB 详 `design/05-policy.md`，在此落） | P7 | 外部 OpenAI 客户端能调；能力可热插拔不崩内核 | plan/09 |
 | **P10 加固** | 可恢复压缩 / 评测回归网 / observability | P3起持续 | 任务级回归网跑通；压缩不丢事实召回；追踪面板基于事件流 | plan/10 |
 
 > 顺序不是死板线性：P1→P2→P3 是主干必经；P4-P10 里 P7(桌面) 可提前接、P10 贯穿后期。每 Phase 的"进 v1/后做"见 §2。
+> **P6 已整阶段移除**（[ADR-0036](./adr/0036-p6-dropped-from-roadmap.md)）：v1 后的既定序列 = **P8 → P9 → P10**；编号**不重排**（P7-P10 作为锚点已散布于 ADR/审计/交付报告/分支名）。
 
 ### 1.5 Phase 落地备注（约束写备注、上表保持简洁）
 - **P0**：只产**接口桩(stub)**，无业务逻辑、**不能跑 Agent 任务**；可跑从 P1 起（R5）。
@@ -37,13 +38,14 @@
 - **P7**：“可早接”=**只做极简调试面板、仅消费外部事件协议**，**禁止把业务/状态/校验下沉到 Shell**（R1）。前端**尽量改造参考项目已有 UI 代码**（**同栈优先：DeepCode Tauri v2 `web`+`src-tauri` + EvoFlow `evopanel`(Tauri+pnpm)**；GenericAgent(tauri)、Cow/wuu/hermes 的 Electron 前端可迁 Tauri；hermes `web`/`ui-tui` 与 wuu `clients/` 参照），**仓库列表以 `project-main/` 目录当下为准、写计划前重看**，复用后仍守“瘦客户端、零业务下沉”（AGENTS §4.5）。
   - **P7 落地备注（2026-10-17，分支 `feat/p7-desktop-shell`）**：① **DoD 口径按现实上修为“跑通 P1–P5 全部能力”**（P5 Skills/MCP 已合入 `290375e`，原表“P1-P4”是旧口径）。② 已落地并**机器验证**：sidecar serve 生产入口（`surfaces/serve.py`，loopback `127.0.0.1:0` + generation bootstrap，ADR-0032）、带外投影收口为 **bus 级一条只读订阅**（ADR-0033，正面收 `plan/05` §0.4 缺口）、协议 TS codegen + 漂移 `--check`（ADR/`check_protocol_schema` 三处 lockstep）、`node_updated`/`tool_completed`/`message_completed`(final_text，D-P7-C 选型①) 的 **additive** 定形（ADR-0034/0035）、TS 瘦客户端（SSE `ThreadEventStream` + `CommandClient`，vitest 12 绿）、`check_thin_client` 瘦客户端守卫（进独立 blocking `boundaries`）、`verify_release_bundle` 结构门 + sidecar 窄锁、**Rust `desktop/sidecar` 监管核心（generation 栅栏 `Fence`/`two_phase_shutdown`/`fail_all`/loopback `wait_ready` + 真子进程强杀测试，`cargo test` 8 绿）**、端到端能力矩阵（真 uvicorn+httpx，脚本化 provider，`test_p7_desktop_e2e`）。③ **UNVERIFIED / 未做（诚实边界）**：**Tauri 壳已搭并本地编译验证**（`desktop/src-tauri`：复用 `questor-sidecar`、`cargo check` Finished + `cargo test` 2 passed；spawn `--serve` 子进程、读 bootstrap、webview 指 loopback 端、退出走 `two_phase_shutdown`；tauri.conf.json 锁 CSP、capabilities 不授 fs/shell）。**已验新增**：Vite 薄客户端 app（`tsc`+`vite build` 产 dist）、sidecar `create_app` 挂静态伺服（TestClient 验 / 返回首页）、Windows **Job Object 杀进程树**（裸 kernel32 FFI，真子进程 `cargo test` 绿）、**PyInstaller onedir 冻结 + `verify_release_bundle --verify-runtime`**（启动冻结 exe、无系统 Python，/run→/events 实跑全流）。**仍 UNVERIFIED**：真开窗口/像素渲染（需显示）、全量 `tauri build` 桌面 bundle（需 `@tauri-apps/cli`+WebView2+vite 产物链）、真远程 MCP server 端到端、真 LLM、在途半条 live-delta 文本恢复——本机无头不跑真窗口，未伪造（cargo/WebView2/pyinstaller 均可用且已实测）。详 `docs/plan/07-p7-desktop-shell.md` §8 偏差回填。
 - **P4**：记忆走 **Command→Reduce→StorePort**、算法作可插拔策略不耦合 Kernel；**依赖 P3、不提前做**（R3）。**P4 落定修正**：① daily 生产者 = 显式 `WriteMemory` + run-完成边界 flush（压缩丢弃→L2' 蒸馏活路随 `disable_compaction=True` 后置 P10，ADR-0025）；② `PolicyView.memory` 自动填充会耦合进 L2 内核、违"换策略不动 loop"，故 P4 的 DoD④ 由可插拔 `MemoryStrategyConfig` + `memory_search` 工具承载，policy 仅作 L4 消费 `view.memory` 的接缝示例。
+- **P9**：因 P6 已移除（ADR-0036），OpenAI 兼容面收到 `image_url` / `input_audio` 等非文本 content part 或语音类请求时，必须**归一化拒绝**（明确的 provider 能力不支持错误，走 ADR-0028 故障归一终态）——**绝不崩、绝不静默降级成纯文本继续跑**；写进 `plan/09` 前置门。
 - **P10**：横切 concern——**轻量可观测/错误栈从 P1 就落**（**已由日志骨架刀 2 落地，ADR-0027**：双通道 + `LogEntry` + 脱敏/节流/关联 id/按日文件面；此前 ROADMAP 373 文件规划里 observability **零配额**是它欠债到 P4 之后的结构性原因，本行起记其文件配额归口）；追踪面板 / `questor logs` 消费命令 / OTel/metrics / `--log-payload` preview 实装随**刀 3**（DESIGN §14）；完整可恢复压缩、回归评测套件后期（R4）。
-- **契约占位在前期**：MCP/子agent/多模态的 ToolSpec/事件 type/state 字段，**P0-P2 先写 draft/unimplemented 占位**，别等 P5/P6 回头改 02/03 造成破坏性变更（R2）。
+- **契约占位在前期**：MCP/子agent 的 ToolSpec/事件 type/state 字段，**P0-P2 先写 draft/unimplemented 占位**（`kind=subagent` 确已落 `contracts/state_schema.py:138`），别回头改 02/03 造成破坏性变更（R2）。**多模态占位从未落地、也无需补**——P6 已随 [ADR-0036](./adr/0036-p6-dropped-from-roadmap.md) 移除；旧文档（`delivery/P1-completion-report.md:110`、`plan/01:44,112`）声称已占位，与 `contracts/events.py:251-273`（20 个 `EventType` 无一多模态类）不符，由该 ADR 就地记账、历史报告不回改。
 
 ## 2. v1 范围建议（最优：先把"可长期演进的核心"做扎实，重且不确定的后置）
 - **进 v1（P0-P4 + P7）**：harness 内核（循环/状态/事件/命令）、LiteLLM 多模型、核心工具 + 三态权限 + 受限沙箱、持久化/断点续传、**记忆三层+Deep Dream**、Tauri 桌面把 UI 立起来。理由：这是"个人 agent 能不能真用 + 架构承重墙"，晚做=重构。
-- **v1 后（P5/P6/P8/P9/P10）**：Skills/MCP、语音多模态、多 agent/DAG、OpenAI 兼容/插件宿主、评测网加固。理由：都是"挂在已稳接缝上的扩展"，晚做只加不改。
-- 唯一要现在就预留、不实现的：**事件 `type` 占位 + 任务树 `kind=subagent` 字段**（P8/P6 接进来时不用改协议/状态）。
+- **v1 后（P5 已完 → P8 → P9 → P10）**：Skills/MCP、多 agent/DAG、OpenAI 兼容/插件宿主、评测网加固。理由：都是"挂在已稳接缝上的扩展"，晚做只加不改。**多模态/语音不在序列内**（ADR-0036 整阶段移出）：它是最容易后加的一层，遇到真实需求时按 `design/02 §6/§7` 只加事件 `type`、L5 加 provider、大载荷复用 ADR-0019，不动内核。
+- 唯一要现在就预留、不实现的：**事件 `type` 占位 + 任务树 `kind=subagent` 字段**（P8 接进来时不用改协议/状态）。
 
 ## 2.5 P1 原型验证优先级（先证设计自洽，别一次做全）
 1. **单 turn、串行工具、关闭并行**（`parallel_safe` 仅占位，完整并行→专门并行化 Phase，ADR-0029）；
