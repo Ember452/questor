@@ -62,6 +62,9 @@ _log = logging.getLogger("questor.cli")
 #: run-完成 flush 摘要的字符上限（与 ``reduce`` 的 16KiB 写上限对称，防单次长跑回答撑爆 daily）。
 _FLUSH_SUMMARY_MAX_CHARS = 16 * 1024
 
+#: P9/ADR-0047：resume 驱动租约 TTL（秒）。单机多进程防同 run 双驱；超 TTL 未释放视为持有者崩溃可被重取。
+_RUN_LEASE_TTL_SECONDS = 300.0
+
 
 async def _noop_teardown() -> None:
     """MCP 未启用时的空 teardown（与 bootstrap 的 teardown 同签名）。"""
@@ -273,6 +276,12 @@ class CliSurface:
         run = await rebuild_run(self.store, run_id)
         if run is None:
             return None
+        # P9/ADR-0047：resume 前取 run 租约——防两进程/两次 resume 并发同 run 双驱（单机多进程单写者）。
+        # 取不到=他人持有 → 诚实拒绝（返回 None），绝不双驱。跨机抢锁属 C12 天花板（本 Phase 不做）。
+        holder = f"cli-resume:{os.getpid()}"
+        if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
+            _log.warning("resume refused: run %s lease held by another driver (single-writer, ADR-0047)", run_id)
+            return None
         bus = InProcessEventBus(self.store)
         bus.add_observer(log_envelope)  # bus 级唯一投影订阅（ADR-0033）
         cancel = asyncio.Event()
@@ -302,6 +311,7 @@ class CliSurface:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
+            await self.store.release_lease(run_id, holder, 1)
         return final
 
     async def _stream(self, queue: asyncio.Queue, on_delta) -> None:  # noqa: ANN001

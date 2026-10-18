@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -38,8 +39,11 @@ from questor.surfaces.subagent_orchestrator import SubagentOrchestrator
 
 # 终态事件集：流式跟到这些即停。
 TERMINAL = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
-# 传输级收尾帧名（§6-8）：非 harness 领域事件、不入库、不进 event.schema，仅告知“流已结束、勿自动重连”。
+#: 传输级收尾帧名（§6-8）：非 harness 领域事件、不入库、不进 event.schema，仅告知“流已结束、勿自动重连”。
 STREAM_END = "stream_end"
+
+#: P9/ADR-0047：resume 驱动租约 TTL（秒）。与 cli 面同值，防两进程 /resume 同 run 双驱。
+_RUN_LEASE_TTL_SECONDS = 300.0
 
 
 def envelope_to_json(env: Envelope) -> str:
@@ -92,7 +96,7 @@ class EventServer:
         策略按 run 经 surface 的 PolicyRegistry 解析（P9）：活 run 端口不变、换 registry 只影响新 run。"""
         return self.surface._loop(self.bus, cancel, surface, subagent_spawner=self.orchestrator, run_id=run_id)
 
-    async def _run_with_mcp(self, controller: RunController, run_id: str) -> None:
+    async def _run_with_mcp(self, controller: RunController, run_id: str, lease_holder: str | None = None) -> None:
         """发现 MCP → 冻结工具面 → 驱动到终态 → per-run teardown。四步**必须同任务**。
 
         MCP stdio 会话的 anyio cancel scope 在哪个 task 进入就必须在那个 task 退出；若把 discover 放在
@@ -105,6 +109,9 @@ class EventServer:
             await self._loop(asyncio.Event(), tool_surface, run_id=run_id).drive_controller(controller)
         finally:
             await mcp_teardown()  # 关连接+回收子进程树+stderr 句柄，防泄漏
+            # P9/ADR-0047：resume 取的租约在驱动任务收尾释放（start_run 不取→None）。
+            if lease_holder is not None:
+                await self.store.release_lease(run_id, lease_holder, 1)
 
     async def start_run(self, text: str, run_id: str | None = None) -> str:
         """后台启动一次 run（用户文本经 SubmitMessage Command 进入 inbox）。
@@ -168,9 +175,13 @@ class EventServer:
         run = await rebuild_run(self.store, run_id)
         if run is None:
             raise HTTPException(status_code=404, detail=f"no checkpoint for run {run_id}")
+        # P9/ADR-0047：取 run 租约防两进程 /resume 同 run 双驱；取不到→409（诚实拒绝，不双驱）。
+        holder = f"http-resume:{os.getpid()}"
+        if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
+            raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
         controller = RunController(run)
         self.registry.register(controller)
-        task = asyncio.create_task(self._run_with_mcp(controller, run_id))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）
+        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约
         self.registry.set_task(run_id, task)
         return run_id
 

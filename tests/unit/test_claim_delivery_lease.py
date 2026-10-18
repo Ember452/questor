@@ -68,3 +68,32 @@ def test_run_lease_single_writer_renew_release() -> None:
             await store.close()
 
     asyncio.run(_go())
+
+
+def test_resume_takes_lease_and_refuses_when_held(tmp_path, monkeypatch) -> None:
+    """MA-2 闭环：`CliSurface.resume` 生产路径确实调 `acquire_lease`；被他方持有→拒（返回 None、不双驱）。
+
+    “方法存在 ≠ 接线”的老坑：本测钉住消费者已接（acquire 被调），不只是原语存在。"""
+    import questor.surfaces.cli as cli_mod
+    from questor.providers.fake import EchoProvider
+    from questor.state.domain_state import Run
+    from questor.surfaces.cli import CliSurface
+
+    calls: list[str] = []
+
+    class _HeldStore:
+        async def acquire_lease(self, run_id: str, holder: str, epoch: int, ttl_seconds: float) -> bool:
+            calls.append(run_id)
+            return False  # 模拟另一进程已持租约
+
+        async def release_lease(self, run_id: str, holder: str, epoch: int) -> bool:
+            return True
+
+    async def _fake_rebuild(store: object, run_id: str) -> Run:
+        return Run(run_id=run_id)
+
+    monkeypatch.setattr(cli_mod, "rebuild_run", _fake_rebuild)
+    surface = CliSurface(workspace_root=tmp_path, provider=EchoProvider(), store=_HeldStore())
+
+    assert asyncio.run(surface.resume("run_held")) is None
+    assert calls == ["run_held"], "resume 必须经 acquire_lease 取租约（生产消费者已接线）"
