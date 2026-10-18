@@ -1,6 +1,6 @@
 # ADR-0047: 跨进程 exactly-once claim/delivery_state 账本 + 单机多进程 run lease（接回 ADR-0021/0038 后置）
 
-- 状态：🚧（2026-10-18，P9 开工前置门；实现见 [`../plan/09-p9-openai-plugin-host.md`](../plan/09-p9-openai-plugin-host.md) T8）
+- 状态：✅（2026-10-18，P9 已实现并验证；实现见 [`../plan/09-p9-openai-plugin-host.md`](../plan/09-p9-openai-plugin-host.md) T8）
 - 背景：[`ADR-0021`](./0021-cross-process-resume.md):8/14 把"完整 claim/delivery_state 账本"显式后置 P9；[`ADR-0038`](./0038-subagent-as-independent-run.md):16/21 定"子 agent v1=同进程 asyncio、at-least-once+去重键；完整 claim/delivery_state 持久账本=P9、跨机属 C12 天花板"。P8 已落 `SubagentSpawnerPort`/`ReportChildTerminal`/`peer_ended`（同进程），崩溃对账用现成 `list_unfinished_runs()`/`watermark()`（[`ADR-0022`](./0022-dual-cursor-watermark.md)）。peer-scan：wuu `worker_execution_lease.go`/`delivery.go`（MIT，Go，跨进程 lease 形状）、hermes `gateway/delivery_ledger.py`（MIT，claim-then-deliver-ack）。用户 2026-10-18 拍板"取全局最优、为后续大扩展铺路"。
 - 决策：
   1. **`StorePort` 纯增量扩（不破既有签名/信封/关联键，C6）**：

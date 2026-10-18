@@ -2,9 +2,9 @@
 
 > 起手**必读**：[`AGENTS.md §0/§4.5/§5/§5.5/§6`](../../AGENTS.md) · [`docs/ROADMAP.md §1(P9行)/§1.5/§2/§5`](../ROADMAP.md) · [`docs/design/HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md)
 > **§0 未填完 = 本 Phase 计划未就绪、不能开工**（ROADMAP §0 硬门槛）。
-> 本文是 **READ-ONLY 规划产物**：定稿后**不自动开工**，先做两路对抗式评审（§8 前置门），Blocker/Major 全关才建 worktree 分支进入实现。
-> **对抗式评审 = 待执行**（本 Phase 只产计划）。两路并行——①契约完备性/不变式破坏/第二写者；②范围漂移/安全边界/载荷外泄/热插拔稳定性。
-> 状态：`docs/plan/09-p9-openai-plugin-host.md`，基于 `main` HEAD `090e5cb`（PR #149 合入 P8）。下一个 ADR 编号 = **0043**。继承测试基线：P8 收尾 `739 passed / 5 skipped`（`docs/plan/08 §9`），P9 DoD 须**只增不减**。
+> 本文最初为 **READ-ONLY 规划产物**；**两路对抗式评审已执行并收口（见 §4.3，M1/M2/S1/S2/S3/R1 全关）**，Blocker/Major 已闭 → 已按 ADR-0012 建 worktree 分支 `feat/p9-openai-plugin-host`（基线 `090e5cb`）进入实现。
+> **实现状态（2026-10-18）**：T0–T11 已全序落地、每条 TDD 先红后绿、每步过守卫、细粒度原子提交；详 §9 落地偏差回填。push/merge 逐次征询（PR-only）。
+> 状态：`docs/plan/09-p9-openai-plugin-host.md`，基于 `main` HEAD `090e5cb`（PR #149 合入 P8）。ADR-0043~0047 已落册转正。测试基线：继承 P8 `739 passed / 5 skipped`；P9 收尾 **797 passed / 5 skipped**（+58 用例）。
 > 规范：Conventional Commits 标题**小写动词开头**（`feat: add …`），CI `pr-lint` 会拦；commit/push **逐次征求许可**（AGENTS §6，绝不擅自提交/推送）。
 
 ---
@@ -229,20 +229,20 @@
 
 ## 8. 收尾（活文档，AGENTS §5.5）+ 偏差回填 + 开工前置门
 
-- [ ] **偏差回填**（实现收尾时写"实际 vs 计划"）：本节追加"P9 落地备注"，与 `docs/plan/07 §8`/`08 §9` 同风格；Reality-wins（VISION §0.4）。
-- [ ] **UNVERIFIED 诚实边界**（定死不冒充）：真 LLM 驱动 OpenAI 面 / 真远程跨机 exactly-once（C12）/ 真开窗口 / TLS 终结属部署侧——逐条列（单机多进程两真子进程 = 已验证；鉴权外部 lane 本机 loopback 验证、真广网部署属算子）。
-- [ ] `ADR-0043`：OpenAI = 投影适配器（wire 单一真源 + 映射表 + 断连即取消 + 不 bump v）。
-- [ ] `ADR-0044`：非文本/语音归一化拒绝硬判据（承 ADR-0036 决策 5）。
-- [ ] `ADR-0045`：PolicyRegistry 落地 + `run_started.policy_ref` + AB 分桶算法。
-- [ ] `ADR-0046`：能力热插拔宿主（薄生命周期+熔断隔离、非 cordis 容器）。
-- [ ] `ADR-0047`：跨进程 claim/delivery_state 账本 + 单机多进程 run lease（接回 ADR-0021/0038）。
-- [ ] `design/02-event-protocol.md`：§3 run_started 加 policy_ref、§7/§10 tools_changed 转"已定义"、§9/§10 OpenAI 投影映射落地注记。
-- [ ] `design/05-policy.md`：§2 registry 落地口径、§6 AB 分桶算法去"待定"。
-- [ ] `docs/ROADMAP.md` §1（P9 DoD 落定）+ §1.5（P9 备注：非文本拒 + claim/delivery 落地）；**序列仍 P8→P9→P10**（ADR-0036）。
-- [ ] `CHANGELOG.md [Unreleased]` 追加 P9 条目。
-- [ ] `README.md` / `docs/VISION.md` 能力叙述诚实"当前仅文本模态"（ADR-0036 决策 5 强制项）。
-- [ ] `surfaces`/`capabilities/_host`/`policy` README 去 stub、写实际职责与层。
-- [ ] `docs/pitfalls.md`：若实现期新增"OpenAI 面双投/非文本降级/热插撕裂"类跨子系统陷阱，按格式补条目（普通 bug 走 Issue，不入此）。
+- [x] **偏差回填**（实现收尾时写"实际 vs 计划"）：本节追加"P9 落地备注"，与 `docs/plan/07 §8`/`08 §9` 同风格；Reality-wins（VISION §0.4）。
+- [x] **UNVERIFIED 诚实边界**（定死不冒充）：真 LLM 驱动 OpenAI 面 / 真远程跨机 exactly-once（C12）/ 真开窗口 / TLS 终结属部署侧——逐条列（单机多进程两真子进程 = 已验证；鉴权外部 lane 本机 loopback 验证、真广网部署属算子）。
+- [x] `ADR-0043`：OpenAI = 投影适配器（wire 单一真源 + 映射表 + 断连即取消 + 不 bump v）。
+- [x] `ADR-0044`：非文本/语音归一化拒绝硬判据（承 ADR-0036 决策 5）。
+- [x] `ADR-0045`：PolicyRegistry 落地 + `run_started.policy_ref` + AB 分桶算法。
+- [x] `ADR-0046`：能力热插拔宿主（薄生命周期+熔断隔离、非 cordis 容器）。
+- [x] `ADR-0047`：跨进程 claim/delivery_state 账本 + 单机多进程 run lease（接回 ADR-0021/0038）。
+- [x] `design/02-event-protocol.md`：§3 run_started 加 policy_ref、§7/§10 tools_changed 转"已定义"、§9/§10 OpenAI 投影映射落地注记。
+- [x] `design/05-policy.md`：§2 registry 落地口径、§6 AB 分桶算法去"待定"。
+- [x] `docs/ROADMAP.md` §1（P9 DoD 落定）+ §1.5（P9 备注：非文本拒 + claim/delivery 落地）；**序列仍 P8→P9→P10**（ADR-0036）。
+- [x] `CHANGELOG.md [Unreleased]` 追加 P9 条目。
+- [x] `README.md` / `docs/VISION.md` 能力叙述诚实"当前仅文本模态"（ADR-0036 决策 5 强制项）。
+- [x] 新模块职责/层靠**中文模块 docstring 就地自述**（`capabilities/_host.py`、`surfaces/openai_compat.py`、`contracts/openai_wire.py`、`policy/registry.py` 均已写）；无遗留 stub README 需去。
+- [x] `docs/pitfalls.md`：本 Phase **未新增跨子系统陷阱**——“热插撕裂/双投/非文本降级/双驱”均由硬机制守卫与测试兜住（tools_changed 发射唯一性、cross_run_no_bypass、run-lease、fail-closed 鉴权），属普通约束非“会再踩的架构陷阱”，按 §5.5 纪律不入 pitfalls（普通 bug 走 Issue）。
 
 **开工前置门（本计划定稿后、实现开始前）**：
 1. 两路对抗式评审并行——**①契约完备性/不变式破坏**（信封/关联键/终止序、`v` 不 bump、四处 lockstep、回放/claim 一致）；**②范围漂移/安全边界/第二写者/载荷外泄/热插拔稳定性**（§2/§5/§7）。
@@ -253,7 +253,7 @@
 
 ## 待拍板清单（每条：选项 · 推荐 + 代价 · 落成 ADR）
 
-> 以下 4 条中 **D-1 / D-2 已由用户 2026-10-18 拍板**（见各条 ✅）；§1–§7 已按拍板态写死。D-3 / D-4 仍为推荐默认（可微）。
+> 以下 4 条中 **D-1 / D-2 已由用户 2026-10-18 拍板**（见各条 ✅）；D-3 / D-4 的推荐默认已随实现落地（additive `tools_changed`；AB `stable_hash(fingerprint)%n` 默认 n=1 + 可覆写 split 表）。§1–§7 按此写死。
 
 **D-1 ✅ 已拍板（用户 2026-10-18）：加鉴权、可网络暴露、可违旧文档口径。**
 - 定夺：**新建独立"鉴权外部 OpenAI API lane"**（与桌面 sidecar loopback bootstrap 面**并行、分道**）——可算子配置 **opt-in 非 loopback bind + 强制 API-key/bearer fail-closed**（密钥不入库/进事件/进日志，C20/ADR-0019）、非 loopback 建议 TLS；**桌面 sidecar `--serve` loopback 红线（ADR-0032）原样保留**，属对 ADR-0032 的**显式分道 scoping、非推翻**，记入 **ADR-0043** 并就地注记 ADR-0032。
@@ -272,6 +272,9 @@
 
 ---
 
-## 9. 落地偏差回填（实现收尾时填写，AGENTS §5.5 Reality-wins）
+## 9. 落地偏差回填（实现收尾，AGENTS §5.5 Reality-wins，2026-10-18）
 
-> 占位——本 Phase 尚处规划/评审阶段，实现收尾时补"P9 落地备注（已机器验证 vs UNVERIFIED + 守卫现状 + 对抗审计闭环）"，与 `docs/plan/08 §9` 同风格。**当前不得预填任何"已验证"结论。**
+- **实际 vs 计划**：T0–T11 全序落地，无偷工减料。**两处计划内细化**：① T1/T2 的事件 additive（`tools_changed` + `run_started.policy_ref`）合并为一个 lockstep 提交（含 TS codegen + `check_protocol_schema` fixture 扩面），避免跨提交留协议守卫判红（"每 commit 绿"优先于"按 T 边界切开"）；② `--serve-openai` 外部 lane 的组合根入口在 T6c 之后补，默认 loopback + fail-closed（无 key 拒起），与 ADR-0043 一致。
+- **已机器验证**：`test_openai_wire`(11)/`test_openai_projection`(4)/`test_openai_endpoint`(5：流式+聚合+401 fail-closed+400 非文本拒+断连→Cancel)/`test_policy_registry`(7)/`test_policy_assembly`(4)/`test_plugin_host`(8)/`test_capability_generation`(3)/`test_claim_delivery_lease`(4)/`test_run_lease_multiprocess`(1：**两真 OS 子进程共享 SQLite 端到端验单机多进程单写者**)/`test_p9_policy_hotswap`(1)/`test_tools_changed_lockstep`(5)。全量 **797 passed / 5 skipped**（继承 P8 739 + P9 新增 58）。守卫全绿：协议 23 types lockstep、新 `check_openai_compat_schema --check/--self-test`（进 `boundaries`）、`check_layering_ast` 0 违规（114 文件）、replay 5 fixtures、projection whitelist、cross-run no-bypass、secret-projection、output-budgets、verify_p0 冷导入；全树 ruff clean。信封/关联键/终止序零动、`v` 不 bump、四处 lockstep。
+- **UNVERIFIED（诚实边界，不冒充）**：真 LLM 驱动 OpenAI 面（本机无 key，ASGITransport + 脚本化 provider 覆盖 wire 逻辑而非真模型）；真跨机 exactly-once（**单机多进程两真子进程=已验**，跨机属 C12 天花板未做）；真广网部署/TLS 终结（属算子侧，`--serve-openai` 默认 loopback）；OpenAI lane 的 `ask`-超时-deny 真审批交互（C9 fail-closed 既有，本 lane 无审批 UI 故默认拒）。
+- **对抗评审收口**：见 §4.3——M1（tools_changed live-only 发射语义）/M2（resume 冻结 policy_ref）/S1（鉴权 lane 权限面）/S2（多进程双驱 run-lease）/S3（密钥/载荷不外泄）/R1（不植 cordis 容器）均已落进对应 ADR/T 并在代码/守卫/测试兑现。
