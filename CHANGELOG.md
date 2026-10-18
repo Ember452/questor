@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed — `python -m questor --help` 掉进 REPL（Issue #148）
+
+实地验证复现：`--help` / `-h` **不打印任何用法**而是直接起交互 REPL（rc=0），且拼错的选项（如 `--resum`）
+同样被当成"无参数"静默起 REPL——属 **fail-open**，在自动化/CI 里表现成"挂住"而不是"明确失败"。
+更隐性的一笔：参数判定之前就已 `assemble_logging()` + `SQLiteStore/SQLiteMemoryStore.connect()`，
+所以**一次 `--help` 会顺手创建 `state.db` / `memory.db` / `memory_store/` / `logs/`**。
+
+- 修：`_amain` 改为**先判参数、再装配**——`-h/--help` 打印用法进 stdout 退 0；未知选项打用法进 stderr 退 2；
+  两者都在任何 store/日志装配**之前**返回。用法文本收敛为 `__main__._USAGE` 常量，与模块 docstring 的入口清单同源。
+- 判红用例：`tests/integration/test_cli_help.py`（真子进程跑 `-m questor`，不 mock 组合根，与刀1 A①/A③ 同法）——
+  四条分别钉住退出码、stdout 用法含四个入口、**不进 REPL**、且 `tmp_path` 下**不生成任何文件**（装配前置的硬可测代理）。
+  修复前实测 4/4 判红（证据：stdout=`questor CLI — type a message …`、tmp 下生成 `logs/memory.db/memory_store/state.db`）。
+- 本地全量门：689 passed / 5 skipped、ruff clean、冷导入 OK、import-linter 5 kept、AST 守卫 0 violation、协议 20 types lockstep。
+
 ### Changed — 文档漂移清扫（只加状态注记，不改阶段结论、不回改历史验收判据）
 
 - **阶段列未同步的完成态**：`docs/ROADMAP.md §1` 的 **P5** 行无 ✅（实已经 PR #143 `114fb0f` + 加固 PR #144 `290375e` 合入）、
@@ -17,8 +31,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `python -m questor`，已实跑验证）；同行声称的 `uv sync --extra im|voice|browser|docs` 四个 extras 从来不存在（无
   `[project.optional-dependencies]`），已改为实况说明并把 `voice`/`im` 指向 ADR-0036。
 - **未修（属对外口径，需产品拍定，已登记）**：仓库根 `README.md:10` 仍写"暂无可运行版本"、快速开始仍写"P1 落地后更新为 `uv run questor`"——
-  属对外口径改写（且桌面安装介质仍 UNVERIFIED），不在本次机械校平范围内。另：`python -m questor --help` 不打印帮助而是直接进 REPL，
-  属真实 UX 缺陷，宜开 GitHub Issue。
+  属对外口径改写（且桌面安装介质仍 UNVERIFIED），不在本次机械校平范围内。同轮撞到的 `python -m questor --help` 入口缺陷
+  已开 **Issue #148** 并在本区间的 Fixed 条目里修掉（含判红用例）。
 
 ### Changed — 路线图：P6（多模态/语音）整阶段移除（[ADR-0036](docs/adr/0036-p6-dropped-from-roadmap.md)）
 
