@@ -48,6 +48,8 @@
 | [0040](./0040-child-permission-inheritance-narrowing.md) | 子权限继承收缩（**fail-closed、子⊆父永不放大**）：`denylist` 只扩大、`rules⊆父`、`mode` 不继承（子默认 default）、floor 同 OS 不放宽；子 ask 归子自审、`request_id` 前缀 `child_run_id` 跨 run 幂等；策略层无裸句柄（hermes 子集判据） | ✅ |
 | [0041](./0041-fanout-budget-and-runaway-control.md) | fan-out 预算与失控终止：`max_parallel_children`(默认4)/`max_tree_depth`(默认1) reservation 防超发；usage 归 per-run 不汇聚父（聚合归 P10）；超限终止序 E2 取消>安全>超时>预算、父耗尽递归 Cancel 子树 | ✅ |
 | [0042](./0042-peer-event-additive-shape.md) | 事件 additive：`peer_started`/`peer_ended` 定形（20→22 type、**不 bump `v`**）；只带关联键+有界 status+`result_ref` 指针、无正文；`node_updated` 白名单不扩；三处 lockstep + C20 不进投影白名单；兑现 design/02 §7 生长场景 | ✅ |
+| [0043](./0043-openai-compat-projection-adapter.md) | OpenAI 兼容 = **投影适配器**：入站经 Command Inbox（C16）、出站只读投影成 OpenAI SSE（design/02 §9 X5/§10 映射表）；**wire 单一真源=独立 `openai_compat.schema.json`+`contracts/openai_wire.py`、questor `v` 不 bump**；**无原生续传=断连即取消**；带外零双投（承 ADR-0033）；**独立鉴权外部 API lane**（对 ADR-0032 分道 scoping、opt-in 非 loopback + 强制 API-key fail-closed + 保守权限 C17） | 🚧 |
+| [0044](./0044-non-text-content-normalize-reject.md) | 非文本/语音 content part **归一化拒绝**（承 ADR-0036 决策5）：surface fail-fast 返 HTTP 400 OpenAI error（不起 run、不崩、不静默降级）+ defense-in-depth 走 ADR-0028 归一 `run_failed`；additive `ErrorKind.UNSUPPORTED_MODALITY`；README/VISION 诚实"仅文本模态" | 🚧 |
 
 > **0027 已落地**（原为日志骨架刀 2 预留号）：详 [`../log/DESIGN.md`](../log/DESIGN.md) §17、[`../log/PLAN.md`](../log/PLAN.md) 刀 2。
 
