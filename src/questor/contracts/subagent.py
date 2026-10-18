@@ -31,14 +31,18 @@ class SpawnRequest:
 
 @dataclass(frozen=True, slots=True)
 class SpawnResult:
-    """端口受理结果。**受理成功仅代表 Command 已入父 inbox**，子 run 的实体化在父 loop 消费点
-    （reduce 受理 SpawnSubagent 后）由 ``materialize_child`` 完成（承 WriteMemory 的"reduce 发事件、
-    消费点做 IO"，ADR-0038/§4.1）。``reason`` 记录被拒原因（fanout_exceeded/depth_exceeded/...）。
+    """spawn 受理/完成结果。``accepted`` 表示 gate 通过且子 run 已发起；
+    委派模式下端口会**等子 run 到终态**后返回，附带 ``terminal_status`` 与有界 ``result`` 摘要。
+
+    ``reason`` 记录被拒原因（fanout_exceeded/depth_exceeded/unknown_parent/not_wired）。``result``
+    是有界摘要（子 run 定稿文本截断），非无界载荷（C18/ADR-0019）。
     """
 
     accepted: bool
     child_run_id: str | None = None
     reason: str | None = None
+    terminal_status: str | None = None  # completed | failed | cancelled（delegate 等到终态后填）
+    result: str | None = None  # 有界摘要，非原文
 
 
 @runtime_checkable
@@ -63,21 +67,18 @@ class CommandRouterPort(Protocol):
 class SubagentSpawnerPort(Protocol):
     """子 agent 编排端口：spawn 一个子 = 独立 Run（同进程 asyncio，ADR-0038）。
 
-    两步、顺序固定，消解"reduce 受理前不得建子"的 exactly-once 边界：
-    - ``request``：跑 fan-out gate（宽度/深度，ADR-0041）+ 投影子权限（ADR-0040）+ 生成 ``child_run_id``
-      + 向**父 inbox** 提 ``SpawnSubagent``；被拒则返回带 ``reason`` 的 ``SpawnResult``。
-    - ``materialize_child``：**仅当父 loop 消费 SpawnSubagent 且 reduce 受理成功后**被调用，才建子 Run、
-      注册 ``RunController`` 并把子 loop 作为 asyncio 任务起跑；子到终态经 ``CommandRouterPort`` 向父提
-      ``ReportChildTerminal``。
-    实现落 L3 ``capabilities/subagent``（持 loop 工厂/registry/bus/store/permission 投影器），由组合根注入。
+    委派模式（v1 协作语义）：``delegate`` **直接实体化并起跑子 run、再 await 其终态**后返回（父等子结果）；
+    同时将 ``SpawnSubagent``/``ReportChildTerminal`` 经**父 inbox**（Command）递交父 reduce 做记账 + 发
+    ``peer_started/peer_ended``（跨 run 不直写，C2/C16）。子由端口直接起跑（而非等父消费 SpawnSubagent），
+    否则父阻塞在 await 上就不会 drain inbox →死锁。
+
+    - ``materialize_child``：**幂等**（子已注册则 no-op）；供崩溃/回放重实体化与 bookkeeping 路径。
+    - ``on_parent_terminal``：父到终态 → 冻结子树（向未终态子提 ``Cancel(owner)``，不硬杀，C7）；无子 no-op。
+    实现落 L6 surfaces（持 registry/bus/store/surface 组装子 loop），由组合根注入 kernel。
     """
 
-    async def request(self, request: SpawnRequest) -> SpawnResult: ...
+    async def delegate(self, request: SpawnRequest) -> SpawnResult: ...
 
-    async def materialize_child(
-        self,
-        parent_run_id: str,
-        node_id: str,
-        child_run_id: str,
-        objective: str,
-    ) -> None: ...
+    async def materialize_child(self, parent_run_id: str, node_id: str, child_run_id: str) -> None: ...
+
+    async def on_parent_terminal(self, parent_run_id: str) -> None: ...
