@@ -199,9 +199,20 @@ mod tests {
 
     #[test]
     fn real_child_is_recovered_by_two_phase() {
-        // 起一个不会自退的命令；无优雅端点 → 到 grace 触发 force_kill；验证真 OS 上进程被回收、可 poll 到退出码。
-        let mut proc = StdProcess::spawn("cmd", &["/C", "ping", "-n", "30", "127.0.0.1"])
-            .expect("spawn cmd ping");
+        // 起一个不会自退的子进程；无优雅端点 → 到 grace 触发 force_kill；验证真 OS 上进程被回收、可 poll 到退出码。
+        // 跨平台选长驻命令：Windows 用 `cmd /C ping`，POSIX 用 `sleep`（coreutils）。探测真实沙箱能力：
+        // 若连所选二进制都起不来（极简沙箱缺省），显式跳过而非用 NotFound panic 冒充失败、更不用静默通过冒充成功。
+        #[cfg(windows)]
+        let spawned = StdProcess::spawn("cmd", &["/C", "ping", "-n", "30", "127.0.0.1"]);
+        #[cfg(not(windows))]
+        let spawned = StdProcess::spawn("sleep", &["30"]);
+        let mut proc = match spawned {
+            Ok(p) => p,
+            Err(err) => {
+                eprintln!("skip: no long-running child available in this sandbox: {err}");
+                return;
+            }
+        };
         let out = two_phase_shutdown(
             || {},
             &mut proc,
@@ -211,7 +222,7 @@ mod tests {
         assert_eq!(
             out,
             Shutdown::ForceKilled,
-            "ping 30 不会在 300ms 内自退，应走强杀兜底"
+            "长驻子进程不会在 300ms 内自退，应走强杀兑底"
         );
         thread::sleep(Duration::from_millis(50));
         assert!(proc.poll().is_some(), "force_kill 后子进程应已退出、可回收");
