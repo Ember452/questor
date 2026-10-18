@@ -29,6 +29,9 @@ Questor 落在 **CowAgent 与 DeepCode 之间、向 DeepCode 靠**。
 
 粗略文件数：`src/*.py` 250–450；`web/*.ts(x)` 150–250；`src-tauri/*.rs` 30–60；`tests/` 400–700；`docs/` 80–150。
 
+> 口径注：**P6（多模态/语音）已整阶段移出路线图**（[ADR-0036](./adr/0036-p6-dropped-from-roadmap.md)），本表与 §3 按此收缩。
+> 若日后按该 ADR 的接缝路径回归，Python 后端与 provider 侧各加一批文件，本区间需上修。
+
 ## 3. Commit 数估算（按 AGENTS 细粒度纪律）
 
 | 阶段 | 估算 |
@@ -40,16 +43,16 @@ Questor 落在 **CowAgent 与 DeepCode 之间、向 DeepCode 靠**。
 | P3 事件溯源+resume | 60–120 |
 | P4 三层记忆+蒸馏+检索 | 100–200 |
 | P5 Skills+MCP | 80–150 |
-| P6 多模态+语音（10+ provider） | 80–150 |
+| ~~P6 多模态+语音（10+ provider）~~ | **已整阶段移出**（[ADR-0036](./adr/0036-p6-dropped-from-roadmap.md)）；原估 80–150 已从本表扣除，归口 §6 的按需扩展 |
 | P7 Tauri 桌面 | 150–250 |
 | P8 多 agent+DAG | 80–150 |
 | P9 OpenAI 兼容+插件宿主 | 100–180 |
 | P10 加固（可恢复压缩/回归网/observability/CI/供应链） | 150–300 |
 | 横切：重构/CI 修补/依赖 bump/文档维护 | 100–200 |
-| **合计** | **~1100–1800 条**（中位 ~1400–1500；极细粒度可上 2500） |
+| **合计** | **~1020–1650 条**（中位 ~1300–1400；极细粒度可上 2000+）——原 ~1100–1800 含 P6 的 80–150，已随 ADR-0036 移出 |
 
 ## 4. 影响估算的杠杆
-- **收窄到 80k–100k / ~1000 commits**：v1 只做 top-3 语音 provider、桌面 UI 保持"够可用"、evals 集 20 条任务封顶、P8/P9 简化。
+- **收窄到 80k–100k / ~1000 commits**：~~v1 只做 top-3 语音 provider~~（该杠杆已整块兑现：P6 已移出路线图，ADR-0036）、桌面 UI 保持"够可用"、evals 集 20 条任务封顶、P8/P9 简化。
 - **扩到 150k+ / 2000+ commits**：把 P8/P9/P10 做透（真多 agent + 完整热插宿主 + 全套 CI lane + 完整可恢复压缩）。
 
 ## 5. 时间维度（非承诺）
@@ -60,7 +63,7 @@ Questor 落在 **CowAgent 与 DeepCode 之间、向 DeepCode 靠**。
 - **新策略（L4，加/换不动内核）**：ToT / LATS / GoT 多算法族；反思/自我进化（Curator 式）；垂直 preset（研究 / 编码 / 运维 / 客服 / 教育等）。
 - **新能力（L3）**：更多内置工具；**GUI / computer-use agent**（参考 Agent-S）；行业 MCP 集；Skills Marketplace / Hub。
 - **新 Surface（L6，只订阅事件协议）**：Web 版（浏览器连远程 questor）；IDE 插件（VSCode / JetBrains）；移动客户端；浏览器扩展；IM 群机器人；cron/自动化面板。
-- **新 Provider 侧（L5）**：更多模型 / 嵌入 / 语音 / 图像 / 视频；BYOM 私有网关；成本预算治理。
+- **新 Provider 侧（L5）**：更多模型 / 嵌入 / 语音 / 图像 / 视频（**语音与图像即原 P6，已由 [ADR-0036](./adr/0036-p6-dropped-from-roadmap.md) 从必经阶段降为本条按需扩展**：L5 加端点 + L6 加接收面 + 大载荷复用 ADR-0019，不动内核）；BYOM 私有网关；成本预算治理。
 - **多 agent / 编排深化（P8 起步）**：swarm / crew-like pipeline、supervisor-worker 层级、跨机协同。
 - **知识库 / RAG**（当前最高准则"先不做"）：向量库 + ingestion 通道已在，届时可直接接入。
 - **观测与治理**：trace 回放 UI、eval 面板、成本看板、审计合规。

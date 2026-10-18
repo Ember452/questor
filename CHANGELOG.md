@@ -6,6 +6,59 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed — `python -m questor --help` 掉进 REPL（Issue #148）
+
+实地验证复现：`--help` / `-h` **不打印任何用法**而是直接起交互 REPL（rc=0），且拼错的选项（如 `--resum`）
+同样被当成"无参数"静默起 REPL——属 **fail-open**，在自动化/CI 里表现成"挂住"而不是"明确失败"。
+更隐性的一笔：参数判定之前就已 `assemble_logging()` + `SQLiteStore/SQLiteMemoryStore.connect()`，
+所以**一次 `--help` 会顺手创建 `state.db` / `memory.db` / `memory_store/` / `logs/`**。
+
+- 修：`_amain` 改为**先判参数、再装配**——`-h/--help` 打印用法进 stdout 退 0；未知选项打用法进 stderr 退 2；
+  两者都在任何 store/日志装配**之前**返回。用法文本收敛为 `__main__._USAGE` 常量，与模块 docstring 的入口清单同源。
+- 判红用例：`tests/integration/test_cli_help.py`（真子进程跑 `-m questor`，不 mock 组合根，与刀1 A①/A③ 同法）——
+  四条分别钉住退出码、stdout 用法含四个入口、**不进 REPL**、且 `tmp_path` 下**不生成任何文件**（装配前置的硬可测代理）。
+  修复前实测 4/4 判红（证据：stdout=`questor CLI — type a message …`、tmp 下生成 `logs/memory.db/memory_store/state.db`）。
+- 本地全量门：689 passed / 5 skipped、ruff clean、冷导入 OK、import-linter 5 kept、AST 守卫 0 violation、协议 20 types lockstep。
+- **回归（由 CI `tests-windows` 抓出、本机 cp936 抓不出）**：首版 `_USAGE` 把中文写进了用户可见输出，而 Windows runner 控制台是 **cp1252**
+  → `print(_USAGE)` 直接 `UnicodeEncodeError` 带堆栈崩掉（rc=1、stdout 空）——“修 help”本身成了新崩溃。
+  修：用法文本改 **ASCII-only**（AGENTS §5.6：一方输出用英文，中文只进注释/docstring）；并新增两条用
+  `PYTHONIOENCODING=cp1252` 钉住代码页的回归用例（**在任何开发机上确定性复现**，不再依赖“恰好有块 Windows 机器”）；
+  修复前先拿它判红、后转绿，全量 **691 passed / 5 skipped**。
+
+### Changed — 文档漂移清扫（只加状态注记，不改阶段结论、不回改历史验收判据）
+
+- **阶段列未同步的完成态**：`docs/ROADMAP.md §1` 的 **P5** 行无 ✅（实已经 PR #143 `114fb0f` + 加固 PR #144 `290375e` 合入）、
+  **P7** 行无 ✅ 且 DoD 仍写"跑通 P1-P4"（§1.5 已上修为 P1–P5）——均按实况补齐并链到 `plan/05`/`plan/07`；
+  §4 节点 C 标"阶段条件已满足、实际发布仍待消两项 UNVERIFIED（全量 `tauri build` 安装介质 + 真开窗口验收）"。
+- **进度与决策计数陈旧**：`docs/VISION.md §8` 仍写"P0–P4 已交付（ADR-0001…0028）"与"P5 开工仍需先定 MCP `run_id` 注入/stderr 重定向"——
+  实况为 P0–P5 + P7 已合入、ADR 至 0036，且该前置已随 P5 落地（`providers/mcp_stderr.py` 的 per-run `mcp-stderr-<run_id>.log`）。
+- **死命令与不存在的 extras**：`CONTRIBUTING.md` 让人跑 `uv run questor --help`，但 `pyproject.toml` 无 `[project.scripts]`（入口只有
+  `python -m questor`，已实跑验证）；同行声称的 `uv sync --extra im|voice|browser|docs` 四个 extras 从来不存在（无
+  `[project.optional-dependencies]`），已改为实况说明并把 `voice`/`im` 指向 ADR-0036。
+- **未修（属对外口径，需产品拍定，已登记）**：仓库根 `README.md:10` 仍写"暂无可运行版本"、快速开始仍写"P1 落地后更新为 `uv run questor`"——
+  属对外口径改写（且桌面安装介质仍 UNVERIFIED），不在本次机械校平范围内。同轮撞到的 `python -m questor --help` 入口缺陷
+  已开 **Issue #148** 并在本区间的 Fixed 条目里修掉（含判红用例）。
+
+### Changed — 路线图：P6（多模态/语音）整阶段移除（[ADR-0036](docs/adr/0036-p6-dropped-from-roadmap.md)）
+
+- **决策**：语音 + 图像识别两半**全砍**，不再占 Phase 编号；v1 后既定序列收敛为 **P7（已合入）→ P8 → P9 → P10**。
+  依据：P6 在依赖图上是叶子（P8 进条件=P4、P9=P7、P10=P3 起持续，无 Phase 消费其产出）；`SCALE-ESTIMATE §3` 估其
+  80–150 commit/文件 + 10+ provider，且 DoD 全压在本机无法证伪的外部云服务上。
+- **编号不重排**：P7–P10 保持原号（已作为锚点散布于 ADR-0029~0035、已合并分支 `feat/p7-desktop-shell`、
+  `docs/audit/*`、`docs/delivery/*` 与本文），重排等于回改历史快照。`plan/06` 从未开工，无需作废。
+- **逆转路径写死**：将来确有需求 → 按 ROADMAP §5 另记 ADR，落点 = **L5 新增 vision/ASR/TTS provider + L6 接收面 +
+  事件面只加 `type`（不碰信封/关联键/终止序）+ 大载荷复用 ADR-0019**；与 `SCALE-ESTIMATE §6` 既有归口一致。
+- **P9 新增一条硬判据**（本次砍出的唯一工程欠债）：OpenAI 兼容面收到 `image_url` / `input_audio` 等非文本
+  content part 时**必须归一化拒绝**（走 ADR-0028 故障归一终态），绝不崩、绝不静默降级成纯文本继续跑。
+- **文档偏差记账**：核实发现 ROADMAP §1.5 R2、`delivery/P1-completion-report.md:110`、`plan/01:44,112` 宣称的
+  "多模态事件 `type` 占位"**从未落地**——`contracts/events.py:251-273` 的 20 个 `EventType` 无一多模态类，全 `src/`
+  对 `voice|audio|tts|asr|vision|attachment|modalit` 零命中。→ 移除 P6 无孤儿占位需清理；已把 §1.5 R2 改为实况口径，
+  **历史交付报告不回改**（与既有纪律一致），只在 ADR-0036 记账。
+- **同步修订**：`docs/ROADMAP.md` §1（P6 行）/§1.5（R2 + 新增 P9 备注）/§2；`docs/VISION.md` §8（原"待拍：多模态/语音
+  哪些进第一版" → 已拍）；`docs/adr/README.md`（索引 0036）；`docs/SCALE-ESTIMATE.md` §2/§3/§4/§6（总量下调至
+  ~1020–1650 commit）。
+- **零代码/零契约变更**：无任何 Python/TS/Rust 文件改动，事件协议、状态模型、分层守卫均不受影响。
+
 ### Added — P7 桌面壳（Tauri）地基（分支 `feat/p7-desktop-shell`；详 `docs/plan/07-p7-desktop-shell.md`）
 
 - **sidecar serve 生产入口（DoD①/⑤，ADR-0032/D-P7-B）**：`surfaces/serve.py` 把 `EventServer` 挂上 uvicorn，

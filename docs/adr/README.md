@@ -41,6 +41,7 @@
 | [0033](./0033-p7-bus-level-out-of-band-projection.md) | 带外投影收口为 bus 级只读订阅（D-P7-A）：一 run 恰投一份、删 `cli._stream` 逐消费者 `log_envelope`；协议零 diff、九内核零依赖不破（收口 plan/05 §0.4 缺口） | ✅ |
 | [0034](./0034-p7-reconnect-message-completed-final-text.md) | 断线重连在途文本恢复 = `message_completed` additive 有界 `final_text`（D-P7-C 选型①）：定稿正文进 durable 事件帧、`after_seq` 重放自足恢复、单一真源不另开 /transcript 第二读面；有界+artifact 溢出、不进投影白名单；半条在途 delta 标 UNVERIFIED | ✅ |
 | [0035](./0035-p7-additive-tool-event-and-node-shape.md) | 工具事件 additive `preview`/`artifact_ref`/`truncated` + `node_updated` 定形（T7/T11）：只加可选字段不破 type/关联键/版本、三处 lockstep、C20 白名单不含原文 | ✅ |
+| [0036](./0036-p6-dropped-from-roadmap.md) | **P6（多模态/语音）整阶段从路线图移除**：语音+图像全砍、编号不重排；v1 后序列 = P8→P9→P10；逆转路径定为 L5 provider + L6 surface 接缝上的按需扩展（复用 ADR-0019 有界载荷）；P9 新增非文本请求体归一化拒绝判据；核实多模态事件 `type` 占位从未落地（旧文档误记） | ✅ |
 
 > **0027 已落地**（原为日志骨架刀 2 预留号）：详 [`../log/DESIGN.md`](../log/DESIGN.md) §17、[`../log/PLAN.md`](../log/PLAN.md) 刀 2。
 

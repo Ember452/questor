@@ -6,12 +6,15 @@
 
 - Python 3.13，依赖用 **uv** 管理（不要直接用 pip）。
 ```bash
-uv sync                 # 建 .venv 并安装 core 依赖
-uv run questor --help   # 运行（P1 起可用）
-uv run ruff check .     # lint
-uv run pytest           # 测试
+uv sync                           # 建 .venv 并安装 core 依赖
+uv run python -m questor --help   # 用法与 env 族（不建库、不起 REPL；Issue #148）
+uv run python -m questor          # 交互 REPL（尚无 `questor` console script，入口只有 `-m questor`）
+uv run ruff check .               # lint
+uv run pytest                     # 测试
 ```
-- extras（默认不装，按需）：`uv sync --extra im|voice|browser|docs`。
+- **extras 当前不存在**：`pyproject.toml` 没有 `[project.optional-dependencies]`，`uv sync --extra …` 会直接失败；
+  旧版本文列的 `voice`/`im` 已随 [ADR-0036](docs/adr/0036-p6-dropped-from-roadmap.md)（P6 多模态/语音整阶段移出）作废，
+  `browser`/`docs` 若将来立项再随 extras 一同定义。
 
 ## 工作方式（重要）
 
