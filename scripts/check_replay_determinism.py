@@ -123,11 +123,29 @@ def _fixture_spawn_report() -> tuple[Run, list[Command], int]:
     return run, cmds, 4  # split 恰在 spawn 之后、report 之前（task_tree 含 active+assigned_run_id）
 
 
+def _fixture_multi_child_report() -> tuple[Run, list[Command], int]:
+    """P8：父 spawn 两子、分别 report（一个 done 一个 failed）；验证多子 task_tree 跨快照 round-trip 确定。"""
+    rid = "r_multi_child"
+    run = Run(run_id=rid, budget=Budget(max_turns=3))
+    nodes = (TaskNode(id="c1", title="c1", kind=TaskKind.SUBAGENT), TaskNode(id="c2", title="c2", kind=TaskKind.SUBAGENT))
+    cmds: list[Command] = [
+        SubmitMessage(run_id=rid, content=_user()),
+        UpdateTaskTree(run_id=rid, upsert=nodes),
+        SpawnSubagent(run_id=rid, node_id="c1", child_run_id="rc1", spawn_key="s:c1"),
+        SpawnSubagent(run_id=rid, node_id="c2", child_run_id="rc2", spawn_key="s:c2"),
+        ReportChildTerminal(run_id=rid, child_run_id="rc1", node_id="c1", terminal_status="completed"),
+        ReportChildTerminal(run_id=rid, child_run_id="rc2", node_id="c2", terminal_status="failed"),
+        FinalizeRun(run_id=rid, status="completed", exit_reason="answered"),
+    ]
+    return run, cmds, 5  # split 在第一子 report 后、第二子 report 前（task_tree 半更新态）
+
+
 FIXTURES: list[tuple[str, Callable[[], tuple[Run, list[Command], int]]]] = [
     ("approve", _fixture_approve),
     ("cancel-backfill", _fixture_cancel_backfill),
     ("multi-turn", _fixture_multi_turn),
     ("spawn-report", _fixture_spawn_report),
+    ("multi-child-report", _fixture_multi_child_report),
 ]
 
 
