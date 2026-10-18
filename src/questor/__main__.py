@@ -9,6 +9,8 @@
 - ``python -m questor --resume <run_id>``：从持久态续跑被 kill/重启的 run（P3）。
 - ``python -m questor --list``：列出未完成的 run id（供选择续跑）。
 - ``python -m questor --dream``：离线 Deep Dream 蒸馏（夜间批处理，把近期 daily 固化回 core）。
+- ``python -m questor -h`` / ``--help``：打印用法并退出（Issue #148）——**不建库、不装日志、不起 REPL**；
+  未识别的选项同理先报错退 2，绝不落回交互态。
 
 路径：state 取 ``QUESTOR_STORE_PATH``（默认 ``<cwd>/.questor/state.db``）；记忆库取
 ``QUESTOR_MEMORY_DB``（默认 ``<cwd>/.questor/memory.db``）、md 真源根取 ``QUESTOR_MEMORY_ROOT``
@@ -38,6 +40,27 @@ from questor.surfaces.serve import serve
 
 #: 组合根自述行 logger（一方 inline 记录；DoD A① 的"起手即有日志"靠它兑现）。
 _LOG = logging.getLogger("questor.composition")
+
+#: 可识别的入口选项；`--resume` 需带 run_id，但选项名本身在此。
+_KNOWN_COMMANDS: frozenset[str] = frozenset({"--serve", "--resume", "--list", "--dream"})
+
+#: CLI 用法文本（Issue #148）：与上方模块 docstring 的入口清单同源，供 `-h/--help` 与未知选项提示共用。
+_USAGE = """usage: python -m questor [command]
+
+commands:
+  (none)             交互 REPL（每轮真实落库，支撑 --resume）
+  --serve            起 HTTP+SSE sidecar（bind 127.0.0.1:0 + 写 bootstrap）
+  --resume <run_id>  从持久态续跑被 kill/重启的 run
+  --list             列出未完成的 run id
+  --dream            离线 Deep Dream 蒸馏
+  -h, --help         显示本用法并退出（不建库、不装日志、不起 REPL）
+
+env（仅组合根读，内核 env-free）:
+  QUESTOR_MODEL · QUESTOR_STORE_PATH · QUESTOR_MEMORY_DB · QUESTOR_MEMORY_ROOT
+  QUESTOR_SKILLS_DIR · QUESTOR_MCP_JSON · QUESTOR_LOG_DIR · QUESTOR_LOG_LEVEL
+  QUESTOR_LOG_KEEP_DAYS · QUESTOR_LOG_PAYLOAD · QUESTOR_SIDECAR_GENERATION
+  QUESTOR_SIDECAR_BOOTSTRAP · QUESTOR_WEB_DIST · QUESTOR_DREAM_LOOKBACK
+"""
 
 
 def _store_path() -> str:
@@ -119,9 +142,23 @@ class _HeuristicDistiller:
 
 
 async def _amain(argv: list[str]) -> int:
+    """组合根主流程：**先判参数、再装配**。`-h/--help` 与未知选项在任何装配之前返回（Issue #148）。
+
+    为何必须前置：旧实现只逐个比 `argv[0]`，help 缺失就落 `else` 直起 REPL（fail-open），
+    而 store/记忆库 connect 已在前面执行——一次 `--help` 会顺手建 state.db/memory.db 与日志面。
+    失败语义：help 退 0（走 stdout）；未知选项退 2（走 stderr）。
+    """
     # 组合根唯一装配入口（DESIGN §11；T2.14）：读 env 族并装**完整管线**——带内桥 + console(stderr)
     # + 按日 JSONL 文件面 + errors 分流——覆盖 REPL/--resume/--list/--dream 四入口。参数由组合根注入、
     # 内核 env-free（config⟂observability）。sidecar 宿主入口须调同一装配口径、不自配。
+    if argv and argv[0] in ("-h", "--help"):
+        print(_USAGE)
+        return 0
+    if argv and argv[0].startswith("-") and argv[0] not in _KNOWN_COMMANDS:
+        # fail-closed：拼错的选项不得当"无参数"静默起 REPL（自动化/CI 里要的是明确失败码）。
+        print(f"unknown option: {argv[0]}", file=sys.stderr)
+        print(_USAGE, file=sys.stderr)
+        return 2
     assemble_logging()
     path = _store_path()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
