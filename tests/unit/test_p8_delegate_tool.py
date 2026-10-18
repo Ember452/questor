@@ -26,7 +26,7 @@ class _FakeCtx:
     def is_cancelled(self) -> bool:
         return False
 
-    async def spawn_subagent(self, objective: str, *, requested_mode: str | None = None, extra_deny: tuple[str, ...] = ()) -> SpawnResult:
+    async def spawn_subagent(self, objective: str, *, requested_mode: str | None = None, extra_deny: tuple[str, ...] = (), wait: bool = True) -> SpawnResult:
         self.calls.append((objective, requested_mode))
         assert self._outcome is not None
         return self._outcome
@@ -59,6 +59,15 @@ async def test_delegate_without_spawner_is_soft_error():
     res = await _run({"objective": "x"}, _NoSpawnCtx())
     assert res.status == "error"
     assert "not available" in (res.result or "")
+
+
+async def test_delegate_fire_and_forget_branch_returns_running():
+    # wait=False → 子仍在跑（terminal_status=None）→ 工具回"已发起 running"，不假称有结果。
+    outcome = SpawnResult(accepted=True, child_run_id="r-c")
+    ctx = _FakeCtx(outcome)
+    res = await _run({"objective": "do it", "wait": False}, ctx)
+    assert res.status == "success"
+    assert "running" in (res.result or "") and "r-c" in (res.result or "")
 
 
 async def test_delegate_refused_by_gate():

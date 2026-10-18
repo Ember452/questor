@@ -153,15 +153,18 @@ class _ToolCtx:
         *,
         requested_mode: str | None = None,
         extra_deny: tuple[str, ...] = (),
+        wait: bool = True,
     ) -> SpawnResult:
         """经 Harness 注入的 spawner 端口发起一个子 agent（独立 Run，ADR-0038）。
 
         工具拿不到 RunRegistry/bus 裸句柄（C4/C8）；spawn 的记账/建子/起跑全在端口与内核。
-        未接线（单 run 场景）时 fail-soft 返回未受理、不抛——不破坏既有循环。"""
+        未接线（单 run 场景）时 fail-soft 返回未受理、不抛——不破坏既有循环。``wait=False`` 为
+        fire-and-forget（不起回、父继续），使多个 live 子可同时存在、宽度门才真实可达。
+        """
         if self._subagent_spawner is None:
             return SpawnResult(accepted=False, reason="subagent orchestration not wired")
         return await self._subagent_spawner.delegate(
-            _spawn_request_from(self.run_id, objective, requested_mode, extra_deny)
+            _spawn_request_from(self.run_id, objective, requested_mode, extra_deny, wait)
         )
 
 
@@ -170,6 +173,7 @@ def _spawn_request_from(
     objective: str,
     requested_mode: str | None,
     extra_deny: tuple[str, ...],
+    wait: bool = True,
 ) -> SpawnRequest:
     """把工具的委派意图包成端口请求。node_id 在此先起一个稳定 id，端口侧用它建节点与绑定子 run。"""
     return SpawnRequest(
@@ -178,6 +182,7 @@ def _spawn_request_from(
         objective=objective,
         requested_mode=requested_mode,
         extra_deny=tuple(extra_deny),
+        wait=wait,
     )
 
 

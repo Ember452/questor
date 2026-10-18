@@ -20,6 +20,8 @@ class SpawnRequest:
 
     ``objective`` 是子任务的短标签（进子 run 的首条 user 消息），**不得含父全量 context**（C18）；
     ``requested_mode`` 若给定仍会被夹到 ≤ 父（永不放大，ADR-0040）；``extra_deny`` 只会扩大子 denylist。
+    ``wait``：True=委派即阻塞等子终态（协作内联取回结果）；False=fire-and-forget（不起回，
+    父继续跑）——只有 fire-and-forget 才能同时挂多个 live 子、令宽度门 `max_parallel_children` 真实可达。
     """
 
     parent_run_id: str
@@ -27,6 +29,7 @@ class SpawnRequest:
     objective: str
     requested_mode: str | None = None
     extra_deny: tuple[str, ...] = ()
+    wait: bool = True
 
 
 @dataclass(frozen=True, slots=True)

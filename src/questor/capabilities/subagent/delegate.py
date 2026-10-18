@@ -30,6 +30,7 @@ class DelegateTool(Tool):
                 "properties": {
                     "objective": {"type": "string", "description": "Short, self-contained sub-task goal."},
                     "mode": {"type": "string", "enum": ["default", "plan", "full_auto"], "description": "Requested child permission mode (clamped to ≤ parent)."},
+                    "wait": {"type": "boolean", "description": "true (default): block until the child reaches a terminal state and return its result; false: fire-and-forget and return immediately."},
                 },
                 "required": ["objective"],
             },
@@ -52,9 +53,13 @@ class DelegateTool(Tool):
             # 未接 spawner 的 run：明确出声、不崩（fail-soft，design/04 L1）。
             return ToolResult(status="error", result="subagent orchestration is not available for this run")
         requested_mode = args.get("mode") if isinstance(args, dict) else None
-        outcome = await spawn(objective.strip(), requested_mode=requested_mode)
+        wait = args.get("wait", True) if isinstance(args, dict) else True
+        outcome = await spawn(objective.strip(), requested_mode=requested_mode, wait=bool(wait))
         if not outcome.accepted:
             return ToolResult(status="error", display="delegation refused", result=f"delegate refused: {outcome.reason}")
+        if outcome.terminal_status is None:
+            # fire-and-forget：子仍在跑，仅回报已发起（不带结果摘要）。
+            return ToolResult(status="success", result=f"delegated to subagent {outcome.child_run_id} (running)", display=f"delegated → child {outcome.child_run_id}")
         summary = (outcome.result or "")[:_MAX_DELEGATE_RESULT_CHARS]
         display = f"delegated → child {outcome.child_run_id} [{outcome.terminal_status}]"
         return ToolResult(status="success", result=f"subagent {outcome.terminal_status}: {summary}".strip(), display=display)

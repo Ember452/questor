@@ -62,6 +62,7 @@ class SubagentOrchestrator:
         self._children: dict[str, set[str]] = {}  # parent_run_id -> live child_run_ids
         self._depth: dict[str, int] = {}  # run_id -> 编排树深度（顶层 run 不在表中，视作 0）
         self._pending: dict[str, asyncio.Future] = {}  # child_run_id -> delegate 等待的终态 future
+        self._child_tasks: dict[str, asyncio.Task] = {}  # child_run_id -> 子驱动 asyncio 任务（供回收/测试 drain）
 
     async def delegate(self, request: SpawnRequest) -> SpawnResult:
         """fan-out gate → 父侧记账命令 → 直接起跑子 run → await 终态 → 回有界结果。"""
@@ -99,8 +100,12 @@ class SubagentOrchestrator:
         self._depth[child_run_id] = parent_depth + 1
         fut = asyncio.get_running_loop().create_future()
         self._pending[child_run_id] = fut
-        # 直接起跑子 run（独立 asyncio 任务）；父 await 其 future。
-        asyncio.create_task(self._drive_child(request.parent_run_id, node_id, child_run_id, request.objective, request.requested_mode))
+        # 直接起跑子 run（独立 asyncio 任务）；wait=True 父 await 其 future，False 则即刻返回（fire-and-forget）。
+        self._child_tasks[child_run_id] = asyncio.create_task(
+            self._drive_child(request.parent_run_id, node_id, child_run_id, request.objective, request.requested_mode)
+        )
+        if not request.wait:
+            return SpawnResult(accepted=True, child_run_id=child_run_id)
         try:
             terminal, summary = await fut
         except asyncio.CancelledError:
