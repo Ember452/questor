@@ -50,6 +50,9 @@
 | [0042](./0042-peer-event-additive-shape.md) | 事件 additive：`peer_started`/`peer_ended` 定形（20→22 type、**不 bump `v`**）；只带关联键+有界 status+`result_ref` 指针、无正文；`node_updated` 白名单不扩；三处 lockstep + C20 不进投影白名单；兑现 design/02 §7 生长场景 | ✅ |
 | [0043](./0043-openai-compat-projection-adapter.md) | OpenAI 兼容 = **投影适配器**：入站经 Command Inbox（C16）、出站只读投影成 OpenAI SSE（design/02 §9 X5/§10 映射表）；**wire 单一真源=独立 `openai_compat.schema.json`+`contracts/openai_wire.py`、questor `v` 不 bump**；**无原生续传=断连即取消**；带外零双投（承 ADR-0033）；**独立鉴权外部 API lane**（对 ADR-0032 分道 scoping、opt-in 非 loopback + 强制 API-key fail-closed + 保守权限 C17） | 🚧 |
 | [0044](./0044-non-text-content-normalize-reject.md) | 非文本/语音 content part **归一化拒绝**（承 ADR-0036 决策5）：surface fail-fast 返 HTTP 400 OpenAI error（不起 run、不崩、不静默降级）+ defense-in-depth 走 ADR-0028 归一 `run_failed`；additive `ErrorKind.UNSUPPORTED_MODALITY`；README/VISION 诚实"仅文本模态" | 🚧 |
+| [0045](./0045-policy-registry-and-run-policy-ref.md) | `PolicyRegistry` 落 **L4 `policy/registry.py`**（进程内、kernel 不 import、组合根解析注入保 C1）：trust project>user>system、错误二分 Unknown/Broken 留名、fail-open 默认+WARN（C10）；发现=固定名册无磁盘 HMR；`Run.policy_ref`+`run_started.policy_ref` additive 不 bump `v`；热替换=新 run、AB 按 fingerprint（design/05 §6 落地） | 🚧 |
+| [0046](./0046-capability-hot-plug-host.md) | 能力热插拔宿主：**不移植 cordis TS 容器**，只薄 `PluginLifecycle(init/teardown)`+`PluginHost` 熔断护栏（C10）复用已存 tools/skills/mcp 注册点；热插只影响下一 `freeze_for_run`、活 run 面不变；`tools_changed` = **live-only 告警**（入 `LIVE_ONLY`、不占 seq、由 loop 在 generation bump 处发）；无磁盘 HMR（C12） | 🚧 |
+| [0047](./0047-cross-process-claim-delivery-run-lease.md) | 接回 P8（ADR-0021/0038 后置）：`StorePort` 增量 `claim/delivery_state/ack` + 单机多进程 `run_lease`（epoch）；投递视图**从事件重放重建、不第二真相**（C13/C15）；真接 `ReportChildTerminal`；两真 OS 子进程共享 SQLite 端到端验单机多进程（DoD⑦ 已验证）、**跨机=UNVERIFIED C12 天花板** | 🚧 |
 
 > **0027 已落地**（原为日志骨架刀 2 预留号）：详 [`../log/DESIGN.md`](../log/DESIGN.md) §17、[`../log/PLAN.md`](../log/PLAN.md) 刀 2。
 
