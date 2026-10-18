@@ -37,9 +37,20 @@ def _run_acquirer(tmp_path: Path, db: str, holder: str) -> str:
         "LEASE_DB": db,
         "LEASE_HOLDER": holder,
         "NO_PROXY": "127.0.0.1,localhost",
+        # 钉住宿主编码（MA-1 修复，同 test_log_entry_parity）：非 UTF-8 代码页（cp936/cp1252）上
+        # 不锁则子进程输出用 locale 编码、父进程 reader 线程 UnicodeDecodeError → stdout/stderr 变 None 假绿。
+        "PYTHONUTF8": "1",
+        "PYTHONIOENCODING": "utf-8",
     }
     proc = subprocess.run(
-        [sys.executable, str(script)], env=env, cwd=_REPO_ROOT, capture_output=True, text=True, timeout=120
+        [sys.executable, str(script)],
+        env=env,
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
     )
     assert proc.returncode == 0, f"{holder} crashed: {proc.stderr[-500:]}"
     return proc.stdout.strip()
