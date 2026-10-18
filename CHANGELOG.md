@@ -19,6 +19,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   四条分别钉住退出码、stdout 用法含四个入口、**不进 REPL**、且 `tmp_path` 下**不生成任何文件**（装配前置的硬可测代理）。
   修复前实测 4/4 判红（证据：stdout=`questor CLI — type a message …`、tmp 下生成 `logs/memory.db/memory_store/state.db`）。
 - 本地全量门：689 passed / 5 skipped、ruff clean、冷导入 OK、import-linter 5 kept、AST 守卫 0 violation、协议 20 types lockstep。
+- **回归（由 CI `tests-windows` 抓出、本机 cp936 抓不出）**：首版 `_USAGE` 把中文写进了用户可见输出，而 Windows runner 控制台是 **cp1252**
+  → `print(_USAGE)` 直接 `UnicodeEncodeError` 带堆栈崩掉（rc=1、stdout 空）——“修 help”本身成了新崩溃。
+  修：用法文本改 **ASCII-only**（AGENTS §5.6：一方输出用英文，中文只进注释/docstring）；并新增两条用
+  `PYTHONIOENCODING=cp1252` 钉住代码页的回归用例（**在任何开发机上确定性复现**，不再依赖“恰好有块 Windows 机器”）；
+  修复前先拿它判红、后转绿，全量 **691 passed / 5 skipped**。
 
 ### Changed — 文档漂移清扫（只加状态注记，不改阶段结论、不回改历史验收判据）
 
