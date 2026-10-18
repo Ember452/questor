@@ -42,6 +42,7 @@ from questor.contracts.events import (
     RecordToolResult,
     RequestApproval,
     ResolveApproval,
+    SpawnSubagent,
     SubmitMessage,
     WriteMemory,
 )
@@ -59,6 +60,7 @@ from questor.contracts.state_schema import (
     ToolArgsStatus,
     ToolCallStatus,
 )
+from questor.contracts.subagent import SpawnRequest, SpawnResult, SubagentSpawnerPort
 from questor.contracts.tool import RunToolSurface, Tool, ToolResult, ToolSpec
 from questor.kernel.events import EventBus
 from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
@@ -87,6 +89,7 @@ class _ToolCtx:
         process_runner: object | None = None,
         artifact_store: object | None = None,
         memory_store: MemoryStorePort | None = None,
+        subagent_spawner: SubagentSpawnerPort | None = None,
     ) -> None:
         self.workspace_root = workspace_root
         self.cwd = cwd or workspace_root
@@ -95,6 +98,7 @@ class _ToolCtx:
         self._process_runner = process_runner
         self._artifact_store = artifact_store
         self._memory_store = memory_store
+        self._subagent_spawner = subagent_spawner
         self._cancel = cancel_event
         # T11/T12 前只记录声明；真正的 ProcessRunner 必须读取此列表并执行 provider credential 过滤。
         self._declared_env_names: set[str] = set()
@@ -142,6 +146,44 @@ class _ToolCtx:
         if self._memory_store is None:
             return ()
         return await self._memory_store.search(query, k=k, scope=scope)
+
+    async def spawn_subagent(
+        self,
+        objective: str,
+        *,
+        requested_mode: str | None = None,
+        extra_deny: tuple[str, ...] = (),
+        wait: bool = True,
+    ) -> SpawnResult:
+        """经 Harness 注入的 spawner 端口发起一个子 agent（独立 Run，ADR-0038）。
+
+        工具拿不到 RunRegistry/bus 裸句柄（C4/C8）；spawn 的记账/建子/起跑全在端口与内核。
+        未接线（单 run 场景）时 fail-soft 返回未受理、不抛——不破坏既有循环。``wait=False`` 为
+        fire-and-forget（不起回、父继续），使多个 live 子可同时存在、宽度门才真实可达。
+        """
+        if self._subagent_spawner is None:
+            return SpawnResult(accepted=False, reason="subagent orchestration not wired")
+        return await self._subagent_spawner.delegate(
+            _spawn_request_from(self.run_id, objective, requested_mode, extra_deny, wait)
+        )
+
+
+def _spawn_request_from(
+    parent_run_id: str,
+    objective: str,
+    requested_mode: str | None,
+    extra_deny: tuple[str, ...],
+    wait: bool = True,
+) -> SpawnRequest:
+    """把工具的委派意图包成端口请求。node_id 在此先起一个稳定 id，端口侧用它建节点与绑定子 run。"""
+    return SpawnRequest(
+        parent_run_id=parent_run_id,
+        node_id=new_id("node"),
+        objective=objective,
+        requested_mode=requested_mode,
+        extra_deny=tuple(extra_deny),
+        wait=wait,
+    )
 
 
 def _none_descriptor() -> SandboxDescriptor:
@@ -199,6 +241,7 @@ class DefaultTurnLoop:
         model: str = "",
         system: str | None = None,
         cancel_event: asyncio.Event | None = None,
+        subagent_spawner: SubagentSpawnerPort | None = None,
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -216,6 +259,8 @@ class DefaultTurnLoop:
         self.model = model
         self.system = system
         self.cancel_event = cancel_event or asyncio.Event()
+        # P8：子 agent 编排端口（未接线时单 run 行为逐字不变）。spawn 建子与子树冻结均走此端口。
+        self.subagent_spawner = subagent_spawner
 
     def _tool(self, name: str) -> Tool | None:
         """工具解析优先走冻结 surface（run 内工具面不变），否则走兼容入口。"""
@@ -248,6 +293,10 @@ class DefaultTurnLoop:
             # 会拿到 turn 边界那个 status=running 的 stale 快照，resume 会重驱一轮（真实 LLM 冒烟发现）。
             if result.status.is_terminal and self.store is not None:
                 await self._checkpoint(result, "final")
+            if result.status.is_terminal and self.subagent_spawner is not None:
+                # P8（ADR-0038/C7）：父 terminal → 冻结子树——经端口向每个 live 子提 Cancel(owner)，
+                # 不 out-of-band 硬杀；无子时端口自会 no-op。
+                await self.subagent_spawner.on_parent_terminal(result.run_id)
             return result
         finally:
             if controller.run.status.is_terminal:
@@ -376,6 +425,12 @@ class DefaultTurnLoop:
                 ack = next((e for e in events if e.type == EventType.MEMORY_WRITTEN), None)
                 if ack is not None:
                     await self.memory_store.write(command.payload, idempotency_key=f"mem:{command.run_id}:{ack.seq}")
+            # P8（ADR-0038/§4.1）：reduce 受理 SpawnSubagent（产出 peer_started = 已绑 node）后，
+            # 才由端口实体化子 run——对齐 WriteMemory 的"reduce 发事件、消费点做 IO"。reduce 若判重/拒
+            # （无 peer_started）则不建子，避免重投/回放留下孤儿子。
+            if isinstance(command, SpawnSubagent) and self.subagent_spawner is not None:
+                if any(e.type == EventType.PEER_STARTED for e in events):
+                    await self.subagent_spawner.materialize_child(command.run_id, command.node_id, command.child_run_id)
             if run.status.is_terminal:
                 return run
         return run
@@ -612,6 +667,7 @@ class DefaultTurnLoop:
             process_runner=self.process_runner,
             artifact_store=self.artifact_store,
             memory_store=self.memory_store,
+            subagent_spawner=self.subagent_spawner,
         )
         deadline = tool.spec.timeout_s or run.budget.tool_default_timeout_seconds
         try:

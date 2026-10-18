@@ -40,7 +40,9 @@ Kernel 内部事件(细粒度、私有、可随实现演进)
 | `approval_request` | 权限=ask 且审批请求已落账 | request_id, tool_call_id, name, args_summary, risk, reason, expires_at | 否（进入 per-call awaiting_approval） |
 | `approval_resolved` | 人工/超时/取消裁决一个 request | request_id, tool_call_id, decision, decided_by, resolved_at | 否 |
 | `permission_mode_changed` | `SetPermissionMode` 成功变更未来模式 | mode, changed_by, effective_from_turn | 否 |
-| `node_updated` | 任务树节点状态变 | node_id, status | 否 |
+| `node_updated` | 任务树节点状态变 | node_id, status, title, parent_id | 否 |
+| `peer_started` | 父 spawn 子 agent（P8，ADR-0042） | parent_run_id, child_run_id, node_id | 否 |
+| `peer_ended` | 子 agent 达终态回父（P8，ADR-0042） | parent_run_id, child_run_id, node_id, terminal_status, result_ref?, resumable_hint | 否 |
 | `usage_delta` | 用量更新 | tokens, cost? | 否 |
 | `heartbeat` | 长任务保活 | ts | 否 |
 | `run_cancelled` | 取消 | final? | **先于 completed** |
@@ -68,7 +70,7 @@ Kernel 内部事件(细粒度、私有、可随实现演进)
 - `protocol/event.schema.json` 采用 `type → $defs payload schema` 的 `oneOf`；每 payload `additionalProperties:false`。新增可选字段先 schema、再代码、再 TS codegen。
 
 ## 7. 生长场景验收（证明"只增不改"够用）
-语音附件→`voice_attached`；子agent→`peer_started/peer_ended`+`node(kind=subagent)`；产物→`artifact`；MCP 热增→`tools_changed`；预算→`budget_update`。**均不碰信封/关联键/终止序**——若某扩展逼着改这三样，即协议设计错。
+语音附件→`voice_attached`（P6 已移除、仍作协议纪律例证，ADR-0036）；**子agent→`peer_started/peer_ended`+`node(kind=subagent)` 已于 P8 定形（[ADR-0042](../adr/0042-peer-event-additive-shape.md)，additive、不 bump `v`）**；产物→`artifact`；MCP 热增→`tools_changed`；预算→`budget_update`。**均不碰信封/关联键/终止序**——若某扩展逼着改这三样，即协议设计错。
 
 ## 8. 待定（v0 后锁，C11）
 - 每事件的**精确 data 字段**：先给上面核心集，跑通 2-3 个策略变体后 lock。

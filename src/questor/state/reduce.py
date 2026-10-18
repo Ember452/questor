@@ -31,10 +31,13 @@ from questor.contracts.events import (
     MarkToolRunning,
     MarkToolValidated,
     RecordToolResult,
+    ReportChildTerminal,
     RequestApproval,
     ResolveApproval,
     SetPermissionMode,
+    SpawnSubagent,
     SubmitMessage,
+    UpdateTaskTree,
     WriteMemory,
 )
 from questor.contracts.memory import source_for_write
@@ -46,12 +49,20 @@ from questor.contracts.state_schema import (
     Message,
     Role,
     RunStatus,
+    TaskKind,
+    TaskNode,
+    TaskStatus,
     ToolCall,
     ToolCallStatus,
 )
-from questor.state.domain_state import Context, PermissionCtx, PermissionDecisionRecord, Run
+from questor.state.domain_state import Context, PermissionCtx, PermissionDecisionRecord, Run, TaskTree
 
 _OPEN_CALL = OPEN_TOOL_CALL_STATUSES
+
+#: 任务节点的终态集（first-writer-wins：已终态的节点不被迟到 ReportChildTerminal 翻案）。
+_TERMINAL_NODE_STATUSES: frozenset[TaskStatus] = frozenset(
+    {TaskStatus.DONE, TaskStatus.FAILED, TaskStatus.CANCELLED}
+)
 
 #: 单条记忆写载荷的字节上限（承 ADR-0019 ToolResult 默认 16 KiB；超限 fail-closed 拒，
 #: 防长跑把 memory.db / event payload 撑爆。实现期可经配置覆盖，只增不改）。
@@ -121,6 +132,49 @@ def _tool_completed_data(tool_call_id: str, status: str, *, result: object, disp
 def _event(seq: int, run: Run, turn: int | None, etype: str, data: dict) -> Envelope:
     """构造一个对外事件信封（v 取 wire 版本，run_id 取自当前 run）。"""
     return Envelope(v=EVENT_SCHEMA_VERSION, seq=seq, run_id=run.run_id, type=etype, turn=turn, data=data)
+
+
+def validate_task_tree(nodes: tuple[TaskNode, ...]) -> list[str]:
+    """任务树依赖校验（I1，[ADR-0037]）：唯一 id / 无自环 / 无悬空 dep / 无环。
+
+    纯函数，返回问题清单（空=合法）。reduce 在写入 ``task_tree`` 前调用；非法即拒 + 发错误事件、
+    **不改状态、不崩**（design/01 §12 I1）。**只校验、不做拓扑调度**（调度器/ fan-in 后置，见 ADR-0037）。
+    环检测用 Kahn：反复移除“所有已知依赖均已就绪”的节点，残留者即在环中（悬空 dep 单独报、不掺入环判定）。
+    """
+    problems: list[str] = []
+    seen: set[str] = set()
+    dup: set[str] = set()
+    for node in nodes:
+        if node.id in seen:
+            dup.add(node.id)
+        seen.add(node.id)
+    for node_id in sorted(dup):
+        problems.append(f"duplicate node id {node_id!r}")
+
+    deps_by_id: dict[str, tuple[str, ...]] = {node.id: node.deps for node in nodes}
+    for node in nodes:
+        for dep in node.deps:
+            if dep == node.id:
+                problems.append(f"node {node.id!r} depends on itself")
+            elif dep not in deps_by_id:
+                problems.append(f"node {node.id!r} has unknown dep {dep!r}")
+
+    remaining = dict(deps_by_id)
+    resolved: set[str] = set()
+    while True:
+        ready = [
+            nid
+            for nid, deps in remaining.items()
+            if all(dep in resolved or dep not in deps_by_id for dep in deps)
+        ]
+        if not ready:
+            break
+        for nid in ready:
+            resolved.add(nid)
+            remaining.pop(nid, None)
+    if remaining:
+        problems.append(f"cycle detected involving {sorted(remaining)}")
+    return problems
 
 
 def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C901
@@ -347,6 +401,65 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         )
         return new, events
 
+    if isinstance(command, UpdateTaskTree):
+        # 首次让 reduce 处理 task_tree：写入前跑 DAG 校验（I1）；非法 → 拒 + 出声、**不改树**。
+        by_id = {n.id: n for n in run.task_tree.nodes}
+        for node in command.upsert:
+            by_id[node.id] = node
+        for nid in command.remove_ids:
+            by_id.pop(nid, None)
+        candidate = tuple(by_id.values())  # 插入序：现有节点在前、新节点追加，回放确定。
+        problems = validate_task_tree(candidate)
+        if problems:
+            msg = "task tree rejected: " + "; ".join(problems)
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": msg})]
+        seq = run.seq
+        events: list[Envelope] = []
+        for node in command.upsert:
+            seq += 1
+            events.append(_event(seq, run, run.turn, EventType.NODE_UPDATED, _node_event_data(node)))
+        return replace(run, task_tree=TaskTree(nodes=candidate), seq=seq), events
+
+    if isinstance(command, SpawnSubagent):
+        # 父侧记账：绑 assigned_run_id + 置 active + 发 peer_started。reduce **不创建子 run**（IO 在 loop 消费点）。
+        node = next((n for n in run.task_tree.nodes if n.id == command.node_id), None)
+        if node is None:
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"spawn: unknown node {command.node_id}"})]
+        if node.assigned_run_id == command.child_run_id:
+            return run, []  # 幂等：同 child 再报 = no-op
+        if node.assigned_run_id is not None:
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"spawn: node {command.node_id} already bound to {node.assigned_run_id}"})]
+        bound = replace(node, kind=TaskKind.SUBAGENT, assigned_run_id=command.child_run_id, status=TaskStatus.ACTIVE)
+        tree = replace(run.task_tree, nodes=_replace_node(run.task_tree.nodes, bound))
+        seq = run.seq
+        events = [_event(seq + 1, run, run.turn, EventType.PEER_STARTED, {"parent_run_id": run.run_id, "child_run_id": command.child_run_id, "node_id": command.node_id})]
+        events.append(_event(seq + 2, run, run.turn, EventType.NODE_UPDATED, _node_event_data(bound)))
+        return replace(run, task_tree=tree, seq=seq + 2), events
+
+    if isinstance(command, ReportChildTerminal):
+        # 子终态回父（经父 inbox，非直写）：回填 node 终态 + 发 peer_ended。已终态 → 幂等 no-op（不被迟到翻案）。
+        node = next((n for n in run.task_tree.nodes if n.id == command.node_id), None)
+        if node is None:
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"report: unknown node {command.node_id}"})]
+        if node.assigned_run_id != command.child_run_id:
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"report: child_run_id mismatch for node {command.node_id}"})]
+        if node.status in _TERMINAL_NODE_STATUSES:
+            return run, []
+        mapped = {"completed": TaskStatus.DONE, "failed": TaskStatus.FAILED, "cancelled": TaskStatus.CANCELLED}[command.terminal_status]
+        settled = replace(node, status=mapped)
+        tree = replace(run.task_tree, nodes=_replace_node(run.task_tree.nodes, settled))
+        seq = run.seq
+        events = [_event(seq + 1, run, run.turn, EventType.PEER_ENDED, {
+            "parent_run_id": run.run_id,
+            "child_run_id": command.child_run_id,
+            "node_id": command.node_id,
+            "terminal_status": command.terminal_status,
+            "result_ref": command.result_ref,
+            "resumable_hint": command.resumable_hint,
+        })]
+        events.append(_event(seq + 2, run, run.turn, EventType.NODE_UPDATED, _node_event_data(settled)))
+        return replace(run, task_tree=tree, seq=seq + 2), events
+
     # 未处理的 Command → 以 warning 拒绝（绝不崩循环，design/04 L1）。
     return run, [
         _event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"unsupported command {command.type}"})
@@ -442,6 +555,24 @@ def _call_status(status: str) -> ToolCallStatus:
 def _replace_call(calls: tuple[ToolCall, ...], updated: ToolCall) -> tuple[ToolCall, ...]:
     """不可变替换：返回把匹配 id 的那条换成 ``updated`` 的新元组。"""
     return tuple(updated if c.tool_call_id == updated.tool_call_id else c for c in calls)
+
+
+def _replace_node(nodes: tuple[TaskNode, ...], updated: TaskNode) -> tuple[TaskNode, ...]:
+    """任务树不可变替换（同 ``_replace_call``）；匹配 id 换成 ``updated``。"""
+    return tuple(updated if n.id == updated.id else n for n in nodes)
+
+
+def _node_event_data(node: TaskNode) -> dict[str, object]:
+    """``node_updated`` 的**有界**白名单载荷（{node_id,status,title,parent_id}）。
+
+    绝不含 ``objective``/``result``/``deps``/``assigned_run_id``（C18/C20；ADR-0035/0042）——富节点走只读端点拉快照。
+    """
+    return {
+        "node_id": node.id,
+        "status": node.status.value,
+        "title": node.title,
+        "parent_id": node.parent_id,
+    }
 
 
 def _append_tool_result(ctx: Context, tool_call_id: str, result: object, *, is_error: bool) -> Context:

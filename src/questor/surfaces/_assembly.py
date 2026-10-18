@@ -48,7 +48,7 @@ def reject_unimplemented_payload() -> None:
     """
     payload = os.environ.get("QUESTOR_LOG_PAYLOAD", "off").strip().lower()
     if payload not in {"", "off"}:
-        raise SystemExit(f"QUESTOR_LOG_PAYLOAD={payload!r} 尚未实装（preview 归刀 3）；当前仅支持 off")
+        raise SystemExit(f"QUESTOR_LOG_PAYLOAD={payload!r} is not implemented yet (preview lands in log blade 3); only 'off' is supported")
 
 
 def assemble_logging() -> None:

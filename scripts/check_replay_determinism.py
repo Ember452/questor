@@ -35,11 +35,14 @@ from questor.contracts.events import (
     FinalizeRun,
     MarkToolValidated,
     RecordToolResult,
+    ReportChildTerminal,
     RequestApproval,
     ResolveApproval,
+    SpawnSubagent,
     SubmitMessage,
+    UpdateTaskTree,
 )
-from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, Message, Role, ToolArgsStatus
+from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, Message, Role, TaskKind, TaskNode, ToolArgsStatus
 from questor.state.domain_state import Run
 from questor.state.reduce import reduce
 from questor.state.snapshot import from_snapshot, to_snapshot
@@ -104,10 +107,45 @@ def _fixture_multi_turn() -> tuple[Run, list[Command], int]:
     return run, cmds, 5  # split 在 turn1 工具闭合、turn2 未起处
 
 
+def _fixture_spawn_report() -> tuple[Run, list[Command], int]:
+    """P8：父 update-tree→spawn→report 全走 reduce；验证 task_tree（含 assigned_run_id）跨快照 round-trip 确定。"""
+    rid = "r_spawn"
+    run = Run(run_id=rid, budget=Budget(max_turns=3))
+    sub_node = TaskNode(id="n1", title="child task", kind=TaskKind.SUBAGENT)
+    cmds: list[Command] = [
+        SubmitMessage(run_id=rid, content=_user()),
+        AdvanceTurn(run_id=rid, turn=1),
+        UpdateTaskTree(run_id=rid, upsert=(sub_node,)),
+        SpawnSubagent(run_id=rid, node_id="n1", child_run_id="r-child-1", spawn_key="spawn:n1:1"),
+        ReportChildTerminal(run_id=rid, child_run_id="r-child-1", node_id="n1", terminal_status="completed"),
+        FinalizeRun(run_id=rid, status="completed", exit_reason="answered"),
+    ]
+    return run, cmds, 4  # split 恰在 spawn 之后、report 之前（task_tree 含 active+assigned_run_id）
+
+
+def _fixture_multi_child_report() -> tuple[Run, list[Command], int]:
+    """P8：父 spawn 两子、分别 report（一个 done 一个 failed）；验证多子 task_tree 跨快照 round-trip 确定。"""
+    rid = "r_multi_child"
+    run = Run(run_id=rid, budget=Budget(max_turns=3))
+    nodes = (TaskNode(id="c1", title="c1", kind=TaskKind.SUBAGENT), TaskNode(id="c2", title="c2", kind=TaskKind.SUBAGENT))
+    cmds: list[Command] = [
+        SubmitMessage(run_id=rid, content=_user()),
+        UpdateTaskTree(run_id=rid, upsert=nodes),
+        SpawnSubagent(run_id=rid, node_id="c1", child_run_id="rc1", spawn_key="s:c1"),
+        SpawnSubagent(run_id=rid, node_id="c2", child_run_id="rc2", spawn_key="s:c2"),
+        ReportChildTerminal(run_id=rid, child_run_id="rc1", node_id="c1", terminal_status="completed"),
+        ReportChildTerminal(run_id=rid, child_run_id="rc2", node_id="c2", terminal_status="failed"),
+        FinalizeRun(run_id=rid, status="completed", exit_reason="answered"),
+    ]
+    return run, cmds, 5  # split 在第一子 report 后、第二子 report 前（task_tree 半更新态）
+
+
 FIXTURES: list[tuple[str, Callable[[], tuple[Run, list[Command], int]]]] = [
     ("approve", _fixture_approve),
     ("cancel-backfill", _fixture_cancel_backfill),
     ("multi-turn", _fixture_multi_turn),
+    ("spawn-report", _fixture_spawn_report),
+    ("multi-child-report", _fixture_multi_child_report),
 ]
 
 
@@ -135,6 +173,13 @@ def _canonical(run: Run) -> dict:
     )
     calls = tuple(sorted((c.tool_call_id, c.name, c.status.value) for c in run.tool_ledger.calls))
     approvals = tuple(sorted((a.request_id, a.tool_call_id, a.status.value, a.decision or "") for a in run.permission_ctx.approvals))
+    # P8：task_tree 必须进权威骨架——否则 DAG/spawn 状态漂移全绿（最危险的静默错，ADR-0037/0038）。
+    task_tree = tuple(
+        sorted(
+            (n.id, n.status.value, n.kind.value, n.parent_id or "", tuple(n.deps), n.assigned_run_id or "")
+            for n in run.task_tree.nodes
+        )
+    )
     return {
         "status": run.status.value,
         "turn": run.turn,
@@ -146,6 +191,7 @@ def _canonical(run: Run) -> dict:
         "items": items,
         "calls": calls,
         "approvals": approvals,
+        "task_tree": task_tree,
     }
 
 

@@ -24,6 +24,11 @@ def _run_cli_module(tmp_path: Path, payload: str | None) -> subprocess.Completed
         "QUESTOR_LOG_DIR": str(tmp_path / "logs"),
         "LITELLM_LOCAL_MODEL_COST_MAP": "True",
         "PYTHONPATH": str(Path(_REPO_ROOT) / "src"),
+        # 钉住宿主 locale（AGENTS §3 / Issue #148）：强制子进程以 UTF-8 写、父进程以 UTF-8 读，
+        # 否则非 UTF-8 代码页（cp936/cp1252）host 上 reader 线程解码子进程输出会 UnicodeDecodeError、
+        # 使 proc.stdout/stderr 变 None → `proc.stderr + proc.stdout` 抛 TypeError。跨平台确定性复现。
+        "PYTHONUTF8": "1",
+        "PYTHONIOENCODING": "utf-8",
     }
     if payload is not None:
         env["QUESTOR_LOG_PAYLOAD"] = payload
@@ -34,6 +39,7 @@ def _run_cli_module(tmp_path: Path, payload: str | None) -> subprocess.Completed
         stdin=subprocess.DEVNULL,  # 立即 EOF → REPL 退出
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=120,
     )
 

@@ -68,6 +68,10 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.RESYNC_REQUIRED: frozenset({"reason", "expected", "current"}),
     EventType.WARNING: frozenset({"message"}),
     EventType.MEMORY_WRITTEN: frozenset({"kind", "chunk_count", "source", "artifact_ref"}),
+    # peer_started/peer_ended（P8 子 agent，ADR-0042）：只关联键 + 有界终态 + artifact 指针，无正文（C18/C20）。
+    # 注：两者均不进 projection._DATA_KEYS（C20：日得不复制载荷）。
+    EventType.PEER_STARTED: frozenset({"parent_run_id", "child_run_id", "node_id"}),
+    EventType.PEER_ENDED: frozenset({"parent_run_id", "child_run_id", "node_id", "terminal_status", "result_ref", "resumable_hint"}),
 }
 
 

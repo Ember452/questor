@@ -34,7 +34,9 @@
         "run_completed",
         "resync_required",
         "warning",
-        "memory_written"
+        "memory_written",
+        "peer_started",
+        "peer_ended"
       ]
     },
     "data": { "type": "object" }
@@ -59,7 +61,9 @@
     { "if": { "properties": { "type": { "const": "run_completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/run_completed" } } } },
     { "if": { "properties": { "type": { "const": "resync_required" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/resync_required" } } } },
     { "if": { "properties": { "type": { "const": "warning" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/warning" } } } },
-    { "if": { "properties": { "type": { "const": "memory_written" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_written" } } } }
+    { "if": { "properties": { "type": { "const": "memory_written" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_written" } } } },
+    { "if": { "properties": { "type": { "const": "peer_started" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/peer_started" } } } },
+    { "if": { "properties": { "type": { "const": "peer_ended" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/peer_ended" } } } }
   ],
   "$defs": {
     "run_started": {
@@ -250,6 +254,31 @@
         "chunk_count": { "type": "integer", "minimum": 0 },
         "source": { "type": ["string", "null"], "maxLength": 64 },
         "artifact_ref": { "type": ["string", "null"], "maxLength": 128 }
+      }
+    },
+    "peer_started": {
+      "type": "object",
+      "required": ["parent_run_id", "child_run_id", "node_id"],
+      "additionalProperties": false,
+      "description": "Parent spawned a child agent run (P8; ADR-0042). Correlation keys only, never payload.",
+      "properties": {
+        "parent_run_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "child_run_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "node_id": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "peer_ended": {
+      "type": "object",
+      "required": ["parent_run_id", "child_run_id", "node_id", "terminal_status"],
+      "additionalProperties": false,
+      "description": "Child agent run reached a terminal state, reported to parent (P8; ADR-0042). result_ref is an opaque artifact pointer, never the body (C18/C20).",
+      "properties": {
+        "parent_run_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "child_run_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "node_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "terminal_status": { "type": "string", "enum": ["completed", "failed", "cancelled"] },
+        "result_ref": { "type": ["string", "null"], "maxLength": 128 },
+        "resumable_hint": { "type": "boolean" }
       }
     }
   }

@@ -40,7 +40,9 @@ export type QuestorExternalEventProjectionV1 = {
     | "run_completed"
     | "resync_required"
     | "warning"
-    | "memory_written";
+    | "memory_written"
+    | "peer_started"
+    | "peer_ended";
   data: {
     [k: string]: unknown;
   };
@@ -163,4 +165,23 @@ export interface MemoryWrittenData {
   chunk_count: number;
   source?: string | null;
   artifact_ref?: string | null;
+}
+/**
+ * Parent spawned a child agent run (P8; ADR-0042). Correlation keys only, never payload.
+ */
+export interface PeerStartedData {
+  parent_run_id: string;
+  child_run_id: string;
+  node_id: string;
+}
+/**
+ * Child agent run reached a terminal state, reported to parent (P8; ADR-0042). result_ref is an opaque artifact pointer, never the body (C18/C20).
+ */
+export interface PeerEndedData {
+  parent_run_id: string;
+  child_run_id: string;
+  node_id: string;
+  terminal_status: "completed" | "failed" | "cancelled";
+  result_ref?: string | null;
+  resumable_hint?: boolean;
 }

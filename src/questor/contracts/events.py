@@ -207,6 +207,58 @@ class FinalizeRun:
     type: ClassVar[str] = "finalize_run"
 
 
+# ---- P8 子 agent / DAG Command（均经 reduce 单写；ADR-0038）----
+@dataclass(frozen=True, slots=True)
+class SpawnSubagent:
+    """父 run 记账一个子 agent（独立 Run）：绑定 ``assigned_run_id`` + 置 node active + 发 ``peer_started``。
+
+    reduce 是纯状态机、**不创建子 run**（IO 在 loop 消费点经注入端口完成，ADR-0038/§4.1）。
+    ``spawn_key`` 是幂等 claim 键（``(parent,node,attempt)``）：重投同键 = no-op，崩溃重启不留孤儿子（v1=at-least-once）。"""
+
+    run_id: str  # 父 run
+    node_id: str
+    child_run_id: str
+    spawn_key: str
+    type: ClassVar[str] = "spawn_subagent"
+
+    def __post_init__(self) -> None:
+        if not self.spawn_key:
+            raise ValueError("SpawnSubagent.spawn_key is required (idempotency claim key)")
+        if not self.child_run_id or not self.node_id:
+            raise ValueError("SpawnSubagent requires node_id and child_run_id")
+
+
+@dataclass(frozen=True, slots=True)
+class ReportChildTerminal:
+    """子 run 终态回灌父 run（经父 inbox，非跨 run 直写）：回填 node + 发 ``peer_ended``。
+
+    ``result_ref`` 是 artifact 指针（非正文，C18/C20/ADR-0019）；父 cancelled 时本命令得 REJECTED_TERMINAL（不复活）。"""
+
+    run_id: str  # 父 run（接收方）
+    child_run_id: str
+    node_id: str
+    terminal_status: str  # completed | failed | cancelled
+    result_ref: str | None = None
+    resumable_hint: bool = False
+    type: ClassVar[str] = "report_child_terminal"
+
+    def __post_init__(self) -> None:
+        if self.terminal_status not in {"completed", "failed", "cancelled"}:
+            raise ValueError("ReportChildTerminal.terminal_status must be completed, failed or cancelled")
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateTaskTree:
+    """承接策略 ``ProposePlanUpdate`` 意图：**首次让 reduce 处理 task_tree**。
+
+    写入前对 ``upsert``+现有节点集跑 DAG 依赖校验（无环/悬空/自环/唯一，ADR-0037）；非法则拒 + 发错误事件、不改树。"""
+
+    run_id: str
+    upsert: tuple[TaskNode, ...] = ()
+    remove_ids: tuple[str, ...] = ()
+    type: ClassVar[str] = "update_task_tree"
+
+
 Command = (
     SubmitMessage
     | ProposeAction
@@ -224,6 +276,9 @@ Command = (
     | RecordToolResult
     | MarkToolDenied
     | FinalizeRun
+    | SpawnSubagent
+    | ReportChildTerminal
+    | UpdateTaskTree
 )
 
 
@@ -271,6 +326,8 @@ class EventType:
     RESYNC_REQUIRED = "resync_required"
     WARNING = "warning"  # 非终态告警（02 §10）
     MEMORY_WRITTEN = "memory_written"  # 记忆写入回执（有界、无原文；ADR-0024/0026）
+    PEER_STARTED = "peer_started"  # 父 spawn 子 agent（P8；ADR-0042）
+    PEER_ENDED = "peer_ended"  # 子 agent 达终态回父（P8；ADR-0042）
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。
@@ -304,6 +361,35 @@ class TextDeltaData:
     delta: str
     item_id: str | None = None
     type: ClassVar[str] = EventType.TEXT_DELTA
+
+
+@dataclass(frozen=True, slots=True)
+class PeerStartedData:
+    """``peer_started`` 的 data：只带关联键（父/子 run id + node id），无正文（ADR-0042/C18/C20）。"""
+
+    parent_run_id: str
+    child_run_id: str
+    node_id: str
+    type: ClassVar[str] = EventType.PEER_STARTED
+
+
+@dataclass(frozen=True, slots=True)
+class PeerEndedData:
+    """``peer_ended`` 的 data：关联键 + 有界终态 + artifact 指针 + resumable 提示；无结果正文（ADR-0042）。
+
+    ``terminal_status`` ∈ {completed, failed, cancelled}；``result_ref`` 为不透明指针（绝不 abs path）。"""
+
+    parent_run_id: str
+    child_run_id: str
+    node_id: str
+    terminal_status: str
+    result_ref: str | None = None
+    resumable_hint: bool = False
+    type: ClassVar[str] = EventType.PEER_ENDED
+
+    def __post_init__(self) -> None:
+        if self.terminal_status not in {"completed", "failed", "cancelled"}:
+            raise ValueError("PeerEndedData.terminal_status must be completed, failed or cancelled")
 
 
 # 内部领域事件（私有、可随实现演进；投影为外部后才外发）。P0 只留最小集，
@@ -345,6 +431,11 @@ __all__ = [
     "RunFailedData",
     "RunCompletedData",
     "TextDeltaData",
+    "PeerStartedData",
+    "PeerEndedData",
+    "SpawnSubagent",
+    "ReportChildTerminal",
+    "UpdateTaskTree",
     "NodeUpdated",
     "CheckpointRecorded",
 ]

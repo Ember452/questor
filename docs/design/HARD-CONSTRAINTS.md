@@ -105,7 +105,7 @@
 - **约束**：任何一次 `ProviderPort.stream` 请求前，`Domain_State` 的 `context` 必须**完全配对**（每个 `tool_use` 都有对应 `tool_result`）；不可调和时 fail-closed 落 `run_failed`，**不得发出非法历史**。provider 侧异常必须在 kernel 边界经 `contracts` 纯分类器归一 `ErrorEntry`（`layer=provider` + 正确 `retryable`），**绝不允许穿出 turn 循环**；取消/KeyboardInterrupt/SystemExit 等 BaseException 必须继续上抛，不得被“吃”成 run_failed。
 - **为什么**：串行“一轮一个工具”碰上模型“一轮多个 tool_calls”会在历史里留下悬空 tool_call，OpenAI/Anthropic 兼容网关直接 400；当时该异常无人接，**把整个 CLI 进程带 traceback 打崩、run 不落任何终态**（用户侧不可恢复、事件账本不可解释）。配对是线上协议硬约束，不能靠“模型当轮不并行”赌运气。
 - **强制**：关卡写在**全仓唯一**的 provider 调用点内部（`kernel/loop.py::_stream_turn`）；判据取 context 侧 `state/checkpoint.py::open_tool_use_ids`（账本驱动的回填盖不住“context 有、ledger 无”的分叉）；补执行复用 ADR-0021 的 `_settle_open_calls`（含权限/floor，绝不绕过 ask）；`tests/integration/test_pairing_gate_and_provider_fault.py` 含源码级“调用点唯一且关卡在请求前”的 fail-on-empty 守卫。
-- **不是并行通行证**：本条只保证“发出前成对”，执行仍严格串行；reader/writer gate 与真并发已移出 P5、待专门并行化 Phase（ADR-0029）。
+- **不是并行通行证**：本条只保证“发出前成对”，执行仍严格串行；reader/writer gate 与真并发已移出 P5、经 [ADR-0039](../adr/0039-parallel-gate-attribution-recut.md) 归口为“工具 gate → 专门并行化 Phase（P10 或独立）”；而**子代理 fan-out admission gate 已于 P8 落地**（[ADR-0039](../adr/0039-parallel-gate-attribution-recut.md)/[ADR-0041](../adr/0041-fanout-budget-and-runaway-control.md)，由 `SubagentSpawnerPort` 强制、非派发读 `parallel_safe`/`barrier`）。
 
 ## C20 观测面不得成为载荷的第二载体（ADR-0027 复审补）
 
