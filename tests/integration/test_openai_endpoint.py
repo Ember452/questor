@@ -54,6 +54,8 @@ async def test_openai_non_text_rejected_no_run(tmp_path: Path) -> None:
         )
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "unsupported_modality"
+        # MI-3：拒必须“不起 run”——store 无任何未完成 run（start_run 未被调）。
+        assert await store.list_unfinished_runs() == ()
     finally:
         await client.aclose()
         await store.close()
@@ -122,3 +124,20 @@ async def test_disconnect_cancels_run_via_inbox() -> None:
     await agen.__anext__()  # 拿到首帧（role delta）
     await agen.aclose()  # 模拟客户端断连（未达终态）
     assert server.cancelled == ["r1"]
+
+
+async def test_openai_non_ascii_content_roundtrip(tmp_path: Path) -> None:
+    """MI-1（plan §6 钉宿）：非 ASCII/emoji 内容经 `ensure_ascii=False` + utf-8 往返不崩。"""
+    store = await SQLiteStore(str(tmp_path / "na.db")).connect()
+    try:
+        provider = ScriptedProvider([[StreamChunk(kind="text", text="héllo 世界 \U0001f30d"), StreamChunk(kind="finish", finish_reason="stop")]])
+        surface = CliSurface(workspace_root=tmp_path, store=store, provider=provider)
+        server = EventServer(surface, store)
+        app = create_app(server, openai_api_keys=["sk-test"])
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://s", timeout=30, trust_env=False) as client:
+            r = await client.post("/v1/chat/completions", headers=_AUTH, json={"messages": [{"role": "user", "content": "hi"}]})
+        assert r.status_code == 200
+        content = r.json()["choices"][0]["message"]["content"]
+        assert "h\u00e9llo" in content and "世界" in content and "\U0001f30d" in content, content
+    finally:
+        await store.close()
