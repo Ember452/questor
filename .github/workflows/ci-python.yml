@@ -94,6 +94,13 @@ jobs:
         run: |
           uv run python scripts/check_replay_determinism.py --self-test
           uv run python scripts/check_replay_determinism.py
+      # ADR-0038 (C2/C16): cross-run state change goes only via Command→inbox→reduce. Foreign
+      # `.run =` rebinds (a second writer / bypass) are banned outside loop.py's own-controller
+      # single-writer rebind and RunController construction. --self-test proves it can go red; fail-on-empty.
+      - name: Cross-run no-bypass guard (subagent orchestration must not write another Run)
+        run: |
+          uv run python scripts/check_cross_run_no_bypass.py --self-test
+          uv run python scripts/check_cross_run_no_bypass.py
       - name: Secret/env-value projection guard (self-test proves it can go red)
         run: |
           uv run python scripts/check_secret_projection.py --self-test
