@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — 文档漂移清扫（只加状态注记，不改阶段结论、不回改历史验收判据）
+
+- **阶段列未同步的完成态**：`docs/ROADMAP.md §1` 的 **P5** 行无 ✅（实已经 PR #143 `114fb0f` + 加固 PR #144 `290375e` 合入）、
+  **P7** 行无 ✅ 且 DoD 仍写"跑通 P1-P4"（§1.5 已上修为 P1–P5）——均按实况补齐并链到 `plan/05`/`plan/07`；
+  §4 节点 C 标"阶段条件已满足、实际发布仍待消两项 UNVERIFIED（全量 `tauri build` 安装介质 + 真开窗口验收）"。
+- **进度与决策计数陈旧**：`docs/VISION.md §8` 仍写"P0–P4 已交付（ADR-0001…0028）"与"P5 开工仍需先定 MCP `run_id` 注入/stderr 重定向"——
+  实况为 P0–P5 + P7 已合入、ADR 至 0036，且该前置已随 P5 落地（`providers/mcp_stderr.py` 的 per-run `mcp-stderr-<run_id>.log`）。
+- **死命令与不存在的 extras**：`CONTRIBUTING.md` 让人跑 `uv run questor --help`，但 `pyproject.toml` 无 `[project.scripts]`（入口只有
+  `python -m questor`，已实跑验证）；同行声称的 `uv sync --extra im|voice|browser|docs` 四个 extras 从来不存在（无
+  `[project.optional-dependencies]`），已改为实况说明并把 `voice`/`im` 指向 ADR-0036。
+- **未修（属对外口径，需产品拍定，已登记）**：仓库根 `README.md:10` 仍写"暂无可运行版本"、快速开始仍写"P1 落地后更新为 `uv run questor`"——
+  属对外口径改写（且桌面安装介质仍 UNVERIFIED），不在本次机械校平范围内。另：`python -m questor --help` 不打印帮助而是直接进 REPL，
+  属真实 UX 缺陷，宜开 GitHub Issue。
+
 ### Changed — 路线图：P6（多模态/语音）整阶段移除（[ADR-0036](docs/adr/0036-p6-dropped-from-roadmap.md)）
 
 - **决策**：语音 + 图像识别两半**全砍**，不再占 Phase 编号；v1 后既定序列收敛为 **P7（已合入）→ P8 → P9 → P10**。
