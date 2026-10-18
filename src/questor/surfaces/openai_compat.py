@@ -31,6 +31,21 @@ if TYPE_CHECKING:  # 仅类型：避免与 http_sse 的模块期循环 import（
 #: SSE 终结标记（design/02 §10：无原生续传，[DONE] 终结）。
 DONE = "[DONE]"
 
+#: 本适配器消费的 questor 事件类型（design/02 §10 映射表的定义域）。漂移门
+#: ``scripts/check_openai_compat_schema.py`` 断言本集 ⊆ ``contracts`` EventType（映射引用未知事件即判红）。
+PROJECTED_EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        EventType.RUN_STARTED,
+        EventType.TEXT_DELTA,
+        EventType.REASONING_DELTA,
+        EventType.TOOL_STARTED,
+        EventType.TOOL_COMPLETED,
+        EventType.RUN_COMPLETED,
+        EventType.RUN_CANCELLED,
+        EventType.RUN_FAILED,
+    }
+)
+
 
 async def project_openai_stream(
     envelopes: AsyncIterator[Envelope],
@@ -157,4 +172,4 @@ def mount_openai_routes(app: FastAPI, server: EventServer, *, api_keys: list[str
         return JSONResponse(_completion_object(completion_id, created, model, content, run_id))
 
 
-__all__ = ["DONE", "mount_openai_routes", "project_openai_stream"]
+__all__ = ["DONE", "PROJECTED_EVENT_TYPES", "mount_openai_routes", "project_openai_stream"]
