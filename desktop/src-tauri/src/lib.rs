@@ -23,6 +23,8 @@ const POLL: Duration = Duration::from_millis(200);
 const BOOTSTRAP_WAIT: Duration = Duration::from_secs(40);
 /// §6-5 崩溃监控线程轮询子进程的间隔。
 const MONITOR_TICK: Duration = Duration::from_millis(500);
+/// §6-6：连续崩溃重启上限，超限停监控（避免崩溃循环烧 CPU）。
+const MAX_RESTARTS: usize = 5;
 
 /// sidecar bootstrap 契约（与 `surfaces/serve.py::write_bootstrap` 字段一致）。
 #[derive(serde::Deserialize)]
@@ -61,35 +63,87 @@ fn status_payload<'a>(
     }
 }
 
-/// §6-5 崩溃监控：轮询子进程；非主动停机下若退出 → emit crashed（退出码作有界 detail）。
-/// 重启/重挂属 §6-6，本切片不实现（emit 后停循环）。
-fn monitor_sidecar_crash(handle: tauri::AppHandle) {
+/// §6-5/6-6 监控重启循环：轮询子进程；非主动停机下若退出 → emit crashed，再 `start_sidecar` 重挂
+/// （`fence.bump` 于其中发生，陈旧 SSE/回执自然作废）→ 换新 bootstrap 的 port/token → 重导航 webview → emit ready。
+/// 连撞上限 `MAX_RESTARTS` 则 emit stopped 停循。**诚实边界**：respawn + webview 重导航集成行为需真桌面实测 → headless UNVERIFIED；
+/// 壳非事件 broker（webview 直连 sidecar），无壳侧 pending 可 fail_all；在途 run 的 after_seq 重挂属 §6-8。
+fn monitor_sidecar_loop(
+    handle: tauri::AppHandle,
+    fence: Fence,
+    program: String,
+    args: Vec<String>,
+) {
+    let mut restarts = 0usize;
     loop {
         std::thread::sleep(MONITOR_TICK);
-        if let Some(flag) = handle.try_state::<ShuttingDown>() {
-            if flag.0.load(Ordering::SeqCst) {
-                return; // 主动关窗：非崩溃
-            }
+        let shutting_down = handle
+            .try_state::<ShuttingDown>()
+            .map(|f| f.0.load(Ordering::SeqCst))
+            .unwrap_or(true); // 状态缺失（异常拆毁）→ 保守停监控。
+        if shutting_down {
+            return; // 主动关窗：非崩溃。
         }
-        let exited = match handle.try_state::<SidecarCell>() {
-            Some(cell) => match cell.0.lock() {
-                Ok(mut g) => match g.as_mut() {
-                    Some((proc, gen_slot, _port, _tok)) => {
-                        proc.poll().map(|code| (*gen_slot, code))
-                    }
-                    None => return, // 已被 shutdown take → 主动停机
-                },
+        // 短暂持锁轮询当前子进程退出（不跨 sleep 持锁，避免阻住优雅关闭路径）。
+        let exited = {
+            let Some(cell) = handle.try_state::<SidecarCell>() else {
+                return;
+            };
+            let mut guard = match cell.0.lock() {
+                Ok(g) => g,
                 Err(_) => return,
-            },
-            None => return,
+            };
+            match guard.as_mut() {
+                Some((proc, gen, _port, _tok)) => proc.poll().map(|code| (*gen, code)),
+                None => return, // 已被 shutdown take → 主动停机
+            }
         };
-        if let Some((cur_gen, code)) = exited {
-            let detail = format!("exit {code}");
+        let Some((gen, code)) = exited else { continue };
+        // 崩溃出声（错误类必报，C6/§6-5）。
+        let detail = format!("exit {code}");
+        let _ = handle.emit(
+            "sidecar_status",
+            status_payload("crashed", gen, Some(&detail)),
+        );
+        if restarts >= MAX_RESTARTS {
             let _ = handle.emit(
                 "sidecar_status",
-                status_payload("crashed", cur_gen, Some(&detail)),
+                status_payload("stopped", gen, Some("restart limit hit")),
             );
+            log("sidecar restart limit hit; monitor stops");
             return;
+        }
+        restarts += 1;
+        // respawn：start_sidecar 内 bump generation + 写新 bootstrap + wait_ready。
+        match start_sidecar(&fence, &program, &args) {
+            Ok((proc, port, new_gen, token)) => {
+                let url: tauri::Url =
+                    match format!("http://127.0.0.1:{port}/?token={token}").parse() {
+                        Ok(u) => u,
+                        Err(_) => {
+                            let _ = handle.emit(
+                                "sidecar_status",
+                                status_payload("stopped", new_gen, Some("bad url")),
+                            );
+                            return;
+                        }
+                    };
+                // 替换托管 cell（旧死 proc 在此 drop → 回收），供优雅关闭接手新进程。
+                if let Some(cell) = handle.try_state::<SidecarCell>() {
+                    if let Ok(mut g) = cell.0.lock() {
+                        *g = Some((proc, new_gen, port, token));
+                    }
+                }
+                if let Some(win) = handle.get_webview_window("main") {
+                    let _ = win.navigate(url); // 重导航到新端口/新 token。
+                }
+                let _ = handle.emit("sidecar_status", status_payload("ready", new_gen, None));
+                log(&format!("sidecar restarted gen={new_gen} port={port}"));
+            }
+            Err(e) => {
+                let _ = handle.emit("sidecar_status", status_payload("stopped", gen, Some(&e)));
+                log("sidecar restart failed; monitor stops");
+                return;
+            }
         }
     }
 }
@@ -219,10 +273,10 @@ pub fn run() {
                     .build()
                     .map_err(|e| format!("window build failed: {e}"))?;
             win.set_focus().ok();
-            // §6-5：sidecar 就绪 → emit ready；起崩溃监控线程（重启循环属 §6-6，未做）。
+            // §6-5/6-6：sidecar 就绪 → emit ready；起监控重启循环（崩溃→emit→respawn→重导航→emit ready）。
             let handle = app.handle().clone();
             let _ = handle.emit("sidecar_status", status_payload("ready", gen, None));
-            std::thread::spawn(move || monitor_sidecar_crash(handle));
+            std::thread::spawn(move || monitor_sidecar_loop(handle, fence, program, args));
             Ok(())
         })
         .build(tauri::generate_context!())
