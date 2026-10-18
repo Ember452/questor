@@ -40,6 +40,14 @@ fn bootstrap_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(".questor").join("sidecar-bootstrap.json"))
 }
 
+/// dev 态前端静态产物默认路径：`src-tauri` 的兄弟目录 `web/dist`（纯路径运算，不触碰文件系统，可单测）。
+fn dev_web_dist_default(manifest_dir: &std::path::Path) -> PathBuf {
+    manifest_dir
+        .parent()
+        .map(|p| p.join("web").join("dist"))
+        .unwrap_or_else(|| manifest_dir.join("web").join("dist"))
+}
+
 /// 启动（或重启）sidecar：bump generation → 设 env → 按 resolve 出的 (program,args) spawn → 读 bootstrap → 就绪探测。
 /// program/args 由 `resolve_sidecar`（env→发布资源→开发态）决定；发布态不写死 `python`（§6-1）。
 fn start_sidecar(
@@ -129,6 +137,12 @@ pub fn run() {
                 packaged,
                 "python",
             );
+            // dev 态（debug 构建）且操作者未显式指定时，注入前端产物默认路径，免去每窗口手设 env；
+            // 发布态（release）绝不注入——前端由 PyInstaller 资源目录伺服。已设则尊重不覆盖。
+            if cfg!(debug_assertions) && std::env::var_os("QUESTOR_WEB_DIST").is_none() {
+                let dist = dev_web_dist_default(std::path::Path::new(env!("CARGO_MANIFEST_DIR")));
+                std::env::set_var("QUESTOR_WEB_DIST", &dist);
+            }
             let (proc, port, _gen, token) = start_sidecar(&fence, &program, &args)
                 .map_err(|e| format!("sidecar start failed: {e}"))?;
             // webview 指向 loopback sidecar，并把会话 token 经查询注入（前端据此带 header）。
@@ -170,6 +184,15 @@ mod tests {
         assert_eq!(b.port, 54321);
         assert_eq!(b.generation, 7);
         assert_eq!(b.token, "tok-abc");
+    }
+
+    /// dev 默认前端产物路径 = src-tauri 的兄弟目录 `web/dist`（纯路径运算，不触碰文件系统）。
+    #[test]
+    fn dev_web_dist_default_points_to_sibling_web_dist() {
+        let got =
+            super::dev_web_dist_default(std::path::Path::new("/abs/project/desktop/src-tauri"));
+        let want = std::path::Path::new("/abs/project/desktop/web/dist");
+        assert_eq!(got, want);
     }
 
     #[test]
