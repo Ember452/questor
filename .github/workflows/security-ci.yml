@@ -1,0 +1,113 @@
+name: security-ci
+
+# 参考 DeepCode security-ci：secret 历史扫描 + PR 依赖差异审查 + 定时深度依赖审计。
+# 触发设计诚实：深度审计（advisory 数据库天天变）只在 schedule/手动跑并开 issue，
+# 绝不在每次 push 跑——否则上游无关漏洞会把 main 刷红（DeepCode 同一取舍）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "23 4 * * 1" # 每周一 04:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # 每次 push/PR 都扫历史里是否混入密钥；fail-closed。
+  secret-scan:
+    name: Secret history scan (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install pinned Gitleaks (SHA256-verified)
+        run: |
+          curl --fail --silent --show-error --location \
+            --output gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" \
+            | sha256sum --check
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks git --redact --no-banner --exit-code 1
+
+  # PR 只审"新增/变更"的依赖（对比基线），命中高危即拦——比全量审计更稳、适合阻断。
+  dependency-review:
+    name: PR dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  # 全量深度审计（schedule/手动）：前端 npm、Python uv 锁定环境、两个 Rust crate 的 Cargo.lock。
+  deep-audit:
+    name: Dependency audit (npm / pip / cargo)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: desktop/web/package-lock.json
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Audit Node (desktop/web)
+        working-directory: desktop/web
+        run: |
+          npm ci
+          npm audit --audit-level=high || echo "::warning::npm audit reported high+ advisories"
+
+      - name: Audit Python (locked env)
+        run: |
+          uv sync --locked --all-groups
+          uv run --with pip-audit pip-audit --desc
+
+      - name: Audit Rust (both crates' Cargo.lock)
+        run: |
+          cargo install cargo-audit --version 0.22.2 --locked
+          cargo audit --file desktop/src-tauri/Cargo.lock
+          cargo audit --file desktop/sidecar/Cargo.lock
+
+      - name: Open/update audit issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Dependency audit failed (security-ci)"
+          existing="$(gh issue list --state open --label security --search "\"$title\" in:title" --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Scheduled audit failed again: $RUN_URL"
+          else
+            gh issue create --title "$title" --label security \
+              --body "Scheduled npm/pip/cargo audit found advisories. See failing step in $RUN_URL and bump the affected lockfile."
+          fi

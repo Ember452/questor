@@ -1,0 +1,65 @@
+name: release-desktop
+
+# 发布/打包 CI（参考 DeepCode release-desktop + tauri-apps/tauri-action）：
+# 三段式的 step③ 自动化——冻结 sidecar → stage 进 bundle.resources → tauri build 出安装包 → 传 GitHub Release。
+# 精简起步：仅 Windows（questor 桌面主平台，WebView2/MSVC 就绪），不签名、draft release。
+# 诚实边界：runner 上真实 tauri build（含 WiX 下载）属 UNVERIFIED，需打 tag 或 workflow_dispatch 才触发验证；
+# build-sidecar.py 的本地等价步骤（PyInstaller onedir + stage）已在开发机实测通过。
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write # 建/发 GitHub Release
+
+concurrency:
+  group: release-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    name: Build & release (Windows x64)
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: desktop/web/package-lock.json
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install locked Python env + PyInstaller (build tool)
+        # PyInstaller 是未入窄锁的构建工具（sidecar-requirements 仅在注释提及），这里显式钉版本范围装上。
+        run: |
+          uv sync --locked --all-groups
+          uv pip install "pyinstaller>=6.9,<7"
+
+      - name: Freeze sidecar (PyInstaller onedir) + stage into bundle.resources
+        run: uv run python desktop/scripts/build-sidecar.py
+
+      - name: Verify frozen sidecar runs without system Python
+        run: uv run python scripts/verify_release_bundle.py --verify-runtime
+
+      - name: Tauri build + publish draft release
+        uses: tauri-apps/tauri-action@v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          releaseDraft: true
+          prerelease: false
+          generateReleaseNotes: true
+          args: --bundles nsis,msi
