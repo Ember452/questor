@@ -46,6 +46,7 @@ from questor.contracts.state_schema import (
     Message,
     Role,
     RunStatus,
+    TaskNode,
     ToolCall,
     ToolCallStatus,
 )
@@ -121,6 +122,49 @@ def _tool_completed_data(tool_call_id: str, status: str, *, result: object, disp
 def _event(seq: int, run: Run, turn: int | None, etype: str, data: dict) -> Envelope:
     """构造一个对外事件信封（v 取 wire 版本，run_id 取自当前 run）。"""
     return Envelope(v=EVENT_SCHEMA_VERSION, seq=seq, run_id=run.run_id, type=etype, turn=turn, data=data)
+
+
+def validate_task_tree(nodes: tuple[TaskNode, ...]) -> list[str]:
+    """任务树依赖校验（I1，[ADR-0037]）：唯一 id / 无自环 / 无悬空 dep / 无环。
+
+    纯函数，返回问题清单（空=合法）。reduce 在写入 ``task_tree`` 前调用；非法即拒 + 发错误事件、
+    **不改状态、不崩**（design/01 §12 I1）。**只校验、不做拓扑调度**（调度器/ fan-in 后置，见 ADR-0037）。
+    环检测用 Kahn：反复移除“所有已知依赖均已就绪”的节点，残留者即在环中（悬空 dep 单独报、不掺入环判定）。
+    """
+    problems: list[str] = []
+    seen: set[str] = set()
+    dup: set[str] = set()
+    for node in nodes:
+        if node.id in seen:
+            dup.add(node.id)
+        seen.add(node.id)
+    for node_id in sorted(dup):
+        problems.append(f"duplicate node id {node_id!r}")
+
+    deps_by_id: dict[str, tuple[str, ...]] = {node.id: node.deps for node in nodes}
+    for node in nodes:
+        for dep in node.deps:
+            if dep == node.id:
+                problems.append(f"node {node.id!r} depends on itself")
+            elif dep not in deps_by_id:
+                problems.append(f"node {node.id!r} has unknown dep {dep!r}")
+
+    remaining = dict(deps_by_id)
+    resolved: set[str] = set()
+    while True:
+        ready = [
+            nid
+            for nid, deps in remaining.items()
+            if all(dep in resolved or dep not in deps_by_id for dep in deps)
+        ]
+        if not ready:
+            break
+        for nid in ready:
+            resolved.add(nid)
+            remaining.pop(nid, None)
+    if remaining:
+        problems.append(f"cycle detected involving {sorted(remaining)}")
+    return problems
 
 
 def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C901
