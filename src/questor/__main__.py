@@ -45,21 +45,24 @@ _LOG = logging.getLogger("questor.composition")
 _KNOWN_COMMANDS: frozenset[str] = frozenset({"--serve", "--resume", "--list", "--dream"})
 
 #: CLI 用法文本（Issue #148）：与上方模块 docstring 的入口清单同源，供 `-h/--help` 与未知选项提示共用。
+#: **必须 ASCII-only**：这是用户可见输出（AGENTS §5.6：一方输出用英文，中文只进注释/docstring）。
+#: Windows 非 UTF-8 代码页宿主（CI runner 实测 cp1252）上 `print` 中文会直接 `UnicodeEncodeError`
+#: 带堆栈崩掉，把"看个帮助"变成一个失败进程。回归由 `tests/integration/test_cli_help.py` 钉住。
 _USAGE = """usage: python -m questor [command]
 
 commands:
-  (none)             交互 REPL（每轮真实落库，支撑 --resume）
-  --serve            起 HTTP+SSE sidecar（bind 127.0.0.1:0 + 写 bootstrap）
-  --resume <run_id>  从持久态续跑被 kill/重启的 run
-  --list             列出未完成的 run id
-  --dream            离线 Deep Dream 蒸馏
-  -h, --help         显示本用法并退出（不建库、不装日志、不起 REPL）
+  (none)             start the interactive REPL (every turn is persisted; supports --resume)
+  --serve            run the HTTP+SSE sidecar (bind 127.0.0.1:0 + write bootstrap)
+  --resume <run_id>  resume a killed/restarted run from durable state
+  --list             list unfinished run ids
+  --dream            run offline Deep Dream distillation
+  -h, --help         show this usage and exit (no store, no logging assembly, no REPL)
 
-env（仅组合根读，内核 env-free）:
-  QUESTOR_MODEL · QUESTOR_STORE_PATH · QUESTOR_MEMORY_DB · QUESTOR_MEMORY_ROOT
-  QUESTOR_SKILLS_DIR · QUESTOR_MCP_JSON · QUESTOR_LOG_DIR · QUESTOR_LOG_LEVEL
-  QUESTOR_LOG_KEEP_DAYS · QUESTOR_LOG_PAYLOAD · QUESTOR_SIDECAR_GENERATION
-  QUESTOR_SIDECAR_BOOTSTRAP · QUESTOR_WEB_DIST · QUESTOR_DREAM_LOOKBACK
+env (read by the composition root only; the kernel stays env-free):
+  QUESTOR_MODEL, QUESTOR_STORE_PATH, QUESTOR_MEMORY_DB, QUESTOR_MEMORY_ROOT,
+  QUESTOR_SKILLS_DIR, QUESTOR_MCP_JSON, QUESTOR_LOG_DIR, QUESTOR_LOG_LEVEL,
+  QUESTOR_LOG_KEEP_DAYS, QUESTOR_LOG_PAYLOAD, QUESTOR_SIDECAR_GENERATION,
+  QUESTOR_SIDECAR_BOOTSTRAP, QUESTOR_WEB_DIST, QUESTOR_DREAM_LOOKBACK
 """
 
 
