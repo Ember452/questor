@@ -1,0 +1,5 @@
+# gitleaks 精确豁免清单（按 fingerprint，只放行下面这两个，其余真实凭据照扫）。
+# 这两处是 observability 脱敏单测里用作靶子的**合成假密钥**（_SECRET="sk-abcdef...WXYZ"），
+# 并非真实凭据——见 tests/unit/observability/test_pipeline.py 与 test_redact.py。
+9d318cf5d3e6fe5f1dbd34f98f75a506ac9060ca:tests/unit/observability/test_pipeline.py:generic-api-key:18
+e28edf4d04a8d28539e78b7bf938f8bb0db1842e:tests/unit/observability/test_redact.py:generic-api-key:18
