@@ -2,7 +2,9 @@
 // 连接 same-origin 的 sidecar（webview 指向本服务，ADR-0007）；EventSource 原生带 Last-Event-ID 重连。
 import { CommandClient } from "./api/commandClient";
 import { ThreadEventStream } from "./api/eventStream";
+import { statusBanner } from "./api/status";
 import type { QuestorExternalEventProjectionV1 as Event } from "./generated/event";
+import type { SidecarStatus } from "./generated/sidecarStatus";
 
 // 订阅 UI 关心的事件类型（均来自协议）。EventSource 只对命名事件分发，故逐类型 addEventListener。
 const EVENT_TYPES: string[] = [
@@ -167,3 +169,15 @@ cancelBtn.addEventListener("click", () => {
     /* 取消是投 Command；终态由事件流反映 */
   });
 });
+
+// §6-5：订阅壳（Rust）发的进程级 sidecar_status——Tauri event，非 per-run SSE（sidecar 崩了 SSE 也断了）。
+// __TAURI__ 缺失（非桌面环境/未注入全局）时静默跳过，绝不在浏览器 dev 里抛错。
+const tauriEvents = (window as unknown as {
+  __TAURI__?: { event?: { listen: <T>(name: string, handler: (e: { payload: T }) => void) => Promise<unknown> } };
+}).__TAURI__;
+if (tauriEvents?.event?.listen) {
+  void tauriEvents.event.listen<SidecarStatus>("sidecar_status", (e) => {
+    const banner = statusBanner(e.payload);
+    if (banner) log.appendChild(el("div", banner.level === "warn" ? "error" : "warn", banner.text));
+  });
+}
