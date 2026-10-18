@@ -17,6 +17,7 @@ from datetime import datetime
 from questor.contracts.common import require_aware, utc_now
 from questor.contracts.errors import ErrorEntry
 from questor.contracts.memory import RecoveryPointer
+from questor.contracts.policy import PolicyRef
 from questor.contracts.state_schema import (
     ApprovalRequest,
     Budget,
@@ -100,6 +101,8 @@ class Run:
     permission_ctx: PermissionCtx = field(default_factory=PermissionCtx)
     error_stack: tuple[ErrorEntry, ...] = ()
     cancel_reason: CancelReason | None = None
+    # P9/ADR-0045 additive：run 创建时经 PolicyRegistry 解析、按值快照冻结；默认 None 不破既有构造点/旧快照。
+    policy_ref: PolicyRef | None = None
     created_at: datetime = field(default_factory=utc_now)
     completed_at: datetime | None = None
 

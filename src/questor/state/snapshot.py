@@ -19,6 +19,7 @@ from typing import Any
 from questor.contracts.common import freeze, thaw, utc_now
 from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints
 from questor.contracts.memory import RecoveryPointer
+from questor.contracts.policy import PolicyRef
 from questor.contracts.state_schema import (
     ApprovalRequest,
     ApprovalStatus,
@@ -384,6 +385,8 @@ def to_snapshot(run: Run) -> dict[str, Any]:
         "checkpoints": [_cp_to(cp) for cp in run.checkpoints],
         "permission": _permission_to(run.permission_ctx),
         "errors": [_error_to(e) for e in run.error_stack],
+        # P9/ADR-0045 additive：无策略引用时写 None（旧消费者忽略即可，不 bump SNAPSHOT_VERSION）。
+        "policy_ref": ({"id": run.policy_ref.id, "fingerprint": run.policy_ref.fingerprint} if run.policy_ref else None),
     }
 
 
@@ -432,6 +435,8 @@ def from_snapshot(d: dict[str, Any]) -> Run:
         permission_ctx=_permission_from(d.get("permission", {})),
         error_stack=tuple(_error_from(e) for e in d.get("errors", [])),
         cancel_reason=CancelReason(d["cancel_reason"]) if d.get("cancel_reason") else None,
+        # P9 additive：旧快照无 policy_ref 键→读回 None（不猜测、不破坏 v1/v2/v3 兼容）。
+        policy_ref=PolicyRef(**d["policy_ref"]) if d.get("policy_ref") else None,
         created_at=datetime.fromisoformat(d["created_at"]),
         completed_at=_parse_dt(d.get("completed_at")),
     )

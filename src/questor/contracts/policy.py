@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import ClassVar, Protocol
 
 from questor.contracts.common import JsonObject
@@ -88,6 +89,28 @@ class LoopPolicy:
     disable_compaction: bool = True  # 压缩到 P10 才启用
 
 
+class PolicyTrust(StrEnum):
+    """策略来源信任级（design/05 §2；ADR-0045）。resolve 时 project>user>system、最近根覆写重名。
+
+    形状先行；分桶/优先级消费者在 L4 `PolicyRegistry`（T3）接通，本枚举只定词表。"""
+
+    SYSTEM = "system"
+    USER = "user"
+    PROJECT = "project"
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyRef:
+    """run 内快照冻结的策略标识（ADR-0009/0045）：``id`` + 内容 ``fingerprint``。
+
+    创建 run 时经 :class:`PolicyRegistry` 解析一次、按值冻结进 ``Run.policy_ref``，整 run 用同一份；
+    热替换=新 run、AB 按 fingerprint 路由（fingerprint 是内容指纹非版本号，ADR-0009 决策2）。
+    `run_started` 事件带此引用（additive、不 bump `v`）。"""
+
+    id: str
+    fingerprint: str
+
+
 class PolicyPort(Protocol):
     """可插拔的 Agent 策略。策略里绝不出现 execute/沙箱/StorePort 写句柄。
 
@@ -115,5 +138,7 @@ __all__ = [
     "SuggestCancel",
     "PolicyIntent",
     "LoopPolicy",
+    "PolicyTrust",
+    "PolicyRef",
     "PolicyPort",
 ]
