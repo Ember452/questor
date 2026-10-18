@@ -85,11 +85,12 @@ class EventServer:
         """请求优雅关闭（仅置信号，不硬杀）；serve 看门狗会拾起并让 uvicorn 退出。"""
         self.shutdown_event.set()
 
-    def _loop(self, cancel: asyncio.Event, surface: RunToolSurface) -> DefaultTurnLoop:
+    def _loop(self, cancel: asyncio.Event, surface: RunToolSurface, run_id: str = "") -> DefaultTurnLoop:
         """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。
 
-        注入 orchestrator 使本服务驱的 run 可调 `delegate` 起子 run（P8）；不调则无副作用。"""
-        return self.surface._loop(self.bus, cancel, surface, subagent_spawner=self.orchestrator)
+        注入 orchestrator 使本服务驱的 run 可调 `delegate` 起子 run（P8）；不调则无副作用。
+        策略按 run 经 surface 的 PolicyRegistry 解析（P9）：活 run 端口不变、换 registry 只影响新 run。"""
+        return self.surface._loop(self.bus, cancel, surface, subagent_spawner=self.orchestrator, run_id=run_id)
 
     async def _run_with_mcp(self, controller: RunController, run_id: str) -> None:
         """发现 MCP → 冻结工具面 → 驱动到终态 → per-run teardown。四步**必须同任务**。
@@ -101,7 +102,7 @@ class EventServer:
         mcp_tools, mcp_teardown = await self.surface._discover_mcp(run_id)
         tool_surface = self.surface._freeze_surface(run_id, mcp_tools)
         try:
-            await self._loop(asyncio.Event(), tool_surface).drive_controller(controller)
+            await self._loop(asyncio.Event(), tool_surface, run_id=run_id).drive_controller(controller)
         finally:
             await mcp_teardown()  # 关连接+回收子进程树+stderr 句柄，防泄漏
 
@@ -111,7 +112,8 @@ class EventServer:
         MCP per-run 发现接进桌面路径（审计 §6-7），且与驱动/teardown 同任务（anyio 会话作组作用域）。
         """
         run_id = run_id or new_id("run")
-        run = Run(run_id=run_id, budget=Budget())
+        # P9/ADR-0045：创建 run 时按 run 解析策略、冻结 policy_ref（reduce 会在 run_started 带出）。
+        run = Run(run_id=run_id, budget=Budget(), policy_ref=self.surface._resolve_for_run(run_id)[1])
         controller = RunController(run)
         self.registry.register(controller)
         msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)

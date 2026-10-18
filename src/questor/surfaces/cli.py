@@ -30,6 +30,7 @@ from questor.capabilities.tools.write import WriteTool
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
 from questor.contracts.memory import MemoryStorePort
+from questor.contracts.policy import PolicyPort, PolicyRef, PolicyTrust
 from questor.contracts.ports import ProviderPort, StorePort
 from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role, RunStatus
 from questor.contracts.subagent import SubagentSpawnerPort
@@ -41,7 +42,10 @@ from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.memory.distill import flush_run_to_daily
 from questor.observability.projection import log_envelope
+from questor.policy.memory_policy import MemoryAwareReActPolicy
+from questor.policy.null_policy import NullPolicy
 from questor.policy.react_policy import ReActPolicy
+from questor.policy.registry import PolicyEntry, PolicyRegistry
 from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.state.domain_state import Run
@@ -94,6 +98,18 @@ def _default_registry() -> ToolRegistry:
     return registry
 
 
+def _default_policy_registry() -> PolicyRegistry:
+    """P9/ADR-0045：默认进程内策略名册（system trust 固定名册，无磁盘扫描）。
+
+    解析发生在装配点（本 surface）、产 PolicyPort 注入 loop；kernel 不 import registry（C1）。
+    默认 id=react；null/memory_react 供 A/B 与降级演示。"""
+    registry = PolicyRegistry(default_id="react")
+    registry.register(PolicyEntry(id="react", factory=ReActPolicy, trust=PolicyTrust.SYSTEM))
+    registry.register(PolicyEntry(id="null", factory=NullPolicy, trust=PolicyTrust.SYSTEM))
+    registry.register(PolicyEntry(id="memory_react", factory=MemoryAwareReActPolicy, trust=PolicyTrust.SYSTEM))
+    return registry
+
+
 class CliSurface:
     """把 provider/权限/工具/总线/存储装配成可跑的终端会话。"""
 
@@ -109,6 +125,8 @@ class CliSurface:
         skills_dir: Path | None = None,
         mcp_json_path: Path | None = None,
         log_dir: Path | None = None,
+        policy_id: str = "react",
+        ab_table: dict[str, int] | None = None,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
@@ -119,18 +137,28 @@ class CliSurface:
         self.log_dir = log_dir
         self.read = ReadTool()
         self.registry = _default_registry()
+        # P9/ADR-0045：策略经进程内 registry 按 run 解析（fail-open 默认 react）；不再硬编码 ReActPolicy。
+        self.policy_registry = _default_policy_registry()
+        self.policy_id = policy_id
+        self.ab_table = ab_table
         # 技能生效（DoD①）：把发现的 SKILL.md 目录并入 system prompt。skills_dir=None（默认）
         # 时 catalog 为空、system 不变——不影既有 run。描述已在 catalog 内过 `bound_description` 有界。
         catalog = build_skill_catalog(skills_dir)
         self.system = f"{system}\n\n{catalog}".strip() if catalog else system
 
-    def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface, subagent_spawner: SubagentSpawnerPort | None = None) -> DefaultTurnLoop:
+    def _resolve_for_run(self, run_id: str) -> tuple[PolicyPort, PolicyRef]:
+        """按 run 解析策略（fail-open 回落默认）→ (PolicyPort, 冻结 PolicyRef)。"""
+        return self.policy_registry.resolve_or_default(self.policy_id, split_key=run_id, ab_table=self.ab_table)
+
+    def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface, subagent_spawner: SubagentSpawnerPort | None = None, *, run_id: str = "") -> DefaultTurnLoop:
         """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。
 
-        ``subagent_spawner`` 由组合根注入（P8 多 agent）；未注入时单 run 行为逐字不变。"""
+        ``subagent_spawner`` 由组合根注入（P8 多 agent）；未注入时单 run 行为逐字不变。
+        策略经 PolicyRegistry 按 run 解析（P9）：活 run 用其已注入端口、换 registry 只影响新 run。"""
+        policy, _ref = self._resolve_for_run(run_id)
         return DefaultTurnLoop(
             provider=self.provider,
-            policy=ReActPolicy(),
+            policy=policy,
             permission=DefaultPermissionEngine(),
             bus=bus,
             tool_for=surface.tool_for,
@@ -175,10 +203,12 @@ class CliSurface:
         # 与 run 内 printer/approver 两个订阅队列并存也不会双投。
         bus.add_observer(log_envelope)
         cancel = asyncio.Event()
-        run = Run(run_id=new_id("run"), budget=Budget())
+        run_id = new_id("run")
+        _policy, ref = self._resolve_for_run(run_id)
+        run = Run(run_id=run_id, budget=Budget(), policy_ref=ref)
         mcp_tools, mcp_teardown = await self._discover_mcp(run.run_id)
         surface = self._freeze_surface(run.run_id, mcp_tools)
-        loop = self._loop(bus, cancel, surface)
+        loop = self._loop(bus, cancel, surface, run_id=run.run_id)
         controller = RunController(run)
         registry = RunRegistry()
         registry.register(controller)
@@ -239,7 +269,7 @@ class CliSurface:
         bus.add_observer(log_envelope)  # bus 级唯一投影订阅（ADR-0033）
         cancel = asyncio.Event()
         tool_surface = self.registry.freeze_for_run(run.run_id)
-        loop = self._loop(bus, cancel, tool_surface)
+        loop = self._loop(bus, cancel, tool_surface, run_id=run.run_id)
         controller = RunController(run)
         interactive = sys_stdin_tty()
         printer_queue = bus.add_subscriber(run.run_id)
