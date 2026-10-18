@@ -42,15 +42,23 @@ export type QuestorExternalEventProjectionV1 = {
     | "warning"
     | "memory_written"
     | "peer_started"
-    | "peer_ended";
+    | "peer_ended"
+    | "tools_changed";
   data: {
     [k: string]: unknown;
   };
 };
 
 // ── per-type event data payloads (field-level; a schema field change not reflected here fails --check) ──
+/**
+ * Run accepted. policy_ref is an additive snapshot identity (P9/ADR-0045): resolved once at run creation and frozen for the whole run; A/B routes by fingerprint. Optional keeps v1 additive (no bump).
+ */
 export interface RunStartedData {
   run_id: string;
+  policy_ref?: {
+    id: string;
+    fingerprint: string;
+  };
 }
 export interface TurnStartedData {
   turn: number;
@@ -184,4 +192,10 @@ export interface PeerEndedData {
   terminal_status: "completed" | "failed" | "cancelled";
   result_ref?: string | null;
   resumable_hint?: boolean;
+}
+/**
+ * Capability roster changed (P9/ADR-0046): live-only advisory, no payload; consumers re-fetch the roster for future runs. Not persisted, never logged (C20).
+ */
+export interface ToolsChangedData {
+  domain: "tools" | "skills" | "mcp" | "plugins" | "settings";
 }

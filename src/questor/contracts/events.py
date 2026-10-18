@@ -328,6 +328,7 @@ class EventType:
     MEMORY_WRITTEN = "memory_written"  # 记忆写入回执（有界、无原文；ADR-0024/0026）
     PEER_STARTED = "peer_started"  # 父 spawn 子 agent（P8；ADR-0042）
     PEER_ENDED = "peer_ended"  # 子 agent 达终态回父（P8；ADR-0042）
+    TOOLS_CHANGED = "tools_changed"  # 能力名册变更 live-only 告警（P9；ADR-0046，design/02 §7）
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。

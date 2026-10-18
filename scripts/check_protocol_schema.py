@@ -147,7 +147,7 @@ def _envelope(type_name: str, data: dict[str, Any]) -> dict[str, Any]:
 
 def _valid_fixtures() -> dict[str, dict[str, Any]]:
     return {
-        "run_started": _envelope("run_started", {"run_id": "run_x"}),
+        "run_started": _envelope("run_started", {"run_id": "run_x", "policy_ref": {"id": "react", "fingerprint": "fp"}}),
         "turn_started": _envelope("turn_started", {"turn": 1}),
         "text_delta": _envelope("text_delta", {"delta": "hi"}),
         "reasoning_delta": _envelope("reasoning_delta", {"delta": "think"}),
@@ -197,6 +197,8 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
             "peer_ended",
             {"parent_run_id": "rp", "child_run_id": "rc", "node_id": "n1", "terminal_status": "completed", "resumable_hint": False},
         ),
+        # P9 additive：tools_changed（live-only 告警，单 domain 枚举）+ run_started 带 additive policy_ref。
+        "tools_changed": _envelope("tools_changed", {"domain": "tools"}),
     }
 
 
@@ -210,12 +212,17 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     # P8 peer_*：非枚举终态 + 未知载荷字段（additionalProperties:false）都必被拒。
     peer_bad_status = _envelope("peer_ended", {"parent_run_id": "rp", "child_run_id": "rc", "node_id": "n1", "terminal_status": "weird"})
     peer_over_field = _envelope("peer_started", {"parent_run_id": "rp", "child_run_id": "rc", "node_id": "n1", "prompt": "leak"})
+    # P9：tools_changed domain 不在枚举、run_started.policy_ref 多余字段（additionalProperties:false）都必须被拒。
+    tools_bad_domain = _envelope("tools_changed", {"domain": "bogus"})
+    policy_over_field = _envelope("run_started", {"run_id": "run_x", "policy_ref": {"id": "r", "fingerprint": "f", "leak": 1}})
     return {
         "over_field": over_field,
         "missing_required": missing_required,
         "oversized": oversized,
         "peer_bad_status": peer_bad_status,
         "peer_over_field": peer_over_field,
+        "tools_bad_domain": tools_bad_domain,
+        "policy_over_field": policy_over_field,
     }
 
 
