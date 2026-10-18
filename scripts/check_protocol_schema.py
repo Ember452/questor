@@ -26,9 +26,11 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from questor.contracts.events import EventType
+from questor.contracts.sidecar_status import SIDECAR_LIFECYCLE_STATES, SIDECAR_STATUS_FIELDS
 from questor.kernel.events import EXTERNAL_EVENT_FIELDS
 
 SCHEMA_PATH = Path("protocol/event.schema.json")
+SIDEcar_STATUS_SCHEMA_PATH = Path("protocol/sidecar_status.schema.json")
 
 
 def _contract_types() -> set[str]:
@@ -79,13 +81,35 @@ def _field_drift(schema: dict) -> list[str]:
             continue
         props = _def_prop_names(defs.get(t))
         if props != set(allowed):
-            drift.append(f"field drift on '{t}': schema $defs props {sorted(props)} != contracts whitelist {sorted(set(allowed))}")
+            drift.append(
+                f"field drift on '{t}': schema $defs props {sorted(props)} != contracts whitelist {sorted(set(allowed))}"
+            )
+    return drift
+
+
+def _sidecar_status_drift(status: dict) -> list[str]:
+    """§6-5：进程级 status 面的字段级 lockstep（传入的 status schema ⟂ contracts）。
+
+    state 枚举 == ``SIDECAR_LIFECYCLE_STATES``；顶层属性集 == ``SIDECAR_STATUS_FIELDS``。任一侧增删/改名只改一处即判红。
+    传**内存中的 dict**（便于 self-test 喂篡改副本），不做磁盘 IO。
+    """
+    props = status.get("properties", {})
+    enum = set(props.get("state", {}).get("enum", []))
+    drift: list[str] = []
+    if enum != set(SIDECAR_LIFECYCLE_STATES):
+        drift.append(f"sidecar_status state enum {sorted(enum)} != contracts {sorted(SIDECAR_LIFECYCLE_STATES)}")
+    names = set(props)
+    if names != set(SIDECAR_STATUS_FIELDS):
+        drift.append(f"sidecar_status field set {sorted(names)} != contracts whitelist {sorted(SIDECAR_STATUS_FIELDS)}")
     return drift
 
 
 def check() -> int:
     schema = _load_schema()
     Draft202012Validator.check_schema(schema)  # raises if malformed
+    status_schema = json.loads(SIDEcar_STATUS_SCHEMA_PATH.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(status_schema)  # §6-5：status 面自身亦须良构
+    status_drift = _sidecar_status_drift(status_schema)
     contract = _contract_types()
     if not contract:  # fail-on-empty: an empty EventType set is a misconfig, not a pass
         print("fail-on-empty: contract EventType set is empty", file=sys.stderr)
@@ -107,7 +131,13 @@ def check() -> int:
         for line in drift:
             print(line, file=sys.stderr)
         return 1
-    print(f"protocol schema OK: {len(contract)} event types in lockstep (enum + $defs + branches + per-type field sets)")
+    if status_drift:  # §6-5：进程级 status 面的 state 枚举/字段集与 contracts lockstep
+        for line in status_drift:
+            print(line, file=sys.stderr)
+        return 1
+    print(
+        f"protocol schema OK: {len(contract)} event types in lockstep (enum + $defs + branches + per-type field sets) + sidecar_status"
+    )
     return 0
 
 
@@ -122,12 +152,37 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         "text_delta": _envelope("text_delta", {"delta": "hi"}),
         "reasoning_delta": _envelope("reasoning_delta", {"delta": "think"}),
         "message_completed": _envelope("message_completed", {"message_id": "msg_1"}),
-        "tool_started": _envelope("tool_started", {"tool_call_id": "tc1", "name": "read", "capability": "readonly", "risk": "low", "args_summary": "a.txt"}),
+        "tool_started": _envelope(
+            "tool_started",
+            {"tool_call_id": "tc1", "name": "read", "capability": "readonly", "risk": "low", "args_summary": "a.txt"},
+        ),
         "tool_progress": _envelope("tool_progress", {"message": "working"}),
         "tool_completed": _envelope("tool_completed", {"tool_call_id": "tc1", "status": "success"}),
-        "approval_request": _envelope("approval_request", {"request_id": "apr1", "tool_call_id": "tc1", "name": "write", "args_summary": "out.txt", "risk": "high", "reason": "needs approval", "expires_at": "2026-01-01T00:05:00+00:00"}),
-        "approval_resolved": _envelope("approval_resolved", {"request_id": "apr1", "tool_call_id": "tc1", "decision": "allow", "decided_by": "user", "resolved_at": "2026-01-01T00:01:00+00:00"}),
-        "permission_mode_changed": _envelope("permission_mode_changed", {"mode": "full_auto", "changed_by": "user", "effective_from_turn": 2}),
+        "approval_request": _envelope(
+            "approval_request",
+            {
+                "request_id": "apr1",
+                "tool_call_id": "tc1",
+                "name": "write",
+                "args_summary": "out.txt",
+                "risk": "high",
+                "reason": "needs approval",
+                "expires_at": "2026-01-01T00:05:00+00:00",
+            },
+        ),
+        "approval_resolved": _envelope(
+            "approval_resolved",
+            {
+                "request_id": "apr1",
+                "tool_call_id": "tc1",
+                "decision": "allow",
+                "decided_by": "user",
+                "resolved_at": "2026-01-01T00:01:00+00:00",
+            },
+        ),
+        "permission_mode_changed": _envelope(
+            "permission_mode_changed", {"mode": "full_auto", "changed_by": "user", "effective_from_turn": 2}
+        ),
         "node_updated": _envelope("node_updated", {"node_id": "n1", "status": "pending"}),
         "usage_delta": _envelope("usage_delta", {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}),
         "heartbeat": _envelope("heartbeat", {}),
@@ -180,8 +235,26 @@ def self_test() -> int:
     mc["final_text_TAMPERED"] = mc.pop("final_text")  # 只改 schema 字段名
     field_drift_caught = bool(_field_drift(tampered))
 
-    ok = not bad_accept and not bad_reject and detects and field_ok_when_aligned and field_drift_caught
-    print(f"self-test: valid_all_pass={not bad_accept} ({bad_accept}) bad_all_reject={not bad_reject} ({bad_reject}) detects-drift={detects} field-lockstep-green={field_ok_when_aligned} field-drift-caught={field_drift_caught}")
+    # §6-5：status 面字段级门能判红——把 state 枚举值改名（不动 contracts）→ _sidecar_status_drift 必报；不改则不报。
+    status_schema = json.loads(SIDEcar_STATUS_SCHEMA_PATH.read_text(encoding="utf-8"))
+    status_ok_when_aligned = not _sidecar_status_drift(status_schema)
+    tampered_status = copy.deepcopy(status_schema)
+    se = tampered_status["properties"]["state"]["enum"]
+    se[se.index("crashed")] = "crashhed_TAMPERED"
+    status_drift_caught = bool(_sidecar_status_drift(tampered_status))
+
+    ok = (
+        not bad_accept
+        and not bad_reject
+        and detects
+        and field_ok_when_aligned
+        and field_drift_caught
+        and status_ok_when_aligned
+        and status_drift_caught
+    )
+    print(
+        f"self-test: valid_all_pass={not bad_accept} ({bad_accept}) bad_all_reject={not bad_reject} ({bad_reject}) detects-drift={detects} field-lockstep-green={field_ok_when_aligned} field-drift-caught={field_drift_caught} status-lockstep-green={status_ok_when_aligned} status-drift-caught={status_drift_caught}"
+    )
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 
