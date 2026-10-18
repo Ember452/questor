@@ -92,4 +92,8 @@
 - **实现进度**：P0–P4 已交付并合入（ADR-0001…0028；0027 = 日志骨架刀 2，已合入并过后复审修正轮）。日志骨架排在 P5 开工前的前置已满足；P5 开工仍需先定 MCP 子进程的 `run_id` 注入与 stderr 重定向（[`log/DESIGN.md`](./log/DESIGN.md) §16.4 + `docs/pitfalls.md` 第 3 条）。
 - **设计骨架已定**：四条前置决策已拍（单步接口/权限三态+可插拔沙箱/HTTP+SSE 统传输/任务树预留森林）；存储走事件溯源为主。
   注：“单步接口”指 **PolicyPort 每 turn 只出一个意图**；provider 自己在一轮里发多个 tool_call 属同一意图源的多个调用，回发前由内核串行全部闭合（[ADR-0028](./adr/0028-pairing-gate-and-provider-fault-normalization.md) / HARD C19），不破单步契约。
-- **待拍（产品口径）**：v1 边界中多模态/语音/多 agent 哪些进第一版——对应 ROADMAP §1 的 P6/P8 行，进入前均需先记 ADR（§5）。
+- **产品口径已拍（多模态/语音）**：原 ROADMAP P6 行（图/文件识别 + 语音 ASR/TTS）**整阶段从路线图移除**（[ADR-0036](./adr/0036-p6-dropped-from-roadmap.md)）；
+  v1 后既定序列 = **P8（多 agent/DAG）→ P9（对外/插件宿主）→ P10（加固）**，编号不重排。直接后果：**Questor 当前与可预见期内是纯文本模态**，
+  对外能力叙述须如实反映；P9 的非文本请求体必须归一化拒绝而非静默降级（ROADMAP §1.5 P9 备注）。日后确有需求时，按 ADR-0036
+  的接缝路径回归（L5 provider + L6 surface + 只加事件 `type`，不碰 §4 的信封/关联键铁律与 `design/02 §7` 的终止序），**不再占 Phase 编号**。
+  多 agent（P8）仍按路线图推进，进入前先记 ADR（§5）。
