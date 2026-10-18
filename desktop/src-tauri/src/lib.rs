@@ -8,11 +8,12 @@
 //! 诚实边界：真窗口渲染 / 全量 `tauri build` 需 WebView2 runtime + tauri CLI + 显示，本机无法验证 → UNVERIFIED。
 
 use questor_sidecar::backend::StdProcess;
-use questor_sidecar::{resolve_sidecar, two_phase_shutdown, wait_ready, Fence, Shutdown};
+use questor_sidecar::{resolve_sidecar, two_phase_shutdown, wait_ready, Fence, Process, Shutdown};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// 优雅关闭总宽限（对齐参考仓 sidecar.rs 的 SHUTDOWN_EXIT_GRACE）：先发请求、轮询、超时强杀。
 const GRACE: Duration = Duration::from_secs(35);
@@ -20,6 +21,8 @@ const GRACE: Duration = Duration::from_secs(35);
 const POLL: Duration = Duration::from_millis(200);
 /// 等 sidecar 写 bootstrap 的上限（serve 起 uvicorn 需要点时间）。
 const BOOTSTRAP_WAIT: Duration = Duration::from_secs(40);
+/// §6-5 崩溃监控线程轮询子进程的间隔。
+const MONITOR_TICK: Duration = Duration::from_millis(500);
 
 /// sidecar bootstrap 契约（与 `surfaces/serve.py::write_bootstrap` 字段一致）。
 #[derive(serde::Deserialize)]
@@ -33,6 +36,63 @@ struct Bootstrap {
 
 /// tauri 管理状态：持有当前 sidecar 子进程句柄 + 端口/token，供退出时优雅关闭。
 struct SidecarCell(Mutex<Option<(StdProcess, u64, u16, String)>>);
+
+/// §6-5：主动关窗标志——监控线程据此区分崩溃 vs 优雅停机，避免误报 Crashed。
+struct ShuttingDown(AtomicBool);
+
+/// §6-5：壳→UI 的进程级 sidecar_status wire 载荷（与 protocol/sidecar_status.schema.json 同形）。
+#[derive(serde::Serialize, Clone)]
+struct StatusPayload<'a> {
+    state: &'a str,
+    generation: u64,
+    detail: Option<&'a str>,
+}
+
+/// 构造 status 载荷（纯函数，单测锁字段名 = Rust↔contracts 序列化 lockstep）。
+fn status_payload<'a>(
+    state: &'a str,
+    generation: u64,
+    detail: Option<&'a str>,
+) -> StatusPayload<'a> {
+    StatusPayload {
+        state,
+        generation,
+        detail,
+    }
+}
+
+/// §6-5 崩溃监控：轮询子进程；非主动停机下若退出 → emit crashed（退出码作有界 detail）。
+/// 重启/重挂属 §6-6，本切片不实现（emit 后停循环）。
+fn monitor_sidecar_crash(handle: tauri::AppHandle) {
+    loop {
+        std::thread::sleep(MONITOR_TICK);
+        if let Some(flag) = handle.try_state::<ShuttingDown>() {
+            if flag.0.load(Ordering::SeqCst) {
+                return; // 主动关窗：非崩溃
+            }
+        }
+        let exited = match handle.try_state::<SidecarCell>() {
+            Some(cell) => match cell.0.lock() {
+                Ok(mut g) => match g.as_mut() {
+                    Some((proc, gen_slot, _port, _tok)) => {
+                        proc.poll().map(|code| (*gen_slot, code))
+                    }
+                    None => return, // 已被 shutdown take → 主动停机
+                },
+                Err(_) => return,
+            },
+            None => return,
+        };
+        if let Some((cur_gen, code)) = exited {
+            let detail = format!("exit {code}");
+            let _ = handle.emit(
+                "sidecar_status",
+                status_payload("crashed", cur_gen, Some(&detail)),
+            );
+            return;
+        }
+    }
+}
 
 fn bootstrap_path() -> PathBuf {
     std::env::var_os("QUESTOR_SIDECAR_BOOTSTRAP")
@@ -143,14 +203,15 @@ pub fn run() {
                 let dist = dev_web_dist_default(std::path::Path::new(env!("CARGO_MANIFEST_DIR")));
                 std::env::set_var("QUESTOR_WEB_DIST", &dist);
             }
-            let (proc, port, _gen, token) = start_sidecar(&fence, &program, &args)
+            let (proc, port, gen, token) = start_sidecar(&fence, &program, &args)
                 .map_err(|e| format!("sidecar start failed: {e}"))?;
             // webview 指向 loopback sidecar，并把会话 token 经查询注入（前端据此带 header）。
             // 先构 URL（借用 token），再 manage（移动 token）——避免借用/移动顺序错。
             let url: tauri::Url = format!("http://127.0.0.1:{port}/?token={token}")
                 .parse()
                 .map_err(|e| format!("bad sidecar url: {e}"))?;
-            app.manage(SidecarCell(Mutex::new(Some((proc, _gen, port, token)))));
+            app.manage(SidecarCell(Mutex::new(Some((proc, gen, port, token)))));
+            app.manage(ShuttingDown(AtomicBool::new(false)));
             let win =
                 tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
                     .title("Questor")
@@ -158,12 +219,20 @@ pub fn run() {
                     .build()
                     .map_err(|e| format!("window build failed: {e}"))?;
             win.set_focus().ok();
+            // §6-5：sidecar 就绪 → emit ready；起崩溃监控线程（重启循环属 §6-6，未做）。
+            let handle = app.handle().clone();
+            let _ = handle.emit("sidecar_status", status_payload("ready", gen, None));
+            std::thread::spawn(move || monitor_sidecar_crash(handle));
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while building questor desktop shell")
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
+                // 先置停机标志，让监控线程把这当作主动关闭、不误报 Crashed。
+                if let Some(flag) = app_handle.try_state::<ShuttingDown>() {
+                    flag.0.store(true, Ordering::SeqCst);
+                }
                 if let Some(cell) = app_handle.try_state::<SidecarCell>() {
                     shutdown_sidecar(&cell);
                 }
@@ -184,6 +253,22 @@ mod tests {
         assert_eq!(b.port, 54321);
         assert_eq!(b.generation, 7);
         assert_eq!(b.token, "tok-abc");
+    }
+
+    /// §6-5：壳发的 sidecar_status 载荷必须与 wire 契约同形（字段名 state/generation/detail）。
+    /// 这是 Rust↔contracts 的序列化 lockstep：改名/增删字段此测即红（与 Python 字段级漂移门同经同纬）。
+    #[test]
+    fn sidecar_status_payload_matches_wire_contract() {
+        let v = serde_json::to_value(status_payload("crashed", 3, Some("exit 1"))).unwrap();
+        assert_eq!(v["state"], serde_json::json!("crashed"));
+        assert_eq!(v["generation"], serde_json::json!(3));
+        assert_eq!(v["detail"], serde_json::json!("exit 1"));
+        let mut keys: Vec<String> = v.as_object().unwrap().keys().cloned().collect();
+        keys.sort();
+        assert_eq!(keys, vec!["detail", "generation", "state"]);
+        // detail 省略时序列化为 null（与 schema 的 ["string","null"] 一致）。
+        let v2 = serde_json::to_value(status_payload("ready", 1, None)).unwrap();
+        assert!(v2["detail"].is_null());
     }
 
     /// dev 默认前端产物路径 = src-tauri 的兄弟目录 `web/dist`（纯路径运算，不触碰文件系统）。
