@@ -39,6 +39,7 @@ class ErrorKind(StrEnum):
     CONTEXT_MEMORY_CEILING = "context_memory_ceiling"
     PAYLOAD_TOO_LARGE = "payload_too_large"
     FORMAT_ERROR = "format_error"
+    UNSUPPORTED_MODALITY = "unsupported_modality"  # P9/ADR-0044：非文本/语音 content part 归一拒绝（承 ADR-0036 决策5），不可重试
     AUTH = "auth"
     BILLING = "billing"
     MODEL_NOT_FOUND = "model_not_found"
