@@ -32,6 +32,9 @@ _PROVIDER_EXACT = frozenset(
 )
 _SAFE_PREFIXES = ("PATH", "HOME", "USERPROFILE", "LANG", "LC_", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "SYSTEMROOT", "COMSPEC", "TEMP", "TMP")
 
+# 值内嵌凭据（URL userinfo `scheme://user:pass@host`）——即便变量名安全（如代理 URL），也一律不透传（#181）。
+_URL_USERINFO = re.compile(r"://[^/@:]+:[^/@]+@")
+
 
 def is_provider_credential(name: str) -> bool:
     """Questor/LiteLLM 管理凭据永远不可透传，大小写不敏感。"""
@@ -54,10 +57,13 @@ def scrub_environment(env: dict[str, str] | None = None) -> tuple[dict[str, str]
     kept: dict[str, str] = {}
     removed: list[str] = []
     for key, value in source.items():
-        if _is_safe_name(key) or not _is_credential_shape(key):
-            kept[key] = value
-        else:
+        if not _is_safe_name(key) and _is_credential_shape(key):
             removed.append(key)
+            continue
+        if _URL_USERINFO.search(value or ""):  # 值内嵌 user:pass@ 凭据，名字再安全也不透传（#181）
+            removed.append(key)
+            continue
+        kept[key] = value
     return kept, tuple(sorted(removed))
 
 

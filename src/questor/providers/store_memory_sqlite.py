@@ -435,9 +435,16 @@ class SQLiteMemoryStore(MemoryStorePort):
     async def delete(self, chunk_ids: tuple[str, ...]) -> None:
         db = self._dbp()
         async with self._lock:
-            for cid in chunk_ids:
-                await db.execute("DELETE FROM memory_chunks_fts WHERE id = ?", (cid,))
-                await db.execute("DELETE FROM memory_chunks WHERE id = ?", (cid,))
+            # 单事务包裹逐条删除：与模块头“BEGIN IMMEDIATE 串行单写者”一致，避免崩溃留半成品删除（#183）。
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                for cid in chunk_ids:
+                    await db.execute("DELETE FROM memory_chunks_fts WHERE id = ?", (cid,))
+                    await db.execute("DELETE FROM memory_chunks WHERE id = ?", (cid,))
+                await db.execute("COMMIT")
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
 
     def _abs(self, rel_path: str) -> str:
         """将相对 memory root 的路径解为绝对；**拒绝越界**（path traversal / 符号链逃逸 fail-closed）。"""
