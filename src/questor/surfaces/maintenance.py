@@ -2,9 +2,9 @@
 
 给 Lane D 的回收方法一个**生产调用方**（审计 Minor-2：回收逻辑正确但从不运行→账本无界增长动机未解）。
 只回收**瞬态派生视图**——过期/已释放 `run_lease` + 超 TTL 未 ack 的 in-flight claim；**绝不碰
-acked delivery 行**（BLK-2，绑 event_log 裁剪后置）。artifact 孤儿 GC 的 `gc_orphans` 方法已就绪，
-但其调度需生产 artifact 根装配（当前 `src/` 未统一实例化 `FileSystemArtifactStore`），故此处仅回收账本、
-artifact GC 诚实标"方法就绪、触发待接 artifact 装配"。
+acked delivery 行**（BLK-2，绑 event_log 裁剪后置）。artifact 孤儿 GC 的 `gc_orphans` 方法已就绪，且
+`FileSystemArtifactStore` 现由 ``composition.build_app`` 实例化（#154）；但本 maintenance 命令只持
+``StorePort``、未接 artifact 根的调度触发，故此处仅回收账本、artifact GC 诚实标"方法就绪、触发未接本命令"。
 """
 
 from __future__ import annotations
