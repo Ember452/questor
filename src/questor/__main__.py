@@ -36,6 +36,7 @@ from questor.providers.store_sqlite import SQLiteStore
 from questor.surfaces._assembly import assemble_logging, log_dir_from_env
 from questor.surfaces.cli import CliSurface, interactive
 from questor.surfaces.http_sse import EventServer, create_app
+from questor.surfaces.logs import run_logs_command
 from questor.surfaces.serve import serve
 
 #: 组合根自述行 logger（一方 inline 记录；DoD A① 的"起手即有日志"靠它兑现）。
@@ -57,6 +58,8 @@ commands:
   --resume <run_id>  resume a killed/restarted run from durable state
   --list             list unfinished run ids
   --dream            run offline Deep Dream distillation
+  logs [--run ID]    read-only log consumption (event_log + bypass JSONL timeline)
+  logs --totals      cross-run usage totals projected from durable run_completed
   -h, --help         show this usage and exit (no store, no logging assembly, no REPL)
 
 env (read by the composition root only; the kernel stays env-free):
@@ -237,6 +240,16 @@ async def _amain(argv: list[str]) -> int:
             if final is None:
                 print(f"no checkpoint for run {argv[1]}", file=sys.stderr)
                 return 1
+            return 0
+        if argv and argv[0] == "logs":
+            # P10/ADR-0049 刀 3：**只读**消费命令——读 event_log 权威 + 旁路 JSONL，不写库/不改状态。
+            rest = argv[1:]
+            run_id: str | None = None
+            if "--run" in rest:
+                i = rest.index("--run")
+                run_id = rest[i + 1] if i + 1 < len(rest) else None
+            out = await run_logs_command(store, Path(log_dir_from_env()), run_id=run_id, totals="--totals" in rest)
+            print(out)
             return 0
         return await interactive(surface)
     finally:
