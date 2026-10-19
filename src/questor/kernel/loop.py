@@ -209,7 +209,9 @@ def _analyze_shell(tool_spec: ToolSpec, arguments: JsonObject) -> ShellAnalysis 
     powershell = tool_spec.name.lower() in {"powershell", "pwsh"}
     analyses = [parse_powershell(command) if powershell else parse_posix_shell(command) for command in commands]
     if any(analysis.status is not ShellParseStatus.PARSED for analysis in analyses):
-        return analyses[0]
+        # 任一子命令未解析/动态/不支持 → 整体不可证明只读：返回**首个非 PARSED** 分析（all_read_only=False），
+        # 交 EXEC 能力下限 fail-closed 判；绝不用 analyses[0]（可能是已解析只读）造成 exec fail-open（#169）。
+        return next(analysis for analysis in analyses if analysis.status is not ShellParseStatus.PARSED)
     segments = tuple(segment for analysis in analyses for segment in analysis.segments)
     dialect = ShellDialect.POWERSHELL if powershell else ShellDialect.POSIX
     read_paths = tuple(dict.fromkeys(path for analysis in analyses for path in analysis.read_paths))
