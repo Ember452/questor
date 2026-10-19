@@ -133,12 +133,19 @@ class CliSurface:
         policy_id: str = "react",
         ab_table: dict[str, int] | None = None,
         compaction: CompactionConfig | None = None,
+        process_runner: object | None = None,
+        artifact_store: object | None = None,
+        sandbox: object | None = None,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
         self.model = model
         self.store = store
         self.memory_store = memory_store
+        # exec/写围栏/归档三件套由组合根注入（#154）；None → loop 走 fail-closed（无 runner 则 run_process 拒）。
+        self.process_runner = process_runner
+        self.artifact_store = artifact_store
+        self.sandbox = sandbox
         self.mcp_json_path = mcp_json_path  # None → MCP 禁用（不改动既有 run 行为）
         self.log_dir = log_dir
         self.read = ReadTool()
@@ -188,6 +195,9 @@ class CliSurface:
             subagent_spawner=subagent_spawner,
             capability_probe=self.capability_probe,
             compaction=self.compaction,
+            process_runner=self.process_runner,
+            artifact_store=self.artifact_store,
+            sandbox=self.sandbox,
         )
 
     async def _discover_mcp(self, run_id: str) -> tuple[list[Tool], Teardown]:
@@ -271,6 +281,17 @@ class CliSurface:
         except Exception:  # noqa: BLE001 - 记忆沉淀失败不得拖垮已完成 run；run_id 幂等键使重投安全
             _log.warning("run-completion daily flush failed for run %s", run.run_id, exc_info=True)
 
+    async def _renew_lease_loop(self, run_id: str, holder: str) -> None:
+        """每 ttl/2 续租，保长 CLI resume 不因超 TTL 被过期抢占（C2 单写者，track4 BLK-2）。"""
+        interval = max(1.0, _RUN_LEASE_TTL_SECONDS / 2)
+        try:
+            while True:
+                await asyncio.sleep(interval)
+                if self.store is None or not await self.store.renew_lease(run_id, holder, 1):
+                    return
+        except asyncio.CancelledError:
+            pass
+
     async def resume(self, run_id: str) -> Run | None:
         """从持久态续跑一个被 kill/重启的 run（P3 T12，ADR-0021）。
 
@@ -284,7 +305,7 @@ class CliSurface:
             return None
         # P9/ADR-0047：resume 前取 run 租约——防两进程/两次 resume 并发同 run 双驱（单机多进程单写者）。
         # 取不到=他人持有 → 诚实拒绝（返回 None），绝不双驱。跨机抢锁属 C12 天花板（本 Phase 不做）。
-        holder = f"cli-resume:{os.getpid()}"
+        holder = f"cli-resume:{os.getpid()}:{new_id('drv')}"
         if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
             _log.warning("resume refused: run %s lease held by another driver (single-writer, ADR-0047)", run_id)
             return None
@@ -309,8 +330,12 @@ class CliSurface:
                     idempotency_key=approval.request_id,
                 )
         try:
-            final = await loop.drive_controller(controller)
-            await self._flush_run_to_daily(final)
+            renew_task = asyncio.create_task(self._renew_lease_loop(run_id, holder))
+            try:
+                final = await loop.drive_controller(controller)
+                await self._flush_run_to_daily(final)
+            finally:
+                renew_task.cancel()
         finally:
             _, still_pending = await asyncio.wait({printer}, timeout=2.0)
             for task in still_pending:
@@ -382,13 +407,22 @@ async def interactive(surface: CliSurface | None = None) -> int:
 def main() -> int:
     """独立模块入口（``python -m questor.surfaces.cli``）：跑交互 REPL；Ctrl-C 退出码 130。
 
-    与 ``__main__._amain`` 同为生产入口，因此**共用同一装配口径**（``surfaces._assembly``）——
-    以前这里裸调 ``configure_logging()``，既不建文件面也无视 ``QUESTOR_LOG_*`` 与 payload 门
-    （Issue #138）。
+    与 ``__main__._amain`` **共用同一组合根**（``composition.build_app``，#161）：model/store/memory/
+    skills/MCP/exec 三件套一律同口径装配，不再出现"第二入口静默丢失持久化与模型路由"。
+    局部 import composition 避开模块级 import 环（composition→cli）。
     """
-    assemble_logging()
+    from questor.composition import build_app, close_app
+
+    async def _run() -> int:
+        assemble_logging()
+        app = await build_app()
+        try:
+            return await interactive(app.surface)
+        finally:
+            await close_app(app)
+
     try:
-        return asyncio.run(interactive())
+        return asyncio.run(_run())
     except KeyboardInterrupt:
         return 130
 

@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
+import logging
+import secrets
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -36,6 +37,8 @@ from questor.surfaces.approval import http_status_for_receipt
 from questor.surfaces.cli import CliSurface
 from questor.surfaces.run_registry import RunRegistry
 from questor.surfaces.subagent_orchestrator import SubagentOrchestrator
+
+_log = logging.getLogger("questor.surfaces.http_sse")
 
 # 终态事件集：流式跟到这些即停。
 TERMINAL = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
@@ -105,13 +108,36 @@ class EventServer:
         """
         mcp_tools, mcp_teardown = await self.surface._discover_mcp(run_id)
         tool_surface = self.surface._freeze_surface(run_id, mcp_tools)
+        # 长 run 必须周期续租：否则超过 TTL 后 ``reclaim_expired_leases`` / 异进程 ``--resume``
+        # 可抢走已过期的租约行 → 两个 driver 同写一 run（破 C2 单写者，track4 BLK-2）。
+        renew_task: asyncio.Task | None = None
+        if lease_holder is not None:
+            renew_task = asyncio.create_task(self._renew_lease_loop(run_id, lease_holder))
         try:
             await self._loop(asyncio.Event(), tool_surface, run_id=run_id).drive_controller(controller)
         finally:
+            if renew_task is not None:
+                renew_task.cancel()
+            # 驱动结束即从注册表回收 controller：这是所有经 _run_with_mcp 的 run 的权威收尾点，
+            # 不再依赖是否有 SSE 消费者挂上（无人订阅的 run 曾永驻 registry，track surfaces MAJ-2）。
+            # 同步、置于 finally 首行，确保即便下方 teardown/释放抛错也已回收。
+            self.registry.unregister(run_id)
             await mcp_teardown()  # 关连接+回收子进程树+stderr 句柄，防泄漏
             # P9/ADR-0047：resume 取的租约在驱动任务收尾释放（start_run 不取→None）。
             if lease_holder is not None:
                 await self.store.release_lease(run_id, lease_holder, 1)
+
+    async def _renew_lease_loop(self, run_id: str, holder: str) -> None:
+        """每 ttl/2 续租一次；续租失败（已被夺走）即停——单写者栅栏，诚实放弃而非双驱。"""
+        interval = max(1.0, _RUN_LEASE_TTL_SECONDS / 2)
+        try:
+            while True:
+                await asyncio.sleep(interval)
+                if not await self.store.renew_lease(run_id, holder, 1):
+                    _log.warning("lease lost for run=%s holder=%s：停续租（避免双驱）", run_id, holder)
+                    return
+        except asyncio.CancelledError:
+            pass
 
     async def start_run(self, text: str, run_id: str | None = None) -> str:
         """后台启动一次 run（用户文本经 SubmitMessage Command 进入 inbox）。
@@ -119,13 +145,18 @@ class EventServer:
         MCP per-run 发现接进桌面路径（审计 §6-7），且与驱动/teardown 同任务（anyio 会话作组作用域）。
         """
         run_id = run_id or new_id("run")
+        # 单写者栅栏（C2/ADR-0047）：start_run 也取租约，防另一进程对同 run_id 的 resume 抢驱。
+        # holder 每驱动任务唯一（非 pid），使同进程对同一 run 的二次驱动也会被拒（非静默覆盖）。
+        holder = f"http:{new_id('drv')}"
+        if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
+            raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
         # P9/ADR-0045：创建 run 时按 run 解析策略、冻结 policy_ref（reduce 会在 run_started 带出）。
         run = Run(run_id=run_id, budget=Budget(), policy_ref=self.surface._resolve_for_run(run_id)[1])
         controller = RunController(run)
         self.registry.register(controller)
         msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
         await self.registry.submit(run_id, SubmitMessage(run_id=run_id, content=msg), source="http", idempotency_key=f"submit:{run_id}")
-        task = asyncio.create_task(self._run_with_mcp(controller, run_id))
+        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))
         self.registry.set_task(run_id, task)
         return run_id
 
@@ -176,7 +207,8 @@ class EventServer:
         if run is None:
             raise HTTPException(status_code=404, detail=f"no checkpoint for run {run_id}")
         # P9/ADR-0047：取 run 租约防两进程 /resume 同 run 双驱；取不到→409（诚实拒绝，不双驱）。
-        holder = f"http-resume:{os.getpid()}"
+        # holder 每次驱动唯一（非 pid）：同进程对同一 run 的二次 resume 也会因栅栏而 409，不静默双驱。
+        holder = f"http-resume:{new_id('drv')}"
         if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
             raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
         controller = RunController(run)
@@ -219,6 +251,13 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
     伪造审批"的裸 loopback 暴露面（HITL 是安全边界，不能被本地旁路）。None=不强制（REPL/测试/headless）。
     """
     app = FastAPI(title="questor", version="0.1.0")
+
+    if openai_api_keys and token is None:
+        # 外部 OpenAI lane 绝不允许控制面（/run/cancel/resolve/resume/shutdown/events）裸暴露：
+        # 给了 api_keys 却没给会话 token 时，自动生成一个内部 token 强制 require_token 门住
+        # 控制面（/v1 自带 api_keys 门，不依赖此 token）。否则本机/跨机任意进程可旁路 HITL
+        # 驱动 agent、伪造审批、停机（track4 BLK-3 / surfaces BLK-1）。
+        token = secrets.token_urlsafe(24)
 
     def require_token(request: Request) -> None:
         """会话 token 门：token=None 放行；否则头或查询参数须匹配，否则 401（fail-closed）。"""

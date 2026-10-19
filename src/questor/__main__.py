@@ -30,11 +30,16 @@ import os
 import sys
 from pathlib import Path
 
+from questor.composition import (
+    build_app,
+    close_app,
+    sidecar_bootstrap_from_env,
+    sidecar_generation_from_env,
+    web_dist_from_env,
+)
 from questor.memory.distill import DistillOutcome, deep_dream
-from questor.providers.store_memory_sqlite import SQLiteMemoryStore
-from questor.providers.store_sqlite import SQLiteStore
 from questor.surfaces._assembly import assemble_logging, log_dir_from_env
-from questor.surfaces.cli import CliSurface, interactive
+from questor.surfaces.cli import interactive
 from questor.surfaces.http_sse import EventServer, create_app
 from questor.surfaces.logs import run_logs_command
 from questor.surfaces.maintenance import run_maintenance_command
@@ -72,65 +77,6 @@ env (read by the composition root only; the kernel stays env-free):
   QUESTOR_SIDECAR_BOOTSTRAP, QUESTOR_WEB_DIST, QUESTOR_DREAM_LOOKBACK,
   QUESTOR_OPENAI_API_KEYS, QUESTOR_OPENAI_HOST, QUESTOR_OPENAI_PORT
 """
-
-
-def _store_path() -> str:
-    return os.environ.get("QUESTOR_STORE_PATH", str(Path.cwd() / ".questor" / "state.db"))
-
-
-def _memory_db_path() -> str:
-    return os.environ.get("QUESTOR_MEMORY_DB", str(Path.cwd() / ".questor" / "memory.db"))
-
-
-def _memory_root() -> str:
-    return os.environ.get("QUESTOR_MEMORY_ROOT", str(Path.cwd() / ".questor" / "memory_store"))
-
-
-def _skills_dir_from_env() -> str:
-    """技能搜索目录取自 ``QUESTOR_SKILLS_DIR``（默认 ``<cwd>/.questor/skills``）；env 读属组合根职责。
-
-    与 ``QUESTOR_STORE_PATH``/``QUESTOR_LOG_DIR`` 同族命名；目录不存在时 catalog 为空（合法，不报错）。"""
-    return os.environ.get("QUESTOR_SKILLS_DIR", str(Path.cwd() / ".questor" / "skills"))
-
-
-def _mcp_json_from_env() -> str:
-    """MCP 配置文件取自 ``QUESTOR_MCP_JSON``（默认 ``<cwd>/mcp.json``，已在 PROTECTED_IN_ROOTS 写保护）。
-
-    文件不存在时 bootstrap 发现为空（无 MCP server 是合法的，不报错、不改动 run）。"""
-    return os.environ.get("QUESTOR_MCP_JSON", str(Path.cwd() / "mcp.json"))
-
-
-def _model_from_env() -> str:
-    """模型名取自 ``QUESTOR_MODEL``（缺省回落离线 ``"echo"``）；env 读取属组合根职责（DESIGN §11）。
-
-    必须在此透传给 ``CliSurface.model``：否则 surface 用缺省 "echo"，经 loop → ``ProviderRequest.model``
-    在 litellm 的 ``request.model or self.model`` 里以非空真值 "echo" 覆盖 ``LiteLLMProvider`` 自带的
-    ``QUESTOR_MODEL``，模型名就到不了真实供应商（P4 复审发现的接线缺陷）。"""
-    return os.environ.get("QUESTOR_MODEL") or "echo"
-
-
-def _sidecar_generation_from_env() -> int:
-    """sidecar 代次由启动方（Rust 注入的 env）指定、默认 1；随 bootstrap 落盘作陈旧连接栅栏基（ADR-0032）。解析失败回落 1，绝不在装配期崩。"""
-    try:
-        return int(os.environ.get("QUESTOR_SIDECAR_GENERATION", "1"))
-    except ValueError:
-        return 1
-
-
-def _sidecar_bootstrap_from_env() -> str:
-    """bootstrap 落盘路径取自 ``QUESTOR_SIDECAR_BOOTSTRAP``（默认 ``<cwd>/.questor/sidecar-bootstrap.json``）；env 读属组合根职责。"""
-    return os.environ.get("QUESTOR_SIDECAR_BOOTSTRAP", str(Path.cwd() / ".questor" / "sidecar-bootstrap.json"))
-
-
-def _web_dist_from_env() -> Path | None:
-    """桌面前端静态产物目录取自 ``QUESTOR_WEB_DIST``（未设或目录不存在则 None → sidecar 只跑 API，不挂静态）。
-
-    给定后 sidecar 一并伺服前端、webview 指本服务根路径（ADR-0007）；env 读属组合根职责，serve 面不读 env。"""
-    dist = os.environ.get("QUESTOR_WEB_DIST")
-    if not dist:
-        return None
-    path = Path(dist)
-    return path if path.is_dir() else None
 
 
 class _HeuristicDistiller:
@@ -171,43 +117,29 @@ async def _amain(argv: list[str]) -> int:
         print(_USAGE, file=sys.stderr)
         return 2
     assemble_logging()
-    path = _store_path()
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    store = await SQLiteStore(path).connect()
-    memory = await SQLiteMemoryStore(db_path=_memory_db_path(), memory_root=_memory_root()).connect()
-    # 起手一条一方记录钉住"装配与存储就绪"（DoD A①）：路径不含会话内容，零原文政策不破。
-    _LOG.info(
-        "composition root ready store=%s memory_db=%s",
-        path,
-        _memory_db_path(),
-        extra={"log_fields": {"entry": argv[0] if argv else "repl"}},
-    )
+    # 唯一装配口径（#161/#154）：所有 store/memory/exec 三件套/surface 均在 composition.build_app 构造，
+    # 与 surfaces.cli.main() 共用同一路径——两个生产入口不再漂移。
+    app = await build_app()
+    _LOG.info("cli entry dispatched", extra={"log_fields": {"entry": argv[0] if argv else "repl"}})
     try:
         if argv and argv[0] == "--dream":
             lookback = int(os.environ.get("QUESTOR_DREAM_LOOKBACK", "7"))
-            result = await deep_dream(memory, _HeuristicDistiller(), lookback_days=lookback)
+            result = await deep_dream(app.memory, _HeuristicDistiller(), lookback_days=lookback)
             print(
                 f"deep_dream: wrote={result.get('wrote')} reason={result.get('reason', '-')} "
                 f"input_hash={str(result.get('input_hash', ''))[:12]}"
             )
             return 0
-        surface = CliSurface(
-            store=store,
-            memory_store=memory,
-            model=_model_from_env(),
-            skills_dir=Path(_skills_dir_from_env()),
-            mcp_json_path=Path(_mcp_json_from_env()),
-            log_dir=Path(log_dir_from_env()),
-        )
+        surface = app.surface
         if argv and argv[0] == "--serve":
             # sidecar 常驻服务：EventServer 复用已装配的 surface + store（surface 只持 StorePort 抽象，C4），
             # serve 面只 bind loopback 临时口 + 写 bootstrap，不 import 具体 store（ADR-0032 / S6）。
-            server = EventServer(surface, store)
+            server = EventServer(surface, app.store)
             await serve(
                 server,
-                generation=_sidecar_generation_from_env(),
-                bootstrap_path=Path(_sidecar_bootstrap_from_env()),
-                static_dir=_web_dist_from_env(),
+                generation=sidecar_generation_from_env(),
+                bootstrap_path=Path(sidecar_bootstrap_from_env()),
+                static_dir=web_dist_from_env(),
             )
             return 0
         if argv and argv[0] == "--serve-openai":
@@ -223,13 +155,13 @@ async def _amain(argv: list[str]) -> int:
                 port = 8000
             import uvicorn  # 延迟 import：仅服务入口需要。
 
-            server = EventServer(surface, store)
-            app = create_app(server, openai_api_keys=keys)
+            server = EventServer(surface, app.store)
+            openai_app = create_app(server, openai_api_keys=keys)
             _LOG.info("openai lane serving host=%s port=%s", host, port)
-            await uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning")).serve()
+            await uvicorn.Server(uvicorn.Config(openai_app, host=host, port=port, log_level="warning")).serve()
             return 0
         if argv and argv[0] == "--list":
-            unfinished = await store.list_unfinished_runs()
+            unfinished = await app.store.list_unfinished_runs()
             for run_id in unfinished:
                 print(run_id)
             if not unfinished:
@@ -251,17 +183,16 @@ async def _amain(argv: list[str]) -> int:
             if "--run" in rest:
                 i = rest.index("--run")
                 run_id = rest[i + 1] if i + 1 < len(rest) else None
-            out = await run_logs_command(store, Path(log_dir_from_env()), run_id=run_id, totals="--totals" in rest, expand="--expand" in rest)
+            out = await run_logs_command(app.store, Path(log_dir_from_env()), run_id=run_id, totals="--totals" in rest, expand="--expand" in rest)
             print(out)
             return 0
         if argv and argv[0] == "maintenance":
             # P10/ADR-0050：账本卫生回收生产触发（过期 lease + 超 TTL 未 ack claim；不碰 acked）。
-            print(await run_maintenance_command(store))
+            print(await run_maintenance_command(app.store))
             return 0
         return await interactive(surface)
     finally:
-        await memory.close()
-        await store.close()
+        await close_app(app)
 
 
 def main() -> int:
