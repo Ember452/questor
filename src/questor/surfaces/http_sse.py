@@ -5,8 +5,8 @@ Command Inbox，再把事件流*投影*成 SSE。绝不直接 reduce。
 续传是一等能力：``GET /events/{run_id}`` 遵从 ``Last-Event-ID``/``after_seq``，先经 store
 重放 durable 尾、再跟实时，每帧带 ``id: <seq>``。
 
-SSE 帧/头风格改形自 CowAgent ``openai_compat.py``；``id:<seq>`` + after_seq 重放接线为本仓
-自写（两个参考都未暴露它——R10 §⑤）。"""
+SSE 帧/头遵循 OpenAI 兼容风格；``id:<seq>`` + after_seq 重放接线为本仓自写——
+该续传能力此前无现成实现暴露。"""
 
 from __future__ import annotations
 
@@ -230,7 +230,7 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
 
     @app.get("/health")
     async def health() -> dict:
-        """就绪探针（D-P7-B）：Rust 侧轮询本端口替代参考仓的 stdin `initialize`——只证 serve 面起来，不触碰任何状态。"""
+        """就绪探针（D-P7-B）：Rust 侧轮询本端口可连即判 ready——只证 serve 面起来，不触碰任何状态。"""
         return {"status": "ok"}
 
     @app.post("/shutdown", dependencies=[Depends(require_token)])
