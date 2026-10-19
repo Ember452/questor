@@ -2,7 +2,7 @@
 
 三层归属（DESIGN §3）：**内核文件**——运行时 import 只含 stdlib；``LogEntry`` 仅 ``TYPE_CHECKING``。
 
-形状参照（cordis MIT，仅结构不改包）：协议留内（``Exporter.emit``）、sink 实现各自注册进来。
+设计上：协议留内（``Exporter.emit``）、sink 实现各自注册进来。
 ``register`` 返回**幂等**注销 callable：装配可反复 force 重配而不叠加重复 sink（DESIGN §11 幂等）。
 """
 

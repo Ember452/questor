@@ -6,9 +6,8 @@
 为什么全系统**唯一一处**（D12）：构造时脱敏要两个构造点、且覆盖不到 msg/fields/traceback
 三个面；放在 ``LogEntry`` 构造后、fan-out 前一处，两条通道都被守住。
 
-provenance（改造思路，hermes MIT）：pattern 簇 + "绝不执行凭据"参照 hermes ``RedactingFormatter``
-（其对 Azure Entra bearer 只标不 refresh）；fail-closed 为本设计自加。prompt 回显剥离为 Questor
-自写纯函数，**接线后置**（见 ``strip_prompt_echo`` docstring 的诚实边界）。
+设计要点：pattern 簇遵循“绝不执行凭据”（如 Azure Entra bearer 只标记不 refresh）；
+fail-closed 为本设计自加。prompt 回显剥离为 Questor 自写纯函数，**接线后置**（见 ``strip_prompt_echo`` docstring 的诚实边界）。
 """
 
 from __future__ import annotations

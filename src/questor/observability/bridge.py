@@ -5,12 +5,12 @@
 ``BridgeHandler`` 装上 root，把每条 ``LogRecord`` 转成 ``LogEntry`` 交 pipeline。两条通道在此
 与 ``projection``（带外）汇流到同一个 ``LogEntry``，治理只跑一次。
 
-reality-wins 偏差（记 ADR-0027 §7）：DESIGN §6 的 depth 爬栈是 DeepCode 把记录**重发进 loguru**
+reality-wins 偏差（记 ADR-0027 §7）：DESIGN §6 的 depth 爬栈是**把记录重发进 loguru**
 才需要的（loguru 需从自身发射点重算 depth）；本 B2 架构直接读已定位的 ``LogRecord.filename/
 lineno``——stdlib 在 ``info()`` 调用处经 ``findCaller`` 已把调用点填成业务文件，无需再爬栈（加爬栈
 循环反而是 dead code）。G-L6 由 ``record.filename`` 直取即满足。
 
-provenance（hermes MIT）：降噪白名单来自 ``hermes_logging.py:216-227``。§16.1 args 强转为 Questor 自定。
+降噪白名单沿用常见第三方 logger 名单；§16.1 args 强转为 Questor 自定。
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ _MAX_ARG_REPR = 800
 _SCALAR_TYPES: tuple[type, ...] = (str, int, float, bool)
 
 #: 在 DEBUG/INFO 太吵的第三方 logger（钉到 WARNING，否则 litellm/httpx 淹没有用行）。
-#: 参照 hermes ``_NOISY_LOGGERS``（MIT）；litellm 单列（其请求日志体量大且与 llm 通道重复）。
+#: litellm 单列（其请求日志体量大且与 llm 通道重复）。
 #: 注意：stdlib logger 名**大小写敏感**——litellm 实际用的是首字母大写的 ``LiteLLM``，
 #: 只列小写等于从未生效（Issue #129）；aiosqlite 会把 SQL 参数元组整个打出来，必钉。
 NOISY_LOGGERS: tuple[str, ...] = (
