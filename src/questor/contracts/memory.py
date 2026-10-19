@@ -21,7 +21,7 @@ from questor.contracts.common import JsonObject, freeze, require_non_empty
 
 
 class MemoryScope(StrEnum):
-    """记忆可见范围（承 CowAgent ``MemoryChunk.scope``）。"""
+    """记忆可见范围。"""
 
     SHARED = "shared"
     USER = "user"
@@ -68,8 +68,7 @@ def source_for_write(kind: MemoryWriteKind) -> MemorySource:
 class MemoryChunk:
     """索引里的一条记忆片段（派生投影；文件/md 才是真源，design/06 §0）。
 
-    候选 shape 对齐 CowAgent ``agent/memory/storage.py:104-116``；``(path, start_line,
-    end_line)`` 是记忆侧的 recovery pointer 形态（R06 §4.2）。"""
+    候选 shape 用 ``(path, start_line, end_line)`` 表示记忆侧的 recovery pointer 形态。"""
 
     id: str
     scope: MemoryScope
@@ -121,7 +120,7 @@ class RecoveryPointer:
     """指向被压缩原文区间的恢复指针（ADR-0024；design/01 §13）。
 
     形态定为 ``(seq_from, seq_to)`` + ``covered_hash`` 锚，指向 events/messages 的
-    append-only 序号区间（非字节偏移、非 UUID，据 wuu 取 Seq 侧）；读取前必须以
+    append-only 序号区间（非字节偏移、非 UUID，取序号侧）；读取前必须以
     :meth:`matches` 校验覆盖区语义哈希，**历史被改写/分叉即 fail-closed**（绝不返回旧内容）。
     """
 
@@ -197,7 +196,7 @@ class MemoryStrategyConfig:
 
 @runtime_checkable
 class VectorBackend(Protocol):
-    """向量后端抽象（design/06 §4；承 CowAgent ``vector_backend.py:40-63``）。
+    """向量后端抽象（design/06 §4）。
 
     实现（SQLite cosine）住 ``providers``，不出本模块边界（HARD C4"向量库实现不越界"）。
     无 embedding 时上层须能仅靠关键词通道工作（ADR-0026）。"""

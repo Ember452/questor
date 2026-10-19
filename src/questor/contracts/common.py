@@ -1,7 +1,6 @@
 """L0 词汇层共享原语（不依赖 UI）。
 
- adapted 自 DeepCode ``core/domain/common.py`` 的思路（仅借鉴形状、非逐行照搬），
- 保持依赖极简（标准库 + immutables）。这些是 ``contracts`` 与 ``state`` 共用的
+ 本层保持依赖极简（标准库 + immutables）。这些是 ``contracts`` 与 ``state`` 共用的
  不变式助手：类型化 id、时区感知时间戳、JSON 安全校验、深冻结。
 """
 
