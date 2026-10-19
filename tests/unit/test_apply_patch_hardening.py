@@ -73,3 +73,24 @@ async def test_multi_file_failure_rolls_back(tmp_path: Path, monkeypatch) -> Non
     assert res.status == "error" and "rolled back" in res.result, res.result
     assert not (tmp_path / "good.txt").exists(), "半改：第二个文件写失败但 good.txt 残留"
     assert not (tmp_path / "boom.txt").exists()
+
+
+async def test_git_prefix_diff_edits_real_path(tmp_path: Path) -> None:
+    """MAJ-29：``--- a/x +++ b/x`` 的 git 前缀必须被剥离、落到真实 x（不产生 b/x）。"""
+    (tmp_path / "real.txt").write_bytes(b"keep\nold\n")
+    patch = "--- a/real.txt\n+++ b/real.txt\n@@\n keep\n-old\n+new\n"
+    res = await ApplyPatchTool().execute({"input": patch}, FakeToolContext(tmp_path))
+    assert res.status == "success", res.result
+    assert (tmp_path / "real.txt").read_bytes() == b"keep\nnew\n"
+    assert not (tmp_path / "b/real.txt").exists()
+
+
+async def test_real_a_prefixed_dir_not_mistripped(tmp_path: Path) -> None:
+    """MAJ-29 歧义消解：仓库真有 a/ 目录时，``a/a/x -> b/a/x`` 落到真实 a/x（只剥一层前缀，与 git apply 同义）。"""
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "x.txt").write_bytes(b"keep\nold\n")
+    patch = "--- a/a/x.txt\n+++ b/a/x.txt\n@@\n keep\n-old\n+new\n"
+    res = await ApplyPatchTool().execute({"input": patch}, FakeToolContext(tmp_path))
+    assert res.status == "success", res.result
+    assert (tmp_path / "a" / "x.txt").read_bytes() == b"keep\nnew\n"
+    assert not (tmp_path / "x.txt").exists()
