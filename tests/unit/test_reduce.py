@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from questor.contracts.common import new_id
@@ -57,6 +59,18 @@ def test_append_tool_use_registers_pending_call() -> None:
     assert events[-1].type == "message_completed"
 
 
+def test_large_tool_result_is_bounded_in_context() -> None:
+    """#158：巨型 tool_result 进模型前必须有界，否则撞上下文/计费。"""
+    run, _ = reduce(_run(), SubmitMessage(run_id="run_br", content=_user("hi")))
+    run, _ = reduce(run, AppendAssistantMessage(run_id=run.run_id, turn=1, message=_assistant_toolcall("tc_1")))
+    huge = "x" * (20 * 1024)
+    new, _ = reduce(run, RecordToolResult(run_id=run.run_id, tool_call_id="tc_1", status="success", result=huge))
+    tool_texts = [b.text for m in new.context.items for b in m.content if b.type == "tool_result" and b.text]
+    joined = "".join(tool_texts)
+    assert len(joined) < len(huge), f"tool_result 未截断：{len(joined)}"
+    assert "truncated" in joined
+
+
 def test_record_result_closes_pairing() -> None:
     run, _ = reduce(_run(), SubmitMessage(run_id="run_b", content=_user("hi")))
     run, _ = reduce(run, AppendAssistantMessage(run_id=run.run_id, turn=1, message=_assistant_toolcall("tc_1")))
@@ -93,7 +107,10 @@ def test_terminal_run_freezes_later_commands() -> None:
     run, _ = reduce(_run(), SubmitMessage(run_id="run_e", content=_user("hi")))
     run, _ = reduce(run, FinalizeRun(run_id=run.run_id, status="completed"))
     new, events = reduce(run, SubmitMessage(run_id=run.run_id, content=_user("more")))
-    assert new == run  # frozen
+    # 终态冻结：拒绝仍占用一个 durable seq（地基不变式——产 durable 事件必推进游标，否则撞
+    # event_log UNIQUE）；除 seq 外状态不变。
+    assert new.seq == run.seq + 1
+    assert replace(new, seq=run.seq) == run
     assert events[-1].type == "warning"
 
 

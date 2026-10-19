@@ -110,3 +110,26 @@ def test_same_semantics_regardless_of_flag_spacing() -> None:
     """拆开写与合并写必须同一判定——否则安全判定取决于用户敲不敲空格。"""
     assert _category(parse_posix_shell("sed -ni 's/a/b/' f")) == _category(parse_posix_shell("sed -n -i 's/a/b/' f"))
     assert _category(parse_posix_shell("sort -bo out in")) == _category(parse_posix_shell("sort -b -o out in"))
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        # #155 绕过语料：以下都曾被误判只读，收紧后必须"不证只读"。
+        ("cat notes.md >& out.txt", "ask"),
+        ("echo hi &> out.txt", "ask"),
+        ("git diff --output=/tmp/pwn", "not_proven"),
+        ("git log --output=/tmp/pwn", "not_proven"),
+        ("find . -exec$IFS rm -rf /", "not_proven"),
+        ("find . -delete$X", "not_proven"),
+        ("sed --in-place$Z f", "not_proven"),
+        ("printenv", "not_proven"),  # #159：转储环境变量不再算只读
+        ("printenv PATH", "not_proven"),
+        # 不得误伤：真正的 fd 复制/合并仍是只读。
+        ("cat a 2>&1", "read_only"),
+        ("cat a >&2", "read_only"),
+        ("git diff", "read_only"),
+    ],
+)
+def test_redirect_and_variable_bypass_corpus(command: str, expected: str) -> None:
+    assert _category(parse_posix_shell(command)) == expected, command

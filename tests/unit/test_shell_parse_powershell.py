@@ -59,6 +59,12 @@ def _category(analysis) -> str:  # noqa: ANN001
         ("$x = 1; Remove-Item $x", "not_proven"),
         ("Remove-Item", "not_proven"),
         ("Get-ChildItem | ForEach-Object { Remove-Item $_ }", "not_proven"),
+        # #155：只读 cmdlet 带写文件参数，不得再判只读。
+        ("Get-ChildItem | Sort-Object Name -OutputPath C:\\Temp\\pwn.txt", "not_proven"),
+        ("Get-Process | Format-Table -OutFile C:\\pwn.txt", "not_proven"),
+        ("Sort-Object -OutputPath out.txt", "not_proven"),
+        # 不得误伤：不带写参数的只读命令仍 read_only。
+        ("Get-ChildItem | Sort-Object Name", "read_only"),
     ],
 )
 def test_powershell_parser_classifies_safety(command: str, expected: str) -> None:

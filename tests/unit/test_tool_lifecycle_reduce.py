@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from questor.contracts.events import (
@@ -95,7 +96,9 @@ def test_duplicate_opposite_expired_and_cancelled_approval_transitions_are_idemp
     assert duplicate == first
     assert events == []
     conflict, events = reduce(duplicate, ResolveApproval(run_id="r", request_id="apr", decision="deny", decided_by="user"))
-    assert conflict == duplicate
+    # 冲突决策产一条 durable warning → 占用一个 seq；除 seq 外状态不变。
+    assert conflict.seq == duplicate.seq + 1
+    assert replace(conflict, seq=duplicate.seq) == duplicate
     assert [event.type for event in events] == ["warning"]
 
     expired_run, _ = reduce(_validated_run(), _request())

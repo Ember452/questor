@@ -11,8 +11,6 @@ from questor.contracts.sandbox import SandboxBackend, SandboxDescriptor
 from questor.contracts.shell_analysis import ShellAnalysis
 from questor.contracts.tool import Capability, ToolSpec
 
-_FULL_BACKENDS = frozenset({SandboxBackend.SEATBELT, SandboxBackend.BWRAP})
-
 
 def apply_capability_floor(
     *,
@@ -46,7 +44,9 @@ def apply_capability_floor(
                 warnings=(sandbox.limitation,),
                 floor_applied="exec-capability",
             )
-        if sandbox.backend not in _FULL_BACKENDS:
+        # 能力事实驱动，而非后端名：一个名为 seatbelt/bwrap 却未真正围栏写的 descriptor 必须加严，
+        # 不能因名字落在 _FULL_BACKENDS 就静默放行（#154/MAJ-1：扩展新沙箱后端时的静默 fail-open 陷阱）。
+        if not sandbox.fences_writes:
             proven_read_only = shell_analysis is not None and shell_analysis.all_read_only and not shell_analysis.write_paths
             if not proven_read_only:
                 return PermissionOutcome(

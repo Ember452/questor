@@ -15,8 +15,9 @@ turn 循环（kernel）驱动它。
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime
 
-from questor.contracts.common import new_id, utc_now
+from questor.contracts.common import utc_now
 from questor.contracts.events import (
     EVENT_SCHEMA_VERSION,
     AdvanceTurn,
@@ -32,6 +33,7 @@ from questor.contracts.events import (
     MarkToolRunning,
     MarkToolValidated,
     RecordToolResult,
+    RecordWarning,
     ReportChildTerminal,
     RequestApproval,
     ResolveApproval,
@@ -78,6 +80,10 @@ _TOOL_PREVIEW_CHARS = 4096
 #: 置 `truncated=True`，完整正文仍以 checkpoint（Domain_State.context.items）为权威（reduce 无法做
 #: 异步 IO，故不在事件内归档；重连常见消息即自足，病态超长靠 rebuild）。
 _MSG_FINAL_TEXT_CHARS = 8192
+
+#: 进模型的 tool_result 文本上限（#158；承 C18/ADR-0019 的 16 KiB 预算）。超限截断并标注，
+#: 全文归档留待 exec/artifact 接线（#154）经 envelope_for_text 承接——避免单条 bash~2MiB/MCP 无界结果炸上下文与计费。
+_MAX_MODEL_TOOL_RESULT_CHARS = 16 * 1024
 
 
 def _message_completed_data(message: Message) -> dict[str, object]:
@@ -136,6 +142,17 @@ def _event(seq: int, run: Run, turn: int | None, etype: str, data: dict) -> Enve
     return Envelope(v=EVENT_SCHEMA_VERSION, seq=seq, run_id=run.run_id, type=etype, turn=turn, data=data)
 
 
+def _reject(run: Run, message: str) -> tuple[Run, list[Envelope]]:
+    """拒绝一条命令：Domain_State 不改，但仍**占用一个 durable seq** 承载 warning。
+
+    地基不变式：任何**产出 durable 事件**的分支必须同步推进 ``run.seq``——否则下一条 durable
+    复用同一 seq，落库撞 ``event_log UNIQUE(run_id, seq)`` 并抛穿 ``bus.emit``（崩循环）。历史实现
+    在单事件拒绝分支写 ``run.seq + 1`` 却 ``return run`` 不 bump，正是该碰撞（track5-backbone BLK-1 实测）。
+    """
+    seq = run.seq + 1
+    return replace(run, seq=seq), [_event(seq, run, run.turn, EventType.WARNING, {"message": message})]
+
+
 def validate_task_tree(nodes: tuple[TaskNode, ...]) -> list[str]:
     """任务树依赖校验（I1，[ADR-0037]）：唯一 id / 无自环 / 无悬空 dep / 无环。
 
@@ -179,12 +196,23 @@ def validate_task_tree(nodes: tuple[TaskNode, ...]) -> list[str]:
     return problems
 
 
-def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C901
-    """应用一条 Command；返回新 Run + 按 seq 有序的可持久事件。"""
+def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[Run, list[Envelope]]:  # noqa: C901
+    """应用一条 Command；返回新 Run + 按 seq 有序的可持久事件。
+
+    确定性（#160）：reduce 是 ``(run, command, now)`` 的纯函数——自身不读墙上时钟、不产随机 id。
+    时间戳取入参 ``now``（缺省回落 :func:`utc_now` 供生产；重放/测试注入固定 ``now`` 即逐字节可复现），
+    tool_result 消息 id 由 ``tool_call_id`` 确定性派生（不再 uuid4）。同一输入序列 → 同一输出状态。
+    """
+    ts = now if now is not None else utc_now()
     if run.status.is_terminal:
         # C13 first-writer-wins：终态后冻结，忽略后续写。
         msg = f"run {run.run_id} already {run.status}; ignored {command.type}"
-        return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": msg})]
+        return _reject(run, msg)
+
+    if isinstance(command, RecordWarning):
+        # 内核 out-of-band 告警的唯一 seq 分配入口（C2）：占一个 durable seq、不改状态。
+        seq = run.seq + 1
+        return replace(run, seq=seq), [_event(seq, run, command.turn, EventType.WARNING, {"message": command.message})]
 
     if isinstance(command, SubmitMessage):
         was_idle = run.status is RunStatus.IDLE
@@ -208,7 +236,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         use_ids = [b.tool_use_id for b in command.message.content if b.type == "tool_use" and b.tool_use_id]
         known = {c.tool_call_id for c in run.tool_ledger.calls}
         if any(i in known for i in use_ids):
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "duplicate tool_use id; command rejected"})]
+            return _reject(run, "duplicate tool_use id; command rejected")
         new_calls = tuple(
             ToolCall(
                 tool_call_id=b.tool_use_id,
@@ -231,9 +259,9 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
     if isinstance(command, RecordToolResult):
         target = _open_call(run, command.tool_call_id)
         if target is None:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"no open tool_call {command.tool_call_id}; rejected"})]
+            return _reject(run, f"no open tool_call {command.tool_call_id}; rejected")
         ledger = replace(run.tool_ledger, calls=_replace_call(run.tool_ledger.calls, replace(target, status=_call_status(command.status), result=command.result, display=command.display)))
-        ctx = _append_tool_result(run.context, command.tool_call_id, command.result, is_error=command.status != "success")
+        ctx = _append_tool_result(run.context, command.tool_call_id, command.result, is_error=command.status != "success", now=ts)
         new = replace(run, tool_ledger=ledger, context=ctx, seq=run.seq + 1)
         return new, [_event(new.seq, new, target.turn, EventType.TOOL_COMPLETED, _tool_completed_data(command.tool_call_id, command.status, result=command.result, display=command.display))]
 
@@ -252,10 +280,10 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
     if isinstance(command, MarkToolDenied):
         target = _open_call(run, command.tool_call_id)
         if target is None:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"no open tool_call to deny {command.tool_call_id}"})]
+            return _reject(run, f"no open tool_call to deny {command.tool_call_id}")
         denied = replace(target, status=ToolCallStatus.DENIED, permission_decision="deny", result=command.reason)
         ledger = replace(run.tool_ledger, calls=_replace_call(run.tool_ledger.calls, denied))
-        ctx = _append_tool_result(run.context, command.tool_call_id, f"denied: {command.reason}", is_error=True)
+        ctx = _append_tool_result(run.context, command.tool_call_id, f"denied: {command.reason}", is_error=True, now=ts)
         new = replace(run, tool_ledger=ledger, context=ctx, seq=run.seq + 1)
         return new, [_event(new.seq, new, target.turn, EventType.TOOL_COMPLETED, _tool_completed_data(command.tool_call_id, "denied", result=command.reason, display=None))]
 
@@ -265,9 +293,9 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         if existing is not None:
             if existing.status is ApprovalStatus.PENDING and existing.tool_call_id == command.tool_call_id:
                 return run, []
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"approval request {command.request_id} conflicts with an existing request"})]
+            return _reject(run, f"approval request {command.request_id} conflicts with an existing request")
         if target is None:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"no open tool_call to approve {command.tool_call_id}"})]
+            return _reject(run, f"no open tool_call to approve {command.tool_call_id}")
         requested = replace(
             target,
             status=ToolCallStatus.AWAITING_APPROVAL,
@@ -281,7 +309,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
             args_summary=command.args_summary,
             risk=command.risk,
             reason=command.reason,
-            created_at=utc_now(),
+            created_at=ts,
             expires_at=command.expires_at,
         )
         permissions = replace(run.permission_ctx, approvals=(*run.permission_ctx.approvals, request))
@@ -298,14 +326,14 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         return new, [_event(new.seq, new, target.turn, EventType.APPROVAL_REQUEST, event_data)]
 
     if isinstance(command, ResolveApproval):
-        return _resolve_approval(run, command, decision=command.decision, decided_by=command.decided_by, status=ApprovalStatus.APPROVED if command.decision == "allow" else ApprovalStatus.DENIED, expired=False)
+        return _resolve_approval(run, command, decision=command.decision, decided_by=command.decided_by, status=ApprovalStatus.APPROVED if command.decision == "allow" else ApprovalStatus.DENIED, expired=False, now=ts)
 
     if isinstance(command, ExpireApproval):
-        return _resolve_approval(run, command, decision="deny", decided_by="timeout", status=ApprovalStatus.EXPIRED, expired=True)
+        return _resolve_approval(run, command, decision="deny", decided_by="timeout", status=ApprovalStatus.EXPIRED, expired=True, now=ts)
 
     if isinstance(command, SetPermissionMode):
         if command.mode not in {"default", "plan", "full_auto"}:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"invalid permission mode {command.mode}"})]
+            return _reject(run, f"invalid permission mode {command.mode}")
         if run.permission_ctx.mode == command.mode:
             return run, []
         permissions = replace(run.permission_ctx, mode=command.mode)
@@ -315,7 +343,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
     if isinstance(command, MarkToolRunning):
         target = _open_call(run, command.tool_call_id)
         if target is None:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"no open tool_call to start {command.tool_call_id}"})]
+            return _reject(run, f"no open tool_call to start {command.tool_call_id}")
         if target.status is ToolCallStatus.RUNNING:
             return run, []
         started = replace(
@@ -324,7 +352,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
             capability=command.capability,
             risk=command.risk,
             timeout_s=command.timeout_s,
-            started_at=utc_now(),
+            started_at=ts,
         )
         ledger = replace(run.tool_ledger, calls=_replace_call(run.tool_ledger.calls, started))
         new = replace(run, tool_ledger=ledger, status=RunStatus.RUNNING, seq=run.seq + 1)
@@ -343,7 +371,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         # 记忆正文绝不进 Domain_State（DoD⑤；至多由检索侧经白名单回注有界投影）。
         payload = command.payload
         if len(payload.text.encode("utf-8")) > _MAX_MEMORY_WRITE_BYTES:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "memory write exceeds bound; rejected"})]
+            return _reject(run, "memory write exceeds bound; rejected")
         new = replace(run, seq=run.seq + 1)
         return new, [
             _event(new.seq, new, run.turn, EventType.MEMORY_WRITTEN, {"kind": payload.kind.value, "chunk_count": 1, "source": source_for_write(payload.kind).value})
@@ -357,11 +385,11 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         items = run.context.items
         cut = closed_prefix(items)
         if not command.summary_text.strip():
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "compaction requires non-empty summary; rejected"})]
+            return _reject(run, "compaction requires non-empty summary; rejected")
         if not (0 <= command.evict_start <= command.evict_end <= min(cut, len(items))):
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "compaction range crosses an open tool_use; rejected"})]
+            return _reject(run, "compaction range crosses an open tool_use; rejected")
         if not command.new_pointers:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "compaction requires a fail-closed recovery anchor; rejected"})]
+            return _reject(run, "compaction requires a fail-closed recovery anchor; rejected")
         new_items = items[: command.evict_start] + items[command.evict_end :]
         ctx = replace(
             run.context,
@@ -389,10 +417,10 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
 
     if isinstance(command, Cancel):
         open_calls = _open_calls(run)
-        closed, extra = _backfill_open_calls(run)
+        closed, extra = _backfill_open_calls(run, now=ts)
         ledger = replace(run.tool_ledger, calls=closed)
         ctx = replace(run.context, items=extra)
-        permissions = _cancel_pending_approvals(run.permission_ctx)
+        permissions = _cancel_pending_approvals(run.permission_ctx, ts)
         # 为本次产出的全部事件（回填 + 唯一终态）连续取号，再把 Run.seq 推进到最后一个号——
         # 绝不复用同一 seq（ADR-0011；旧写法 run.seq+1 与 new.seq 相撞会打断 store.append）。
         seq = run.seq
@@ -402,7 +430,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
             events.append(_event(seq, run, None, EventType.TOOL_COMPLETED, {"tool_call_id": call.tool_call_id, "status": "cancelled"}))
         seq += 1
         events.append(_event(seq, run, run.turn, EventType.RUN_CANCELLED, {"reason": str(command.reason)}))
-        new = replace(run, tool_ledger=ledger, context=ctx, permission_ctx=permissions, status=RunStatus.CANCELLED, cancel_reason=command.reason, completed_at=utc_now(), seq=seq)
+        new = replace(run, tool_ledger=ledger, context=ctx, permission_ctx=permissions, status=RunStatus.CANCELLED, cancel_reason=command.reason, completed_at=ts, seq=seq)
         return new, events
 
     if isinstance(command, FinalizeRun):
@@ -410,7 +438,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         # 把未配对的 tool_use 留在 context；P3 做 resume/after_seq 续传时会被原样喂回 provider
         # （Anthropic/OpenAI 强制 tool_use↔tool_result 成对，直接 4xx），所以在这一步就补上。
         open_calls = _open_calls(run)
-        closed, extra_messages = _backfill_open_calls(run, note=f"run finished as {command.status} before this call completed")
+        closed, extra_messages = _backfill_open_calls(run, note=f"run finished as {command.status} before this call completed", now=ts)
         ledger = replace(run.tool_ledger, calls=closed)
         items = (*run.context.items, *extra_messages)
         seq = run.seq
@@ -429,7 +457,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
                 context=replace(run.context, items=items),
                 status=RunStatus.FAILED,
                 error_stack=stack,
-                completed_at=utc_now(),
+                completed_at=ts,
                 seq=seq,
             )
             return new, events
@@ -442,7 +470,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
             tool_ledger=ledger,
             context=replace(run.context, items=items),
             status=RunStatus.COMPLETED,
-            completed_at=utc_now(),
+            completed_at=ts,
             seq=seq,
         )
         return new, events
@@ -458,7 +486,7 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         problems = validate_task_tree(candidate)
         if problems:
             msg = "task tree rejected: " + "; ".join(problems)
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": msg})]
+            return _reject(run, msg)
         seq = run.seq
         events: list[Envelope] = []
         for node in command.upsert:
@@ -470,11 +498,11 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         # 父侧记账：绑 assigned_run_id + 置 active + 发 peer_started。reduce **不创建子 run**（IO 在 loop 消费点）。
         node = next((n for n in run.task_tree.nodes if n.id == command.node_id), None)
         if node is None:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"spawn: unknown node {command.node_id}"})]
+            return _reject(run, f"spawn: unknown node {command.node_id}")
         if node.assigned_run_id == command.child_run_id:
             return run, []  # 幂等：同 child 再报 = no-op
         if node.assigned_run_id is not None:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"spawn: node {command.node_id} already bound to {node.assigned_run_id}"})]
+            return _reject(run, f"spawn: node {command.node_id} already bound to {node.assigned_run_id}")
         bound = replace(node, kind=TaskKind.SUBAGENT, assigned_run_id=command.child_run_id, status=TaskStatus.ACTIVE)
         tree = replace(run.task_tree, nodes=_replace_node(run.task_tree.nodes, bound))
         seq = run.seq
@@ -486,9 +514,9 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         # 子终态回父（经父 inbox，非直写）：回填 node 终态 + 发 peer_ended。已终态 → 幂等 no-op（不被迟到翻案）。
         node = next((n for n in run.task_tree.nodes if n.id == command.node_id), None)
         if node is None:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"report: unknown node {command.node_id}"})]
+            return _reject(run, f"report: unknown node {command.node_id}")
         if node.assigned_run_id != command.child_run_id:
-            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"report: child_run_id mismatch for node {command.node_id}"})]
+            return _reject(run, f"report: child_run_id mismatch for node {command.node_id}")
         if node.status in _TERMINAL_NODE_STATUSES:
             return run, []
         mapped = {"completed": TaskStatus.DONE, "failed": TaskStatus.FAILED, "cancelled": TaskStatus.CANCELLED}[command.terminal_status]
@@ -507,16 +535,14 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         return replace(run, task_tree=tree, seq=seq + 2), events
 
     # 未处理的 Command → 以 warning 拒绝（绝不崩循环，design/04 L1）。
-    return run, [
-        _event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"unsupported command {command.type}"})
-    ]
+    return _reject(run, f"unsupported command {command.type}")
 
 
-def _cancel_pending_approvals(ctx: PermissionCtx) -> PermissionCtx:
+def _cancel_pending_approvals(ctx: PermissionCtx, now: datetime) -> PermissionCtx:
     return replace(
         ctx,
         approvals=tuple(
-            replace(a, status=ApprovalStatus.CANCELLED, decision="deny", decided_by="cancel", resolved_at=utc_now()) if a.status is ApprovalStatus.PENDING else a
+            replace(a, status=ApprovalStatus.CANCELLED, decision="deny", decided_by="cancel", resolved_at=now) if a.status is ApprovalStatus.PENDING else a
             for a in ctx.approvals
         ),
     )
@@ -530,20 +556,20 @@ def _resolve_approval(
     decided_by: str,
     status: ApprovalStatus,
     expired: bool,
+    now: datetime,
 ) -> tuple[Run, list[Envelope]]:
     request_id = command.request_id
     tool_call_id = getattr(command, "tool_call_id", None)
     approval = next((item for item in run.permission_ctx.approvals if item.request_id == request_id), None)
     if approval is None or (tool_call_id is not None and approval.tool_call_id != tool_call_id):
-        return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"unknown approval request {request_id}"})]
+        return _reject(run, f"unknown approval request {request_id}")
     if approval.status is not ApprovalStatus.PENDING:
         if approval.decision == decision:
             return run, []
-        return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"approval {request_id} already {approval.status.value}"})]
-    now = utc_now()
+        return _reject(run, f"approval {request_id} already {approval.status.value}")
     target = _open_call(run, approval.tool_call_id)
     if target is None:
-        return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": f"approval {request_id} has no open tool_call"})]
+        return _reject(run, f"approval {request_id} has no open tool_call")
     resolved = replace(approval, status=status, decision=decision, decided_by=decided_by, resolved_at=now)
     permissions = replace(
         run.permission_ctx,
@@ -557,7 +583,7 @@ def _resolve_approval(
     else:
         reason = "approval expired before a decision" if expired else f"approval denied: {approval.reason}"
         call = replace(target, status=ToolCallStatus.DENIED, permission_decision="deny", permission_reason=reason, permission_decided_by=decided_by, result=reason, ended_at=now)
-        ctx = _append_tool_result(run.context, target.tool_call_id, reason, is_error=True)
+        ctx = _append_tool_result(run.context, target.tool_call_id, reason, is_error=True, now=now)
         run_status = RunStatus.RUNNING
     ledger = replace(run.tool_ledger, calls=_replace_call(run.tool_ledger.calls, call))
     seq = run.seq
@@ -621,14 +647,20 @@ def _node_event_data(node: TaskNode) -> dict[str, object]:
     }
 
 
-def _append_tool_result(ctx: Context, tool_call_id: str, result: object, *, is_error: bool) -> Context:
-    """追加一条含 tool_result 的消息，维持 tool_use↔tool_result 配对（I1）。"""
-    block = ContentBlock(type="tool_result", tool_use_id=tool_call_id, text=str(result), is_error=is_error)
-    msg = Message(id=new_id("msg"), role=Role.TOOL, content=(block,), seq=len(ctx.items))
+def _append_tool_result(ctx: Context, tool_call_id: str, result: object, *, is_error: bool, now: datetime) -> Context:
+    """追加一条含 tool_result 的消息，维持 tool_use↔tool_result 配对（I1）。
+
+    进模型的文本有界（#158）：旧实现 ``str(result)`` 无上限，巨型结果会原样进下一轮 provider 请求。
+    消息 id 由 tool_call_id 确定性派生、created_at 取传入 ``now``（#160：不再 uuid4/墙上时钟）。"""
+    text = str(result)
+    if len(text) > _MAX_MODEL_TOOL_RESULT_CHARS:
+        text = text[:_MAX_MODEL_TOOL_RESULT_CHARS] + f"\n…[tool_result truncated from {len(text)} chars]"
+    block = ContentBlock(type="tool_result", tool_use_id=tool_call_id, text=text, is_error=is_error)
+    msg = Message(id=f"toolresult:{tool_call_id}", role=Role.TOOL, content=(block,), seq=len(ctx.items), created_at=now)
     return replace(ctx, items=(*ctx.items, msg))
 
 
-def _backfill_open_calls(run: Run, *, note: str = "cancelled before completion") -> tuple[tuple[ToolCall, ...], tuple[Message, ...]]:
+def _backfill_open_calls(run: Run, *, note: str = "cancelled before completion", now: datetime) -> tuple[tuple[ToolCall, ...], tuple[Message, ...]]:
     """C7：用 cancelled 结果闭合每一个未完成的调用，保住配对不变式。
 
     取消不是普通工具 error：账本必须保留可区分事实，resume/审计才能判断进程被用户停止
@@ -644,10 +676,11 @@ def _backfill_open_calls(run: Run, *, note: str = "cancelled before completion")
     )
     extra = tuple(
         Message(
-            id=new_id("msg"),
+            id=f"toolresult:{c.tool_call_id}",
             role=Role.TOOL,
             content=(ContentBlock(type="tool_result", tool_use_id=c.tool_call_id, text=note, is_error=True),),
             seq=len(run.context.items) + i,
+            created_at=now,
         )
         for i, c in enumerate(_open_calls(run))
     )

@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -157,6 +158,9 @@ class SQLiteMemoryStore(MemoryStorePort):
         self.config = config or MemoryStrategyConfig()
         self._db: aiosqlite.Connection | None = None
         self.vector: SQLiteVectorBackend | None = None
+        # 单连接事务不得跨协程交错（与事件 store 同理，track4 BLK-1）：--serve 多 run 共享本 store，
+        # 并发 write/sync/write_memory_text 的 BEGIN→COMMIT 会互踩。此锁在 asyncio 层串行化全部 DB 入口。
+        self._lock = asyncio.Lock()
 
     async def connect(self) -> SQLiteMemoryStore:
         # isolation_level=None → 自驱 BEGIN IMMEDIATE / COMMIT / ROLLBACK。
@@ -199,30 +203,36 @@ class SQLiteMemoryStore(MemoryStorePort):
         幂等：``write_ledger`` 命中同 ``idempotency_key`` → 直接返回原 receipt，不重复 append。
         返回 bounded receipt（path/start_line/end_line/chunk_count），**不含原文**。"""
         db = self._dbp()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute(
-                "SELECT path, start_line, end_line, chunk_count FROM write_ledger WHERE idempotency_key = ?",
-                (idempotency_key,),
-            )
-            row = await cur.fetchone()
-            if row is not None:
+        async with self._lock:
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute(
+                    "SELECT path, start_line, end_line, chunk_count FROM write_ledger WHERE idempotency_key = ?",
+                    (idempotency_key,),
+                )
+                row = await cur.fetchone()
+                if row is not None:
+                    await db.execute("COMMIT")
+                    return {"path": row[0], "start_line": row[1], "end_line": row[2], "chunk_count": row[3], "idempotent": True}
+                rel, start, end, chunk = await asyncio.to_thread(self._append_to_source_file, write, idempotency_key)
+                await self._index_chunk(chunk, embedding=None)
+                await db.execute(
+                    "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,?,?,?,?)",
+                    (idempotency_key, rel, start, end, 1, utc_now().isoformat()),
+                )
                 await db.execute("COMMIT")
-                return {"path": row[0], "start_line": row[1], "end_line": row[2], "chunk_count": row[3], "idempotent": True}
-            rel, start, end, chunk = self._append_to_source_file(write)
-            await self._index_chunk(chunk, embedding=None)
-            await db.execute(
-                "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,?,?,?,?)",
-                (idempotency_key, rel, start, end, 1, utc_now().isoformat()),
-            )
-            await db.execute("COMMIT")
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
-        return {"path": rel, "start_line": start, "end_line": end, "chunk_count": 1, "idempotent": False}
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+            return {"path": rel, "start_line": start, "end_line": end, "chunk_count": 1, "idempotent": False}
 
-    def _append_to_source_file(self, write: MemoryWrite) -> tuple[str, int, int, MemoryChunk]:
-        """原子追加一段浓缩文本到 md 文件，返回 (相对path, 起行, 止行, 派生 chunk)。"""
+    def _append_to_source_file(self, write: MemoryWrite, idempotency_key: str) -> tuple[str, int, int, MemoryChunk]:
+        """原子追加一段浓缩文本到 md 文件，返回 (相对path, 起行, 止行, 派生 chunk)。
+
+        幂等（#163B）：header 内嵌 ``<!-- idem:KEY -->``。若 marker 已在文件里，说明前一次 append
+        已成功但 DB 事务回滚（write_ledger 无记录）——**不重复 append**，定位既有块行区间返回同一
+        chunk。保证“文件每个 idempotency_key 恰好一块”，重投不产生二次正文。
+        """
         date = utc_now().strftime("%Y-%m-%d")
         if write.kind is MemoryWriteKind.CORE:
             path = os.path.join(self.memory_root, "MEMORY.md")
@@ -232,28 +242,43 @@ class SQLiteMemoryStore(MemoryStorePort):
         if os.path.exists(path):
             with open(path, encoding="utf-8") as fh:
                 existing = fh.read()
-        prior_lines = existing.splitlines()
-        sep = "" if (not existing or existing.endswith("\n")) else "\n"
-        header = f"{sep}\n## [{write.kind.value}] {utc_now().isoformat()}\n\n"
-        body = header + write.text.strip() + "\n"
-        new_content = existing + body
-        _atomic_write_text(path, new_content)
-        new_lines = new_content.splitlines()
-        start = len(prior_lines) + 1
-        end = len(new_lines)
+        lines = existing.splitlines()
         rel = _rel(self.memory_root, path)
         source = source_for_write(write.kind)
-        chunk = MemoryChunk(
-            id=hashlib.md5(f"{rel}:{start}:{end}:{write.text}".encode()).hexdigest(),
-            scope=write.scope,
-            source=source,
-            path=rel,
-            start_line=start,
-            end_line=end,
-            text=write.text.strip(),
-            hash=hashlib.sha256(write.text.strip().encode()).hexdigest(),
-        )
-        return rel, start, end, chunk
+
+        def _chunk(start: int, end: int) -> MemoryChunk:
+            return MemoryChunk(
+                id=hashlib.md5(f"{rel}:{start}:{end}:{write.text}".encode()).hexdigest(),
+                scope=write.scope,
+                source=source,
+                path=rel,
+                start_line=start,
+                end_line=end,
+                text=write.text.strip(),
+                hash=hashlib.sha256(write.text.strip().encode()).hexdigest(),
+            )
+
+        marker = f"<!-- idem:{idempotency_key} -->"
+        hit = next((i for i, ln in enumerate(lines) if marker in ln), None)
+        if hit is not None:
+            # 既有块（上次 append 成功但 DB 回滚）：不重复写；header 行 hit(0-based) → 1-based hit+1，
+            # 止于下一个 `## ` header 前一行或文件末。
+            start = hit + 1
+            end = len(lines)
+            for j in range(hit + 1, len(lines)):
+                if lines[j].lstrip().startswith("## "):
+                    end = j
+                    break
+            return rel, start, end, _chunk(start, end)
+
+        sep = "" if (not existing or existing.endswith("\n")) else "\n"
+        # header 内嵌 scope（#163A）+ 幂等 marker（#163B）。
+        header = f"{sep}\n## [{write.kind.value}] {utc_now().isoformat()} scope={write.scope.value} {marker}\n\n"
+        new_content = existing + header + write.text.strip() + "\n"
+        _atomic_write_text(path, new_content)
+        start = len(lines) + 1
+        end = len(new_content.splitlines())
+        return rel, start, end, _chunk(start, end)
 
     async def _index_chunk(self, chunk: MemoryChunk, *, embedding: tuple[float, ...] | None) -> None:
         db = self._dbp()
@@ -295,19 +320,20 @@ class SQLiteMemoryStore(MemoryStorePort):
         ``snippet_max_bytes`` 有界（HARD C18/ADR-0019）。融合/衰减纯函数住在 memory/search.py。"""
         cfg = self.config
         wide = max(k * 3, k)
-        keyword_ids, by_id = await self._keyword_candidates(query, scope=scope, limit=wide)
-        vector_ids: list[str] = []
-        if query_embedding is not None and self.vector is not None:
-            for cid, _score in await self.vector.search(query_embedding, k=wide):
-                if cid not in by_id:
-                    row = await self._fetch_chunk(cid)
-                    if row is None or (scope is not None and row["scope"] != scope.value):
+        async with self._lock:
+            keyword_ids, by_id = await self._keyword_candidates(query, scope=scope, limit=wide)
+            vector_ids: list[str] = []
+            if query_embedding is not None and self.vector is not None:
+                for cid, _score in await self.vector.search(query_embedding, k=wide):
+                    if cid not in by_id:
+                        row = await self._fetch_chunk(cid)
+                        if row is None or (scope is not None and row["scope"] != scope.value):
+                            continue
+                        by_id[cid] = row
+                    elif scope is not None and by_id[cid]["scope"] != scope.value:
                         continue
-                    by_id[cid] = row
-                elif scope is not None and by_id[cid]["scope"] != scope.value:
-                    continue
-                vector_ids.append(cid)
-        fused = fuse(keyword_ids, vector_ids, cfg)
+                    vector_ids.append(cid)
+            fused = fuse(keyword_ids, vector_ids, cfg)
         now = utc_now()
         results = [
             MemorySearchResult(
@@ -387,23 +413,25 @@ class SQLiteMemoryStore(MemoryStorePort):
         files = self._scan_source_files()
         chunks = build_chunks(files)
         db = self._dbp()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            await db.execute("DELETE FROM memory_chunks_fts")
-            await db.execute("DELETE FROM memory_chunks")
-            for chunk in chunks:
-                await self._index_chunk(chunk, embedding=None)
-            await db.execute("COMMIT")
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
+        async with self._lock:
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                await db.execute("DELETE FROM memory_chunks_fts")
+                await db.execute("DELETE FROM memory_chunks")
+                for chunk in chunks:
+                    await self._index_chunk(chunk, embedding=None)
+                await db.execute("COMMIT")
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
         return {"reindexed": len(chunks), "files": len(files), "chunker_version": CHUNKER_VERSION}
 
     async def delete(self, chunk_ids: tuple[str, ...]) -> None:
         db = self._dbp()
-        for cid in chunk_ids:
-            await db.execute("DELETE FROM memory_chunks_fts WHERE id = ?", (cid,))
-            await db.execute("DELETE FROM memory_chunks WHERE id = ?", (cid,))
+        async with self._lock:
+            for cid in chunk_ids:
+                await db.execute("DELETE FROM memory_chunks_fts WHERE id = ?", (cid,))
+                await db.execute("DELETE FROM memory_chunks WHERE id = ?", (cid,))
 
     def _abs(self, rel_path: str) -> str:
         """将相对 memory root 的路径解为绝对；**拒绝越界**（path traversal / 符号链逃逸 fail-closed）。"""
@@ -432,21 +460,22 @@ class SQLiteMemoryStore(MemoryStorePort):
         不自动索引；调用方随后 ``sync`` 从文件重建。越界路径 fail-closed（``_abs``）。"""
         full = self._abs(rel_path)
         db = self._dbp()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute("SELECT path FROM write_ledger WHERE idempotency_key = ?", (idempotency_key,))
-            if await cur.fetchone() is not None:
+        async with self._lock:
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT path FROM write_ledger WHERE idempotency_key = ?", (idempotency_key,))
+                if await cur.fetchone() is not None:
+                    await db.execute("COMMIT")
+                    return {"path": rel_path, "idempotent": True}
+                _atomic_write_text(full, content)
+                await db.execute(
+                    "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,0,0,0,?)",
+                    (idempotency_key, _rel(self.memory_root, full), utc_now().isoformat()),
+                )
                 await db.execute("COMMIT")
-                return {"path": rel_path, "idempotent": True}
-            _atomic_write_text(full, content)
-            await db.execute(
-                "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,0,0,0,?)",
-                (idempotency_key, _rel(self.memory_root, full), utc_now().isoformat()),
-            )
-            await db.execute("COMMIT")
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
         return {"path": rel_path, "idempotent": False}
 
     async def append_memory_text(self, rel_path: str, content: str, *, idempotency_key: str) -> JsonObject:
@@ -455,26 +484,27 @@ class SQLiteMemoryStore(MemoryStorePort):
         不自动索引；调用方随后 ``sync`` 重建。越界 fail-closed。"""
         full = self._abs(rel_path)
         db = self._dbp()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute("SELECT path FROM write_ledger WHERE idempotency_key = ?", (idempotency_key,))
-            if await cur.fetchone() is not None:
+        async with self._lock:
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT path FROM write_ledger WHERE idempotency_key = ?", (idempotency_key,))
+                if await cur.fetchone() is not None:
+                    await db.execute("COMMIT")
+                    return {"path": rel_path, "idempotent": True}
+                existing = ""
+                if os.path.exists(full):
+                    with open(full, encoding="utf-8") as fh:
+                        existing = fh.read()
+                sep = "" if (not existing or existing.endswith("\n")) else "\n"
+                _atomic_write_text(full, existing + sep + content)
+                await db.execute(
+                    "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,0,0,0,?)",
+                    (idempotency_key, _rel(self.memory_root, full), utc_now().isoformat()),
+                )
                 await db.execute("COMMIT")
-                return {"path": rel_path, "idempotent": True}
-            existing = ""
-            if os.path.exists(full):
-                with open(full, encoding="utf-8") as fh:
-                    existing = fh.read()
-            sep = "" if (not existing or existing.endswith("\n")) else "\n"
-            _atomic_write_text(full, existing + sep + content)
-            await db.execute(
-                "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,0,0,0,?)",
-                (idempotency_key, _rel(self.memory_root, full), utc_now().isoformat()),
-            )
-            await db.execute("COMMIT")
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
         return {"path": rel_path, "idempotent": False}
 
 

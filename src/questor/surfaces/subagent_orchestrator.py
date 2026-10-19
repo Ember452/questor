@@ -169,6 +169,7 @@ class SubagentOrchestrator:
 
         父若已终态则得 REJECTED_TERMINAL（不复活，诚实 at-least-once；子已在自己账本落终态）。"""
         self._children.get(parent_run_id, set()).discard(child_run_id)
+        self._registry.unregister(child_run_id)  # 子驱动结束即回收其 controller（不依赖 SSE 消费者，防常驻泄漏）
         bounded = (summary or "")[:_MAX_CHILD_SUMMARY_CHARS]
         # P9/ADR-0047：claim-then-deliver-then-ack——稳定投递 id 使跨进程/崩溃重放的
         # 同一子终态只投一次（exactly-once）；claim 不中=已被投/持有，跳过重投但仍解 waiter。

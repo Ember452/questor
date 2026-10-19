@@ -17,6 +17,7 @@ JSON 以 ``allow_nan=False`` 存、时间为 tz-aware UTC（R03 B-P3）。``aios
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 
@@ -99,6 +100,11 @@ class SQLiteStore(StorePort):
     def __init__(self, path: str = ":memory:") -> None:
         self.path = path
         self._db: aiosqlite.Connection | None = None
+        # 单条 aiosqlite 连接上事务不得跨协程交错：BEGIN→…→COMMIT 之间多个 await，
+        # 若两个协程同时进入会撞 "cannot start a transaction within a transaction"，其 ROLLBACK
+        # 又撕掉对方事务（track4 BLK-1 实测）。此锁在 asyncio 层串行化全部 DB 操作；单连接本就
+        # 无法真并发，锁不损吞吐（aiosqlite worker 线程已串行化实际 SQL）。
+        self._lock = asyncio.Lock()
 
     async def connect(self) -> SQLiteStore:
         # isolation_level=None -> 自动提交，好让我们自己驱动 BEGIN IMMEDIATE。
@@ -143,255 +149,270 @@ class SQLiteStore(StorePort):
         每条事件同时取一个全局单调 ``gseq``（跨 run watermark）；``BEGIN IMMEDIATE`` 串行化单写者，
         确保 per-run seq 与全局 gseq 都不重（ADR-0020 append-before-snapshot 的前半）。
         """
-        db = self._dbp()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute("SELECT COALESCE(MAX(seq), 0) FROM event_log WHERE run_id = ?", (run_id,))
-            seq = (await cur.fetchone())[0]
-            for ev in events:
-                seq = int(ev["seq"]) if "seq" in ev else seq + 1
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT COALESCE(MAX(seq), 0) FROM event_log WHERE run_id = ?", (run_id,))
+                seq = (await cur.fetchone())[0]
+                for ev in events:
+                    seq = int(ev["seq"]) if "seq" in ev else seq + 1
+                    await db.execute(
+                        "INSERT INTO event_log (run_id, seq, type, turn, item_id, payload, ts) VALUES (?,?,?,?,?,?,?)",
+                        (
+                            run_id,
+                            seq,
+                            ev["type"],
+                            ev.get("turn"),
+                            ev.get("item_id"),
+                            _dumps(ev.get("data", {})),
+                            ev.get("ts") or utc_now().isoformat(),
+                        ),
+                    )
+                # runs 记账表：派生的快速发现缓存（head_seq + updated_at），非权威真相。
                 await db.execute(
-                    "INSERT INTO event_log (run_id, seq, type, turn, item_id, payload, ts) VALUES (?,?,?,?,?,?,?)",
-                    (
-                        run_id,
-                        seq,
-                        ev["type"],
-                        ev.get("turn"),
-                        ev.get("item_id"),
-                        _dumps(ev.get("data", {})),
-                        ev.get("ts") or utc_now().isoformat(),
-                    ),
+                    "INSERT INTO runs (run_id, head_seq, updated_at) VALUES (?,?,?) "
+                    "ON CONFLICT(run_id) DO UPDATE SET head_seq = excluded.head_seq, updated_at = excluded.updated_at",
+                    (run_id, seq, utc_now().isoformat()),
                 )
-            # runs 记账表：派生的快速发现缓存（head_seq + updated_at），非权威真相。
-            await db.execute(
-                "INSERT INTO runs (run_id, head_seq, updated_at) VALUES (?,?,?) "
-                "ON CONFLICT(run_id) DO UPDATE SET head_seq = excluded.head_seq, updated_at = excluded.updated_at",
-                (run_id, seq, utc_now().isoformat()),
-            )
-            await db.commit()
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
-        return seq
+                await db.commit()
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+            return seq
 
     async def replay(self, run_id: str, after_seq: int, limit: int | None = None) -> list[JsonObject]:
         """重放 ``seq > after_seq`` 的事件、按 seq 升序——即 after_seq 续传的机制核心。"""
-        db = self._dbp()
-        sql = "SELECT gseq, seq, type, turn, item_id, payload, ts FROM event_log WHERE run_id = ? AND seq > ? ORDER BY seq"
-        params: tuple = (run_id, after_seq)
-        if limit is not None:
-            sql += " LIMIT ?"
-            params = (run_id, after_seq, limit)
-        cur = await db.execute(sql, params)
-        rows = await cur.fetchall()
-        return [
-            {"gseq": r[0], "seq": r[1], "type": r[2], "turn": r[3], "item_id": r[4], "data": json.loads(r[5]), "ts": r[6]}
-            for r in rows
-        ]
+        async with self._lock:
+            db = self._dbp()
+            sql = "SELECT gseq, seq, type, turn, item_id, payload, ts FROM event_log WHERE run_id = ? AND seq > ? ORDER BY seq"
+            params: tuple = (run_id, after_seq)
+            if limit is not None:
+                sql += " LIMIT ?"
+                params = (run_id, after_seq, limit)
+            cur = await db.execute(sql, params)
+            rows = await cur.fetchall()
+            return [
+                {"gseq": r[0], "seq": r[1], "type": r[2], "turn": r[3], "item_id": r[4], "data": json.loads(r[5]), "ts": r[6]}
+                for r in rows
+            ]
 
     async def replay_global(self, after_watermark: int, limit: int | None = None) -> list[JsonObject]:
         """跨 run 重放全局 ``gseq > after_watermark`` 的事件、按全局序升序（catch-up watermark）。"""
-        db = self._dbp()
-        sql = (
-            "SELECT gseq, run_id, seq, type, turn, item_id, payload, ts FROM event_log WHERE gseq > ? ORDER BY gseq"
-        )
-        params: tuple = (after_watermark,)
-        if limit is not None:
-            sql += " LIMIT ?"
-            params = (after_watermark, limit)
-        cur = await db.execute(sql, params)
-        rows = await cur.fetchall()
-        return [
-            {
-                "gseq": r[0],
-                "run_id": r[1],
-                "seq": r[2],
-                "type": r[3],
-                "turn": r[4],
-                "item_id": r[5],
-                "data": json.loads(r[6]),
-                "ts": r[7],
-            }
-            for r in rows
-        ]
+        async with self._lock:
+            db = self._dbp()
+            sql = (
+                "SELECT gseq, run_id, seq, type, turn, item_id, payload, ts FROM event_log WHERE gseq > ? ORDER BY gseq"
+            )
+            params: tuple = (after_watermark,)
+            if limit is not None:
+                sql += " LIMIT ?"
+                params = (after_watermark, limit)
+            cur = await db.execute(sql, params)
+            rows = await cur.fetchall()
+            return [
+                {
+                    "gseq": r[0],
+                    "run_id": r[1],
+                    "seq": r[2],
+                    "type": r[3],
+                    "turn": r[4],
+                    "item_id": r[5],
+                    "data": json.loads(r[6]),
+                    "ts": r[7],
+                }
+                for r in rows
+            ]
 
     async def watermark(self) -> int:
         """当前全局物理序头部（无事件则 0）。"""
-        cur = await self._dbp().execute("SELECT COALESCE(MAX(gseq), 0) FROM event_log")
-        return (await cur.fetchone())[0]
+        async with self._lock:
+            cur = await self._dbp().execute("SELECT COALESCE(MAX(gseq), 0) FROM event_log")
+            return (await cur.fetchone())[0]
 
     async def sequence_head(self, run_id: str) -> int:
         """返回该 run 当前 durable 序列号头部（无事件则 0）。"""
-        cur = await self._dbp().execute("SELECT COALESCE(MAX(seq), 0) FROM event_log WHERE run_id = ?", (run_id,))
-        return (await cur.fetchone())[0]
+        async with self._lock:
+            cur = await self._dbp().execute("SELECT COALESCE(MAX(seq), 0) FROM event_log WHERE run_id = ?", (run_id,))
+            return (await cur.fetchone())[0]
 
     async def list_unfinished_runs(self) -> tuple[str, ...]:
         """由 log 派生非终态 run：有事件但 event_log 中不含任一终态事件（log 权威，不旁记 status）。"""
-        placeholders = ",".join("?" for _ in _TERMINAL_TYPES)
-        cur = await self._dbp().execute(
-            f"SELECT DISTINCT run_id FROM event_log WHERE run_id NOT IN "
-            f"(SELECT DISTINCT run_id FROM event_log WHERE type IN ({placeholders})) ORDER BY run_id",
-            _TERMINAL_TYPES,
-        )
-        return tuple(r[0] for r in await cur.fetchall())
+        async with self._lock:
+            placeholders = ",".join("?" for _ in _TERMINAL_TYPES)
+            cur = await self._dbp().execute(
+                f"SELECT DISTINCT run_id FROM event_log WHERE run_id NOT IN "
+                f"(SELECT DISTINCT run_id FROM event_log WHERE type IN ({placeholders})) ORDER BY run_id",
+                _TERMINAL_TYPES,
+            )
+            return tuple(r[0] for r in await cur.fetchall())
 
     async def claim_delivery(self, delivery_id: str, ttl_seconds: float = 30.0) -> bool:
         """claim-then-deliver（ADR-0047）：原子取投递所有权。``BEGIN IMMEDIATE`` 跨进程串行化。
 
         新建 claim 返 True；已 acked 或他人未过期持有返 False；前次 claim 超 TTL（崩溃）可重取。"""
-        db = self._dbp()
-        now = time.time()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute("SELECT state, claimed_at, ttl_seconds FROM deliveries WHERE delivery_id = ?", (delivery_id,))
-            row = await cur.fetchone()
-            if row is None:
-                await db.execute("INSERT INTO deliveries (delivery_id, state, claimed_at, ttl_seconds) VALUES (?, 'claimed', ?, ?)", (delivery_id, now, ttl_seconds))
-            else:
-                state, claimed_at, ttl = row
-                if state == "acked" or now - claimed_at < ttl:
-                    await db.commit()
-                    return False
-                await db.execute("UPDATE deliveries SET state = 'claimed', claimed_at = ?, ttl_seconds = ? WHERE delivery_id = ?", (now, ttl_seconds, delivery_id))
-            await db.commit()
-            return True
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
+        async with self._lock:
+            db = self._dbp()
+            now = time.time()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT state, claimed_at, ttl_seconds FROM deliveries WHERE delivery_id = ?", (delivery_id,))
+                row = await cur.fetchone()
+                if row is None:
+                    await db.execute("INSERT INTO deliveries (delivery_id, state, claimed_at, ttl_seconds) VALUES (?, 'claimed', ?, ?)", (delivery_id, now, ttl_seconds))
+                else:
+                    state, claimed_at, ttl = row
+                    if state == "acked" or now - claimed_at < ttl:
+                        await db.commit()
+                        return False
+                    await db.execute("UPDATE deliveries SET state = 'claimed', claimed_at = ?, ttl_seconds = ? WHERE delivery_id = ?", (now, ttl_seconds, delivery_id))
+                await db.commit()
+                return True
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
 
     async def delivery_state(self, delivery_id: str) -> str | None:
-        cur = await self._dbp().execute("SELECT state FROM deliveries WHERE delivery_id = ?", (delivery_id,))
-        row = await cur.fetchone()
-        return row[0] if row else None
+        async with self._lock:
+            cur = await self._dbp().execute("SELECT state FROM deliveries WHERE delivery_id = ?", (delivery_id,))
+            row = await cur.fetchone()
+            return row[0] if row else None
 
     async def ack_delivery(self, delivery_id: str) -> bool:
-        db = self._dbp()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute("SELECT state FROM deliveries WHERE delivery_id = ?", (delivery_id,))
-            row = await cur.fetchone()
-            if row is None:
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT state FROM deliveries WHERE delivery_id = ?", (delivery_id,))
+                row = await cur.fetchone()
+                if row is None:
+                    await db.commit()
+                    return False  # 从未 claim，不能凭空 ack
+                if row[0] != "acked":
+                    await db.execute("UPDATE deliveries SET state = 'acked' WHERE delivery_id = ?", (delivery_id,))
                 await db.commit()
-                return False  # 从未 claim，不能凭空 ack
-            if row[0] != "acked":
-                await db.execute("UPDATE deliveries SET state = 'acked' WHERE delivery_id = ?", (delivery_id,))
-            await db.commit()
-            return True
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
+                return True
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
 
     async def acquire_lease(self, run_id: str, holder: str, epoch: int, ttl_seconds: float) -> bool:
         """获取 run 驱动租约（单机多进程单写者）：同 holder/已过期可取，他人未过期拒。"""
-        db = self._dbp()
-        now = time.time()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute("SELECT holder, epoch, expires_at FROM run_leases WHERE run_id = ?", (run_id,))
-            row = await cur.fetchone()
-            if row is not None:
-                held_by, held_epoch, expires = row
-                if held_by == holder and held_epoch == epoch:
-                    await db.execute("UPDATE run_leases SET expires_at = ?, ttl_seconds = ? WHERE run_id = ?", (now + ttl_seconds, ttl_seconds, run_id))
-                    await db.commit()
-                    return True
-                if now < expires:
-                    await db.commit()
-                    return False
-            await db.execute(
-                "INSERT INTO run_leases (run_id, holder, epoch, expires_at, ttl_seconds) VALUES (?,?,?,?,?) "
-                "ON CONFLICT(run_id) DO UPDATE SET holder=excluded.holder, epoch=excluded.epoch, expires_at=excluded.expires_at, ttl_seconds=excluded.ttl_seconds",
-                (run_id, holder, epoch, now + ttl_seconds, ttl_seconds),
-            )
-            await db.commit()
-            return True
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
+        async with self._lock:
+            db = self._dbp()
+            now = time.time()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT holder, epoch, expires_at FROM run_leases WHERE run_id = ?", (run_id,))
+                row = await cur.fetchone()
+                if row is not None:
+                    held_by, held_epoch, expires = row
+                    if held_by == holder and held_epoch == epoch:
+                        await db.execute("UPDATE run_leases SET expires_at = ?, ttl_seconds = ? WHERE run_id = ?", (now + ttl_seconds, ttl_seconds, run_id))
+                        await db.commit()
+                        return True
+                    if now < expires:
+                        await db.commit()
+                        return False
+                await db.execute(
+                    "INSERT INTO run_leases (run_id, holder, epoch, expires_at, ttl_seconds) VALUES (?,?,?,?,?) "
+                    "ON CONFLICT(run_id) DO UPDATE SET holder=excluded.holder, epoch=excluded.epoch, expires_at=excluded.expires_at, ttl_seconds=excluded.ttl_seconds",
+                    (run_id, holder, epoch, now + ttl_seconds, ttl_seconds),
+                )
+                await db.commit()
+                return True
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
 
     async def renew_lease(self, run_id: str, holder: str, epoch: int) -> bool:
         """续租：仅当前 holder+epoch 匹配时按 ttl 延长到期；否则 False（已被夺走）。"""
-        db = self._dbp()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute("SELECT holder, epoch, ttl_seconds, expires_at FROM run_leases WHERE run_id = ?", (run_id,))
-            row = await cur.fetchone()
-            if row is None or row[0] != holder or row[1] != epoch:
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT holder, epoch, ttl_seconds, expires_at FROM run_leases WHERE run_id = ?", (run_id,))
+                row = await cur.fetchone()
+                if row is None or row[0] != holder or row[1] != epoch:
+                    await db.commit()
+                    return False
+                await db.execute("UPDATE run_leases SET expires_at = ? WHERE run_id = ?", (max(row[3], time.time() + row[2]), run_id))
                 await db.commit()
-                return False
-            await db.execute("UPDATE run_leases SET expires_at = ? WHERE run_id = ?", (max(row[3], time.time() + row[2]), run_id))
-            await db.commit()
-            return True
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
+                return True
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
 
     async def release_lease(self, run_id: str, holder: str, epoch: int) -> bool:
         """释放租约：仅当前 holder+epoch 匹配时删除；否则 False。"""
-        db = self._dbp()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute("SELECT holder, epoch FROM run_leases WHERE run_id = ?", (run_id,))
-            row = await cur.fetchone()
-            if row is None or row[0] != holder or row[1] != epoch:
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT holder, epoch FROM run_leases WHERE run_id = ?", (run_id,))
+                row = await cur.fetchone()
+                if row is None or row[0] != holder or row[1] != epoch:
+                    await db.commit()
+                    return False
+                await db.execute("DELETE FROM run_leases WHERE run_id = ?", (run_id,))
                 await db.commit()
-                return False
-            await db.execute("DELETE FROM run_leases WHERE run_id = ?", (run_id,))
-            await db.commit()
-            return True
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
+                return True
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
 
     async def reclaim_expired_leases(self, now: float) -> int:
         """P10/ADR-0050：删已过期 run 租约行（瞬态派生视图）；返回删除数。
 
         只碰 ``expires_at < now``——持有者本就可重取。BEGIN IMMEDIATE 串行化（C2）。"""
-        db = self._dbp()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute("DELETE FROM run_leases WHERE expires_at < ?", (now,))
-            await db.commit()
-            return cur.rowcount or 0
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("DELETE FROM run_leases WHERE expires_at < ?", (now,))
+                await db.commit()
+                return cur.rowcount or 0
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
 
     async def reclaim_stale_claims(self, now: float) -> int:
         """P10/ADR-0050：删超 TTL 未 ack 的 in-flight claim（崩溃遗留）。**绝不碰已 acked 行**（BLK-2）。
 
         只删 ``state='claimed'`` 且 ``claimed_at+ttl_seconds < now``；acked 投递行作幂等键必须保留
         （投递视图从 event_log 重建，删了会 rebuild 重 claim→双投），其回收与 event_log 裁剪绑定后置。"""
-        db = self._dbp()
-        await db.execute("BEGIN IMMEDIATE")
-        try:
-            cur = await db.execute(
-                "DELETE FROM deliveries WHERE state = 'claimed' AND claimed_at + ttl_seconds < ?", (now,)
-            )
-            await db.commit()
-            return cur.rowcount or 0
-        except BaseException:
-            await db.execute("ROLLBACK")
-            raise
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute(
+                    "DELETE FROM deliveries WHERE state = 'claimed' AND claimed_at + ttl_seconds < ?", (now,)
+                )
+                await db.commit()
+                return cur.rowcount or 0
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
 
     async def save_checkpoint(self, checkpoint: JsonObject) -> None:
         """写入/覆盖一个 checkpoint（幂等：cp_id 主键 + OR REPLACE）。
 
         ADR-0020：调用方须已把该 seq 及之前的耐久事件 append 落库（append-before-snapshot）。
         """
-        await self._dbp().execute(
-            "INSERT OR REPLACE INTO checkpoints (cp_id, run_id, seq, turn, kind, state_digest, pending, ts) VALUES (?,?,?,?,?,?,?,?)",
-            (
-                checkpoint["cp_id"],
-                checkpoint["run_id"],
-                checkpoint["seq"],
-                checkpoint["turn"],
-                checkpoint["kind"],
-                checkpoint["state_digest"],
-                _dumps(checkpoint.get("pending", [])),
-                checkpoint.get("ts") or utc_now().isoformat(),
-            ),
-        )
+        async with self._lock:
+            await self._dbp().execute(
+                "INSERT OR REPLACE INTO checkpoints (cp_id, run_id, seq, turn, kind, state_digest, pending, ts) VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    checkpoint["cp_id"],
+                    checkpoint["run_id"],
+                    checkpoint["seq"],
+                    checkpoint["turn"],
+                    checkpoint["kind"],
+                    checkpoint["state_digest"],
+                    _dumps(checkpoint.get("pending", [])),
+                    checkpoint.get("ts") or utc_now().isoformat(),
+                ),
+            )
 
     async def latest_checkpoint(self, run_id: str) -> JsonObject | None:
         """返回该 run seq 最大的 checkpoint（供 resume 取最近快照）；无则 None。"""
@@ -400,29 +421,31 @@ class SQLiteStore(StorePort):
 
     async def checkpoints(self, run_id: str, limit: int | None = None) -> list[JsonObject]:
         """该 run 快照列表，**按 seq 新→旧**；供 ``rebuild_run`` 逐一尝试完好快照、跳过损坏项。"""
-        sql = "SELECT cp_id, run_id, seq, turn, kind, state_digest, pending, ts FROM checkpoints WHERE run_id = ? ORDER BY seq DESC"
-        params: tuple = (run_id,)
-        if limit is not None:
-            sql += " LIMIT ?"
-            params = (run_id, limit)
-        cur = await self._dbp().execute(sql, params)
-        rows = await cur.fetchall()
-        return [
-            {
-                "cp_id": r[0],
-                "run_id": r[1],
-                "seq": r[2],
-                "turn": r[3],
-                "kind": r[4],
-                "state_digest": r[5],
-                "pending": json.loads(r[6]) if r[6] else [],
-                "ts": r[7],
-            }
-            for r in rows
-        ]
+        async with self._lock:
+            sql = "SELECT cp_id, run_id, seq, turn, kind, state_digest, pending, ts FROM checkpoints WHERE run_id = ? ORDER BY seq DESC"
+            params: tuple = (run_id,)
+            if limit is not None:
+                sql += " LIMIT ?"
+                params = (run_id, limit)
+            cur = await self._dbp().execute(sql, params)
+            rows = await cur.fetchall()
+            return [
+                {
+                    "cp_id": r[0],
+                    "run_id": r[1],
+                    "seq": r[2],
+                    "turn": r[3],
+                    "kind": r[4],
+                    "state_digest": r[5],
+                    "pending": json.loads(r[6]) if r[6] else [],
+                    "ts": r[7],
+                }
+                for r in rows
+            ]
 
     async def checkpoint_seq(self, run_id: str) -> int | None:
         """该 run 最近快照的 seq（尾重放起点）；无快照返回 None。"""
-        cur = await self._dbp().execute("SELECT MAX(seq) FROM checkpoints WHERE run_id = ?", (run_id,))
-        row = await cur.fetchone()
-        return row[0] if row and row[0] is not None else None
+        async with self._lock:
+            cur = await self._dbp().execute("SELECT MAX(seq) FROM checkpoints WHERE run_id = ?", (run_id,))
+            row = await cur.fetchone()
+            return row[0] if row and row[0] is not None else None

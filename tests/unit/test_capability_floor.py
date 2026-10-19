@@ -92,6 +92,26 @@ def test_capability_floor_never_allows_unsandboxed_exec_under_full_auto() -> Non
     assert "no sandbox" in outcome.reason.lower()
 
 
+def test_exec_floor_uses_capability_facts_not_backend_name() -> None:
+    """#154/MAJ-1：名为 seatbelt 但 fences_writes=False（未实装）的 descriptor 必须 ASK，不得因后端名静默放行。"""
+    descriptor = SandboxDescriptor(
+        backend=SandboxBackend.SEATBELT,
+        confinement=Confinement.PARTIAL,
+        fences_writes=False,
+        fences_network=False,
+        isolates_process_tree=True,
+        limitation="seatbelt detected but write fence unimplemented on this host",
+    )
+    outcome = apply_capability_floor(
+        tool_spec=_spec(Capability.EXEC),
+        sandbox=descriptor,
+        shell_analysis=None,
+        args_summary="rm -rf /",
+        mode="full_auto",
+    )
+    assert outcome is not None and outcome.decision.value == "ask"
+
+
 def test_network_without_fence_is_denied() -> None:
     outcome = apply_capability_floor(
         tool_spec=_spec(Capability.NETWORK),

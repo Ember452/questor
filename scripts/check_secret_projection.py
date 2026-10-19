@@ -5,8 +5,8 @@ Events and their ``data`` are the external surface. A secret/credential/env *val
 raw full-args blob must never reach them. This is a deterministic AST scan of the two places
 that shape outbound data:
 
-1. event construction sites (``state/reduce.py`` / ``kernel/loop.py``): no dict literal may use
-   a secret-shaped key (api_key/token/secret/password/credential/environment/full_args/...);
+1. event construction sites (every module that constructs an ``Envelope(`` — auto-discovered):
+   no dict literal may use a secret-shaped key (api_key/token/secret/password/credential/environment/full_args/...);
 2. the projection whitelist (``kernel/events.EXTERNAL_EVENT_FIELDS``): no whitelisted outbound
    key may be secret-shaped.
 
@@ -48,7 +48,20 @@ FORBIDDEN_KEYS: frozenset[str] = frozenset(
     }
 )
 
-_EVENT_SOURCES: tuple[str, ...] = ("state/reduce.py", "kernel/loop.py")
+_EVENT_SOURCE_HINT = "Envelope("  # 任何构造 durable 事件信封的模块都纳入扫描（自动发现，非写死文件）。
+
+
+def _event_source_files(root: Path) -> list[str]:
+    """自动发现所有**构造 Envelope** 的模块（#165：新的事件生产面自动纳入守卫，不再写死两文件）。"""
+    found: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if _EVENT_SOURCE_HINT in text:
+            found.append(str(path.relative_to(root)).replace("\\", "/"))
+    return found
 
 
 def scan_source(source: str, path: str) -> list[str]:
@@ -65,14 +78,12 @@ def scan_source(source: str, path: str) -> list[str]:
 def check(root: Path = Path("src/questor")) -> tuple[list[str], int]:
     violations: list[str] = []
     scanned = 0
-    for rel in _EVENT_SOURCES:
+    for rel in _event_source_files(root):
         file = root / rel
-        if not file.exists():
-            continue
         scanned += 1
         violations += scan_source(file.read_text(encoding="utf-8"), str(file))
-    if scanned == 0:  # fail-on-empty: the sources we expect to guard must be present
-        return [f"fail-on-empty: none of {_EVENT_SOURCES} found under {root}"], 0
+    if scanned == 0:  # fail-on-empty：一个构造 Envelope 的源都没找到 = 配置错，不是通过
+        return [f"fail-on-empty: no Envelope-constructing source found under {root}"], 0
 
     # 投影白名单自身也不能含密钥形状键。
     from questor.kernel.events import EXTERNAL_EVENT_FIELDS

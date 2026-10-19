@@ -112,7 +112,6 @@ _READ_ONLY_PROGRAMS = frozenset(
         "groups",
         "hostname",
         "uname",
-        "printenv",
         "locale",
         "uptime",
         "ps",
@@ -294,7 +293,8 @@ def _parse_segment(tokens: Sequence[str]) -> ShellSegment | ShellAnalysis:
         return _dynamic("dynamic or unproven program")
     if program not in _READ_ONLY_PROGRAMS and program not in _WRITE_PROGRAMS and program != "git":
         return _dynamic("unknown program")
-    if any(_is_path_dynamic(x) for x in tokens if not x.startswith("-")):
+    # 变量/替换检测不得豁免 `-` 前缀 token：`-exec$IFS` 的 `$IFS` 是真变量，绕不过检测才算安全。
+    if any(_is_path_dynamic(x) for x in tokens):
         return _dynamic("shell variable or substitution")
 
     positional: list[str] = []
@@ -315,8 +315,22 @@ def _parse_segment(tokens: Sequence[str]) -> ShellSegment | ShellAnalysis:
             redirects.append(ShellRedirect(target=target, append=token.endswith(">>"), null_sink=null_sink))
             continue
         if "&" in token and ">" in token:
-            redirects.append(ShellRedirect(target=token, fd_dup=True))
-            index += 1
+            # 区分 fd 复制/关闭（`>&2`、`2>&1`、`>&-`，非文件写）与 `>& file`/`&> file`（把输出写文件=写）。
+            # shlex 常把 `>&` 与目标拆成相邻 token，故先看 token 内联尾巴，再看下一 token。
+            if re.fullmatch(r"\d*>&[-\d]+", token):
+                redirects.append(ShellRedirect(target=token, fd_dup=True))
+                index += 1
+                continue
+            if index + 1 >= len(args):
+                return _dynamic("redirect target missing")
+            nxt = args[index + 1]
+            if nxt.isdigit() or nxt == "-":
+                redirects.append(ShellRedirect(target=token + nxt, fd_dup=True))
+            else:
+                redirects.append(
+                    ShellRedirect(target=nxt, append=token.endswith(">>"), null_sink=nxt in NULL_SINKS)
+                )
+            index += 2
             continue
         if token.startswith("-"):
             flags.append(token)
@@ -346,6 +360,9 @@ def _parse_segment(tokens: Sequence[str]) -> ShellSegment | ShellAnalysis:
         if sub in _GIT_DYNAMIC:
             return _dynamic(f"git {sub} mutates repository state")
         if sub in _GIT_READ_ONLY:
+            # 只读子命令也可能经 flags 写文件（`git diff/log --output=<file>`）；带写形态 flag 一律不证只读。
+            if any(f == "--output" or f.startswith("--output=") or f == "-o" or f.startswith("-o=") for f in flags):
+                return _dynamic(f"git {sub} writes via output flag")
             return ShellSegment(program=program, args=tuple(args), read_only=True, git_subcommand=sub, read_paths=tuple(positional[1:]))
         if sub == "branch":
             if any(flag in {"-l", "--list"} for flag in flags):

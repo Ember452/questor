@@ -63,6 +63,19 @@ _READ_ONLY = frozenset(
     }
 )
 
+#: 写文件类参数：只读 cmdlet 带这些参数即不再是只读（`Sort-Object -OutputPath`、`Format-Table -OutFile` 等）。
+_READ_ONLY_WRITE_PARAMS = frozenset(
+    {
+        "-outputpath",
+        "-outfile",
+        "-filepath",
+        "-logfile",
+        "-tafile",
+        "-redirectstandardoutput",
+        "-redirectstandarderror",
+    }
+)
+
 _WRITE_COMMANDS = frozenset(
     {
         "remove-item",
@@ -222,6 +235,11 @@ def _parse_command(tokens: Sequence[str]) -> ShellSegment | ShellAnalysis:
         index += 1
 
     write_paths = tuple(redirect.target for redirect in redirects if not redirect.null_sink and not redirect.fd_dup)
+    # 只读 cmdlet 也可带写文件参数（`Sort-Object -OutputPath`、`Format-Table -OutFile`、`Tee-Object -FilePath` 等）
+    # → 不能证只读。命中即不证（#155：旧实现把这类参数值当 positional、整段误判只读）。
+    flagset = {f.lower() for f in flags}
+    if flagset & _READ_ONLY_WRITE_PARAMS:
+        return _dynamic(f"{program_raw} writes via file-writing parameter")
     if program in _WRITE_COMMANDS:
         if not positional and not write_paths:
             return _dynamic(f"{program_raw} requires an explicit target")

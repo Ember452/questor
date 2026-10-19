@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from questor.contracts.events import (
     EventType,
     ReportChildTerminal,
@@ -73,7 +75,8 @@ def test_spawn_subagent_is_idempotent_same_child():
 def test_spawn_subagent_unknown_node_rejected():
     run = _run()
     new, events = reduce(run, SpawnSubagent(run_id="r-parent", node_id="ghost", child_run_id="r-child", spawn_key="s1"))
-    assert new is run
+    assert new.seq == run.seq + 1  # 拒绝产 durable warning → 占用一个 seq
+    assert replace(new, seq=run.seq) == run  # 除 seq 外状态不变
     assert any(e.type == EventType.WARNING for e in events)
 
 
@@ -101,5 +104,6 @@ def test_report_child_terminal_mismatched_child_rejected():
     run = _run((_subagent_node("n1"),))
     run, _ = reduce(run, SpawnSubagent(run_id="r-parent", node_id="n1", child_run_id="r-child", spawn_key="s1"))
     new, events = reduce(run, ReportChildTerminal(run_id="r-parent", child_run_id="r-OTHER", node_id="n1", terminal_status="completed"))
-    assert new is run
+    assert new.seq == run.seq + 1  # 拒绝产 durable warning → 占用一个 seq
+    assert replace(new, seq=run.seq) == run  # 除 seq 外状态不变
     assert any(e.type == EventType.WARNING for e in events)

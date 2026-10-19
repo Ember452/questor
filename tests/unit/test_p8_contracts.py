@@ -11,8 +11,6 @@ from questor.contracts.events import (
     EVENT_SCHEMA_VERSION,
     Command,
     EventType,
-    PeerEndedData,
-    PeerStartedData,
     ReportChildTerminal,
     SpawnSubagent,
     UpdateTaskTree,
@@ -48,19 +46,15 @@ def test_spawn_subagent_is_frozen():
         pass
 
 
-def test_peer_data_bounded_fields_and_no_payload_keys():
-    started = PeerStartedData(parent_run_id="rp", child_run_id="rc", node_id="n1")
-    ended = PeerEndedData(parent_run_id="rp", child_run_id="rc", node_id="n1", terminal_status="completed", result_ref="artifact://x", resumable_hint=True)
-    assert dataclasses.is_dataclass(started) and dataclasses.is_dataclass(ended)
-    # 载荷只带关联键/标量状态/指针，绝不含 prompt/result/body/text（C18/C20）。
-    for dc in (started, ended):
-        assert not ({"prompt", "result", "body", "text", "content", "args"} & {f.name for f in dataclasses.fields(dc)})
+def test_peer_data_described_by_wire_whitelist():
+    # peer_* 的载荷形状由 EXTERNAL_EVENT_FIELDS + event.schema.json 单一真源定义（#164：
+    # 旧的 Python dataclass 只是重复描述、无生产构造点 → 已删）。此处钉住 wire 契约不变。
+    from questor.kernel.events import EXTERNAL_EVENT_FIELDS
 
-
-def test_peer_ended_terminal_status_domain():
-    # terminal_status 只 ∈ {completed, failed, cancelled}。
-    for status in ("completed", "failed", "cancelled"):
-        PeerEndedData("rp", "rc", "n1", status, None, False)
+    assert EXTERNAL_EVENT_FIELDS[EventType.PEER_STARTED] == frozenset({"parent_run_id", "child_run_id", "node_id"})
+    assert EXTERNAL_EVENT_FIELDS[EventType.PEER_ENDED] == frozenset(
+        {"parent_run_id", "child_run_id", "node_id", "terminal_status", "result_ref", "resumable_hint"}
+    )
 
 
 def test_budget_fanout_fields_optional_and_conservative():

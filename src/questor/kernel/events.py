@@ -128,6 +128,14 @@ class InProcessEventBus(EventBus):
         self._subs[run_id].append(queue)
         return queue
 
+    def _remove_subscriber(self, run_id: str, queue: asyncio.Queue[Envelope]) -> None:
+        """从 ``_subs`` 摘掉一个队列；该 run 已无订阅者则连键一起清（防长驻 sidecar 泄漏）。"""
+        queues = self._subs.get(run_id)
+        if queues is not None and queue in queues:
+            queues.remove(queue)
+            if not queues:
+                del self._subs[run_id]
+
     async def emit(self, env: Envelope) -> None:
         """落库（非 live-only）→投影后向订阅者转发；终态至多一条。"""
         if env.type in TERMINAL:
@@ -180,26 +188,30 @@ class InProcessEventBus(EventBus):
 
         queue = self.add_subscriber(run_id)  # 先订阅后重放，避免两路之间的缺口
         seen = after_seq
+        try:
+            if self._store is not None:
+                for row in await self._store.replay(run_id, after_seq):
+                    seen = max(seen, row["seq"])
+                    replayed = project(_row_to_envelope(run_id, row))
+                    if replayed is None:  # 仅内部：持久了但不外发
+                        continue
+                    yield replayed
+                    if replayed.type in TERMINAL:  # run 已结束，无需再跟实时
+                        return
 
-        if self._store is not None:
-            for row in await self._store.replay(run_id, after_seq):
-                seen = max(seen, row["seq"])
-                replayed = project(_row_to_envelope(run_id, row))
-                if replayed is None:  # 仅内部：持久了但不外发
-                    continue
-                yield replayed
-                if replayed.type in TERMINAL:  # run 已结束，无需再跟实时
-                    return
-
-        while True:
-            env = await queue.get()
-            if env.type in LIVE_ONLY:
-                yield env  # 瞬态 delta：总是转发、不做 seq 去重
-            elif env.seq > seen:
-                seen = env.seq
-                yield env
-            if env.type in TERMINAL:
-                break
+            while True:
+                env = await queue.get()
+                if env.type in LIVE_ONLY:
+                    yield env  # 瞬态 delta：总是转发、不做 seq 去重
+                elif env.seq > seen:
+                    seen = env.seq
+                    yield env
+                if env.type in TERMINAL:
+                    break
+        finally:
+            # 无论重放到终态 return、正常 break、还是客户端断连（GeneratorExit/取消），
+            # 都必须摘掉本次队列——否则常驻 sidecar 每次断连漏一个队列（track surfaces MAJ-1）。
+            self._remove_subscriber(run_id, queue)
 
 
 def _row_to_envelope(run_id: str, row: dict) -> Envelope:

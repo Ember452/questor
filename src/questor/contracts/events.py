@@ -17,7 +17,7 @@ from typing import Any, ClassVar
 from questor.contracts.common import JsonObject, freeze, require_aware, utc_now
 from questor.contracts.errors import ErrorEntry
 from questor.contracts.memory import MemoryWrite, RecoveryPointer
-from questor.contracts.state_schema import CancelReason, Checkpoint, Message, TaskNode
+from questor.contracts.state_schema import CancelReason, Message, TaskNode
 
 #: 关联键——一旦发布永不改名/删除（design/02 §1）。
 CORRELATION_KEYS: frozenset[str] = frozenset(
@@ -38,17 +38,6 @@ class SubmitMessage:
     run_id: str
     content: Message
     type: ClassVar[str] = "submit_message"
-
-
-@dataclass(frozen=True, slots=True)
-class ProposeAction:
-    """承载策略单步意图的 Command。"""
-
-    run_id: str
-    turn: int
-    # 来自 PolicyPort 的单步意图（design/05）；属不可信输入，内核执行前先校验。
-    intent: JsonObject
-    type: ClassVar[str] = "propose_action"
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,12 +133,18 @@ class WriteMemory:
 
 
 @dataclass(frozen=True, slots=True)
-class RequestCompactHint:
-    """仅建议压缩压力，不强制；何时/如何压缩由内核决定（design/01 I2）。"""
+class RecordWarning:
+    """内核需在 ``reduce`` 之外落一条 durable 告警时的唯一入口（保 seq 单调，C2）。
+
+    典型：C10 策略故障回滚前的告警。不产任何状态变更，只占一个 durable seq 并产一条
+    ``warning`` 事件——历史实现直接经总线发 ``warning`` 却复用已占 seq，撞 ``event_log``
+    UNIQUE 而崩循环（track5-backbone BLK-1 path A）。
+    """
 
     run_id: str
-    pressure: float
-    type: ClassVar[str] = "request_compact_hint"
+    turn: int | None
+    message: str
+    type: ClassVar[str] = "record_warning"
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,7 +280,6 @@ class UpdateTaskTree:
 
 Command = (
     SubmitMessage
-    | ProposeAction
     | RequestApproval
     | ResolveApproval
     | ExpireApproval
@@ -294,7 +288,6 @@ Command = (
     | MarkToolRunning
     | Cancel
     | WriteMemory
-    | RequestCompactHint
     | CompactContext
     | AppendAssistantMessage
     | AdvanceTurn
@@ -304,6 +297,7 @@ Command = (
     | SpawnSubagent
     | ReportChildTerminal
     | UpdateTaskTree
+    | RecordWarning
 )
 
 
@@ -364,89 +358,13 @@ ERROR_CLASS_EVENT_TYPES: frozenset[str] = frozenset(
 )
 
 
-@dataclass(frozen=True, slots=True)
-class RunFailedData:
-    """``run_failed`` 的 data：携归一化错误（含 retryable/resumable）。"""
-
-    error: ErrorEntry
-    type: ClassVar[str] = EventType.RUN_FAILED
-
-
-@dataclass(frozen=True, slots=True)
-class RunCompletedData:
-    """``run_completed`` 的 data：最终答复 + 用量 + 退出归因。"""
-
-    final: Message | None = None
-    usage: JsonObject | None = None
-    exit_reason: str | None = None  # turn_exit_reason（R01 G-1）
-    type: ClassVar[str] = EventType.RUN_COMPLETED
-
-
-@dataclass(frozen=True, slots=True)
-class TextDeltaData:
-    """``text_delta`` 的 data：一段可见文本增量（live-only）。"""
-
-    delta: str
-    item_id: str | None = None
-    type: ClassVar[str] = EventType.TEXT_DELTA
-
-
-@dataclass(frozen=True, slots=True)
-class PeerStartedData:
-    """``peer_started`` 的 data：只带关联键（父/子 run id + node id），无正文（ADR-0042/C18/C20）。"""
-
-    parent_run_id: str
-    child_run_id: str
-    node_id: str
-    type: ClassVar[str] = EventType.PEER_STARTED
-
-
-@dataclass(frozen=True, slots=True)
-class PeerEndedData:
-    """``peer_ended`` 的 data：关联键 + 有界终态 + artifact 指针 + resumable 提示；无结果正文（ADR-0042）。
-
-    ``terminal_status`` ∈ {completed, failed, cancelled}；``result_ref`` 为不透明指针（绝不 abs path）。"""
-
-    parent_run_id: str
-    child_run_id: str
-    node_id: str
-    terminal_status: str
-    result_ref: str | None = None
-    resumable_hint: bool = False
-    type: ClassVar[str] = EventType.PEER_ENDED
-
-    def __post_init__(self) -> None:
-        if self.terminal_status not in {"completed", "failed", "cancelled"}:
-            raise ValueError("PeerEndedData.terminal_status must be completed, failed or cancelled")
-
-
-# 内部领域事件（私有、可随实现演进；投影为外部后才外发）。P0 只留最小集，
-# 完整内部集在 P1 随 turn 循环补齐（design/02 §2/§8）。
-@dataclass(frozen=True, slots=True)
-class NodeUpdated:
-    """任务树节点状态变更（内部）。"""
-
-    node: TaskNode
-    type: ClassVar[str] = EventType.NODE_UPDATED
-
-
-@dataclass(frozen=True, slots=True)
-class CheckpointRecorded:
-    """落了一个 checkpoint（内部，不进对外投影）。"""
-
-    checkpoint: Checkpoint
-    type: ClassVar[str] = "checkpoint_recorded"
-
-
 __all__ = [
     "CORRELATION_KEYS",
     "EVENT_SCHEMA_VERSION",
     "SubmitMessage",
-    "ProposeAction",
     "ResolveApproval",
     "Cancel",
     "WriteMemory",
-    "RequestCompactHint",
     "CompactContext",
     "AppendAssistantMessage",
     "AdvanceTurn",
@@ -457,14 +375,8 @@ __all__ = [
     "Envelope",
     "EventType",
     "ERROR_CLASS_EVENT_TYPES",
-    "RunFailedData",
-    "RunCompletedData",
-    "TextDeltaData",
-    "PeerStartedData",
-    "PeerEndedData",
     "SpawnSubagent",
     "ReportChildTerminal",
     "UpdateTaskTree",
-    "NodeUpdated",
-    "CheckpointRecorded",
+    "RecordWarning",
 ]

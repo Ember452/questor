@@ -30,6 +30,28 @@ def _dedupe(items: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(result)
 
 
+def _looks_like_unified_diff(text: str) -> bool:
+    """含 ``--- `` 与 ``+++ `` 头且带 ``@@`` 段才当 unified diff，避免把普通文本误当补丁。"""
+    has_header = any(ln.startswith("--- ") for ln in text.splitlines()) and any(
+        ln.startswith("+++ ") for ln in text.splitlines()
+    )
+    return has_header and any(ln.startswith("@@") for ln in text.splitlines())
+
+
+def _diff_header_path(raw: str) -> tuple[str, ...]:
+    """从一个 ``--- ``/``+++ `` 头取候选路径：``/dev/null`` 无路径；同时给原始与去 ``a/``/``b/`` 两个形态。
+
+    两个形态都作候选（宁多勿漏）：工具自身按去前缀形态写文件，而 ``PROTECTED_IN_ROOTS`` 检查需看到
+    裸名（如 ``.env``）才能拦住；原始形态兼顾真实目录名不被误剥的情形。"""
+    value = raw.strip()
+    if value == "/dev/null" or not value:
+        return ()
+    out = [value]
+    if len(value) > 2 and value[1] == "/" and value[0] in "ab":
+        out.append(value[2:])
+    return tuple(out)
+
+
 def extract_paths(arguments: Mapping[str, object] | None) -> tuple[str, ...]:
     """从 path keys 和 apply_patch headers 抽取路径候选，保持首次出现顺序。"""
     if not arguments:
@@ -46,6 +68,15 @@ def extract_paths(arguments: Mapping[str, object] | None) -> tuple[str, ...]:
                     if candidate:
                         found.append(candidate)
                     break
+    # unified diff（apply_patch 的 ``input``/``patch``）：从 ``--- ``/``+++ `` 头抽路径（#156 BLK-1）。
+    for key in ("patch", "input"):
+        value = arguments.get(key)
+        if isinstance(value, str) and _looks_like_unified_diff(value):
+            for line in value.splitlines():
+                if line.startswith("--- "):
+                    found.extend(_diff_header_path(line[4:]))
+                elif line.startswith("+++ "):
+                    found.extend(_diff_header_path(line[4:]))
     return _dedupe(tuple(found))
 
 
