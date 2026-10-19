@@ -1,6 +1,6 @@
 """L3 远程 MCP inputSchema → provider 兼容 JSON Schema 归一（C18；`docs/plan/05` T3）。
 
-改造自 DeepCode `core/mcp/schema.py:8-39`（MIT）：把不可信的远程 schema 归一成 provider 可用的
+把不可信的远程 schema 归一成 provider 可用的
 形状——非 object 根退化为空对象、`type:[X,null]` 折叠为 `X`+`nullable`、`oneOf/anyOf` 含单一 null
 分支时并入、object 补 `properties`/`required`。纯函数、递归、绝不崩（形状异常也产出可用结构）。
 """

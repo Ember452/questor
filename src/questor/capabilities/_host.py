@@ -11,7 +11,7 @@
 活 run 工具面不变，承 ``tools/registry.py:97-104``）。
 
 **边界（C1）**：只 import 标准库 + ``contracts``；不 import surfaces/providers 具体实现。
-发现≠执行（inert discovery，借 DeepCode ``plugins/host.py`` 纪律）：本宿主不扫盘、不执行插件代码副作用。
+发现≠执行（inert discovery）：本宿主不扫盘、不执行插件代码副作用。
 """
 
 from __future__ import annotations
