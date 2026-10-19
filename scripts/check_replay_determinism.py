@@ -171,6 +171,16 @@ def _fixture_compaction() -> tuple[Run, list[Command], int]:
     return run, cmds, 3  # split 在压缩命令之前（pre_compact 快照位置）
 
 
+def _fixture_compaction_after_split() -> tuple[Run, list[Command], int]:
+    """P10/Major-2 盲区补（审计 F2）：split 落在 CompactContext **之后**。
+
+    这样快照捕获的是**压缩后**态（含 summary/compaction_floor/recovery_pointers），尾只重放
+    FinalizeRun——若快照序列化丢弃压缩态，from_snapshot 重建就丢锈而连续 reduce 不丢 → 判红。
+    与 _fixture_compaction（split 在压缩前）互补，共同钉住"压缩态经快照 round-trip 确定"。"""
+    run, cmds, _ = _fixture_compaction()
+    return run, cmds, 4  # split 在 CompactContext 之后、FinalizeRun 之前
+
+
 FIXTURES: list[tuple[str, Callable[[], tuple[Run, list[Command], int]]]] = [
     ("approve", _fixture_approve),
     ("cancel-backfill", _fixture_cancel_backfill),
@@ -178,6 +188,7 @@ FIXTURES: list[tuple[str, Callable[[], tuple[Run, list[Command], int]]]] = [
     ("spawn-report", _fixture_spawn_report),
     ("multi-child-report", _fixture_multi_child_report),
     ("compaction", _fixture_compaction),
+    ("compaction-after-split", _fixture_compaction_after_split),
 ]
 
 

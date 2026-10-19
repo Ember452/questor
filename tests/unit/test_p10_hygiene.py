@@ -12,6 +12,7 @@ from pathlib import Path
 
 from questor.providers.artifact_store import FileSystemArtifactStore, referenced_artifact_ids
 from questor.providers.store_sqlite import SQLiteStore
+from questor.surfaces.maintenance import run_maintenance_command
 
 
 async def test_reclaim_expired_leases_only_expired(tmp_path: Path) -> None:
@@ -74,3 +75,16 @@ def test_referenced_artifact_ids_scans_nested_events() -> None:
     ]
     ids = referenced_artifact_ids(events)
     assert ids == {"artifact://abc123", "artifact://def456"}
+
+
+async def test_maintenance_command_reclaims_via_production_caller(tmp_path: Path) -> None:
+    """Minor-2：`questor maintenance` 给 reclaim 方法一个生产调用方（不再是零 caller）。"""
+    store = await SQLiteStore(str(tmp_path / "s.db")).connect()
+    try:
+        await store.acquire_lease("run_exp", "h", 1, ttl_seconds=-1.0)
+        await store.claim_delivery("d_stale", ttl_seconds=-1.0)
+        out = await run_maintenance_command(store)
+        assert "reclaimed_leases=1" in out
+        assert "reclaimed_stale_claims=1" in out
+    finally:
+        await store.close()
