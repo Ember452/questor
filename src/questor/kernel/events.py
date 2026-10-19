@@ -124,7 +124,9 @@ class InProcessEventBus(EventBus):
         self._observers.append(observer)
 
     def add_subscriber(self, run_id: str) -> asyncio.Queue[Envelope]:
-        queue: asyncio.Queue[Envelope] = asyncio.Queue()
+        # 宽松上界：既钉住慢/挂起消费者的无界堆积（激活 emit 里既定的 QueueFull 丢帧→resync 背压，#174），
+        # 又远大于正常单 run 事件量；durable 帧丢了可经 store.replay 补齐，仅瞬态 delta 会丢。
+        queue: asyncio.Queue[Envelope] = asyncio.Queue(maxsize=4096)
         self._subs[run_id].append(queue)
         return queue
 
