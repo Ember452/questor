@@ -10,6 +10,7 @@ finish。按 R08 C 处理若干坑：usage 只要出现就读（不假设只在�
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import logging
@@ -191,8 +192,10 @@ class LiteLLMProvider(ProviderPort):
         request_sha256 = hashlib.sha256(
             json.dumps(params, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
         ).hexdigest()
+        stream = None
         try:
-            async for chunk in await litellm.acompletion(**params):  # type: ignore[arg-type]
+            stream = await litellm.acompletion(**params)  # type: ignore[arg-type]
+            async for chunk in stream:
                 usage = getattr(chunk, "usage", None)
                 if usage:
                     usage_dict = _usage_dict(usage)
@@ -257,6 +260,11 @@ class LiteLLMProvider(ProviderPort):
                     status,
                     extra={"log_fields": {"arguments_preview": args_preview, "response_preview": resp_preview, "truncated": True}},
                 )
+            # 释放底层流句柄：取消/早退时不让 httpx 连接依赖 GC 回收（#173）。放 emit 之后，不危及观测。
+            aclose = getattr(stream, "aclose", None)
+            if aclose is not None:
+                with contextlib.suppress(Exception):
+                    await aclose()
 
 
 def _delta_reasoning(delta: Any) -> str | None:
