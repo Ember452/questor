@@ -343,6 +343,37 @@ class SQLiteStore(StorePort):
             await db.execute("ROLLBACK")
             raise
 
+    async def reclaim_expired_leases(self, now: float) -> int:
+        """P10/ADR-0050：删已过期 run 租约行（瞬态派生视图）；返回删除数。
+
+        只碰 ``expires_at < now``——持有者本就可重取。BEGIN IMMEDIATE 串行化（C2）。"""
+        db = self._dbp()
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await db.execute("DELETE FROM run_leases WHERE expires_at < ?", (now,))
+            await db.commit()
+            return cur.rowcount or 0
+        except BaseException:
+            await db.execute("ROLLBACK")
+            raise
+
+    async def reclaim_stale_claims(self, now: float) -> int:
+        """P10/ADR-0050：删超 TTL 未 ack 的 in-flight claim（崩溃遗留）。**绝不碰已 acked 行**（BLK-2）。
+
+        只删 ``state='claimed'`` 且 ``claimed_at+ttl_seconds < now``；acked 投递行作幂等键必须保留
+        （投递视图从 event_log 重建，删了会 rebuild 重 claim→双投），其回收与 event_log 裁剪绑定后置。"""
+        db = self._dbp()
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await db.execute(
+                "DELETE FROM deliveries WHERE state = 'claimed' AND claimed_at + ttl_seconds < ?", (now,)
+            )
+            await db.commit()
+            return cur.rowcount or 0
+        except BaseException:
+            await db.execute("ROLLBACK")
+            raise
+
     async def save_checkpoint(self, checkpoint: JsonObject) -> None:
         """写入/覆盖一个 checkpoint（幂等：cp_id 主键 + OR REPLACE）。
 

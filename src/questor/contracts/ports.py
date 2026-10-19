@@ -122,6 +122,20 @@ class StorePort(Protocol):
         """释放租约：仅当前 holder+epoch 匹配时删除；否则 False。"""
         ...
 
+    async def reclaim_expired_leases(self, now: float) -> int:
+        """P10/ADR-0050：回收**已过期**的 run 租约行（瞬态派生视图，可安全重取）；返回删除数。
+
+        只删 ``expires_at < now`` 的行（持有者可重取）。不碰未过期租约（单写者栅栏）。"""
+        ...
+
+    async def reclaim_stale_claims(self, now: float) -> int:
+        """P10/ADR-0050：回收**超 TTL 未 ack** 的 in-flight claim 行（崩溃遗留、可安全重取）；返回删除数。
+
+        只删 ``state='claimed'`` 且 ``claimed_at+ttl < now`` 的行。**绝不删已 acked 的投递行**
+        （对抗评审 BLK-2：投递视图从 ``event_log`` 重建，ack 幂等键一删就 rebuild 重 claim→双投，
+        破 exactly-once；acked 行的回收与 event_log 裁剪绑定后置）。"""
+        ...
+
 
 @runtime_checkable
 class Clock(Protocol):
