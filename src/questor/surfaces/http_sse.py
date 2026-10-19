@@ -123,7 +123,7 @@ class EventServer:
             # 同步、置于 finally 首行，确保即便下方 teardown/释放抛错也已回收。
             self.registry.unregister(run_id)
             await mcp_teardown()  # 关连接+回收子进程树+stderr 句柄，防泄漏
-            # P9/ADR-0047：resume 取的租约在驱动任务收尾释放（start_run 不取→None）。
+            # P9/ADR-0047：start_run 与 resume 均取唯一 holder 租约（单写者），驱动任务收尾在此释放（未取到→lease_holder=None 那么 no-op）。
             if lease_holder is not None:
                 await self.store.release_lease(run_id, lease_holder, 1)
 

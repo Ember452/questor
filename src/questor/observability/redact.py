@@ -7,7 +7,7 @@
 三个面；放在 ``LogEntry`` 构造后、fan-out 前一处，两条通道都被守住。
 
 设计要点：pattern 簇遵循“绝不执行凭据”（如 Azure Entra bearer 只标记不 refresh）；
-fail-closed 为本设计自加。prompt 回显剥离为 Questor 自写纯函数，**接线后置**（见 ``strip_prompt_echo`` docstring 的诚实边界）。
+fail-closed 为本设计自加。prompt 回显剥离为 Questor 自写纯函数，**已在 ``kernel/loop`` 接线**（见 ``strip_prompt_echo`` docstring）。
 """
 
 from __future__ import annotations
@@ -111,8 +111,9 @@ def strip_prompt_echo(text: str, prompts: list[str], min_len: int = 24) -> str:
     provider 4xx 常把请求体（含用户 prompt）整段回显；除 pattern 脱敏外，再对错误文本做一次
     "与本轮 prompt 的长公共片段→``<prompt>``"处理（DESIGN §8）。
 
-    **诚实边界（接线后置 P5/刀 3）**：本函数只提供纯逻辑 + 单测。真正的 prompt 基准（带内桥无
-    prompt、错误回显需比对账本查询）尚未接线——现网错误回显脱敏效果标 UNVERIFIED（无 key）。
+    **接线现状（#162B）**：已在 ``kernel/loop`` 的 provider 异常归一点接入——以 ``run.context``
+    里的用户消息为 prompt 基准剥离回显，使 ``run_failed``/账本/前端不再携带 prompt。端到端真实
+    回显脱敏效果仍需带 key 的 live 验证（无 key 环境下标 UNVERIFIED）。
     """
     out = text
     for prompt in prompts:
