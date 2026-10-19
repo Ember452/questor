@@ -1,6 +1,6 @@
 """L5 StorePort -> SQLite：append-only 事件日志 + checkpoint（ADR-0005/0011/0020/0022）。
 
-我按 DeepCode 验证过的模式自写的实现（见 R03/R10）：
+本实现自写，核心设计模式如下：
 - **两类游标**（ADR-0011/0022）：per-run 逻辑 ``seq``（``SSE after_seq`` 续传，
   ``COALESCE(MAX(seq),0)+1 WHERE run_id``）+ 全局单调物理 ``gseq``（跨 run catch-up watermark）。
 - **log 权威（事件）+ 快照权威（状态）**（ADR-0020）：耐久事件先经 ``BEGIN IMMEDIATE`` 原子落
