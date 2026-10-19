@@ -74,6 +74,10 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.PEER_ENDED: frozenset({"parent_run_id", "child_run_id", "node_id", "terminal_status", "result_ref", "resumable_hint"}),
     # tools_changed（P9/ADR-0046）：live-only 能力名册变更告警，只一个 domain 枚举、无任何正文（C18/C20）。
     EventType.TOOLS_CHANGED: frozenset({"domain"}),
+    # compact_started/compact_applied（P10/ADR-0048，design/02 §10）：只带栅栏/有界量、无正文（C18/C20）。
+    # baseline_seq 供渲染侧重折上下文视图；不进 projection._DATA_KEYS（摘要文本属载荷、日得不复制，C20）。
+    EventType.COMPACT_STARTED: frozenset({"reason"}),
+    EventType.COMPACT_APPLIED: frozenset({"baseline_seq", "covered_from", "covered_to", "summary_bytes"}),
 }
 
 

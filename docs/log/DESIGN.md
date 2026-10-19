@@ -347,7 +347,7 @@ prompt_tokens, completion_tokens, request_sha256, response_sha256, error_class
 |---|---|---|---|
 | **刀 1** | 装配上移覆盖四入口、启用 `questor.bus` 报总线故障、console sink 强制 stderr | **P4 PR 合并后立刻**，独立小 PR | 纯缺陷，不改契约不动分层，不该排进任何 Phase |
 | **刀 2** | 本文骨架全套（§3–§13）+ ADR-0027 + G-L1..L12 守卫 | **P4 合入 main 之后、P5 开工之前** | ROADMAP §1.5 明写"轻量可观测从 P1 就落"——这是补债；P5 MCP 是第一个从进程外引入错误的项目（server 连不上、SKILL.md 解析失败、远程工具描述投毒），死线就在它之前 |
-| **刀 3** | §14 消费命令、OTel/metrics/追踪面板、`--log-payload` 实装 | 真需求出现时（P7 桌面调试 / P10 加固） | 不预排；`llm-*.jsonl` 的独立文件已在刀 2 留好，届时不需改骨架 |
+| **刀 3** | §14 消费命令、OTel/metrics/追踪面板、`--log-payload` 实装 | 真需求出现时（P7 桌面调试 / P10 加固） | 不预排；`llm-*.jsonl` 的独立文件已在刀 2 留好，届时不需改骨架。**P10/ADR-0049 已落地（2026-10-19）**：`questor logs` 只读消费命令（DESIGN §14）+ `--log-payload=truncate:N` preview（§12，走独立 `questor.llm.preview` 通道、主干零原文、必过脱敏）均实装；`trace_id` 作普通键保留；**OTel/metrics 移出本 Phase**（守 D8 stdlib-only、不在 P10 DoD，真需求+独立 ADR 再开）。 |
 
 判据一句话，供后续复用：**任何会新增"入口"或新增"错误来源"的 Phase，必须排在日志骨架之后。**
 

@@ -199,6 +199,9 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         ),
         # P9 additive：tools_changed（live-only 告警，单 domain 枚举）+ run_started 带 additive policy_ref。
         "tools_changed": _envelope("tools_changed", {"domain": "tools"}),
+        # P10 additive（ADR-0048）：compact_started 单 reason；compact_applied 只栅栏/有界量、无正文。
+        "compact_started": _envelope("compact_started", {"reason": "kernel_token_pressure"}),
+        "compact_applied": _envelope("compact_applied", {"baseline_seq": 7, "covered_from": 1, "covered_to": 3, "summary_bytes": 42}),
     }
 
 
@@ -215,6 +218,8 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     # P9：tools_changed domain 不在枚举、run_started.policy_ref 多余字段（additionalProperties:false）都必须被拒。
     tools_bad_domain = _envelope("tools_changed", {"domain": "bogus"})
     policy_over_field = _envelope("run_started", {"run_id": "run_x", "policy_ref": {"id": "r", "fingerprint": "f", "leak": 1}})
+    # P10 compact_*（ADR-0048）：compact_applied 额外携 summary_text 正文必须被 additionalProperties:false 拒（C20）。
+    compact_over_field = _envelope("compact_applied", {"baseline_seq": 7, "covered_from": 1, "covered_to": 3, "summary_bytes": 42, "summary_text": "leaked body"})
     return {
         "over_field": over_field,
         "missing_required": missing_required,
@@ -223,6 +228,7 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
         "peer_over_field": peer_over_field,
         "tools_bad_domain": tools_bad_domain,
         "policy_over_field": policy_over_field,
+        "compact_over_field": compact_over_field,
     }
 
 

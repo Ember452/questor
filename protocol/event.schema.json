@@ -37,7 +37,9 @@
         "memory_written",
         "peer_started",
         "peer_ended",
-        "tools_changed"
+        "tools_changed",
+        "compact_started",
+        "compact_applied"
       ]
     },
     "data": { "type": "object" }
@@ -65,7 +67,9 @@
     { "if": { "properties": { "type": { "const": "memory_written" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_written" } } } },
     { "if": { "properties": { "type": { "const": "peer_started" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/peer_started" } } } },
     { "if": { "properties": { "type": { "const": "peer_ended" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/peer_ended" } } } },
-    { "if": { "properties": { "type": { "const": "tools_changed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/tools_changed" } } } }
+    { "if": { "properties": { "type": { "const": "tools_changed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/tools_changed" } } } },
+    { "if": { "properties": { "type": { "const": "compact_started" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/compact_started" } } } },
+    { "if": { "properties": { "type": { "const": "compact_applied" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/compact_applied" } } } }
   ],
   "$defs": {
     "run_started": {
@@ -301,6 +305,25 @@
       "additionalProperties": false,
       "description": "Capability roster changed (P9/ADR-0046): live-only advisory, no payload; consumers re-fetch the roster for future runs. Not persisted, never logged (C20).",
       "properties": { "domain": { "type": "string", "enum": ["tools", "skills", "mcp", "plugins", "settings"] } }
+    },
+    "compact_started": {
+      "type": "object",
+      "required": ["reason"],
+      "additionalProperties": false,
+      "description": "Kernel began recoverable context compaction at a turn boundary (P10/ADR-0048, design/02 §10). reason is a short kernel label; no payload, never the summary text (C18/C20).",
+      "properties": { "reason": { "type": "string", "maxLength": 128 } }
+    },
+    "compact_applied": {
+      "type": "object",
+      "required": ["baseline_seq", "covered_from", "covered_to", "summary_bytes"],
+      "additionalProperties": false,
+      "description": "Compaction applied; baseline_seq is the durable seq that rewrote context so renderers re-fold their view (design/02 §10). covered_from/covered_to are the evicted durable event seq range (originals read back from append-only event_log); summary_bytes is the summary size only, never its text (C20).",
+      "properties": {
+        "baseline_seq": { "type": "integer", "minimum": 0 },
+        "covered_from": { "type": "integer", "minimum": 0 },
+        "covered_to": { "type": "integer", "minimum": 0 },
+        "summary_bytes": { "type": "integer", "minimum": 0 }
+      }
     }
   }
 }

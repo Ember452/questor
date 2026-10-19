@@ -78,3 +78,8 @@ pythonpath = ["src", "tests"]
 # 显式固定 thread 方法：signal 方法仅 Unix 可用，不指定的话 Windows 本地与 Linux CI 行为会不一致
 # ——而本次 CI 挂死恰恰是“本地绿、runner 卡死”的平台差异型故障，不能再留一个。
 addopts = "--timeout=60 --timeout-method=thread"
+# P10/ADR-0049 任务级回归网：`eval` 标记的确定性端到端用例（承 DoD-C），可用 `-m eval` 单独选、
+# 挂进独立非阻塞 lane；未标记用例不受影响。承 pitfalls 确定性纪律，绝不用真 key/真网络。
+markers = [
+    "eval: deterministic task-level regression net (scripted provider, no key/network); selectable via -m eval",
+]

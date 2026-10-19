@@ -43,7 +43,9 @@ export type QuestorExternalEventProjectionV1 = {
     | "memory_written"
     | "peer_started"
     | "peer_ended"
-    | "tools_changed";
+    | "tools_changed"
+    | "compact_started"
+    | "compact_applied";
   data: {
     [k: string]: unknown;
   };
@@ -198,4 +200,19 @@ export interface PeerEndedData {
  */
 export interface ToolsChangedData {
   domain: "tools" | "skills" | "mcp" | "plugins" | "settings";
+}
+/**
+ * Kernel began recoverable context compaction at a turn boundary (P10/ADR-0048, design/02 §10). reason is a short kernel label; no payload, never the summary text (C18/C20).
+ */
+export interface CompactStartedData {
+  reason: string;
+}
+/**
+ * Compaction applied; baseline_seq is the durable seq that rewrote context so renderers re-fold their view (design/02 §10). covered_from/covered_to are the evicted durable event seq range (originals read back from append-only event_log); summary_bytes is the summary size only, never its text (C20).
+ */
+export interface CompactAppliedData {
+  baseline_seq: number;
+  covered_from: number;
+  covered_to: number;
+  summary_bytes: number;
 }

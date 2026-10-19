@@ -32,6 +32,7 @@ from questor.contracts.events import (
     AdvanceTurn,
     AppendAssistantMessage,
     Cancel,
+    CompactContext,
     Envelope,
     EventType,
     ExpireApproval,
@@ -46,8 +47,8 @@ from questor.contracts.events import (
     SubmitMessage,
     WriteMemory,
 )
-from questor.contracts.memory import MemoryStorePort
-from questor.contracts.policy import PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
+from questor.contracts.memory import MemoryScope, MemoryStorePort, MemoryWrite, MemoryWriteKind
+from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
 from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort
 from questor.contracts.sandbox import Confinement, SandboxBackend, SandboxDescriptor
 from questor.contracts.shell_analysis import ShellAnalysis, ShellDialect, ShellParseStatus
@@ -62,6 +63,7 @@ from questor.contracts.state_schema import (
 )
 from questor.contracts.subagent import SpawnRequest, SpawnResult, SubagentSpawnerPort
 from questor.contracts.tool import RunToolSurface, Tool, ToolResult, ToolSpec
+from questor.kernel.compaction import plan_compaction
 from questor.kernel.events import EventBus
 from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
 from questor.kernel.run_control import RunController
@@ -243,6 +245,7 @@ class DefaultTurnLoop:
         cancel_event: asyncio.Event | None = None,
         subagent_spawner: SubagentSpawnerPort | None = None,
         capability_probe: Callable[[], int] | None = None,
+        compaction: CompactionConfig | None = None,
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -262,6 +265,8 @@ class DefaultTurnLoop:
         self.cancel_event = cancel_event or asyncio.Event()
         # P8：子 agent 编排端口（未接线时单 run 行为逐字不变）。spawn 建子与子树冻结均走此端口。
         self.subagent_spawner = subagent_spawner
+        # P10/ADR-0048：可恢复压缩旋钮；None = 不压缩（向后兼容，等价旧 disable_compaction=True）。
+        self.compaction = compaction
         # P9/ADR-0046：能力名册探针（未注入则不发 tools_changed）。loop 每安全点比对、变化即发 live-only。
         self.capability_probe = capability_probe
         self._capability_gen = capability_probe() if capability_probe is not None else 0
@@ -381,6 +386,10 @@ class DefaultTurnLoop:
                     return await self._fail_with_entry(run, turn, entry, "provider_protocol_error")
                 await self._checkpoint(run, "auto")
 
+                # P10/ADR-0048：turn 边界安全点（快照已落、全部 tool_use 已闭合）尝试可恢复压缩。
+                # I2：压缩由内核决定（策略只能发 advisory hint）；未配 compaction 则逐字不变。
+                run = await self._maybe_compact(controller, run, turn, total_tokens)
+
                 if run.budget.max_tokens is not None and total_tokens > run.budget.max_tokens:
                     return await self._fail(run, turn, ErrorKind.INTERNAL, f"token budget {run.budget.max_tokens} exceeded (used {total_tokens})", "budget_exhausted")
 
@@ -440,6 +449,56 @@ class DefaultTurnLoop:
                     await self.subagent_spawner.materialize_child(command.run_id, command.node_id, command.child_run_id)
             if run.status.is_terminal:
                 return run
+        return run
+
+    async def _maybe_compact(self, controller: RunController, run: Run, turn: int, total_tokens: int) -> Run:
+        """P10/ADR-0048：在 turn 边界安全点尝试一次**可恢复压缩**。
+
+        步骤（全部经 Command→reduce→durable，绝不上 out-of-band）：
+        1. 纯决策 `plan_compaction`（无 IO）定当否压、逐出哪段、携带的 summary/锚；
+        2. 先落 `pre_compact` 全量快照（design/01 §5）——压缩前态可确定性还原；
+        3. 提交 `CompactContext` 命令→reduce 纯应用（携摘要/锚）→发 compact_started/applied；
+        4. L2' 蒸馏桥（ADR-0025）：被压区浓缩经 `WriteMemory(kind=distill)` 写 daily（仅装配了
+           memory_store 时），使“压缩不丢事实召回”可经检索回读。未配则 no-op（向后兼容）。
+        """
+        if self.compaction is None:
+            return run
+        plan = plan_compaction(run, self.compaction, total_tokens)
+        if plan is None:
+            return run
+        await self._checkpoint(run, "pre_compact")  # 压缩前全量快照，保证可确定性还原压缩前态
+        run, events = reduce(
+            run,
+            CompactContext(
+                run_id=run.run_id,
+                evict_start=plan.evict_start,
+                evict_end=plan.evict_end,
+                summary_text=plan.summary_text,
+                new_floor=plan.new_floor,
+                new_pointers=plan.new_pointers,
+            ),
+        )
+        controller.run = run
+        await self._emit(events)
+        if not any(e.type == EventType.COMPACT_APPLIED for e in events):
+            return run  # reduce 拒了（如越 closed_prefix）→不进蒸馏写
+        # L2' 蒸馏桥：被压区浓缩写 daily（正文只放浓缩、绝不放 delta/原文，I3）。
+        if self.memory_store is not None:
+            p = plan.new_pointers[0]
+            payload = MemoryWrite(
+                kind=MemoryWriteKind.DISTILL,
+                scope=MemoryScope.SHARED,
+                text=plan.summary_text,
+                covered_from=p.seq_from,
+                covered_to=p.seq_to,
+                covered_hash=p.covered_hash,
+            )
+            run, mev = reduce(run, WriteMemory(run_id=run.run_id, payload=payload))
+            controller.run = run
+            await self._emit(mev)
+            ack = next((e for e in mev if e.type == EventType.MEMORY_WRITTEN), None)
+            if ack is not None:
+                await self.memory_store.write(payload, idempotency_key=f"mem:{run.run_id}:{ack.seq}")
         return run
 
     # ---- phase 辅助方法 ------------------------------------------------

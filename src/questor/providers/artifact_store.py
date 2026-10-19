@@ -88,5 +88,62 @@ class FileSystemArtifactStore:
                 os.unlink(temp_name)
             raise
 
+    def _referenced_ids_from_files(self) -> dict[str, Path]:
+        """扫存储根，映 artifact_id → 文件路径（id = ``artifact://{digest[:16]}``，与 ``put_*`` 产生的 artifact_id 一致）。"""
+        out: dict[str, Path] = {}
+        if not self.root.is_dir():
+            return out
+        for path in self.root.iterdir():
+            if not path.is_file():
+                continue
+            # 忽略临时写文件（以 . 开头）；正式文件名 = {64-hex-digest}{suffix}。
+            if path.name.startswith("."):
+                continue
+            digest = path.stem
+            if len(digest) >= 16:
+                out[f"artifact://{digest[:16]}"] = path
+        return out
 
-__all__ = ["FileSystemArtifactStore"]
+    async def gc_orphans(self, referenced_ids: set[str], *, dry_run: bool = False) -> list[str]:
+        """P10/ADR-0050：**可达性孤儿 GC**。只删不被任何引用 artifact_id 集命中的文件。
+
+        ``referenced_ids`` 应由调用方从 ``event_log``/``checkpoints`` 提取（见 ``referenced_artifact_ids``）。
+        内容寻址跨 run 去重 → 删前按 id 全集判定，绝不删活跃引用（承 ADR-0019/0020 log 不裁→活跃 id 恒在）。
+        返回被删（或 dry_run 时将被删）的 artifact_id 列表（不返绝对路径）。写失败静默降级（旁路回收，不抛）。
+        """
+        def _run() -> list[str]:
+            removed: list[str] = []
+            for artifact_id, path in self._referenced_ids_from_files().items():
+                if artifact_id in referenced_ids:
+                    continue  # 仍被引用→保留（去重下任一引用者存活即不删）
+                removed.append(artifact_id)
+                if not dry_run:
+                    with contextlib.suppress(OSError):
+                        path.unlink()
+            return removed
+
+        return await asyncio.to_thread(_run)
+
+
+def referenced_artifact_ids(records: object) -> set[str]:
+    """从事件/快照结构中递归提取所有 ``artifact://`` 指针（供 ``gc_orphans`` 定引用集）。
+
+    遇 dict/list 递归；任何字符串值以 ``artifact://`` 开头即计作一个引用（覆盖
+    tool_completed.artifact_ref / peer_ended.result_ref / memory_written.artifact_ref 等）。"""
+    found: set[str] = set()
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, (list, tuple)):
+            for value in node:
+                walk(value)
+        elif isinstance(node, str) and node.startswith("artifact://"):
+            found.add(node)
+
+    walk(records)
+    return found
+
+
+__all__ = ["FileSystemArtifactStore", "referenced_artifact_ids"]

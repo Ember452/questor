@@ -220,3 +220,25 @@ jobs:
           name: coverage-report-windows
           path: coverage.xml
           retention-days: 7
+
+  # P10/ADR-0049 TC2：任务级回归网（DoD-C）**独立、先非阻塞**（承 G-L7/夜间独立形状）。
+  # 用 `-m eval` 选确定性 scripted-provider 用例（无 key/无网络）；continue-on-error 使其在
+  # 未标 required 前不阻断 merge。承 pitfalls 确定性纪律：真 LLM 端到端不在此列（UNVERIFIED）。
+  # 阈值钉定：eval 失败即回归信号；稳定后再议是否升为阻塞 required check。
+  evals:
+    needs: boundaries
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+      - run: uv sync --locked --all-groups
+      - name: deterministic task-level eval net
+        run: uv run pytest -m eval -v --tb=short -p no:cacheprovider

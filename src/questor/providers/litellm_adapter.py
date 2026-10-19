@@ -107,6 +107,10 @@ _REASONING_KEYS = ("reasoning_content", "reasoning", "thinking")
 #: sha256 + token 计数 + 耗时 + 分类，绝不落 prompt/响应片段（DoD B⑤；ADR-0027 D4）。
 _LLM_LOG = logging.getLogger("questor.llm")
 
+#: 预览专用 logger（P10/ADR-0049 刀 3）：携有界截断的 prompt/响应 preview，经 sink 只进独立
+#: ``llm-<date>.jsonl``、**绝不进主干**（C20 不越界款：显式授权 + 独立通道 + 有界截断）。
+_LLM_PREVIEW_LOG = logging.getLogger("questor.llm.preview")
+
 
 def _content_text(message: Message) -> str:
     """拼接消息里所有可见 text 块。"""
@@ -153,6 +157,10 @@ class LiteLLMProvider(ProviderPort):
     def __init__(self, model: str, **settings: Any) -> None:
         self.model = model
         self.settings = settings
+        # P10/ADR-0049：preview 截断预算（由组合根从 QUESTOR_LOG_PAYLOAD 解析后注入）；None=不落 preview。
+        # 非空才产 questor.llm.preview 行；值必过管线单一脱敏 filter、有界截断。
+        preview = settings.get("payload_preview")
+        self.payload_preview: int | None = preview if isinstance(preview, int) and preview > 0 else None
 
     async def stream(self, request: ProviderRequest) -> AsyncIterator[StreamChunk]:
         """流式请求并把原始 chunk 归一化为 StreamChunk 序列。
@@ -239,6 +247,16 @@ class LiteLLMProvider(ProviderPort):
                 request_sha256=request_sha256,
                 response_sha256=response_sha256,
             )
+            if self.payload_preview is not None:
+                # 显式授权才落 preview 到独立 llm 通道（主干由 sink_file 排除 questor.llm.preview 保证零原文）。
+                # 脱敏由 pipeline 单一 filter 自动覆盖所有 field 值（含下面 preview）；绝不执行凭据。
+                args_preview = json.dumps(params.get("messages", []), ensure_ascii=False, default=str)[: self.payload_preview]
+                resp_preview = "".join(resp_parts)[: self.payload_preview]
+                _LLM_PREVIEW_LOG.debug(
+                    "llm preview %s",
+                    status,
+                    extra={"log_fields": {"arguments_preview": args_preview, "response_preview": resp_preview, "truncated": True}},
+                )
 
 
 def _delta_reasoning(delta: Any) -> str | None:

@@ -14,7 +14,8 @@ from datetime import datetime
 
 from questor.contracts.events import ExpireApproval
 from questor.contracts.ports import StorePort
-from questor.contracts.state_schema import ApprovalStatus
+from questor.contracts.state_schema import ApprovalStatus, Message
+from questor.kernel.compaction import covered_hash
 from questor.state.domain_state import Run
 from questor.state.reduce import reduce
 from questor.state.snapshot import from_snapshot
@@ -22,6 +23,12 @@ from questor.state.snapshot import from_snapshot
 
 class NoIntactCheckpointError(RuntimeError):
     """某 run 有快照但无一可完好重建（blob 损坏 / 版本不可解）：fail-closed，绝不半重建或静默当未知 run。"""
+
+
+class AnchorIntegrityError(RuntimeError):
+    """P10/Major-2：`covered_hash` 回读校验不符——被压区原文已被改写/分叉。
+
+    fail-closed：绝不返回旧/篡改内容。与快照损坏同类，但专指“压缩锈与原文不一致”这一不变式违反。"""
 
 
 def _expire_due_approvals(run: Run, *, now: datetime) -> Run:
@@ -70,3 +77,44 @@ async def rebuild_run(store: StorePort, run_id: str, *, now: datetime | None = N
 async def resume_run(store: StorePort, run_id: str, *, now: datetime | None = None) -> Run | None:
     """向后兼容入口：等价于 ``rebuild_run``（恢复该 run 最近权威状态并闭合过期审批）。"""
     return await rebuild_run(store, run_id, now=now)
+
+
+async def verify_recovery_anchors(store: StorePort, run_id: str) -> list[Message]:
+    """P10/Major-2（ADR-0048）：按 ``recovery_pointers`` **回读被压区原文并 fail-closed 校验**。
+
+    这是 ``RecoveryPointer.matches()`` 的生产调用方——“历史被改写/分叉即拒”从纸面不变式变成执行点：
+    1. 取当前态（最新快照）的 ``recovery_pointers``；无则返回 ``[]``（未压缩）。
+    2. 逐锈从**全量快照**（`pre_compact` 等保留被逐区的检查点）按索引切片原文、重算 ``covered_hash``、``matches()`` 比对。
+    3. 任一锈无快照能佐证（被篡改/丢失/越界）→ 抛 ``AnchorIntegrityError``，**绝不返回旧内容**。
+
+    只读（仅 ``store.checkpoints``）；不改状态、不写库。返回各锈覆盖区原文拼接（供“展开压缩行”类读面）。"""
+    candidates = await store.checkpoints(run_id)
+    if not candidates:
+        return []
+    current = from_snapshot(json.loads(candidates[0]["state_digest"]))  # 新→旧，首个=当前态
+    pointers = current.context.recovery_pointers
+    if not pointers:
+        return []
+    # 候选全量快照（含被逐区）：反序列化所有可解的快照的完整 items。
+    full_snapshots: list[tuple[Message, ...]] = []
+    for cp in candidates:
+        try:
+            full_snapshots.append(from_snapshot(json.loads(cp["state_digest"])).context.items)
+        except Exception:  # noqa: BLE001 - 损坏快照回读时自然作为“不能佐证锈”，绝不半重建
+            continue
+    recovered: list[Message] = []
+    for pointer in pointers:
+        hit: list[Message] | None = None
+        for items in full_snapshots:
+            if not (0 <= pointer.seq_from <= pointer.seq_to < len(items)):
+                continue
+            covered = items[pointer.seq_from : pointer.seq_to + 1]
+            if pointer.matches(covered_hash(covered)):  # ← 生产调用点（Major-2）
+                hit = list(covered)
+                break
+        if hit is None:  # 无一快照能佐证此锈 → fail-closed（篡改/分叉/丢失）
+            raise AnchorIntegrityError(
+                f"run {run_id}: recovery anchor [{pointer.seq_from},{pointer.seq_to}] failed covered_hash verification; refusing tampered history"
+            )
+        recovered.extend(hit)
+    return recovered
