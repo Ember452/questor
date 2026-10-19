@@ -148,8 +148,8 @@ class MemoryWrite:
     kind: MemoryWriteKind
     scope: MemoryScope
     text: str  # 有界浓缩文本；空文本被拒（空哨兵由蒸馏侧"跳过不写"处理，不进此路径）
-    covered_from: int | None = None  # 仅 distill：指向被压原文区（events 序号）
-    covered_to: int | None = None
+    covered_from: int | None = None  # 仅 distill：被压原文区起点（**压缩前 context 快照索引**，非 event seq；compaction 与 RecoveryPointer 同一编号空间）
+    covered_to: int | None = None  # 同上，被压原文区终点（context 快照索引）
     covered_hash: str | None = None  # 仅 distill：覆盖区语义哈希锚（读取 fail-closed 校验）
     note: str | None = None  # 有界来源说明（勿塞原始 transcript）
     metadata: JsonObject | None = None
