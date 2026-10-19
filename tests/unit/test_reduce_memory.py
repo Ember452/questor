@@ -34,5 +34,8 @@ def test_write_memory_oversize_fail_closed() -> None:
         payload=MemoryWrite(kind=MemoryWriteKind.DAILY, scope=MemoryScope.USER, text="x" * (16 * 1024 + 1)),
     )
     new, events = reduce(run, cmd)
-    assert new.seq == 0  # 拒绝：不占 seq、状态不变
+    # 拒绝仍产一条 durable WARNING 事件→必须占用一个 seq（地基不变式：产 durable 事件必推进游标，
+    # 否则下一条 durable 复用同 seq 撞 event_log UNIQUE）；除 seq 外状态不变（正文不进 Domain_State）。
+    assert new.seq == run.seq + 1
+    assert new.context.items == run.context.items
     assert events[0].type == EventType.WARNING
