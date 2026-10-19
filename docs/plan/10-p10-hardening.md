@@ -234,6 +234,15 @@
 
 **质量门**：全量 838 passed / 5 skipped 零回归（基线 800+38）、全树 ruff clean、`lint-imports` 5 kept、协议 25 types lockstep、10 边界守卫全绿、冷导入逐模块。**push/merge 逐次待授权（PR-only，本地 merge commit 不 squash）**。
 
+**独立对抗式验收审计后修复（`docs/audit/P10-review-2026-10-19-independent.md`，CONDITIONAL GO → 关闭 Blocker=0/2 Major）**：
+- **Major-1（压缩生产恒关）**：组合根新增 `compaction_from_env()`（`QUESTOR_COMPACTION=off|on|items:N`）生产构造 `CompactionConfig`，`CliSurface.compaction` 注入、`_loop` 透传 `DefaultTurnLoop`——`src/` 现有真实 `CompactionConfig(` 构造与生产接线；默认 off 保零回归；**触发信号改用 `max_items`（context 体量）非累计 token**（采纳审计外我自查的信号隐患）。判红：`test_p10_compaction_wiring.py`。
+- **Major-2（covered_hash 回读无消费者）**：新增 `kernel/recovery.verify_recovery_anchors`——按 `recovery_pointers` 从 `pre_compact` 全量快照回读原文、重算 `covered_hash`、`matches()` 不符抛 `AnchorIntegrityError`（fail-closed 拒返篡改历史）；`RecoveryPointer.matches()` 现于 `src/` 有生产调用方；接 `questor logs --run ID --expand` 生产可达。判红：`test_compaction_recovery.py`（回读原文 + 篡改→拒绝）。
+- **Minor-1**：`check_replay_determinism` 增 `compaction-after-split` fixture（split 落压缩之后，补“压缩态经快照 round-trip”盲区）；现 7 fixtures。
+- **Minor-2**：`questor maintenance` 子命令给 lease/claim 回收一个生产触发（artifact `gc_orphans` 方法就绪、调度待接生产 artifact 根装配，已诚实标注）。
+- **Minor-3**：eval 计数口径对齐（`-m eval`=3、`tests/evals/` 目录含未标记的 p4=4）。
+
+修复后：全量回归重跑零回归、`-m eval` 3、新接线/消费者测均绿；关闭两 Major → GO（待 CI 绿 + 用户授权合并）。
+
 ---
 
 ## 附：七处真矛盾裁决一览（决策完备，供对抗评审直击）
