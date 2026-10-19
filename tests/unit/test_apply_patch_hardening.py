@@ -52,3 +52,24 @@ async def test_lf_file_keeps_lf_after_patch(tmp_path: Path) -> None:
     res = await ApplyPatchTool().execute({"input": patch}, FakeToolContext(tmp_path))
     assert res.status == "success", res.result
     assert (tmp_path / "lf.txt").read_bytes() == b"keep\nnew\n"
+
+
+async def test_multi_file_failure_rolls_back(tmp_path: Path, monkeypatch) -> None:
+    """MAJ-11：多文件补丁在阶段二任一文件写失败时，必须回滚全部、不留半改。"""
+    real = Path.write_bytes
+
+    def fake(self: Path, data) -> int:  # 对名字含 boom 的目标注入写失败
+        if "boom" in self.name:
+            raise OSError("injected disk full")
+        return real(self, data)
+
+    monkeypatch.setattr(Path, "write_bytes", fake)
+    patch = (
+        "--- /dev/null\n+++ b/good.txt\n@@ -0,0 +1,1 @@\n+ok\n"
+        "--- /dev/null\n+++ b/boom.txt\n@@ -0,0 +1,1 @@\n+bad\n"
+    )
+    res = await ApplyPatchTool().execute({"input": patch}, FakeToolContext(tmp_path))
+    monkeypatch.undo()
+    assert res.status == "error" and "rolled back" in res.result, res.result
+    assert not (tmp_path / "good.txt").exists(), "半改：第二个文件写失败但 good.txt 残留"
+    assert not (tmp_path / "boom.txt").exists()
