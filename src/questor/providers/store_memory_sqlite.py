@@ -167,6 +167,7 @@ class SQLiteMemoryStore(MemoryStorePort):
         os.makedirs(self.memory_root, exist_ok=True)
         self._db = await aiosqlite.connect(self.db_path, isolation_level=None)
         try:
+            await self._db.execute("PRAGMA busy_timeout=30000")  # 跨进程瞬时争用下等锁而非立即抛错（#182）；不开 WAL（单写者由租约保证，避免 -wal 文件）。
             await self._db.executescript(_SCHEMA)
             await self._enforce_schema_version()
             self.vector = SQLiteVectorBackend(self._db)

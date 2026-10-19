@@ -110,6 +110,7 @@ class SQLiteStore(StorePort):
         # isolation_level=None -> 自动提交，好让我们自己驱动 BEGIN IMMEDIATE。
         self._db = await aiosqlite.connect(self.path, isolation_level=None)
         try:
+            await self._db.execute("PRAGMA busy_timeout=30000")  # 跨进程 BEGIN IMMEDIATE 瞬时争用下等锁而非立即抛错（#182）；单写者已由租约保证，不开 WAL（收益低、徒增 -wal 文件）。
             await self._db.executescript(_SCHEMA)
             await self._enforce_schema_version()
         except BaseException:
