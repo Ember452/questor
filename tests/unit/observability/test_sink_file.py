@@ -107,6 +107,23 @@ def test_lazy_gc_removes_expired(tmp_path: Path) -> None:
     assert (logs / f"questor-{recent}.jsonl").exists()
 
 
+def test_sink_recovers_after_transient_degrade(tmp_path: Path) -> None:
+    """#162A：瞬时降级不再永久停写——退避到期后一次成功写即自愈。"""
+    sink = FileSink(tmp_path / "logs")
+    sink.degraded = True
+    sink._degrade_streak = 1
+    sink._retry_after = float("inf")  # 退避未到 → emit 抑制不写
+    sink.emit(_entry(msg="suppressed"))
+    date = datetime.now(UTC).strftime("%Y%m%d")
+    main_text = (tmp_path / "logs" / f"questor-{date}.jsonl")
+    assert not main_text.exists() or "suppressed" not in main_text.read_text(encoding="utf-8")
+    # 退避到期（设 _retry_after=0）→ 下次 emit 写成功并从降级态恢复。
+    sink._retry_after = 0.0
+    sink.emit(_entry(msg="recovered"))
+    assert sink.degraded is False
+    assert "recovered" in main_text.read_text(encoding="utf-8")
+
+
 def test_degraded_readonly_dir_no_crash(tmp_path: Path) -> None:
     blocker = tmp_path / "blocked"  # 用普通文件占位 → 其下无法建子目录
     blocker.write_text("x", encoding="utf-8")

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -33,6 +34,10 @@ _LLM = "llm"
 #: 预览专用 logger（P10/ADR-0049 刀 3；C20 不越界款）：携 prompt/响应截断 preview。
 #: **绝不进主干**（保 D4 零原文）、只进独立 `llm-<date>.jsonl`（单独授权/单独排除于分享）。
 _LLM_PREVIEW_LOGGER = "questor.llm.preview"
+
+#: 降级退避：一次写入失败不再永久停写，而是按指数退避重试，一次成功即自愈（#162A）。
+_DEGRADE_BACKOFF_BASE = 1.0
+_DEGRADE_BACKOFF_CAP = 60.0
 
 
 def _entry_to_dict(entry: LogEntry) -> dict:
@@ -72,6 +77,8 @@ class FileSink:
         self._dir = Path(log_dir)
         self.degraded = False
         self._degrade_warned = False
+        self._degrade_streak = 0
+        self._retry_after = 0.0
         # 预算按**记录日期**分桶，且三个 lane 的写入都计入（Issue #135）：
         # 旧写法是跨日累计的单计数器 + 一个永不复位的 _raised 布尔，后果是一天日志多就
         # 把此后所有分片永久降到 INFO（长跑 sidecar 上等于“第一天很噪 → 以后再也看不到 DEBUG”）。
@@ -86,10 +93,13 @@ class FileSink:
         try:
             self._dir.mkdir(parents=True, exist_ok=True)
         except OSError as exc:  # 只读挂载 / CWD 只读 / 装到 Program Files 非管理员
-            self._degrade(exc)
+            self._degrade(exc, now=time.monotonic())
 
-    def _degrade(self, exc: BaseException) -> None:
+    def _degrade(self, exc: BaseException, *, now: float) -> None:
         self.degraded = True
+        self._degrade_streak += 1
+        # 有限退避、可自愈：瞬时 OSError（AV/索引器占用、磁盘短暂满）不再永久停写整个进程生命周期。
+        self._retry_after = now + min(_DEGRADE_BACKOFF_CAP, _DEGRADE_BACKOFF_BASE * (2 ** (self._degrade_streak - 1)))
         if not self._degrade_warned:
             self._degrade_warned = True
             try:  # 一次性出声：让"日志没写"本身不至于变成一个待排故障。
@@ -101,7 +111,8 @@ class FileSink:
     # --- 落盘 --------------------------------------------------------------
 
     def emit(self, entry: LogEntry) -> None:
-        if self.degraded:
+        now = time.monotonic()
+        if self.degraded and now < self._retry_after:
             return
         try:
             line = json.dumps(_entry_to_dict(entry), ensure_ascii=False) + "\n"
@@ -119,9 +130,12 @@ class FileSink:
             if entry.level >= self.min_level and entry.logger != _LLM_PREVIEW_LOGGER:
                 self._append(self._fname(entry, _MAIN), line)
                 self._account(day, line)
+            if self.degraded:  # 一次成功写即从降级态恢复（#162A）。
+                self.degraded = False
+                self._degrade_streak = 0
         except (ValueError, OSError):
-            # 磁盘写失败/文件在 teardown 期被关（ValueError("I/O on closed file")）→ 吞 + 降级。
-            self._degrade(sys.exc_info()[1])
+            # 磁盘写失败/文件在 teardown 期被关（ValueError("I/O on closed file")）→ 吞 + 退避降级。
+            self._degrade(sys.exc_info()[1], now=now)
 
     def _roll_day(self, day: str) -> None:
         """换日则重置主干门：前一日的软阈值提级不该泄漏到新的一日（Issue #135）。"""
