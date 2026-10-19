@@ -18,6 +18,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import replace
 from datetime import datetime
 
+from questor.contracts.common import utc_now
 from questor.contracts.events import (
     EVENT_SCHEMA_VERSION,
     Envelope,
@@ -226,5 +227,5 @@ def _row_to_envelope(run_id: str, row: dict) -> Envelope:
         type=row["type"],
         turn=row.get("turn"),
         data=row.get("data", {}),
-        ts=datetime.fromisoformat(ts) if ts else datetime.now(),
+        ts=datetime.fromisoformat(ts) if ts else utc_now(),
     )
