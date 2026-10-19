@@ -73,6 +73,13 @@ class GrepTool(Tool):
                 if name_glob and not fnmatch.fnmatch(filename, name_glob):
                     continue
                 full = Path(dirpath) / filename
+                # 越界防御（与 glob 对齐）：解析真实路径，落在 workspace root 之外即跳过——
+                # 挡住文件 symlink / Windows 目录 junction 把 root 外内容读进上下文
+                # （grep 属 READONLY→权限恒 ALLOW、无审批门，故 containment 是它唯一屏障，BLK-12）。
+                try:
+                    Path(str(full.resolve())).relative_to(root)
+                except (OSError, ValueError):
+                    continue
                 try:
                     if full.stat().st_size > _MAX_FILE_BYTES:
                         continue
