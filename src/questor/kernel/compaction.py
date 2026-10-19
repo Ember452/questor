@@ -10,7 +10,7 @@
 - 保头（system/首个 user 轮）保尾（最新可见回复），只压中段（design/01 §2「user/assistant 文本不删」的
   可恢复实现：中段进 `summary` + `recovery_pointers`，原文仍在 append-only `event_log`）；
 - `covered_hash` 剔除易变字段（message id / seq / tool_use_id / args），只留语义形状，跨 rebuild 稳定
-  （wuu compaction_note.go:74-75，ADR-0024）。
+  （ADR-0024）。
 """
 
 from __future__ import annotations

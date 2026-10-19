@@ -3,8 +3,7 @@
 纯函数、无 IO/subprocess。目标不是“理解所有 shell”，而是把能被证明安全的命令与
 动态、未识别、不可解析或破坏性命令严格分开。任何不能证明 read_only 的结果都不得自动 allow。
 
-部分分隔/unwrap 表改造自 CowAgent ``agent/permission/policy.py:290-475``，MIT License；
-本仓改成 dialect-tagged IR，不保留其返回语义。
+分隔/unwrap 表在本仓以 dialect-tagged IR 重新实现，不沿用外部返回语义。
 """
 
 from __future__ import annotations

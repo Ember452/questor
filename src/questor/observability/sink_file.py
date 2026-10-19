@@ -9,7 +9,7 @@
 - ``llm-<YYYYMMDD>.jsonl``：仅 ``llm_file=True`` 且 ``logger=="questor.llm"`` 时承载（隐私独立通道）。
 
 按日无 rename（D7）→ 跨进程安全；文件名天然可 GC（删过期文件）。**best-effort**：目录不可建/不可写
-→ 降级 console-only（一次性 stderr WARNING、``degraded=True``、绝不抛，参照 CowAgent MIT 思路）；
+→ 降级 console-only（一次性 stderr WARNING、``degraded=True``、绝不抛）；
 teardown 期 ``ValueError/OSError`` 吞掉。JSONL 单行：``json.dumps`` 转义换行，异常链栈完整仍一物理行。
 """
 

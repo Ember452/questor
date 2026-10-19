@@ -4,7 +4,7 @@
 - 命名 `mcp_<server>_<tool>`（C20）；描述过共享 `bound_description` 有界净化（C19/C18）；
   inputSchema 过 `normalize_mcp_schema` 归一（C18）。
 - **C22 非放宽**：capability=NETWORK、risk=MEDIUM、read_only 默认 False（远程 annotations 是 hint
-  非 grant，DeepCode `core/mcp/tools.py:71-74` 同向）、approval_mode 不设 → 由权限层走 unknown→deny。
+  非 grant）、approval_mode 不设 → 由权限层走 unknown→deny。
 - **C19 闭合**：远程返回 `isError` → `ToolResult(status="error")`（真实记录，非合成）；transport/连接
   异常**向上抛**，由 Harness `_execute_tool` 归一成 error/timed_out 的 `tool_result` 闭合配对，绝不吞成成功。
 分层：本模块在 L3，经注入的 connection 调远程，不 import store/surfaces（HARD C1/C14）。

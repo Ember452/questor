@@ -1,6 +1,6 @@
 """L3 SKILL.md frontmatter 解析（C03；`docs/plan/05` T8/T9）。
 
-设计取舍（相对 crewAI `skills/parser.py:39-127` 的 `yaml.safe_load`）：本仓未在
+设计取舍：本仓未在
 `pyproject` 声明 pyyaml，依赖 transitive 会随上游升级消失（supply-chain 隐患），且
 Agent Skills 的 frontmatter 只需扁平 ``key: scalar`` 与可选内联 list——故用**严格、依赖最小**
 的手写解析：只接受 ``key: value`` 行，任何缩进块映射 / 顶层列表项 / 无冒号行一律

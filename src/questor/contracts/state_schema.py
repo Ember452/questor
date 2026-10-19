@@ -320,7 +320,7 @@ class Budget:
     approval_timeout_seconds: float = 300
     tool_default_timeout_seconds: float = 120
     # P8 fan-out 预算（ADR-0041）：默认 None = 不允许 fan-out（保守）；由 capabilities/subagent 的
-    # admission gate 强制（wuu spawn_slot reservation），非硬杀。
+    # admission gate 强制（预留式配额，非硬杀）。
     max_parallel_children: int | None = None  # 单个父 run 同时在世的子 run 上限
     max_tree_depth: int | None = None  # 编排树深度上限（默认语义由调用侧取 1：父不直接生孙）
 

@@ -1,6 +1,6 @@
 """L3 技能 frontmatter 校验（C04；`docs/plan/05` T8/T9）。
 
-改造 crewAI `skills/validation.py:13-56`：name 小写连字符正则、长度上界、目录名==声明名。
+校验规则：name 小写连字符正则、长度上界、目录名==声明名。
 失败即抛 `SkillParseError`（与解析同族），交 `loader.discover_skills` 逐文件降级出声，绝不误纳。
 只依赖 stdlib（HARD C1/C14）。"""
 

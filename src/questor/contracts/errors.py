@@ -153,8 +153,7 @@ def classify_provider_error(exc: BaseException, *, at_turn: int) -> ErrorEntry:
     不变式：返回值永不为 ``None``；``layer`` 恒为 ``PROVIDER``（调用点即故障域）；
     ``message`` 有界到 :data:`MAX_ERROR_MESSAGE_CHARS`。
     失败语义：**本函数绝不抛**——分类器自己出错时降级为 ``UNKNOWN``/不可重试，
-    免得错误路径变成第二个异常把 run 打穿（参照 hermes ``agent/error_surface.py`` 的
-    "NEVER raises" 纪律，MIT © Nous Research；改造复用其形状，非照搬实现）。
+    免得错误路径变成第二个异常把 run 打穿（"NEVER raises" 是本分类器的硬性纪律）。
     """
     try:
         kind, retryable, should_compress = _verdict_of(exc)

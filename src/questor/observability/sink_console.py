@@ -4,8 +4,7 @@
 
 **永不写 stdout**（G-L10）：``--list`` 等机器可读输出走 stdout，console sink 落 stdout 会污染它。
 默认流 ``sys.stderr``、``min_level=INFO``（D10 console INFO / file DEBUG）。编码非 UTF-8 locale 下
-抛错时降级为 ASCII ``replace`` 重写，绝不把 ``UnicodeEncodeError`` 上冒（参照 hermes ``_safe_stderr``
-思路，MIT）。异常最终仍由 pipeline 的 exporter 兜底，本 sink 先自行尽力降级。
+抛错时降级为 ASCII ``replace`` 重写，绝不把 ``UnicodeEncodeError`` 上冒。异常最终仍由 pipeline 的 exporter 兜底，本 sink 先自行尽力降级。
 """
 
 from __future__ import annotations

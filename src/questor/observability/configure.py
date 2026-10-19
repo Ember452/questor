@@ -2,7 +2,7 @@
 
 三层归属（DESIGN §3）：**内核文件**——运行时 import 只在 observability 包内。**env-free**：所有参数由
 调用方（组合根 T2.14）传入，绝不读 config/env（守 ``config ⟂ observability`` independence 契约；
-cordis ``_resolveConfig`` 同构——配置由容器注入，内核不知道 env 的存在）。
+配置由容器注入，内核不知道 env 的存在）。
 
 幂等口径：默认 ``force=True`` 重配——**先拆旧再建新**（移除旧 ``BridgeHandler``、注销旧 sink、
 重置管线），故反复调用不叠 handler/sink（G-L8）。``force=False`` 且已初始化则 no-op。

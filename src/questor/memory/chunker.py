@@ -1,4 +1,4 @@
-"""记忆切块（design/06 §5 取料 #4；承 CowAgent ``chunker.py`` 思路自写，非逐行移植）。
+"""记忆切块（design/06 §5 取料 #4）。
 
 纯函数、无 IO、只依赖 contracts：把一篇 markdown 文档切成带**行区间**的 :class:`MemoryChunk`。
 markdown 结构感知（按标题切段）+ 超长滑窗（overlap 防切断语义）。``CHUNKER_VERSION`` 变更触发

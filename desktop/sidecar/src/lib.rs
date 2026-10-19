@@ -2,12 +2,12 @@
 //!
 //! 这里是**纯逻辑、零外部依赖**，好让 `cargo test` 快速、确定性地验证最难的部分：
 //! - **generation 栅栏**：每次重启自增，携带旧 generation 的连接/回执一律判为陈旧丢弃
-//!   （防"重启后陈旧连接写新 run"，对应参考仓 `sidecar.rs` 的 `generation: AtomicU64` 形状）。
+//!   （防“重启后陈旧连接写新 run”）。
 //! - **两级优雅关闭**：先 `request`（sidecar 的 shutdown 调用）→ 轮询子进程 `poll` 到 `grace` 上限
 //!   → 超时 `force_kill` 兜底。无论走哪级，都在返回前给出确定终态。
 //! - **`fail_all`**：崩溃/关闭时把在途 pending 全标记为 Failed，使 pending 不撕裂状态（C10/C19 的
 //!   "先推部分事件后不得让消费方误解"在生命周期侧的对应物）。
-//! - **loopback 就绪探测**：轮询 `127.0.0.1:<port>` 可连即 ready（ADR-0007：替代参考仓 stdin `initialize`）。
+//! - **loopback 就绪探测**：轮询 `127.0.0.1:<port>` 可连即 ready（ADR-0007）。
 //!
 //! OS 进程/Windows Job Object 真后端在 `backend.rs`（生产用）；本模块只依赖 `trait` 抽象，便于 mock 测。
 

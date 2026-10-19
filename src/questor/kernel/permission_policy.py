@@ -3,8 +3,7 @@
 引擎自身没有配置：mode/rules/denylist/approval policy 全从权威 PermissionCtx 读取。
 这样 `SetPermissionMode` 改 Domain_State 后，下一次调用必然看到新模式（ADR-0014）。
 
-部分 pattern/argument 语义改造自 DeepCode ``core/harness/permissions.py``，MIT License；
-本仓改成 PermissionEvaluation/Outcome，不把完整参数原样外发。
+pattern/argument 语义在本仓收敛为 PermissionEvaluation/Outcome，不把完整参数原样外发。
 """
 
 from __future__ import annotations

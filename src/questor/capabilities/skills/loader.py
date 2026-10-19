@@ -1,6 +1,6 @@
 """L3 技能发现与加载（C05；`docs/plan/05` DoD①/T8）。
 
-发现 = 扫目录逐个读 SKILL.md；**单文件失败隔离**（改造 crewAI `skills/loader.py:44-117`）：
+发现 = 扫目录逐个读 SKILL.md；**单文件失败隔离**：
 一个坏 `SKILL.md` 只降级它自己并 WARNING 出声，绝不拖垮整批发现（HARD C6：错误绝不静默）。
 发现阶段只到 METADATA（读 frontmatter，不读正文）——正文/资源按 C06 渐进披露（见 `disclosure.py`），
 避免整批技能正文无脑进 prompt。只依赖 stdlib（HARD C1/C14）。"""

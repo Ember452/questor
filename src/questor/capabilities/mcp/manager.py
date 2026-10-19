@@ -23,7 +23,7 @@ from questor.capabilities.mcp.security import McpSecurityError, validate_server_
 _log = logging.getLogger("questor.mcp")
 
 #: 单个 server 的发现上限（C18 有界 / 防远程 server 一次性报海量工具撑爆 prompt 与工具面；
-#: 超限只接前 N 个并出声，对齐参考实现 DeepCode `core/mcp/connection.py:27` 的 MAX_DISCOVERED_TOOLS）。
+#: 超限只接前 N 个并出声）。
 MAX_DISCOVERED_TOOLS = 256
 
 

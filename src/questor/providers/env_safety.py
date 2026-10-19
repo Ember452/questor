@@ -2,7 +2,7 @@
 
 威胁模型：父进程环境变量 → subprocess stdout/stderr → 下一轮 prompt → 第三方 relay。
 默认擦除 credential-shaped names；provider credentials 永不因 declare 而透传。
-hermes ``env_passthrough.py:46-92`` 的 credential blocklist 纪律为参照，本仓独立实现。
+credential blocklist 纪律在本仓独立实现。
 """
 
 from __future__ import annotations

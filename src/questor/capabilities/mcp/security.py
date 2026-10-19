@@ -1,6 +1,6 @@
 """L3 MCP server entry 安全门（C11；`docs/plan/05` T1，§0.2 凭据/投毒防护）。
 
-采 hermes `mcp_security.py:1-40` 思路：**载入时 + spawn 前**都调 `validate_server_entry`，
+**载入时 + spawn 前**都调 `validate_server_entry`，
 使手改/预植的 `mcp.json` 条目在执行前也被拦。只拦窄形状（宁可漏报不误伤合法 server）：
 - server 命令本身是裸 shell 解释器（bash/sh/cmd/powershell…）；
 - argv 文本含外联(egress)/外传(exfil)/OS 持久化(persistence) hint。
