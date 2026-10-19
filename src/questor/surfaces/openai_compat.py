@@ -12,12 +12,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
@@ -116,18 +117,29 @@ async def _stream_with_cancel(server: EventServer, run_id: str, completion_id: s
             else:
                 yield {"data": json.dumps(frame, ensure_ascii=False)}
     finally:
-        if not completed:  # 无原生续传：客户端断连即取消该 run。
-            await server.cancel(run_id)
+        if not completed:  # 无原生续传：客户端断连即取消该 run；终态/未知 run 的 cancel 会抛 409 → 清理路径吞掉（#175）。
+            with contextlib.suppress(HTTPException):
+                await server.cancel(run_id)
 
 
 async def _collect_final_text(server: EventServer, run_id: str) -> str:
-    """非流式：读到终态，聚合可见文本（一次性收全，无游标续传）。"""
+    """非流式：读到终态，聚合可见文本（一次性收全，无游标续传）。
+
+    客户端在聚合途中断连 → 本协程被取消，finally 经 inbox 提 ``Cancel`` 收敛该 run，
+    不再让它在后台继续烧 provider 费用（#175）。"""
     buf: list[str] = []
-    async for env in server.bus.subscribe(run_id, 0):
-        if env.type == EventType.TEXT_DELTA:
-            buf.append(env.data.get("delta", ""))
-        elif env.type in (EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED):
-            break
+    reached_terminal = False
+    try:
+        async for env in server.bus.subscribe(run_id, 0):
+            if env.type == EventType.TEXT_DELTA:
+                buf.append(env.data.get("delta", ""))
+            elif env.type in (EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED):
+                reached_terminal = True
+                break
+    finally:
+        if not reached_terminal:  # 断连/取消：best-effort 收敛 run；终态竞态的 409 吞掉
+            with contextlib.suppress(HTTPException):
+                await server.cancel(run_id)
     return "".join(buf)
 
 

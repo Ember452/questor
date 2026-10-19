@@ -43,14 +43,13 @@ from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.memory.distill import flush_run_to_daily
 from questor.observability.projection import log_envelope
-from questor.policy.memory_policy import MemoryAwareReActPolicy
 from questor.policy.null_policy import NullPolicy
 from questor.policy.react_policy import ReActPolicy
 from questor.policy.registry import PolicyEntry, PolicyRegistry
 from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.state.domain_state import Run
-from questor.surfaces._assembly import assemble_logging, compaction_from_env, payload_preview_from_env
+from questor.surfaces._assembly import assemble_logging, compaction_from_env, payload_preview_from_env, reconfigure_output_streams
 from questor.surfaces.approval import prompt_approval
 from questor.surfaces.mcp_bootstrap import Teardown, discover_mcp_tools
 from questor.surfaces.run_registry import RunRegistry
@@ -107,11 +106,11 @@ def _default_policy_registry() -> PolicyRegistry:
     """P9/ADR-0045：默认进程内策略名册（system trust 固定名册，无磁盘扫描）。
 
     解析发生在装配点（本 surface）、产 PolicyPort 注入 loop；kernel 不 import registry（C1）。
-    默认 id=react；null/memory_react 供 A/B 与降级演示。"""
+    默认 id=react；null 供降级演示。memory_react 需 loop 供 view.memory（尚未接线，见 #184），
+    接线前不入默认名册以免“可选但静默等同 react”的误导；类与直测保留，接线后经 ADR 再加回。"""
     registry = PolicyRegistry(default_id="react")
     registry.register(PolicyEntry(id="react", factory=ReActPolicy, trust=PolicyTrust.SYSTEM))
     registry.register(PolicyEntry(id="null", factory=NullPolicy, trust=PolicyTrust.SYSTEM))
-    registry.register(PolicyEntry(id="memory_react", factory=MemoryAwareReActPolicy, trust=PolicyTrust.SYSTEM))
     return registry
 
 
@@ -414,6 +413,7 @@ def main() -> int:
     from questor.composition import build_app, close_app
 
     async def _run() -> int:
+        reconfigure_output_streams()  # 先于一切输出把 stdout/stderr 重配为 UTF-8 兜底（#180）
         assemble_logging()
         app = await build_app()
         try:

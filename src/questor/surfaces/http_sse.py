@@ -40,6 +40,17 @@ from questor.surfaces.subagent_orchestrator import SubagentOrchestrator
 
 _log = logging.getLogger("questor.surfaces.http_sse")
 
+
+def _log_drive_failure(task: asyncio.Task) -> None:
+    """驱动 task 的异常绝不静默（#170）：取出并出声，避免持久/内存/快照故障把 task 吞成死。
+
+    （仅用于日志/排障；run 的权威终态仍由 _run_with_mcp finally 的 unregister 保证。）"""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        _log.error("drive task raised; run may be left non-terminal (persist/memory/checkpoint fault)", exc_info=exc)
+
 # 终态事件集：流式跟到这些即停。
 TERMINAL = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
 #: 传输级收尾帧名（§6-8）：非 harness 领域事件、不入库、不进 event.schema，仅告知“流已结束、勿自动重连”。
@@ -106,24 +117,26 @@ class EventServer:
         start_run（调用方 task）而 teardown 放在驱动 task，会“exit cancel scope in a different task”崩。
         故发现/驱动/回收集中在此一个 task 内；无 mcp.json 时 discover 返回 ([], noop)，不改变既有行为。
         """
-        mcp_tools, mcp_teardown = await self.surface._discover_mcp(run_id)
-        tool_surface = self.surface._freeze_surface(run_id, mcp_tools)
-        # 长 run 必须周期续租：否则超过 TTL 后 ``reclaim_expired_leases`` / 异进程 ``--resume``
-        # 可抢走已过期的租约行 → 两个 driver 同写一 run（破 C2 单写者，track4 BLK-2）。
+        # discover/freeze 与驱动必须同一 task（anyio cancel scope），但也纳入 try：坏 mcp.json
+        # 抛 McpConfigError 时，仍要进 finally 释放租约、回收 registry、关已建句柄（#178）。
+        mcp_teardown = None
         renew_task: asyncio.Task | None = None
-        if lease_holder is not None:
-            renew_task = asyncio.create_task(self._renew_lease_loop(run_id, lease_holder))
         try:
+            mcp_tools, mcp_teardown = await self.surface._discover_mcp(run_id)
+            tool_surface = self.surface._freeze_surface(run_id, mcp_tools)
+            # 长 run 必须周期续租：否则超 TTL 后过期行可被抢→双驱破 C2 单写者。
+            if lease_holder is not None:
+                renew_task = asyncio.create_task(self._renew_lease_loop(run_id, lease_holder))
             await self._loop(asyncio.Event(), tool_surface, run_id=run_id).drive_controller(controller)
         finally:
             if renew_task is not None:
                 renew_task.cancel()
-            # 驱动结束即从注册表回收 controller：这是所有经 _run_with_mcp 的 run 的权威收尾点，
-            # 不再依赖是否有 SSE 消费者挂上（无人订阅的 run 曾永驻 registry，track surfaces MAJ-2）。
-            # 同步、置于 finally 首行，确保即便下方 teardown/释放抛错也已回收。
+            # 驱动结束即从注册表回收 controller（权威收尾点，不依赖是否有 SSE 消费者挂上，track surfaces MAJ-2）。
+            # 置于 finally 首行，确保即便下方 teardown/释放抛错也已回收。
             self.registry.unregister(run_id)
-            await mcp_teardown()  # 关连接+回收子进程树+stderr 句柄，防泄漏
-            # P9/ADR-0047：start_run 与 resume 均取唯一 holder 租约（单写者），驱动任务收尾在此释放（未取到→lease_holder=None 那么 no-op）。
+            if mcp_teardown is not None:  # discover 本身失败时无 teardown 可关；已建连接/句柄由 discover 内部回滚
+                await mcp_teardown()
+            # P9/ADR-0047：start_run 与 resume 均取唯一 holder 租约，未取到→lease_holder=None 那么 no-op。
             if lease_holder is not None:
                 await self.store.release_lease(run_id, lease_holder, 1)
 
@@ -157,6 +170,7 @@ class EventServer:
         msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
         await self.registry.submit(run_id, SubmitMessage(run_id=run_id, content=msg), source="http", idempotency_key=f"submit:{run_id}")
         task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))
+        task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）
         self.registry.set_task(run_id, task)
         return run_id
 
@@ -214,6 +228,7 @@ class EventServer:
         controller = RunController(run)
         self.registry.register(controller)
         task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约
+        task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）
         self.registry.set_task(run_id, task)
         return run_id
 

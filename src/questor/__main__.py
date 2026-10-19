@@ -38,7 +38,7 @@ from questor.composition import (
     web_dist_from_env,
 )
 from questor.memory.distill import DistillOutcome, deep_dream
-from questor.surfaces._assembly import assemble_logging, log_dir_from_env
+from questor.surfaces._assembly import assemble_logging, log_dir_from_env, reconfigure_output_streams
 from questor.surfaces.cli import interactive
 from questor.surfaces.http_sse import EventServer, create_app
 from questor.surfaces.logs import run_logs_command
@@ -108,6 +108,7 @@ async def _amain(argv: list[str]) -> int:
     # 本入口的顺序（#161）：先判参数、再装配——日志经 ``assemble_logging``（带内桥 + console + 按日
     # JSONL + errors 分流），应用 store/memory/exec 三件套/surface 经 ``composition.build_app``；参数由组合根
     # 注入、内核 env-free（config⟂observability）。sidecar 宿主与 surfaces.cli.main() 均复用同一 build_app、不自配。
+    reconfigure_output_streams()  # 先于一切输出把 stdout/stderr 重配为 UTF-8 兜底（#180，防非 UTF-8 宿主 print CJK 崩）
     if argv and argv[0] in ("-h", "--help"):
         print(_USAGE)
         return 0

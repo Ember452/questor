@@ -166,9 +166,16 @@ class SQLiteMemoryStore(MemoryStorePort):
         # isolation_level=None → 自驱 BEGIN IMMEDIATE / COMMIT / ROLLBACK。
         os.makedirs(self.memory_root, exist_ok=True)
         self._db = await aiosqlite.connect(self.db_path, isolation_level=None)
-        await self._db.executescript(_SCHEMA)
-        await self._enforce_schema_version()
-        self.vector = SQLiteVectorBackend(self._db)
+        try:
+            await self._db.execute("PRAGMA busy_timeout=30000")  # 跨进程瞬时争用下等锁而非立即抛错（#182）；不开 WAL（单写者由租约保证，避免 -wal 文件）。
+            await self._db.executescript(_SCHEMA)
+            await self._enforce_schema_version()
+            self.vector = SQLiteVectorBackend(self._db)
+        except BaseException:
+            # schema 版本 fail-closed 等抛出时先关掉刚建的连接，避免 aiosqlite 非守护线程泄漏（#172）。
+            await self._db.close()
+            self._db = None
+            raise
         return self
 
     async def _enforce_schema_version(self) -> None:
@@ -429,9 +436,16 @@ class SQLiteMemoryStore(MemoryStorePort):
     async def delete(self, chunk_ids: tuple[str, ...]) -> None:
         db = self._dbp()
         async with self._lock:
-            for cid in chunk_ids:
-                await db.execute("DELETE FROM memory_chunks_fts WHERE id = ?", (cid,))
-                await db.execute("DELETE FROM memory_chunks WHERE id = ?", (cid,))
+            # 单事务包裹逐条删除：与模块头“BEGIN IMMEDIATE 串行单写者”一致，避免崩溃留半成品删除（#183）。
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                for cid in chunk_ids:
+                    await db.execute("DELETE FROM memory_chunks_fts WHERE id = ?", (cid,))
+                    await db.execute("DELETE FROM memory_chunks WHERE id = ?", (cid,))
+                await db.execute("COMMIT")
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
 
     def _abs(self, rel_path: str) -> str:
         """将相对 memory root 的路径解为绝对；**拒绝越界**（path traversal / 符号链逃逸 fail-closed）。"""

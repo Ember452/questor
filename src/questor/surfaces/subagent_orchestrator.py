@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 
 from questor.contracts.events import (
     Cancel,
@@ -109,8 +110,16 @@ class SubagentOrchestrator:
         try:
             terminal, summary = await fut
         except asyncio.CancelledError:
-            # 父被取消 → 委托取消：向子下达 Cancel(owner)，不硬杀；本 future 由 _drive_child 收尾清理。
+            # 父被取消 → 向子下达 Cancel(owner)（#177：原注释声称发但代码未发→取消不下达、子白占宽度位）；
+            # best-effort 且吞掉 submit 内的再取消，绝不掩盖外层 CancelledError；future 由 _drive_child 收尾。
             self._pending.pop(child_run_id, None)
+            with contextlib.suppress(Exception, asyncio.CancelledError):
+                await self._registry.submit(
+                    child_run_id,
+                    Cancel(run_id=child_run_id, reason=CancelReason.OWNER),
+                    source="subagent-parent",
+                    idempotency_key=f"cancel:{request.parent_run_id}:{child_run_id}",
+                )
             raise
         return SpawnResult(accepted=True, child_run_id=child_run_id, terminal_status=terminal, result=summary)
 
