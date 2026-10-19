@@ -8,6 +8,7 @@ ProcessResult，不执行未包装 argv。
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import subprocess
 import sys
@@ -17,6 +18,9 @@ from questor.contracts.artifacts import ArtifactRef
 from questor.contracts.process import ProcessRequest, ProcessResult
 from questor.contracts.sandbox import SandboxBackend, SandboxDescriptor
 from questor.providers.env_safety import build_child_env, scrub_environment
+
+#: 单流 spool 驻留内存硬上限（#157）：超限仍排空管道但不全量留内存，防 runaway 输出打爆宿主。
+_MAX_SPOOL_BYTES = 16 * 1024 * 1024
 
 
 class FileSystemArtifactWritePort:
@@ -121,24 +125,29 @@ class SandboxedProcessRunner:
                     job = None
 
         timed_out = False
+        stdout_text = stderr_text = ""
+        stdout_artifact = stderr_artifact = None
+        exit_code: int | None = None
         try:
-            stdout_text, stdout_artifact = await asyncio.wait_for(
-                self._read_stream(process.stdout, request.stdout_limit, "stdout"),
+            # 并发排空两路 + 等待退出，共用单一 wall-clock 超时（#157/MAJ-3/BLK-13）：
+            # 串行读会在子进程 stderr 灌满管道、stdout 未 EOF 时死锁→误判超时并丢弃全部输出。
+            results = await asyncio.wait_for(
+                asyncio.gather(
+                    self._read_stream(process.stdout, request.stdout_limit, "stdout"),
+                    self._read_stream(process.stderr, request.stderr_limit, "stderr"),
+                    process.wait(),
+                ),
                 timeout=request.timeout_s,
             )
-            stderr_text, stderr_artifact = await asyncio.wait_for(
-                self._read_stream(process.stderr, request.stderr_limit, "stderr"),
-                timeout=request.timeout_s,
-            )
-            exit_code = await asyncio.wait_for(process.wait(), timeout=request.timeout_s)
+            (stdout_text, stdout_artifact), (stderr_text, stderr_artifact), exit_code = results
         except TimeoutError:
+            # 超时：杀整棵进程树并排空管道；取消（CancelledError，如外层 deadline）同样回收，不留孤儿。
             timed_out = True
-            if sys.platform == "win32" and process.pid is not None and job is None:
-                subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)], check=False, capture_output=True)
-            process.kill()
-            exit_code = await process.wait()
-            stdout_text, stdout_artifact = "", None
-            stderr_text, stderr_artifact = "", None
+            exit_code = await self._terminate(process)
+            stdout_text, stdout_artifact, stderr_text, stderr_artifact = "", None, "", None
+        except asyncio.CancelledError:
+            await self._terminate(process)
+            raise
         finally:
             if job is not None:
                 job.close()
@@ -158,6 +167,37 @@ class SandboxedProcessRunner:
             stderr_artifact=stderr_artifact,
         )
 
+    async def _terminate(self, process: asyncio.subprocess.Process) -> int | None:
+        """任何退出路径都杀整棵进程树并排空管道——不留孤儿、不泄漏 transport（#157/MAJ-8）。"""
+        if process.returncode is not None:
+            return process.returncode
+        if sys.platform == "win32" and process.pid is not None:
+            # taskkill /T 杀进程树；同步调用挪到线程，不阻塞事件循环（#157/MIN-26）。
+            await asyncio.to_thread(
+                subprocess.run,
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                check=False,
+                capture_output=True,
+            )
+        else:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+        # 排空残余管道，避免子进程因写满管道而卡住无法回收。
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(asyncio.gather(self._drain(process.stdout), self._drain(process.stderr)), timeout=5.0)
+        with contextlib.suppress(Exception):
+            return await process.wait()
+        return process.returncode
+
+    @staticmethod
+    async def _drain(stream: asyncio.StreamReader | None) -> None:
+        """读到 EOF 丢弃，仅用于终止后排空管道。"""
+        if stream is None:
+            return
+        with contextlib.suppress(Exception):
+            while await stream.read(8192):
+                pass
+
     async def _read_stream(self, stream, limit: int, kind: str):  # noqa: ANN001, ANN201
         if stream is None:
             return "", None
@@ -170,7 +210,9 @@ class SandboxedProcessRunner:
                 break
             total += len(chunk)
             if spool is not None:
-                spool.extend(chunk)
+                # 硬上限封顶： runaway 输出（如 `yes`）不得无限驻留内存；继续排空管道但不留全文。
+                if len(spool) < _MAX_SPOOL_BYTES:
+                    spool.extend(chunk)
             elif total <= limit:
                 bounded.append(chunk)
             else:

@@ -10,7 +10,12 @@ from __future__ import annotations
 import os
 import re
 
-_CREDENTIAL_SHAPE = re.compile(r"(?:^|_)(?:API_KEY|ACCESS_TOKEN|AUTH_TOKEN|SECRET|PASSWORD|CREDENTIAL|PRIVATE_KEY|TOKEN)(?:$|_)", re.IGNORECASE)
+# 凭据形状：涵盖常见厂商/命名（AWS_ACCESS_KEY_ID、GH_PAT、STRIPE_KEY、*_PRIVATE 等）。
+# 均以 `(?:^|_)...(?:$|_)` 边界匹配，不误伤 MONKEY/PATH/REPEAT 等普通词。
+_CREDENTIAL_SHAPE = re.compile(
+    r"(?:^|_)(?:API_?KEY|ACCESS_KEY|ACCESS_TOKEN|AUTH_TOKEN|AUTH|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE_KEY|PRIVATE|TOKEN|PAT|KEY)(?:$|_)",
+    re.IGNORECASE,
+)
 _PROVIDER_EXACT = frozenset(
     {
         "LITELLM_API_KEY",

@@ -45,3 +45,22 @@ def test_scrubbed_names_exclude_values() -> None:
     assert scrubbed == {}
     assert names == ("LITELLM_API_KEY",)
     assert "do-not-leak" not in str(names)
+
+
+def test_broadly_named_credentials_are_scrubbed() -> None:
+    """#159：非规范命名的凭据（AWS/GH/STRIPE/DB）必须被擦，而普通词不误伤。"""
+    _scrubbed, names = scrub_environment(
+        {
+            "AWS_ACCESS_KEY_ID": "AKIAxx",
+            "GH_PAT": "ghp_xx",
+            "STRIPE_KEY": "sk_xx",
+            "DB_PASSWORD": "p",
+            "MY_TLS_CLIENT_SECRET": "s",
+            "MONKEY": "keep-me",
+            "PATHOGEN": "keep-me",
+            "REPEAT_COUNT": "keep-me",
+        }
+    )
+    got = set(names)
+    assert {"AWS_ACCESS_KEY_ID", "GH_PAT", "STRIPE_KEY", "DB_PASSWORD", "MY_TLS_CLIENT_SECRET"} <= got, f"漏擦：{got}"
+    assert not ({"MONKEY", "PATHOGEN", "REPEAT_COUNT"} & got), f"误伤普通词：{got}"
