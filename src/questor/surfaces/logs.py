@@ -18,6 +18,7 @@ from typing import Any
 
 from questor.contracts.events import EventType
 from questor.contracts.ports import StorePort
+from questor.kernel.recovery import AnchorIntegrityError, verify_recovery_anchors
 
 
 def read_bypass_rows(log_dir: Path, *, run_id: str | None = None) -> tuple[list[dict[str, Any]], int]:
@@ -77,12 +78,23 @@ def session_totals(events: Iterable[dict[str, Any]]) -> dict[str, int]:
     return total
 
 
-async def run_logs_command(store: StorePort, log_dir: Path, *, run_id: str | None = None, totals: bool = False) -> str:
+async def run_logs_command(store: StorePort, log_dir: Path, *, run_id: str | None = None, totals: bool = False, expand: bool = False) -> str:
     """命令主体：读 event_log（权威）+ 旁路 JSONL，产出人读文本输出（stdout）。全程只读。
 
     - ``totals=True`` → 输出跨 run 的 ``run_completed`` usage 聚合（session 总花费，读侧投影）。
+    - ``expand=True`` → 按 ``recovery_pointers`` 回读某 run 被压缩区原文（fail-closed，Major-2 消费者）。
     - 否则 → 合并时间线：账本事件 + 旁路独有信息，按 ``run_id+seq`` 排序。
     """
+    if expand:
+        if run_id is None:
+            return "(logs --expand requires --run <id>)"
+        try:
+            recovered = await verify_recovery_anchors(store, run_id)
+        except AnchorIntegrityError as exc:
+            return f"(anchor verification FAILED, refusing tampered history: {exc})"
+        if not recovered:
+            return "(no compacted region to expand)"
+        return "\n".join(f"[recovered {m.role.value}] {' '.join(b.text or '' for b in m.content if b.type == 'text')}" for m in recovered)
     if totals:
         events = await store.replay_global(0)
         agg = session_totals(events)

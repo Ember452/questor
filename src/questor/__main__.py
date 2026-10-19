@@ -59,6 +59,7 @@ commands:
   --list             list unfinished run ids
   --dream            run offline Deep Dream distillation
   logs [--run ID]    read-only log consumption (event_log + bypass JSONL timeline)
+  logs --run ID --expand  recover a run's compacted originals via covered_hash (fail-closed)
   logs --totals      cross-run usage totals projected from durable run_completed
   -h, --help         show this usage and exit (no store, no logging assembly, no REPL)
 
@@ -248,7 +249,7 @@ async def _amain(argv: list[str]) -> int:
             if "--run" in rest:
                 i = rest.index("--run")
                 run_id = rest[i + 1] if i + 1 < len(rest) else None
-            out = await run_logs_command(store, Path(log_dir_from_env()), run_id=run_id, totals="--totals" in rest)
+            out = await run_logs_command(store, Path(log_dir_from_env()), run_id=run_id, totals="--totals" in rest, expand="--expand" in rest)
             print(out)
             return 0
         return await interactive(surface)

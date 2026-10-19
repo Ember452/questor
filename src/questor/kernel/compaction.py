@@ -99,8 +99,10 @@ def plan_compaction(run: Run, config: CompactionConfig, total_tokens: int) -> Co
     if evict_end <= evict_start:
         return None  # cut 落在头保护区内、或尾保护区内有未闭合调用 → 无安全可压窗口
     evicted = items[evict_start:evict_end]
-    seqs = [m.seq for m in evicted]
-    pointer = RecoveryPointer(seq_from=min(seqs), seq_to=max(seqs), covered_hash=covered_hash(evicted))
+    # 锚用**压缩前消息索引范围**（非 message.seq 字段）：`recovery_pointers` 指向 pre_compact 全量快照里
+    # 被逐区的位置，读侧消费者（``kernel/recovery.verify_recovery_anchors``）据此切片原文、重算 ``covered_hash``
+    # 校验、篡改即 fail-closed（Major-2 回读消费者）。索引与 evict 窗口逐字一致。
+    pointer = RecoveryPointer(seq_from=evict_start, seq_to=evict_end - 1, covered_hash=covered_hash(evicted))
     return CompactPlan(
         evict_start=evict_start,
         evict_end=evict_end,
