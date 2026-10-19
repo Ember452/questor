@@ -20,6 +20,42 @@ async def _open(tmp_path: Path) -> SQLiteMemoryStore:
     return await store.connect()
 
 
+async def test_write_after_ledger_rollback_does_not_double_append(tmp_path: Path) -> None:
+    """#163(B)：文件已 append、DB 事务回滚后同 key 重投，不得二次 append（幂等 marker 兼补偿）。"""
+    from questor.contracts.common import utc_now
+
+    store = await _open(tmp_path)
+    try:
+        w = MemoryWrite(kind=MemoryWriteKind.DAILY, scope=MemoryScope.USER, text="idempotent body ZZZ")
+        await store.write(w, idempotency_key="kx")
+        # 模拟“文件写了但 DB 回滚”：删掉幂等账（write_ledger），但文件仍在。
+        await store._db.execute("DELETE FROM write_ledger WHERE idempotency_key = 'kx'")
+        await store._db.commit()
+        await store.write(w, idempotency_key="kx")  # marker 命中 → 不二次 append
+        date = utc_now().strftime("%Y-%m-%d")
+        content = (tmp_path / "mstore" / "memory" / f"{date}.md").read_text(encoding="utf-8")
+        assert content.count("idempotent body ZZZ") == 1, f"重投二次 append：{content.count('idempotent body ZZZ')} 次"
+    finally:
+        await store.close()
+
+
+async def test_sync_preserves_shared_scope(tmp_path: Path) -> None:
+    """#163(A)：sync 全量重建必须按节头恢复 scope，不把 SHARED 蒸馏块误抹为 USER。"""
+    store = await _open(tmp_path)
+    try:
+        await store.write(
+            MemoryWrite(kind=MemoryWriteKind.DISTILL, scope=MemoryScope.SHARED, text="shared distill marker fact AAA", covered_from=0, covered_to=1, covered_hash="deadbeef"),
+            idempotency_key="distill:1",
+        )
+        await store.sync()  # 重建索引（旧实现会把 scope 抹为 USER）
+        shared = await store.search("shared distill marker fact AAA", k=5, scope=MemoryScope.SHARED)
+        user = await store.search("shared distill marker fact AAA", k=5, scope=MemoryScope.USER)
+        assert any("AAA" in r.snippet for r in shared), f"sync 后 SHARED scope 丢失：{[r.snippet for r in shared]}"
+        assert not any("AAA" in r.snippet for r in user), "SHARED 块被误标为 USER（scope 隔离失效）"
+    finally:
+        await store.close()
+
+
 async def test_write_then_keyword_search_hits(tmp_path: Path) -> None:
     store = await _open(tmp_path)
     try:

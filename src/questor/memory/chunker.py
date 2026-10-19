@@ -9,6 +9,7 @@ markdown 结构感知（按标题切段）+ 超长滑窗（overlap 防切断语�
 from __future__ import annotations
 
 import hashlib
+import re
 
 from questor.contracts.memory import MemoryChunk, MemoryScope, MemorySource
 
@@ -18,6 +19,20 @@ CHUNKER_VERSION = 1
 _MAX_LINES = 40
 #: 滑窗相邻块重叠行数，保语义连续、防边界丢信息。
 _OVERLAP = 4
+#: 节头内嵌的 scope 标记（#163）：写侧 header 携 `scope=<value>`，sync 重建时据此逐节恢复 scope，
+#: 不再把 SHARED 蒸馏块误抹为 USER。
+_SCOPE_RE = re.compile(r"\bscope=([A-Za-z_]+)")
+
+
+def _scope_from_header(header: str, fallback: MemoryScope) -> MemoryScope:
+    """从节头行解析 `scope=`；无标记或非法值→回落 fallback（兼容旧无标记真源）。"""
+    m = _SCOPE_RE.search(header)
+    if not m:
+        return fallback
+    try:
+        return MemoryScope(m.group(1))
+    except ValueError:
+        return fallback
 
 
 def _make_chunk(rel_path: str, source: MemorySource, scope: MemoryScope, start: int, end: int, lines: list[str]) -> MemoryChunk:
@@ -58,10 +73,12 @@ def chunk_document(
     # 2) 每段：<=_MAX_LINES 整段一 chunk；否则滑窗切、相邻块 overlap。
     chunks: list[MemoryChunk] = []
     for start_line, blines in blocks:
+        # 每段首行可能是节头（`## [kind] ... scope=...`）→ 据此恢复该段的 scope（#163），无标记回落文件级。
+        sec_scope = _scope_from_header(blines[0], scope) if blines else scope
         if len(blines) <= _MAX_LINES:
             end_line = start_line + len(blines) - 1
             if "\n".join(blines).strip():
-                chunks.append(_make_chunk(rel_path, source, scope, start_line, end_line, blines))
+                chunks.append(_make_chunk(rel_path, source, sec_scope, start_line, end_line, blines))
             continue
         step = _MAX_LINES - _OVERLAP
         offset = 0
@@ -70,7 +87,7 @@ def chunk_document(
             start = start_line + offset
             end = min(start_line + offset + len(window) - 1, start_line + len(blines) - 1)
             if "\n".join(window).strip():
-                chunks.append(_make_chunk(rel_path, source, scope, start, end, window))
+                chunks.append(_make_chunk(rel_path, source, sec_scope, start, end, window))
             if offset + _MAX_LINES >= len(blines):
                 break
             offset += step
