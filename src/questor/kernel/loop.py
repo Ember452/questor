@@ -41,6 +41,7 @@ from questor.contracts.events import (
     MarkToolRunning,
     MarkToolValidated,
     RecordToolResult,
+    RecordWarning,
     RequestApproval,
     ResolveApproval,
     SpawnSubagent,
@@ -70,6 +71,7 @@ from questor.kernel.run_control import RunController
 from questor.kernel.shell_parse_posix import parse_posix_shell
 from questor.kernel.shell_parse_powershell import parse_powershell
 from questor.kernel.tool_arguments import extract_shell_commands
+from questor.observability.redact import strip_prompt_echo
 from questor.observability.scope import bind
 from questor.state.checkpoint import open_tool_use_ids
 from questor.state.domain_state import Run
@@ -405,8 +407,11 @@ class DefaultTurnLoop:
                 intent, faulted = self._ask_policy(run)
                 if faulted:
                     faults += 1
-                    await self._live(run, turn, EventType.WARNING, {"message": "policy raised; rolling back turn (C10)"})
-                    run = turn_start  # 回滚 Domain_State 到 turn 起点；已发出的 delta 不撤销
+                    # durable 告警必须经 reduce 取号（否则复用已占 seq 撞 UNIQUE，track5-backbone BLK-1 path A）。
+                    run, wev = reduce(run, RecordWarning(run_id=run.run_id, turn=turn, message="policy raised; rolling back turn (C10)"))
+                    await self._emit(wev)
+                    # 回滚 Domain_State 到 turn 起点，但**保住单调 seq 游标**（已落库的事件号不得重用）。
+                    run = replace(turn_start, seq=run.seq)
                     if faults > 2:
                         return await self._fail(run, turn, ErrorKind.POLICY_VIOLATION, "policy raised repeatedly", "policy_error")
                     continue
@@ -499,6 +504,11 @@ class DefaultTurnLoop:
             ack = next((e for e in mev if e.type == EventType.MEMORY_WRITTEN), None)
             if ack is not None:
                 await self.memory_store.write(payload, idempotency_key=f"mem:{run.run_id}:{ack.seq}")
+        # 压缩应用后立即落 post_compact 快照：否则崩在“压缩生效与下一轮 auto 快照”之间时，
+        # rebuild 取到 seq 最大的 pre_compact（未压缩态）→ 压缩本想缓解的 provider 溢出复活
+        # （track5-backbone MAJ-3）。checkpoints 按 seq DESC，post_compact 序号更大、优先命中；
+        # pre_compact 仍保留供 verify_recovery_anchors 回读被逐区原文。
+        await self._checkpoint(run, "post_compact")
         return run
 
     # ---- phase 辅助方法 ------------------------------------------------
@@ -521,7 +531,12 @@ class DefaultTurnLoop:
         except Exception as exc:  # noqa: BLE001 - provider 是外部故障域：归一成终态，不得打穿宿主进程（C10 对称面）
             # 只捕 Exception：CancelledError / KeyboardInterrupt / SystemExit 属 BaseException，
             # 取消与进程级中断必须继续传递，不能被“吃”成一个 run_failed（同 _execute_tool 纪律）。
-            return await self._fail_with_entry(run, turn, classify_provider_error(exc, at_turn=turn), "provider_error"), None, {}
+            entry = classify_provider_error(exc, at_turn=turn)
+            # provider 4xx 常把请求体（含本轮 prompt）整段回显：在**源头**剥回显，使 run_failed 事件、
+            # 快照、主干日志三条下游都不落 prompt 明文（#162B；DESIGN §8 “主干零明文”）。
+            if entry.message:
+                entry = replace(entry, message=strip_prompt_echo(entry.message, _prompt_echo_baseline(run)))
+            return await self._fail_with_entry(run, turn, entry, "provider_error"), None, {}
         return run, message, usage
 
     async def _ensure_paired_history(self, controller: RunController, run: Run, turn: int) -> Run:
@@ -560,7 +575,18 @@ class DefaultTurnLoop:
 
         失败语义：不自己捕获异常——由 ``_stream_turn`` 的统一边界归一（免得分类漏在多处）。
         """
-        request = ProviderRequest(model=self.model, messages=run.context.items, tools=self._specs(), system=self.system)
+        # 压缩逐出的中段既不在 items、摘要若不回填则模型直接丢内容（track5-backbone MAJ-4）：
+        # 有 summary 时作为首条 user 消息前缀注入，使“压缩不丢上下文”对模型可见（未配压缩时 summary 空、行为不变）。
+        messages = run.context.items
+        if run.context.summary:
+            summary_msg = Message(
+                id=f"summary:{run.run_id}",
+                role=Role.USER,
+                content=(ContentBlock(type="text", text=f"[之前对话的摘要]\n{run.context.summary}"),),
+                seq=0,
+            )
+            messages = (summary_msg, *messages)
+        request = ProviderRequest(model=self.model, messages=messages, tools=self._specs(), system=self.system)
         text_parts: list[str] = []
         usage: JsonObject = {}
         calls: dict[int, dict] = {}
@@ -908,6 +934,18 @@ class DefaultTurnLoop:
             return
         self._capability_gen = gen
         await self._live(run, turn, EventType.TOOLS_CHANGED, {"domain": "tools"})
+
+
+#: 单条回显基准文本的截断上限（防超大 context 下 SequenceMatcher 退化）。
+_ECHO_BASELINE_CAP = 8192
+
+
+def _prompt_echo_baseline(run: Run) -> list[str]:
+    """本轮已/将发给 provider 的可见文本（含工具输出），作为错误回显剥离的基准。
+
+    provider 4xx 常回显请求体；把这些文本交给 :func:`strip_prompt_echo` 后，错误消息中与它们
+    的长公共片段会被 ``<prompt>`` 取代（源头去标识，而非依赖下游日志脱敏）。"""
+    return [b.text[:_ECHO_BASELINE_CAP] for m in run.context.items for b in m.content if b.type == "text" and b.text]
 
 
 def _has_text(message: Message) -> bool:
