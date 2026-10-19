@@ -1,7 +1,7 @@
 """L1 Domain_State 聚合（design/01）。P0 只有形状 + 构造不变式，无 reduce。
 
 Harness 全程唯一可信状态：权威、可序列化、可回放、可断点。本模块把 L0 词汇组合成
-``Run`` / ``DomainState``，并在**构造期**强制局部不变式（仿 DeepCode ``domain/turn.py``）。
+``Run`` / ``DomainState``，并在**构造期**强制局部不变式。
 跨对象不变式（``tool_use``↔``tool_result`` 配对、DAG 无环）与唯一写者 ``reduce`` 在
 :mod:`questor.state.reduce`（P1，design/01 §12 I1）。
 
@@ -113,7 +113,7 @@ class Run:
         if self.turn < 0:
             raise ValueError("Run.turn must be >= 0")
         require_aware(self.created_at, "Run.created_at")
-        # 终态一致性（R03/C13；镜像 DeepCode turn.py）：一轮至多一个终态且字段自洽。
+        # 终态一致性（C13）：一轮至多一个终态且字段自洽。
         if self.status.is_terminal:
             if self.completed_at is None:
                 raise ValueError("terminal Run requires completed_at")
