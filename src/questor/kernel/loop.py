@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Callable
 from contextlib import ExitStack
@@ -199,6 +200,10 @@ def _none_descriptor() -> SandboxDescriptor:
         isolates_process_tree=False,
         limitation="no sandbox backend available",
     )
+
+
+# 内核一方 inline 记录 logger（走 observability 桥进主干；策略/故障留痕用，#171）。
+_log = logging.getLogger("questor.loop")
 
 
 def _analyze_shell(tool_spec: ToolSpec, arguments: JsonObject) -> ShellAnalysis | None:
@@ -658,7 +663,8 @@ class DefaultTurnLoop:
         view = PolicyView(context=run.context.items, tool_results=run.tool_ledger.calls, tools=self._specs(), budget=run.budget)
         try:
             return self.policy.propose_action(view), False
-        except Exception:  # noqa: BLE001 - 策略故障绝不得打断循环
+        except Exception:  # noqa: BLE001 - 策略故障绝不得打断循环，但必须留痕供排障（#171）
+            _log.warning("policy.propose_action raised; isolating turn", exc_info=True)
             return None, True
 
     async def _handle_tool_call(self, controller: RunController, run: Run, intent: ProposeToolCall) -> Run:
@@ -694,17 +700,25 @@ class DefaultTurnLoop:
         analysis = _analyze_shell(tool.spec, intent.args)
         permission = replace(run.permission_ctx, workspace_root=str(self.workspace_root), cwd=str(self.workspace_root))
         sandbox_descriptor = self.sandbox.describe() if self.sandbox is not None and hasattr(self.sandbox, "describe") else _none_descriptor()
-        outcome = self.permission.evaluate(
-            PermissionEvaluation(
-                tool_name=intent.name,
-                tool_spec=tool.spec,
-                args_status=call.args_status,
-                arguments=intent.args,
-                permission=permission,
-                sandbox=sandbox_descriptor,
-                shell_analysis=analysis,
+        try:
+            outcome = self.permission.evaluate(
+                PermissionEvaluation(
+                    tool_name=intent.name,
+                    tool_spec=tool.spec,
+                    args_status=call.args_status,
+                    arguments=intent.args,
+                    permission=permission,
+                    sandbox=sandbox_descriptor,
+                    shell_analysis=analysis,
+                )
             )
-        )
+        except Exception as exc:  # noqa: BLE001 - 权限求值故障（未知 mode/bug）必须 fail-closed，不得击穿循环（#168）
+            run = await self._apply_command(
+                controller,
+                run,
+                MarkToolDenied(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", reason=f"permission evaluation fault; fail-closed deny: {type(exc).__name__}: {exc}"),
+            )
+            return run
         decision = outcome.decision
         reason = outcome.reason
         if decision is PermissionDecision.DENY:
@@ -1038,9 +1052,17 @@ def _unknown_tool_message(name: str, specs, surface: object | None = None) -> st
 
 
 def _schema_error(params: JsonObject, args: JsonObject) -> str | None:
-    """用 JSON-Schema 校验入参（C8 第一层）；非法则返回可读错误。"""
-    validator = Draft202012Validator(params)
-    errs = sorted(validator.iter_errors(args), key=lambda e: e.path)
+    """用 JSON-Schema 校验入参（C8 第一层）；非法则返回可读错误。
+
+    校验**基础设施**故障（远程不可信 schema 含无法解析的 ``$ref``/``$id``、畸形 schema）也归为
+    结构化错误返回、**绝不抛出**（#168）：抛出会击穿 drive 循环、run 不落终态。fail-closed——
+    无法证明入参合法即按非法处理，工具不执行。
+    """
+    try:
+        validator = Draft202012Validator(params)
+        errs = sorted(validator.iter_errors(args), key=lambda e: e.path)
+    except Exception as exc:  # noqa: BLE001 - 校验器本身炸（坏 $ref 等）也要 fail-closed 成结构化错误
+        return f"invalid arguments: schema validation failed ({type(exc).__name__}: {exc})"
     if not errs:
         return None
     return "invalid arguments: " + "; ".join(e.message for e in errs[:3])
