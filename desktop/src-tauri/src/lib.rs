@@ -15,7 +15,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
 
-/// 优雅关闭总宽限（对齐参考仓 sidecar.rs 的 SHUTDOWN_EXIT_GRACE）：先发请求、轮询、超时强杀。
+/// 优雅关闭总宽限：先发请求、轮询、超时强杀。
 const GRACE: Duration = Duration::from_secs(35);
 /// 轮询子进程退出的间隔。
 const POLL: Duration = Duration::from_millis(200);
