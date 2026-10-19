@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 from questor.contracts.policy import CompactionConfig
@@ -90,6 +91,24 @@ def payload_preview_from_env() -> int | None:
     if not (1 <= n <= _PAYLOAD_MAX_CHARS):
         raise SystemExit(f"QUESTOR_LOG_PAYLOAD truncate={n} out of range 1..{_PAYLOAD_MAX_CHARS}")
     return n
+
+
+def reconfigure_output_streams(*streams: object) -> None:
+    """把 stdout/stderr 重配为 UTF-8 + errors=replace（#180）。
+
+    宿主代码页非 UTF-8（如 Windows cp1252）时，REPL/CLI 直接 ``print`` 含 CJK 的用户可见输出会
+    抛 UnicodeEncodeError 崩掉 printer 任务/交互面（sink_console 自带 ASCII 兜底，但 REPL print 面没有）。
+    无 ``reconfigure``（被 pytest 等替换的流）则安全跳过；不传参则默认作用于 ``sys.stdout/stderr``。
+    """
+    targets = streams or (sys.stdout, sys.stderr)
+    for stream in targets:
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):  # 已 detach/不可重配：尽力而为，绝不因此崩装配
+            pass
 
 
 def assemble_logging() -> None:

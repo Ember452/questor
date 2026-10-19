@@ -50,7 +50,7 @@ from questor.policy.registry import PolicyEntry, PolicyRegistry
 from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.state.domain_state import Run
-from questor.surfaces._assembly import assemble_logging, compaction_from_env, payload_preview_from_env
+from questor.surfaces._assembly import assemble_logging, compaction_from_env, payload_preview_from_env, reconfigure_output_streams
 from questor.surfaces.approval import prompt_approval
 from questor.surfaces.mcp_bootstrap import Teardown, discover_mcp_tools
 from questor.surfaces.run_registry import RunRegistry
@@ -414,6 +414,7 @@ def main() -> int:
     from questor.composition import build_app, close_app
 
     async def _run() -> int:
+        reconfigure_output_streams()  # 先于一切输出把 stdout/stderr 重配为 UTF-8 兜底（#180）
         assemble_logging()
         app = await build_app()
         try:
