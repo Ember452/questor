@@ -8,6 +8,7 @@ containment（越界 deny）。
 
 from __future__ import annotations
 
+import contextlib
 import re
 from pathlib import Path
 
@@ -154,9 +155,18 @@ class ApplyPatchTool(Tool):
         planned: list[tuple[Path, bytes | None]] = []  # bytes=None 表示删除
         for change in changes:
             rel = change.new_path or change.old_path
-            res = resolve_in_workspace(str(rel or ""), root=ctx.workspace_root, cwd=ctx.cwd)
-            if not res.ok or res.path is None:
-                return ToolResult(status="error", result=f"{rel}: {res.error or 'invalid path'}")
+            raw = str(rel or "")
+            norm = raw.replace("\\", "/")
+            if norm[:2] in ("a/", "b/"):
+                norm = norm[2:]
+            # 同时试原始与 a/b-剥离候选（#156 BLK-1）：`a/` 前缀 diff 落到真实路径、受权限/保护区约束，
+            # 而不是原样建出 `a/secret.txt`。
+            for cand in (raw, norm):
+                res = resolve_in_workspace(cand, root=ctx.workspace_root, cwd=ctx.cwd)
+                if res.ok and res.path is not None:
+                    break
+            else:
+                return ToolResult(status="error", result=f"{raw}: {res.error or 'invalid path'}")
             target = res.path
             if change.is_delete:
                 if not target.exists():
@@ -186,21 +196,36 @@ class ApplyPatchTool(Tool):
                 else:
                     new_lines = _apply_hunks(existing, change.hunks)
             except ValueError:
-                return ToolResult(status="error", result=f"context mismatch in {target.name}; no files were changed")
+                return ToolResult(status="error", result=f"context mismatch in {target.name}; aborting whole apply_patch (no files written)")
             planned.append((target, sep.join(new_lines).encode("utf-8")))
 
-        # 阶段二：全部校验通过后统一落盘。
-        written: list[str] = []
-        for target, payload in planned:
+        # 阶段二：原子落盘（#156 MAJ-11）——先快照所有目标的原字节/存在性，任一写或删失败即回滚全部，
+        # 跨多文件不留“半改”（此前一个文件失败会留下其余已写入的修改）。
+        originals: list[tuple[Path, bytes | None]] = []
+        for target, _payload in planned:
             try:
+                originals.append((target, target.read_bytes() if target.is_file() else None))
+            except OSError as exc:  # 预读失败：尚未改动任何文件，直接结构化报错。
+                return ToolResult(status="error", result=f"cannot read {target.name}: {exc}; no files were changed")
+        try:
+            for target, payload in planned:
                 if payload is None:
                     target.unlink()
-                else:
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(payload)
-            except OSError as exc:
-                return ToolResult(status="error", result=f"apply failed on {target.name}: {exc}")
-            written.append(str(target))
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(payload)
+        except OSError as exc:
+            failed = target.name
+            for target, blob in originals:  # 回滚到快照：恢复原内容 / 删刚建的文件 / 复原被删文件。
+                with contextlib.suppress(OSError):
+                    if blob is None:
+                        if target.exists():
+                            target.unlink()
+                    else:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(blob)
+            return ToolResult(status="error", result=f"apply failed on {failed}: {exc}; rolled back all files")
+        written = [str(target) for target, _ in planned]
         return ToolResult(status="success", result=f"applied patch to {len(written)} file(s)", display="patched: " + ", ".join(Path(w).name for w in written), files=tuple(written))
 
 

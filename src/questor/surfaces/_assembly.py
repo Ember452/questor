@@ -3,7 +3,8 @@
 为什么单独一个文件：仓库有两个生产入口——``python -m questor``（``__main__``）与
 ``python -m questor.surfaces.cli``（``cli.main()``）。审计发现后者裸调 ``configure_logging()``，
 既不建文件面也无视 ``QUESTOR_LOG_*`` 与 ``QUESTOR_LOG_PAYLOAD`` 门（Issue #138），等于"组合根唯一
-装配口径"事实上碎成两半。env 解析收在这里，两个入口共用同一份。
+装配口径"事实上碎成两半。**日志相关 env** 解析收在这里，两个入口的完整应用装配则统一走
+``composition.build_app``（#161）。
 
 分层归属：env 读取属**组合根/surfaces** 职责，``observability`` 内核保持 env-free（既有
 ``config ⟂ observability`` independence 契约与 DESIGN §11 的口径）。

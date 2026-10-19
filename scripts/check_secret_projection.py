@@ -2,7 +2,7 @@
 """Secret/env-value projection guard (ADR-0019; HARD C4/C17/C18; design/02 §5).
 
 Events and their ``data`` are the external surface. A secret/credential/env *value* or a
-raw full-args blob must never reach them. This is a deterministic AST scan of the two places
+raw full-args blob must never reach them. This is a deterministic AST scan of the places
 that shape outbound data:
 
 1. event construction sites (every module that constructs an ``Envelope(`` — auto-discovered):

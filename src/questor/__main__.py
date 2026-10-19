@@ -1,8 +1,8 @@
-"""组合根入口（composition root）：装配 StorePort + MemoryStorePort 后启动 CLI 传输面。
+"""CLI 入口：委托组合根 ``composition.build_app`` 装配 StorePort + MemoryStorePort 后启动传输面。
 
-用 ``python -m questor`` 运行。本模块**可以** import 具体适配器（``SQLiteStore``/
-``SQLiteMemoryStore``）——它是把 L5 实现注入 L6 surfaces 的唯一装配点；surfaces 自身只持
-``StorePort``/``MemoryStorePort`` 抽象（C4/C14）。
+用 ``python -m questor`` 运行。具体适配器（``SQLiteStore``/``SQLiteMemoryStore``）的装配是
+``composition.build_app`` 的职责（唯一组合根，#161）；本入口只解析 argv 并调用它，不再自行 import
+L5 实现。surfaces 自身只持 ``StorePort``/``MemoryStorePort`` 抽象（C4/C14）。
 
 - ``python -m questor``：交互 REPL（每轮真实落库到 store，支撑 resume）。
 - ``python -m questor --serve``：起 HTTP+SSE sidecar 服务（bind ``127.0.0.1:0`` + 写 bootstrap，ADR-0032）。
@@ -83,7 +83,7 @@ class _HeuristicDistiller:
     """无密钥离线 fallback 蒸馏器：**合并**现有 core + 近期 daily 的非标题行去重回写（单调不回退）。
 
     诚实边界：真 LLM 蒸馏质量 UNVERIFIED；配置 ``LITELLM_API_KEY`` 时可换成 LLM-backed
-    ``DistillProvider`` 注入（本组合根是唯一装配点）。无可萃取时返回 ``None`` → 空哨兵跳过。"""
+    ``DistillProvider`` 注入（``--dream`` 的 distiller 在本 CLI 入口选定并注入）。无可萃取时返回 ``None`` → 空哨兵跳过。"""
 
     @staticmethod
     def _facts(text: str) -> set[str]:
@@ -105,9 +105,9 @@ async def _amain(argv: list[str]) -> int:
     而 store/记忆库 connect 已在前面执行——一次 `--help` 会顺手建 state.db/memory.db 与日志面。
     失败语义：help 退 0（走 stdout）；未知选项退 2（走 stderr）。
     """
-    # 组合根唯一装配入口（DESIGN §11；T2.14）：读 env 族并装**完整管线**——带内桥 + console(stderr)
-    # + 按日 JSONL 文件面 + errors 分流——覆盖 REPL/--resume/--list/--dream 四入口。参数由组合根注入、
-    # 内核 env-free（config⟂observability）。sidecar 宿主入口须调同一装配口径、不自配。
+    # 本入口的顺序（#161）：先判参数、再装配——日志经 ``assemble_logging``（带内桥 + console + 按日
+    # JSONL + errors 分流），应用 store/memory/exec 三件套/surface 经 ``composition.build_app``；参数由组合根
+    # 注入、内核 env-free（config⟂observability）。sidecar 宿主与 surfaces.cli.main() 均复用同一 build_app、不自配。
     if argv and argv[0] in ("-h", "--help"):
         print(_USAGE)
         return 0
