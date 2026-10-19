@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 class DisclosureLevel(IntEnum):
-    """技能信息渐进披露层级（改造 crewAI `skills/models.py` 的 METADATA/INSTRUCTIONS/RESOURCES）。
+    """技能信息渐进披露层级：METADATA/INSTRUCTIONS/RESOURCES 三档。
 
     越高越"贵"（进 prompt 的字节越多）：发现阶段只读 METADATA（frontmatter），激活才读
     INSTRUCTIONS（正文），需要资源清单才升到 RESOURCES——避免整批技能正文无脑塞进上下文。"""
@@ -37,7 +37,7 @@ class Skill:
     """一个已发现技能；``disclosure_level`` 决定 ``body``/``resources`` 是否已载入（渐进披露，C06）。
 
     发现阶段只到 METADATA（读 frontmatter），激活才读 INSTRUCTIONS（正文 body），需要资源清单
-    才升到 RESOURCES——避免整批技能正文无脑塞进上下文（对照 crewAI `skills/models.py`）。"""
+    才升到 RESOURCES——避免整批技能正文无脑塞进上下文。"""
 
     frontmatter: SkillFrontmatter
     path: Path

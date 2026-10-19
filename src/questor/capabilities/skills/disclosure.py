@@ -4,7 +4,7 @@
 - INSTRUCTIONS：读 SKILL.md 正文 body；
 - RESOURCES：列 scripts/references/assets 下文件清单。
 正文软上限 ``_MAX_BODY_CHARS``：超阈**只告警不失败**——大正文挤占上下文是 prompt 注入/膨胀面
-（C18/C20 有界精神），但不因体积直接拒载（对照 crewAI `skills/parser.py`）。只依赖 stdlib（C1/C14）。"""
+（C18/C20 有界精神），但不因体积直接拒载。只依赖 stdlib（C1/C14）。"""
 
 from __future__ import annotations
 
