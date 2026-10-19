@@ -16,7 +16,7 @@ from typing import Any, ClassVar
 
 from questor.contracts.common import JsonObject, freeze, require_aware, utc_now
 from questor.contracts.errors import ErrorEntry
-from questor.contracts.memory import MemoryWrite
+from questor.contracts.memory import MemoryWrite, RecoveryPointer
 from questor.contracts.state_schema import CancelReason, Checkpoint, Message, TaskNode
 
 #: 关联键——一旦发布永不改名/删除（design/02 §1）。
@@ -152,6 +152,30 @@ class RequestCompactHint:
     type: ClassVar[str] = "request_compact_hint"
 
 
+@dataclass(frozen=True, slots=True)
+class CompactContext:
+    """P10/ADR-0048：内核在 turn 边界安全点发出的**压缩应用**命令（design/01 I2；HARD C2/C16）。
+
+    关键铁律（对抗评审 MAJ-8）：``summary_text``、``new_pointers``（含 ``covered_hash``）、
+    ``new_floor`` 均由 **loop 侧**（可插拔摘要策略，非 provider-in-reduce）算好后随命令携带；
+    ``reduce`` **只做纯校验 + 纯应用**，绝不在此计算摘要/哈希——否则 ``pre_compact`` 快照尾重放
+    含本命令时重跑摘要器会破回放确定性（design/01 I4）。``evict_start/evict_end`` 为
+    ``context.items`` 上待逐出的**连续中段**索引；reduce 要求 ``evict_end <= closed_prefix(items)``
+    （C19：绝不孤儿化未闭合 ``tool_use``）。"""
+
+    run_id: str
+    evict_start: int
+    evict_end: int
+    summary_text: str
+    new_floor: int
+    new_pointers: tuple[RecoveryPointer, ...] = ()
+    type: ClassVar[str] = "compact_context"
+
+    def __post_init__(self) -> None:
+        if self.evict_start < 0 or self.evict_end < self.evict_start:
+            raise ValueError("CompactContext requires 0 <= evict_start <= evict_end")
+
+
 # ---- 内核内部 Command（仍是 Command，仍经 reduce 单写；C2）----
 @dataclass(frozen=True, slots=True)
 class AppendAssistantMessage:
@@ -271,6 +295,7 @@ Command = (
     | Cancel
     | WriteMemory
     | RequestCompactHint
+    | CompactContext
     | AppendAssistantMessage
     | AdvanceTurn
     | RecordToolResult
@@ -329,6 +354,8 @@ class EventType:
     PEER_STARTED = "peer_started"  # 父 spawn 子 agent（P8；ADR-0042）
     PEER_ENDED = "peer_ended"  # 子 agent 达终态回父（P8；ADR-0042）
     TOOLS_CHANGED = "tools_changed"  # 能力名册变更 live-only 告警（P9；ADR-0046，design/02 §7）
+    COMPACT_STARTED = "compact_started"  # 压缩开始（P10；ADR-0048，design/02 §10）
+    COMPACT_APPLIED = "compact_applied"  # 压缩应用 + baseline_seq 栅栏（P10；ADR-0048，design/02 §10）
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。
@@ -420,6 +447,7 @@ __all__ = [
     "Cancel",
     "WriteMemory",
     "RequestCompactHint",
+    "CompactContext",
     "AppendAssistantMessage",
     "AdvanceTurn",
     "RecordToolResult",

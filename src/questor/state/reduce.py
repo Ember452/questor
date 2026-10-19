@@ -23,6 +23,7 @@ from questor.contracts.events import (
     AppendAssistantMessage,
     Cancel,
     Command,
+    CompactContext,
     Envelope,
     EventType,
     ExpireApproval,
@@ -55,6 +56,7 @@ from questor.contracts.state_schema import (
     ToolCall,
     ToolCallStatus,
 )
+from questor.state.checkpoint import closed_prefix
 from questor.state.domain_state import Context, PermissionCtx, PermissionDecisionRecord, Run, TaskTree
 
 _OPEN_CALL = OPEN_TOOL_CALL_STATUSES
@@ -346,6 +348,44 @@ def reduce(run: Run, command: Command) -> tuple[Run, list[Envelope]]:  # noqa: C
         return new, [
             _event(new.seq, new, run.turn, EventType.MEMORY_WRITTEN, {"kind": payload.kind.value, "chunk_count": 1, "source": source_for_write(payload.kind).value})
         ]
+
+    if isinstance(command, CompactContext):
+        # P10/ADR-0048：压缩应用——reduce **纯校验 + 纯应用**（对抗评审 MAJ-8）：摘要/锚/floor 均
+        # 由 loop 侧算好随命令携带，reduce 绝不计算摘要/哈希。三道 fail-closed：
+        #   ① summary 非空；② evict 边界 ≤ closed_prefix（C19 绝不孤儿化未闭合 tool_use）；
+        #   ③ 新锚必须非空（可恢复锚生产者，ADR-0024）。非法则拒 + 发 warning、状态不变。
+        items = run.context.items
+        cut = closed_prefix(items)
+        if not command.summary_text.strip():
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "compaction requires non-empty summary; rejected"})]
+        if not (0 <= command.evict_start <= command.evict_end <= min(cut, len(items))):
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "compaction range crosses an open tool_use; rejected"})]
+        if not command.new_pointers:
+            return run, [_event(run.seq + 1, run, run.turn, EventType.WARNING, {"message": "compaction requires a fail-closed recovery anchor; rejected"})]
+        new_items = items[: command.evict_start] + items[command.evict_end :]
+        ctx = replace(
+            run.context,
+            items=new_items,
+            summary=command.summary_text,
+            compaction_floor=command.new_floor,
+            recovery_pointers=(*run.context.recovery_pointers, *command.new_pointers),
+        )
+        # 为本次两条事件连续取号（不复用同一 seq，ADR-0011）；baseline_seq = compact_applied 的 seq。
+        seq = run.seq
+        seq += 1
+        started = _event(seq, run, run.turn, EventType.COMPACT_STARTED, {"reason": "kernel_token_pressure"})
+        seq += 1
+        covered_from = command.new_pointers[0].seq_from
+        covered_to = command.new_pointers[-1].seq_to
+        applied = _event(
+            seq,
+            run,
+            run.turn,
+            EventType.COMPACT_APPLIED,
+            {"baseline_seq": seq, "covered_from": covered_from, "covered_to": covered_to, "summary_bytes": len(command.summary_text.encode("utf-8"))},
+        )
+        new = replace(run, context=ctx, seq=seq)
+        return new, [started, applied]
 
     if isinstance(command, Cancel):
         open_calls = _open_calls(run)
