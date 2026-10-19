@@ -50,7 +50,7 @@ from questor.policy.registry import PolicyEntry, PolicyRegistry
 from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.state.domain_state import Run
-from questor.surfaces._assembly import assemble_logging
+from questor.surfaces._assembly import assemble_logging, payload_preview_from_env
 from questor.surfaces.approval import prompt_approval
 from questor.surfaces.mcp_bootstrap import Teardown, discover_mcp_tools
 from questor.surfaces.run_registry import RunRegistry
@@ -85,7 +85,8 @@ def provider_from_env() -> ProviderPort:
     """根据环境变量选 provider：有 model+key 走 LiteLLM，否则离线 Echo。"""
     model = os.environ.get("QUESTOR_MODEL")
     if model and os.environ.get("LITELLM_API_KEY"):
-        return LiteLLMProvider(model)
+        # P10/ADR-0049：preview 预算由组合根解析注入（None=零原文默认）；非空才落独立 llm 通道。
+        return LiteLLMProvider(model, payload_preview=payload_preview_from_env())
     return EchoProvider()
 
 

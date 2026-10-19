@@ -30,6 +30,10 @@ _MAIN = "questor"
 _ERRORS = "errors"
 _LLM = "llm"
 
+#: 预览专用 logger（P10/ADR-0049 刀 3；C20 不越界款）：携 prompt/响应截断 preview。
+#: **绝不进主干**（保 D4 零原文）、只进独立 `llm-<date>.jsonl`（单独授权/单独排除于分享）。
+_LLM_PREVIEW_LOGGER = "questor.llm.preview"
+
 
 def _entry_to_dict(entry: LogEntry) -> dict:
     """LogEntry → JSONL 记录 dict（字段全量、机器可断言，D9）。"""
@@ -107,12 +111,12 @@ class FileSink:
             if entry.level >= LogLevel.WARNING:
                 self._append(self._fname(entry, _ERRORS), line)
                 self._account(day, line)
-            # llm lane：仅开启时承载 questor.llm（默认关；preview 随刀 3）。
-            if self.llm_file and entry.logger == "questor.llm":
+            # llm lane：仅开启时承载 questor.llm（元数据）与 questor.llm.preview（有界 preview，P10 刀 3）。
+            if self.llm_file and entry.logger in ("questor.llm", _LLM_PREVIEW_LOGGER):
                 self._append(self._fname(entry, _LLM), line)
                 self._account(day, line)
-            # main lane：受当前 min_level 门。
-            if entry.level >= self.min_level:
+            # main lane：受当前 min_level 门；**preview 行绝不落主干**（C20 不越界款；preview 只走 llm lane）。
+            if entry.level >= self.min_level and entry.logger != _LLM_PREVIEW_LOGGER:
                 self._append(self._fname(entry, _MAIN), line)
                 self._account(day, line)
         except (ValueError, OSError):
