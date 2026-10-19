@@ -40,6 +40,17 @@ from questor.surfaces.subagent_orchestrator import SubagentOrchestrator
 
 _log = logging.getLogger("questor.surfaces.http_sse")
 
+
+def _log_drive_failure(task: asyncio.Task) -> None:
+    """驱动 task 的异常绝不静默（#170）：取出并出声，避免持久/内存/快照故障把 task 吞成死。
+
+    （仅用于日志/排障；run 的权威终态仍由 _run_with_mcp finally 的 unregister 保证。）"""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        _log.error("drive task raised; run may be left non-terminal (persist/memory/checkpoint fault)", exc_info=exc)
+
 # 终态事件集：流式跟到这些即停。
 TERMINAL = {EventType.RUN_COMPLETED, EventType.RUN_CANCELLED, EventType.RUN_FAILED}
 #: 传输级收尾帧名（§6-8）：非 harness 领域事件、不入库、不进 event.schema，仅告知“流已结束、勿自动重连”。
@@ -159,6 +170,7 @@ class EventServer:
         msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
         await self.registry.submit(run_id, SubmitMessage(run_id=run_id, content=msg), source="http", idempotency_key=f"submit:{run_id}")
         task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))
+        task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）
         self.registry.set_task(run_id, task)
         return run_id
 
@@ -216,6 +228,7 @@ class EventServer:
         controller = RunController(run)
         self.registry.register(controller)
         task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约
+        task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）
         self.registry.set_task(run_id, task)
         return run_id
 
