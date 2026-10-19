@@ -31,7 +31,7 @@ from questor.capabilities.tools.write import WriteTool
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
 from questor.contracts.memory import MemoryStorePort
-from questor.contracts.policy import PolicyPort, PolicyRef, PolicyTrust
+from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyRef, PolicyTrust
 from questor.contracts.ports import ProviderPort, StorePort
 from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role, RunStatus
 from questor.contracts.subagent import SubagentSpawnerPort
@@ -50,7 +50,7 @@ from questor.policy.registry import PolicyEntry, PolicyRegistry
 from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.state.domain_state import Run
-from questor.surfaces._assembly import assemble_logging, payload_preview_from_env
+from questor.surfaces._assembly import assemble_logging, compaction_from_env, payload_preview_from_env
 from questor.surfaces.approval import prompt_approval
 from questor.surfaces.mcp_bootstrap import Teardown, discover_mcp_tools
 from questor.surfaces.run_registry import RunRegistry
@@ -132,6 +132,7 @@ class CliSurface:
         log_dir: Path | None = None,
         policy_id: str = "react",
         ab_table: dict[str, int] | None = None,
+        compaction: CompactionConfig | None = None,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
@@ -146,6 +147,9 @@ class CliSurface:
         self.policy_registry = _default_policy_registry()
         self.policy_id = policy_id
         self.ab_table = ab_table
+        # P10/Major-1：可恢复压缩旋钮由组合根注入（显式传参优先，否则读 QUESTOR_COMPACTION env）。
+        # None=默认不压缩（向后兼容）；非 None 则 _loop 透传给 DefaultTurnLoop，生产 run 达阈会真压缩。
+        self.compaction = compaction if compaction is not None else compaction_from_env()
         # P9/ADR-0046：能力热插拔宿主（统一 init/teardown + 熔断隔离）；generation 与工具注册表共构探针。
         self.plugin_host = PluginHost()
         # 技能生效（DoD①）：把发现的 SKILL.md 目录并入 system prompt。skills_dir=None（默认）
@@ -183,6 +187,7 @@ class CliSurface:
             cancel_event=cancel,
             subagent_spawner=subagent_spawner,
             capability_probe=self.capability_probe,
+            compaction=self.compaction,
         )
 
     async def _discover_mcp(self, run_id: str) -> tuple[list[Tool], Teardown]:

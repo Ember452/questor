@@ -15,6 +15,7 @@ import logging
 import os
 from pathlib import Path
 
+from questor.contracts.policy import CompactionConfig
 from questor.observability.configure import configure_logging, logging_status
 from questor.observability.entry import LogLevel
 
@@ -42,6 +43,28 @@ def keep_days_from_env() -> int:
 
 #: preview 截断上限（有界，防超大 preview 把 llm 通道撑爆；承 C18/DESIGN §12）。
 _PAYLOAD_MAX_CHARS = 8192
+
+
+def compaction_from_env() -> CompactionConfig | None:
+    """``QUESTOR_COMPACTION`` 解析→生产可恢复压缩旋钮（P10/Major-1，ADR-0048）。
+
+    env 读取属**组合根/surfaces** 职责（与 ``QUESTOR_LOG_*`` 同族，内核 env-free）：
+    - 未设 / ``off`` → ``None``（**默认不压缩**，向后兼容、不影响既有行为与测试）；
+    - ``on`` → 保守默认（以 **context 条数** 为触发信号、非累计花费；保头 2、保尾 6，超 24 条才压）；
+    - ``items:N`` → 自定义条数阈值（max_items=N，N>24 才合理但尊重调用方）。
+    触发用 ``max_items``（context 体量）而非 ``trigger_tokens``（累计花费）——修正我先前标注的“用错信号”隐患。
+    """
+    raw = os.environ.get("QUESTOR_COMPACTION", "off").strip().lower()
+    if raw in {"", "off"}:
+        return None
+    if raw == "on":
+        return CompactionConfig(keep_head=2, keep_tail=6, max_items=24)
+    if raw.startswith("items:"):
+        digits = raw[len("items:") :]
+        if digits.isdigit() and int(digits) > 0:
+            return CompactionConfig(keep_head=2, keep_tail=6, max_items=int(digits))
+    # 非法值：宁可不猜也不静默错配——拒绝启动（与 payload 门同口径 fail-closed）。
+    raise SystemExit(f"QUESTOR_COMPACTION={raw!r} invalid; use 'off', 'on', or 'items:<N>'")
 
 
 def payload_preview_from_env() -> int | None:
