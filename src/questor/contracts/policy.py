@@ -81,12 +81,34 @@ PolicyIntent = ProposeToolCall | ProposePlanUpdate | AdviseCompact | SuggestFini
 
 
 @dataclass(frozen=True, slots=True)
+class CompactionConfig:
+    """P10/ADR-0048：内核可恢复压缩的旋钮（取代旧 `disable_compaction` bool）。
+
+    默认 ``None``（LoopPolicy 未配）**= 不压缩**，向后兼容既有行为。开启后由 loop 在 turn
+    边界安全点据此判定是否压缩（I2 内核决定、策略只能发 advisory）；阈值取单一真源
+    （``trigger_tokens`` 对比累计 token），loop 只消费不重推窗口数学（wuu 口径）。
+
+    - ``keep_head``：从头保留不被逐出的条数（保护开头 user/系统轮）；
+    - ``keep_tail``：从尾保留的条数（保住最新可见回复与在途区，hermes 锈改造）；
+    - ``trigger_tokens``：累计用量达此阈值才触发（None=不因 token 触发）；
+    - ``max_items``：context 条数超此值才触发（None=不因条数触发）。
+    两者均 None 时不触发（保守默认，与 ADR-0041 保守默认一致）。"""
+
+    keep_head: int = 2
+    keep_tail: int = 2
+    trigger_tokens: int | None = None
+    max_items: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class LoopPolicy:
     """内核侧每次 run 的策略旋钮（wuu loopdriver 形状，R01 G-6）。"""
 
     max_turns: int = 25
     disable_tools: bool = False
-    disable_compaction: bool = True  # 压缩到 P10 才启用
+    # P10/ADR-0048：旧 `disable_compaction: bool` 转正为结构化 ``compaction: CompactionConfig | None``。
+    # None = 不压缩（等价于旧的 disable_compaction=True 默认）；配一个 config 才开启可恢复压缩。
+    compaction: CompactionConfig | None = None
 
 
 class PolicyTrust(StrEnum):
@@ -137,6 +159,7 @@ __all__ = [
     "SuggestFinish",
     "SuggestCancel",
     "PolicyIntent",
+    "CompactionConfig",
     "LoopPolicy",
     "PolicyTrust",
     "PolicyRef",

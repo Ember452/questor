@@ -32,6 +32,7 @@ from questor.contracts.events import (
     AppendAssistantMessage,
     Cancel,
     Command,
+    CompactContext,
     FinalizeRun,
     MarkToolValidated,
     RecordToolResult,
@@ -42,6 +43,7 @@ from questor.contracts.events import (
     SubmitMessage,
     UpdateTaskTree,
 )
+from questor.contracts.memory import RecoveryPointer
 from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, Message, Role, TaskKind, TaskNode, ToolArgsStatus
 from questor.state.domain_state import Run
 from questor.state.reduce import reduce
@@ -52,6 +54,10 @@ _FUTURE = datetime(2099, 1, 1, tzinfo=UTC)
 
 def _user() -> Message:
     return Message(id="u0", role=Role.USER, seq=0, content=(ContentBlock(type="text", text="go"),))
+
+
+def _assistant_text(text: str, seq: int) -> Message:
+    return Message(id=f"at{seq}", role=Role.ASSISTANT, seq=seq, content=(ContentBlock(type="text", text=text),))
 
 
 def _assistant_tool_use(tc: str, turn: int) -> Message:
@@ -140,12 +146,38 @@ def _fixture_multi_child_report() -> tuple[Run, list[Command], int]:
     return run, cmds, 5  # split 在第一子 report 后、第二子 report 前（task_tree 半更新态）
 
 
+def _fixture_compaction() -> tuple[Run, list[Command], int]:
+    """P10/ADR-0048：连续两条文本消息后在内核安全点压缩。
+
+    `CompactContext` 携带 summary/covered_hash/floor（loop 侧算好），reduce 纯应用；
+    split 恰在压缩命令**之前**，使 CompactContext 进尾部重放——验证从快照重放该命令与
+    连续 reduce 得到一致的压缩后骨架（含 summary/recovery_pointers）。"""
+    rid = "r_compact"
+    run = Run(run_id=rid, budget=Budget(max_turns=3))
+    cmds: list[Command] = [
+        SubmitMessage(run_id=rid, content=_user()),
+        AdvanceTurn(run_id=rid, turn=1),
+        AppendAssistantMessage(run_id=rid, turn=1, message=_assistant_text("a1", 1)),
+        CompactContext(
+            run_id=rid,
+            evict_start=1,
+            evict_end=2,
+            summary_text="[compacted a1]",
+            new_floor=2,
+            new_pointers=(RecoveryPointer(seq_from=1, seq_to=1, covered_hash="sha256:abc"),),
+        ),
+        FinalizeRun(run_id=rid, status="completed", exit_reason="answered"),
+    ]
+    return run, cmds, 3  # split 在压缩命令之前（pre_compact 快照位置）
+
+
 FIXTURES: list[tuple[str, Callable[[], tuple[Run, list[Command], int]]]] = [
     ("approve", _fixture_approve),
     ("cancel-backfill", _fixture_cancel_backfill),
     ("multi-turn", _fixture_multi_turn),
     ("spawn-report", _fixture_spawn_report),
     ("multi-child-report", _fixture_multi_child_report),
+    ("compaction", _fixture_compaction),
 ]
 
 
@@ -192,6 +224,10 @@ def _canonical(run: Run) -> dict:
         "calls": calls,
         "approvals": approvals,
         "task_tree": task_tree,
+        # P10/ADR-0048：压缩态必进权威骨架——否则 summary/covered_hash/floor 漂移会全绿假判（最危险的静默错）。
+        "summary": run.context.summary,
+        "compaction_floor": run.context.compaction_floor,
+        "recovery_pointers": tuple((p.seq_from, p.seq_to, p.covered_hash) for p in run.context.recovery_pointers),
     }
 
 
