@@ -1,8 +1,7 @@
 """Deep Dream 离线蒸馏 + run-完成→daily flush（design/06 §1/§3；ADR-0025；T13）。
 
 **离线/维护路径**：不进活 run 热 loop（design/05 §5"只读分支快照重放"）；写经
-:class:`MemoryStorePort` **同一收口**（无旁路、无裸句柄，HARD C4）。纪律（承 CowAgent
-``summarizer.py:511-648``/``:288-344`` 自写，非逐行移植）：
+:class:`MemoryStorePort` **同一收口**（无旁路、无裸句柄，HARD C4）。核心纪律：
 
 - **原子写**：真源 md 经 store 的 ``write_memory_text``/``append_memory_text``（临时文件 + ``os.replace``）。
 - **输入 hash 去重**：以"本次喂入的 daily 原料"为 ``idempotency_key`` → 同原料二次运行 **no-op**（不重复重写 core）。

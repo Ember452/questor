@@ -3,7 +3,7 @@
 把"已读到的 md 文件内容"映射为待索引的 chunk 集合——**无 IO、无 store 依赖、可单测**。调用方
 （``providers.store_memory_sqlite.SQLiteMemoryStore.sync``）负责扫盘读文件、清索引、逐块 reindex。
 
-文件 → source 映射（承 CowAgent ``manager.py:359-396`` sync 语义）：``MEMORY.md``→core、
+文件 → source 映射：``MEMORY.md``→core、
 ``knowledge/**``→knowledge、``memory/<date>.md``→daily；**``memory/dreams/**`` 不进索引**
 （design/06 §1：蒸馏日记作常绿精华来源，但排除出检索层，防近重复噪声）。
 """
