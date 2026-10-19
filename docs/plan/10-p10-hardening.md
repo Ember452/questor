@@ -217,6 +217,25 @@
 
 ---
 
+## 9. 落地实况与偏差回填（执行期 2026-10-19，AGENTS §5.5 reality-wins）
+
+**完成态（worktree `questor-p10-hardening`、分支 `feat/p10-hardening`、基线 `cfc3004`）**：
+- **Lane A（TA1–TA7）全部落地**：`CompactContext`+reduce 纯应用、compact_* 四处 lockstep、baseline_seq 快照/回放、CompactionConfig+loop 安全点触发+pre_compact 补点、确定性摘要+L2' 蒸馏桥、`check_replay_determinism` 压缩 fixture（6 fixtures、`_canonical` 纳入压缩态）、C19 配对专项。
+- **Lane B**：**TB1 无需新代码**——bus 级一处只读投影收口**已由 P7/ADR-0033 落地并被 `test_p7_out_of_band_projection`（2 订阅者每 seq 恰一行）+ P9 canary（三消费者各投一次）覆盖**（刀2 偏差#4 早已在 P7 消解；不臆造工作，仅核实）。TB2/TB3/TB4 均落地。
+- **Lane C（TC1/TC2）**：确定性 eval 套件 + `eval` marker + 独立非阻塞 `evals` CI job。阈值钉定=同输入两次事件序列一致（`test_eval_determinism_*`）；反假绿由 reduce/plan 层负测 + eval 专测中段事实回读保障。
+- **Lane D（TD1/TD2/TD3）**：lease/TTL 回收 + artifact 孤儿 GC + event_log 裁剪后置登记（ADR-0050）。
+
+**偏差/现实修正（不改结论，只记落点）**：
+1. **`usage_delta` 死类型**：声明+外部白名单齐、生产路径从不发射（`LIVE_ONLY`）。一度误作聚合源→改取 durable `run_completed.usage`（MAJ-4）。
+2. **`FileSystemArtifactStore` docstring 与实现不符**：“按 run 隔离”但路径=`root/{digest}`、run_id 不入路径（内容寻址去重）。GC 按**引用可达性**实现、非按目录（登记不擅改）。
+3. **TS `event.ts` 手工同步**：本环境无 `node_modules`、`npm run generate:protocol` 不可跑；按 json-schema-to-typescript 惯例手改。**待依赖齐备时由 CI `check:protocol`（boundaries job 的 TS codegen freshness gate）校验一致**；本轮 Python 侧 `check_protocol_schema --check`/`--self-test` 已 25 types lockstep 绿。
+4. **`check_*` 守卫现场数=12**（非任务描述的 11）；`boundaries` job 实注册 Python 侧子集。
+5. **eval 事实召回腿修正**：`DELTA-9` 在受保护头部（未逐出）→不进 distill；eval 断言改为“保头留活区 + 被压区可恢复锈”两腿；distill 可检索召回由 `test_compaction_loop`（中段含事实）覆盖。
+
+**质量门**：全量 838 passed / 5 skipped 零回归（基线 800+38）、全树 ruff clean、`lint-imports` 5 kept、协议 25 types lockstep、10 边界守卫全绿、冷导入逐模块。**push/merge 逐次待授权（PR-only，本地 merge commit 不 squash）**。
+
+---
+
 ## 附：七处真矛盾裁决一览（决策完备，供对抗评审直击）
 
 1. **范围切分**：**一份 plan/10**、按依赖排序分 **A/B/C/D 四 lane** 交付；判据=三子系统代码面基本不重叠可并行，但 C（eval）依赖 A+B 稳定、D（GC）依赖 A。每 lane 可独立交付并 merge（A 独立兑现"压缩不丢事实召回"、B 兑现"追踪面板基于事件流"、C 兑现"任务级回归网"、D 卫生）。
