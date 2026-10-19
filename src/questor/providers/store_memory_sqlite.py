@@ -166,9 +166,15 @@ class SQLiteMemoryStore(MemoryStorePort):
         # isolation_level=None → 自驱 BEGIN IMMEDIATE / COMMIT / ROLLBACK。
         os.makedirs(self.memory_root, exist_ok=True)
         self._db = await aiosqlite.connect(self.db_path, isolation_level=None)
-        await self._db.executescript(_SCHEMA)
-        await self._enforce_schema_version()
-        self.vector = SQLiteVectorBackend(self._db)
+        try:
+            await self._db.executescript(_SCHEMA)
+            await self._enforce_schema_version()
+            self.vector = SQLiteVectorBackend(self._db)
+        except BaseException:
+            # schema 版本 fail-closed 等抛出时先关掉刚建的连接，避免 aiosqlite 非守护线程泄漏（#172）。
+            await self._db.close()
+            self._db = None
+            raise
         return self
 
     async def _enforce_schema_version(self) -> None:
