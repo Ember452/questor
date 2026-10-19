@@ -25,9 +25,11 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from questor.contracts.errors import MAX_ERROR_MESSAGE_CHARS
 from questor.contracts.events import EventType
-from questor.contracts.sidecar_status import SIDECAR_LIFECYCLE_STATES, SIDECAR_STATUS_FIELDS
+from questor.contracts.sidecar_status import _MAX_DETAIL_LEN, SIDECAR_LIFECYCLE_STATES, SIDECAR_STATUS_FIELDS
 from questor.kernel.events import EXTERNAL_EVENT_FIELDS
+from questor.state.reduce import _MSG_FINAL_TEXT_CHARS
 
 SCHEMA_PATH = Path("protocol/event.schema.json")
 SIDEcar_STATUS_SCHEMA_PATH = Path("protocol/sidecar_status.schema.json")
@@ -104,6 +106,44 @@ def _sidecar_status_drift(status: dict) -> list[str]:
     return drift
 
 
+def _max_length_drift(event_schema: dict, status_schema: dict) -> list[str]:
+    """maxLength **数值**单一真源交叉核对（#165）：schema 里声明的上限必须 == Python 常量。
+
+    旧守卫只比字段名，不比数值：改 schema maxLength 或 Python 常量之一不会报红，
+    而“bounded”只是口头。本函数把三处有界字段（final_text / error.message / sidecar detail）钉成机守。"""
+
+    def _maxlen(node: object, *keys: str) -> object:
+        cur: object = node
+        for k in keys:
+            if not isinstance(cur, dict):
+                return None
+            cur = cur.get(k)
+        return cur
+
+    checks = [
+        (
+            _maxlen(event_schema, "$defs", "message_completed", "properties", "final_text", "maxLength"),
+            _MSG_FINAL_TEXT_CHARS,
+            "message_completed.final_text vs reduce._MSG_FINAL_TEXT_CHARS",
+        ),
+        (
+            _maxlen(event_schema, "$defs", "run_failed", "properties", "error", "properties", "message", "maxLength"),
+            MAX_ERROR_MESSAGE_CHARS,
+            "run_failed.error.message vs errors.MAX_ERROR_MESSAGE_CHARS",
+        ),
+        (
+            _maxlen(status_schema, "properties", "detail", "maxLength"),
+            _MAX_DETAIL_LEN,
+            "sidecar_status.detail vs _MAX_DETAIL_LEN",
+        ),
+    ]
+    drift: list[str] = []
+    for schema_val, py_val, label in checks:
+        if schema_val != py_val:
+            drift.append(f"maxLength drift on '{label}': schema {schema_val!r} != python {py_val!r}")
+    return drift
+
+
 def check() -> int:
     schema = _load_schema()
     Draft202012Validator.check_schema(schema)  # raises if malformed
@@ -133,6 +173,11 @@ def check() -> int:
         return 1
     if status_drift:  # §6-5：进程级 status 面的 state 枚举/字段集与 contracts lockstep
         for line in status_drift:
+            print(line, file=sys.stderr)
+        return 1
+    ml_drift = _max_length_drift(schema, status_schema)  # #165：bounded 上限数值也必须 lockstep
+    if ml_drift:
+        for line in ml_drift:
             print(line, file=sys.stderr)
         return 1
     print(
@@ -270,6 +315,12 @@ def self_test() -> int:
     se[se.index("crashed")] = "crashhed_TAMPERED"
     status_drift_caught = bool(_sidecar_status_drift(tampered_status))
 
+    # #165：maxLength 数值门能判红——改 schema 的 final_text maxLength（不动 Python）→ 必报。
+    maxlen_ok_when_aligned = not _max_length_drift(schema, status_schema)
+    tampered_ml = copy.deepcopy(schema)
+    tampered_ml["$defs"]["message_completed"]["properties"]["final_text"]["maxLength"] = 9999
+    maxlen_drift_caught = bool(_max_length_drift(tampered_ml, status_schema))
+
     ok = (
         not bad_accept
         and not bad_reject
@@ -278,6 +329,8 @@ def self_test() -> int:
         and field_drift_caught
         and status_ok_when_aligned
         and status_drift_caught
+        and maxlen_ok_when_aligned
+        and maxlen_drift_caught
     )
     print(
         f"self-test: valid_all_pass={not bad_accept} ({bad_accept}) bad_all_reject={not bad_reject} ({bad_reject}) detects-drift={detects} field-lockstep-green={field_ok_when_aligned} field-drift-caught={field_drift_caught} status-lockstep-green={status_ok_when_aligned} status-drift-caught={status_drift_caught}"

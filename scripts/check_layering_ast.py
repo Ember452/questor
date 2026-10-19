@@ -112,14 +112,25 @@ def analyze_source(source: str, own_layer: str, path: str = "<string>") -> list[
     tree = ast.parse(source)
     violations: list[str] = []
     own_rank = LAYER_RANK.get(own_layer, -1)
-    for lineno, imported in _referenced_layers(tree):
-        if imported in CROSS_CUTTING:
-            continue
-        if LAYER_RANK.get(imported, -1) > own_rank:
+    if own_layer in CROSS_CUTTING:
+        # 横切层（observability/config）红线机守：只能依赖 contracts（+ 自身包），
+        # 不得 import 任何业务层或另一横切（S7：旧实现直接 continue 跳过 → “横切→业务”不守）。
+        for lineno, imported in _referenced_layers(tree):
+            if imported == own_layer or imported == "contracts":
+                continue
             violations.append(
-                f"{path}:{lineno}: layer '{own_layer}' must not import outer "
-                f"layer '{imported}' (C1/C14)"
+                f"{path}:{lineno}: cross-cutting layer '{own_layer}' may import only "
+                f"contracts/self, not '{imported}' (S7)"
             )
+    else:
+        for lineno, imported in _referenced_layers(tree):
+            if imported in CROSS_CUTTING:
+                continue
+            if LAYER_RANK.get(imported, -1) > own_rank:
+                violations.append(
+                    f"{path}:{lineno}: layer '{own_layer}' must not import outer "
+                    f"layer '{imported}' (C1/C14)"
+                )
     forbidden = FORBIDDEN_IMPORTS.get(own_layer, ())
     for lineno, module in _referenced_modules(tree):
         if any(module == bad or module.startswith(bad + ".") for bad in forbidden):
@@ -152,6 +163,8 @@ def self_test() -> int:
     caps_store = 'from questor.providers.store_memory_sqlite import SQLiteMemoryStore\n'
     providers_import_memory = 'from questor.memory.search import fuse\n'  # 外→内（providers⊐memory），应放行
     good = "from questor.contracts import events\n"
+    obs_to_kernel = "from questor.kernel import loop\n"  # 横切→业务，应红（#165：旧实现跳过不判）
+    obs_to_contracts = "from questor.contracts import events\n"  # 横切→contracts，应放行
     bad_hits = analyze_source(bad, "kernel")
     pkg_hits = analyze_source(bad_from_import, "kernel")
     forbidden_hits = analyze_source(forbidden, "capabilities")
@@ -160,9 +173,14 @@ def self_test() -> int:
     caps_store_hits = analyze_source(caps_store, "capabilities")
     allowed_hits = analyze_source(providers_import_memory, "providers")
     good_hits = analyze_source(good, "kernel")
-    ok = bool(bad_hits) and bool(pkg_hits) and bool(forbidden_hits) and bool(surfaces_hits) and bool(memory_hits) and bool(caps_store_hits) and not allowed_hits and not good_hits
-    print(f"self-test: dyn-import={bool(bad_hits)} package-import={bool(pkg_hits)} forbidden-caps={bool(forbidden_hits)} surfaces-reduce={bool(surfaces_hits)} memory-outer={bool(memory_hits)} caps-store={bool(caps_store_hits)} providers->memory-allowed={not allowed_hits} clean-passed={not good_hits}")
-    for msg in (*bad_hits, *pkg_hits, *forbidden_hits, *surfaces_hits, *memory_hits, *caps_store_hits):
+    obs_bad_hits = analyze_source(obs_to_kernel, "observability")
+    obs_good_hits = analyze_source(obs_to_contracts, "observability")
+    ok = (
+        bool(bad_hits) and bool(pkg_hits) and bool(forbidden_hits) and bool(surfaces_hits) and bool(memory_hits)
+        and bool(caps_store_hits) and bool(obs_bad_hits) and not allowed_hits and not good_hits and not obs_good_hits
+    )
+    print(f"self-test: dyn-import={bool(bad_hits)} package-import={bool(pkg_hits)} forbidden-caps={bool(forbidden_hits)} surfaces-reduce={bool(surfaces_hits)} memory-outer={bool(memory_hits)} caps-store={bool(caps_store_hits)} crosscut-to-business={bool(obs_bad_hits)} providers->memory-allowed={not allowed_hits} clean-passed={not good_hits and not obs_good_hits}")
+    for msg in (*bad_hits, *pkg_hits, *forbidden_hits, *surfaces_hits, *memory_hits, *caps_store_hits, *obs_bad_hits):
         print(f"  expected-red -> {msg}")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
