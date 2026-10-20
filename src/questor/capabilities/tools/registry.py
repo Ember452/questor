@@ -50,6 +50,18 @@ def bound_description(text: str, *, name: str, max_chars: int | None) -> str:
     return cleaned
 
 
+def _is_available(tool: Tool, spec: ToolSpec) -> bool:
+    """工具是否进入本 run 的工具面：**两个**条件都要真。
+
+    - `Tool.available()`：动态可用性（凭据/平台/特性开关）；
+    - `ToolSpec.available`：静态默认值（G7 僵尸位——以前无人读，现接线）。
+
+    内置工具均不显式给 `available`（默认 True），所以本改动对现有名册**零行为变更**；
+    它的作用是让声明期就能把工具关成“注册但不外露”（如未完成的实验工具），而不必删代码。
+    """
+    return spec.available and tool.available()
+
+
 class ToolRegistry:
     """进程内工具注册表（可增删查 + 冻结快照 + 误名候选提示）。"""
 
@@ -94,12 +106,12 @@ class ToolRegistry:
         return self._tools.get(name)
 
     def list_available(self) -> tuple[Tool, ...]:
-        """列出 available() 为真的工具（特性开关/凭据/平台缺失时隐藏）。"""
-        return tuple(tool for name, tool in self._tools.items() if tool.available())
+        """列出可用工具（特性开关/凭据/平台缺失时隐藏；`ToolSpec.available` 为假也隐藏）。"""
+        return tuple(tool for name, tool in self._tools.items() if _is_available(tool, self._specs[name]))
 
     def definitions(self) -> tuple[ToolSpec, ...]:
         """available 工具的已 sanitize spec（喂 provider）。"""
-        return tuple(self._specs[name] for name, tool in self._tools.items() if tool.available())
+        return tuple(self._specs[name] for name, tool in self._tools.items() if _is_available(tool, self._specs[name]))
 
     def candidates(self, name: str) -> tuple[str, ...]:
         """委托已冻结 surface 的同名逻辑（保持单一真源）。"""
@@ -107,7 +119,9 @@ class ToolRegistry:
 
     def freeze_for_run(self, run_id: str) -> RunToolSurface:
         """快照当前 available 工具面给这个 run；后续 register/unregister 不影响此快照。"""
-        available = [(self._specs[name], tool) for name, tool in self._tools.items() if tool.available()]
+        available = [
+            (self._specs[name], tool) for name, tool in self._tools.items() if _is_available(tool, self._specs[name])
+        ]
         return RunToolSurface(
             tools=tuple(tool for _, tool in available),
             specs=tuple(spec for spec, _ in available),
