@@ -20,7 +20,7 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from contextlib import ExitStack
 from dataclasses import replace
 from datetime import timedelta
@@ -44,6 +44,7 @@ from questor.contracts.events import (
     MarkToolRunning,
     MarkToolValidated,
     RecordToolResult,
+    RecordTurnCompleted,
     RecordWarning,
     RequestApproval,
     ResolveApproval,
@@ -71,6 +72,7 @@ from questor.kernel.compaction import plan_compaction
 from questor.kernel.events import EventBus
 from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
 from questor.kernel.run_control import RunController
+from questor.kernel.settle import TurnBoundary
 from questor.kernel.shell_parse_posix import parse_posix_shell
 from questor.kernel.shell_parse_powershell import parse_powershell
 from questor.kernel.tool_arguments import extract_shell_commands
@@ -290,6 +292,7 @@ class DefaultTurnLoop:
         subagent_spawner: SubagentSpawnerPort | None = None,
         capability_probe: Callable[[], int] | None = None,
         compaction: CompactionConfig | None = None,
+        settle: Callable[[TurnBoundary], Awaitable[None]] | None = None,
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -311,6 +314,8 @@ class DefaultTurnLoop:
         self.subagent_spawner = subagent_spawner
         # P10/ADR-0048：可恢复压缩旋钮；None = 不压缩（向后兼容，等价旧 disable_compaction=True）。
         self.compaction = compaction
+        # B6：Stop/Interrupt 点的 settle 回调（surface 注册；None = 不写记忆，kernel 仍 emit turn_completed）。
+        self.settle = settle
         # P9/ADR-0046：能力名册探针（未注入则不发 tools_changed）。loop 每安全点比对、变化即发 live-only。
         self.capability_probe = capability_probe
         self._capability_gen = capability_probe() if capability_probe is not None else 0
@@ -371,6 +376,7 @@ class DefaultTurnLoop:
         repeat_sig: tuple | None = None
         repeat_count = 0
         empties = 0
+        turn_assistant: Message | None = None
         # 关联作用域（α′，DESIGN §5；G-L5）：run_id 整轮一次绑定（覆盖新鲜+resume 两条路），
         # turn 每轮从 loop 权威局部变量 ``turn`` 重盖章（同名覆盖→号不漂移）。ExitStack 退出时
         # 统一 reset，绝不把本 run 的关联泄漏进调用方 task（http_sse 并发多 run 靠 task 作用域隔离）。
@@ -381,6 +387,13 @@ class DefaultTurnLoop:
                 if run.status.is_terminal:
                     return run
                 if self.cancel_event.is_set():
+                    if turn_assistant is not None:
+                        run = await self._apply_command(
+                            controller,
+                            run,
+                            RecordTurnCompleted(run_id=run.run_id, turn=turn, usage={}, interrupted=True),
+                        )
+                        await self._settle_turn(run, turn, turn_assistant, {}, interrupted=True)
                     run, events = self._transition(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
                     controller.run = run
                     await self._emit(events)
@@ -429,6 +442,7 @@ class DefaultTurnLoop:
                     )
                     return await self._fail_with_entry(run, turn, entry, "provider_protocol_error")
                 await self._checkpoint(run, "auto")
+                turn_assistant = assistant_msg
 
                 # P10/ADR-0048：turn 边界安全点（快照已落、全部 tool_use 已闭合）尝试可恢复压缩。
                 # I2：压缩由内核决定（策略只能发 advisory hint）；未配 compaction 则逐字不变。
@@ -463,6 +477,13 @@ class DefaultTurnLoop:
                     if any(c.status in OPEN_TOOL_CALL_STATUSES for c in run.tool_ledger.calls):
                         continue  # stop-gate：尚有未闭合工具调用时拒绝过早 Finish
                     final = assistant_msg if has_text else None
+                    # B6 Stop 点：先落 durable turn_completed + settle，再收终态（顺序固定，便于回放）。
+                    run = await self._apply_command(
+                        controller,
+                        run,
+                        RecordTurnCompleted(run_id=run.run_id, turn=turn, usage=usage, interrupted=False),
+                    )
+                    await self._settle_turn(run, turn, final, usage, interrupted=False)
                     run, events = self._transition(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
                     controller.run = run
                     await self._emit(events)
@@ -504,6 +525,31 @@ class DefaultTurnLoop:
         finally:
             # 耐久队列：只 ack 已成功应用的命令；异常/早退时未应用的行保持 deferred，重启可重取。
             await controller.ack(tuple(applied))
+
+    async def _settle_turn(
+        self,
+        run: Run,
+        turn: int,
+        assistant_msg: Message | None,
+        usage: JsonObject,
+        *,
+        interrupted: bool,
+    ) -> None:
+        """Stop/Interrupt 点：把边界事实交给 surface 注册的 settle；失败绝不打断回复。"""
+        if self.settle is None:
+            return
+        boundary = TurnBoundary(
+            run_id=run.run_id,
+            turn=turn,
+            user_text=_last_real_user_text(run),
+            assistant_text=_visible_text(assistant_msg),
+            interrupted=interrupted,
+            usage=dict(usage or {}),
+        )
+        try:
+            await self.settle(boundary)
+        except Exception:  # noqa: BLE001 - best-effort：settle 故障只留痕，不阻塞回复
+            _log.warning("settle_turn callback failed for run=%s turn=%s", run.run_id, turn, exc_info=True)
 
     async def _maybe_compact(self, controller: RunController, run: Run, turn: int, total_tokens: int) -> Run:
         """P10/ADR-0048：在 turn 边界安全点尝试一次**可恢复压缩**。
@@ -1020,6 +1066,32 @@ def _prompt_echo_baseline(run: Run) -> list[str]:
 def _has_text(message: Message) -> bool:
     """消息是否含非空可见文本块。"""
     return any(b.type == "text" and b.text for b in message.content)
+
+
+def _visible_text(message: Message | None) -> str | None:
+    """消息的可见正文（text 块拼接）；空/None 返回 None。"""
+    if message is None:
+        return None
+    text = "".join(b.text or "" for b in message.content if b.type == "text").strip()
+    return text or None
+
+
+def _is_seed_message(message: Message) -> bool:
+    """是否为 SeedContext 注入的种子消息（system_marker origin=seed）。"""
+    return any(
+        b.type == "system_marker" and b.payload and b.payload.get("origin") == "seed" for b in message.content
+    )
+
+
+def _last_real_user_text(run: Run) -> str | None:
+    """最近一条真实 user 原话（跳过 seed 消息）；供 settle 判据①。"""
+    for message in reversed(run.context.items):
+        if message.role is not Role.USER or _is_seed_message(message):
+            continue
+        text = "".join(b.text or "" for b in message.content if b.type == "text").strip()
+        if text:
+            return text
+    return None
 
 
 def _token_total(usage: JsonObject) -> int:
