@@ -6,8 +6,12 @@ import aiosqlite
 import pytest
 
 from questor.contracts.state_schema import RunStatus
+from questor.kernel.recovery import rebuild_run
 from questor.kernel.seed import SeedRef, SeedRejected, build_seed_context
+from questor.providers.fake import EchoProvider
 from questor.providers.store_sqlite import SQLiteStore
+from questor.surfaces.cli import CliSurface
+from questor.surfaces.http_sse import EventServer
 
 
 async def test_old_v2_store_migrates_session_columns(tmp_path) -> None:
@@ -122,3 +126,60 @@ async def test_seed_three_rejections(tmp_path) -> None:
         assert oversize.value.reason == "oversize"
     finally:
         await store.close()
+
+
+def _seed_marker(run) -> bool:  # noqa: ANN001
+    return any(
+        block.type == "system_marker" and block.payload and block.payload.get("origin") == "seed"
+        for message in run.context.items
+        for block in message.content
+    )
+
+
+async def test_start_run_session_seed_and_new_session(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "http-session.db")).connect()
+    try:
+        surface = CliSurface(workspace_root=tmp_path, store=store, provider=EchoProvider())
+        server = EventServer(surface, store)
+        first_id = await server.start_run("first", session_id="s-http")
+        await store_task(server, first_id)
+        second_id = await server.start_run("second", session_id="s-http")
+        await store_task(server, second_id)
+        second = await rebuild_run(store, second_id)
+        assert second is not None and _seed_marker(second)
+        seed_text = "".join(b.text or "" for b in second.context.items[0].content if b.type == "text")
+        assert "echo" in seed_text
+
+        third_id = await server.start_run("third")
+        await store_task(server, third_id)
+        third = await rebuild_run(store, third_id)
+        assert third is not None and not _seed_marker(third)
+        sid = await store.run_session(third_id)
+        assert sid is not None and await store.session_row(sid) is not None
+    finally:
+        await store.close()
+
+
+async def test_run_once_session_seed_and_new_session(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "cli-session.db")).connect()
+    try:
+        surface = CliSurface(workspace_root=tmp_path, store=store, provider=EchoProvider())
+        await surface.run_once("one", session_id="s-cli")
+        second = await surface.run_once("two", session_id="s-cli")
+        assert _seed_marker(second)
+        seed_text = "".join(b.text or "" for b in second.context.items[0].content if b.type == "text")
+        assert "echo" in seed_text
+
+        third = await surface.run_once("three")
+        assert not _seed_marker(third)
+        sid = await store.run_session(third.run_id)
+        assert sid is not None and await store.session_row(sid) is not None
+    finally:
+        await store.close()
+
+
+async def store_task(server: EventServer, run_id: str) -> None:
+    """等 EventServer 的后台驱动任务落终态（测试辅助）。"""
+    active = server.registry._runs.get(run_id)  # noqa: SLF001 - 测试观察点
+    assert active is not None and active.task is not None
+    await active.task

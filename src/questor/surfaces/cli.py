@@ -41,6 +41,7 @@ from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.permissions import DefaultPermissionEngine
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
+from questor.kernel.seed import SeedRef, build_seed_context, coerce_seed_refs
 from questor.memory.distill import flush_run_to_daily
 from questor.observability.projection import log_envelope
 from questor.policy.null_policy import NullPolicy
@@ -229,12 +230,22 @@ class CliSurface:
             run_registry.register(tool)  # 命名冲突由 registry first-writer-wins 拒盖（C21）
         return run_registry.freeze_for_run(run_id)
 
-    async def run_once(self, text: str, *, on_delta=None) -> Run:  # noqa: ANN001
+    async def run_once(
+        self,
+        text: str,
+        *,
+        on_delta=None,  # noqa: ANN001
+        session_id: str | None = None,
+        seed_refs: object | None = None,
+    ) -> Run:
         """跑一轮用户输入直到终态：用户文本与审批都以 Command 经 inbox 进入 loop。
 
         单次 CLI run 若注入了 store 则真实落库（事件 + turn 边界/审批/工具 checkpoint），
         支撑 P3 跨进程 resume；无 store 时退回内存总线（不落库）。surfaces 只持 StorePort
         抽象、不 import 具体 store 实现（S6/T20/C4）。
+
+        B4：给 ``session_id`` 时先确保会话行、绑定 run→session，并注入有界 SeedContext；
+        不给时新建 session 行（单次 run 也落一行），不 seed。
         """
         bus = InProcessEventBus(self.store)
         # 带外投影改挂 bus 级唯一只读订阅（ADR-0033）：不再逐消费者调 log_envelope，
@@ -244,10 +255,12 @@ class CliSurface:
         run_id = new_id("run")
         _policy, ref = self._resolve_for_run(run_id)
         run = Run(run_id=run_id, budget=Budget(), policy_ref=ref)
+        sid, seed_requested = await self._prepare_session(run_id, session_id)
+        seed_message = await self._seed_message(run, sid, seed_requested, seed_refs)
         mcp_tools, mcp_teardown = await self._discover_mcp(run.run_id)
         surface = self._freeze_surface(run.run_id, mcp_tools)
         loop = self._loop(bus, cancel, surface, run_id=run.run_id)
-        controller = RunController(run, queue=self.store, session_id=f"sess:{run.run_id}")
+        controller = RunController(run, queue=self.store, session_id=sid)
         registry = RunRegistry()
         registry.register(controller)
         # 先同步挂上两个订阅队列（start drive 之前），保证不丢最早的 text_delta/approval_request；
@@ -257,6 +270,13 @@ class CliSurface:
         printer = asyncio.create_task(self._stream(printer_queue, on_delta))
         approver = asyncio.create_task(self._approve(approver_queue, registry, run.run_id))
         try:
+            if seed_message is not None:
+                await registry.submit(
+                    run.run_id,
+                    SubmitMessage(run_id=run.run_id, content=seed_message),
+                    source="cli",
+                    idempotency_key=f"seed:{run.run_id}",
+                )
             msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
             await registry.submit(
                 run.run_id,
@@ -275,6 +295,29 @@ class CliSurface:
                     await task
             await mcp_teardown()  # per-run MCP 连接与 stderr 句柄收尾（不留悬空子进程/文件）
         return final
+
+    async def _prepare_session(self, run_id: str, session_id: str | None) -> tuple[str, bool]:
+        """确保会话行 + 绑定 run；返回 (session_id, 是否请求 seed)。无 store 时退化为内存会话。"""
+        store = self.store
+        if store is not None and callable(getattr(store, "create_session", None)):
+            if session_id:
+                sid = (await store.ensure_session(session_id))["session_id"]  # type: ignore[attr-defined]
+            else:
+                sid = await store.create_session(  # type: ignore[attr-defined]
+                    model=self.model, workspace_root=str(self.workspace_root)
+                )
+            await store.bind_run_session(run_id, sid)  # type: ignore[attr-defined]
+            return str(sid), bool(session_id)
+        return session_id or f"sess:{run_id}", bool(session_id)
+
+    async def _seed_message(self, run: Run, sid: str, requested: bool, raw_refs: object | None):  # noqa: ANN201
+        """按请求构造 seed 消息；无 session_id 时不 seed（保持历史行为）。"""
+        if not requested:
+            return None
+        refs: tuple[SeedRef, ...] = coerce_seed_refs(raw_refs, sid)
+        store = self.store if callable(getattr(self.store, "session_transcript", None)) else None
+        return await build_seed_context(store, sid, refs=refs, status=run.status)
+
 
     async def _flush_run_to_daily(self, run: Run) -> None:
         """run **成功完成**边界的 episodic→daily 沉淀（产品化“记住”写入触发器）。
@@ -325,7 +368,8 @@ class CliSurface:
         cancel = asyncio.Event()
         tool_surface = self.registry.freeze_for_run(run.run_id)
         loop = self._loop(bus, cancel, tool_surface, run_id=run.run_id)
-        controller = RunController(run, queue=self.store, session_id=f"sess:{run.run_id}")
+        sid = await self.store.run_session(run_id) if callable(getattr(self.store, "run_session", None)) else None
+        controller = RunController(run, queue=self.store, session_id=sid or f"sess:{run_id}")
         interactive = sys_stdin_tty()
         printer_queue = bus.add_subscriber(run.run_id)
         printer = asyncio.create_task(self._stream(printer_queue, None))
@@ -400,8 +444,11 @@ async def interactive(surface: CliSurface | None = None) -> int:
 
     日志装配责任已上移组合根（DESIGN §11）：本函数不再自调 ``configure_logging``；
     直接调本函数的入口/测试需自行显式装配。
+
+    B4：会话连续——store 支持 sessions 时整个 REPL 复用同一 session_id（每轮 run 注入 seed）。
     """
     surface = surface or CliSurface()
+    session_id = new_id("sess") if callable(getattr(surface.store, "create_session", None)) else None
     print("questor CLI — type a message (Ctrl-D to exit).")
     while True:
         try:
@@ -411,7 +458,7 @@ async def interactive(surface: CliSurface | None = None) -> int:
             return 0
         if not text.strip():
             continue
-        await surface.run_once(text)
+        await surface.run_once(text, session_id=session_id)
     return 0
 
 

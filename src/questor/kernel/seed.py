@@ -55,6 +55,21 @@ def _bounded_text(rows: list[dict[str, Any]]) -> str:
     return "\n".join(lines[-MAX_SEED_MESSAGES:])
 
 
+def coerce_seed_refs(raw: object, session_id: str) -> tuple[SeedRef, ...]:
+    """把 HTTP/CLI 传入的 refs（dict 或 SeedRef）归一成 tuple[SeedRef]；非法形状抛 ValueError。"""
+    if not raw:
+        return ()
+    refs: list[SeedRef] = []
+    for item in raw:  # type: ignore[union-attr]
+        if isinstance(item, SeedRef):
+            refs.append(item)
+        elif isinstance(item, dict) and "seq" in item:
+            refs.append(SeedRef(str(item.get("session_id") or session_id), int(item["seq"])))
+        else:
+            raise ValueError(f"seed ref must be SeedRef or {{session_id, seq}}, got {item!r}")
+    return tuple(refs)
+
+
 async def build_seed_context(
     store: object | None,
     session_id: str,
@@ -100,4 +115,4 @@ async def build_seed_context(
     return Message(id=new_id("msg"), role=Role.USER, content=content, seq=0)
 
 
-__all__ = ["MAX_SEED_BYTES", "MAX_SEED_REFS", "MAX_SEED_TOKENS", "SeedRef", "SeedRejected", "build_seed_context"]
+__all__ = ["MAX_SEED_BYTES", "MAX_SEED_REFS", "MAX_SEED_TOKENS", "SeedRef", "SeedRejected", "build_seed_context", "coerce_seed_refs"]
