@@ -57,6 +57,7 @@
 | [0049](./0049-observability-blade3-consumption.md) | P10：**observability 刀 3**——`questor logs` 只读消费命令（event_log 主干 + 旁路 JSONL 按 run_id+seq 合并、零第二真相）；带外投影收口 bus 级一处只读订阅（消 ADR-0033/刀2 偏差#4 双投、覆 CLI+HTTP+OpenAI 三生产者）；`--log-payload=truncate:N` preview 三闸（显式授权+独立 llm 通道+有界截断，主干零原文不变、不进 `_DATA_KEYS`）；usage 聚合取 durable `run_completed.usage`（不用 never-emitted `usage_delta`）；**OTel/metrics 移出本 Phase**（守 D8 stdlib-only） | ✅ |
 | [0050](./0050-p10-hygiene-reclamation.md) | P10：**卫生面回收边界**——`event_log` 主干裁剪**显式后置**（与 recovery_pointers/回放权威/`--resume` 冲突）；claim/delivery/lease 回收**限过期已释放 lease + 超 TTL 未 ack claim**、**不裁 acked delivery 行**（绑 event_log 裁剪、否则 rebuild 重 claim 破 exactly-once）；artifact **仅孤儿 GC**（可达性、内容寻址去重），session 级回收绑 event_log 裁剪后置；登记 artifact store docstring-实现不符（以实现为准） | ✅ |
 | [0051](./0051-tool-parallel-gate-deferred.md) | P10：**工具 reader/writer gate + 真并发派发从 P10 悬置再次收口为独立并行化 Phase（post-P10、未立项）**；终结 ADR-0029/0039 三轮"P10 或独立"模糊措辞（先有 ADR 才动 HARD C19/ADR-0039 文案，ROADMAP §5）；执行仍严格串行 + 回发前配对（C19/ADR-0028），不读 `parallel_safe`/`barrier` 改派发；子代理 fan-out gate（ADR-0041）正交不受影响 | ✅ |
+| [0052](./0052-permission-profile-preset-vocabulary.md) | OPT-3/OPT-4：**L0 新增 profile 词汇**——mode 词表（值/协议顺序/宽松度序）落 `contracts/profile.py`，5 处 Python 侧字面集改为引用它；`normalize` 严格精确（未知/None → default、不抛、不做大小写/别名映射）；`permission_preset_for(profile)` 只携带**收紧**旋钮、结构上不可能放宽 capability floor（C9/C17）；`protocol/event.schema.json` 仍是 wire 真源、`commandClient.ts` 本轮零改动 | ✅ |
 
 > **0027 已落地**（原为日志骨架刀 2 预留号）：详 [`../log/DESIGN.md`](../log/DESIGN.md) §17、[`../log/PLAN.md`](../log/PLAN.md) 刀 2。
 
