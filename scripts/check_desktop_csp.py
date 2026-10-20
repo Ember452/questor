@@ -79,15 +79,16 @@ def _violations_for(conf_text: str, caps_texts: list[str]) -> list[str]:
     return v
 
 
-def check() -> tuple[list[str], bool]:
-    if not _TAURI_CONF.exists():
-        return [f"fail-on-empty: {_TAURI_CONF} not found"], False
+def check(conf_path: Path = _TAURI_CONF, caps_dir: Path = _CAPS_DIR) -> tuple[list[str], bool]:
+    """扫描壳配置（OPT-10：目标路径可参数化，默认仍是现 Tauri 布局）。"""
+    if not conf_path.exists():
+        return [f"fail-on-empty: {conf_path} not found"], False
     caps_texts: list[str] = []
-    if _CAPS_DIR.exists():
-        caps_texts = [p.read_text(encoding="utf-8") for p in sorted(_CAPS_DIR.glob("*.json"))]
+    if caps_dir.exists():
+        caps_texts = [p.read_text(encoding="utf-8") for p in sorted(caps_dir.glob("*.json"))]
     else:
-        return [f"fail-on-empty: no capabilities dir at {_CAPS_DIR}"], False
-    return _violations_for(_TAURI_CONF.read_text(encoding="utf-8"), caps_texts), True
+        return [f"fail-on-empty: no capabilities dir at {caps_dir}"], False
+    return _violations_for(conf_path.read_text(encoding="utf-8"), caps_texts), True
 
 
 # --- self-test fixtures -------------------------------------------------------
@@ -118,10 +119,12 @@ def self_test() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--tauri-conf", default=_TAURI_CONF, type=Path, help="shell config holding app.security.csp (OPT-10)")
+    ap.add_argument("--caps-dir", default=_CAPS_DIR, type=Path, help="directory of capability JSONs (OPT-10)")
     args = ap.parse_args()
     if args.self_test:
         return self_test()
-    violations, found = check()
+    violations, found = check(args.tauri_conf, args.caps_dir)
     if not found:
         for m in violations:
             print(m, file=sys.stderr)

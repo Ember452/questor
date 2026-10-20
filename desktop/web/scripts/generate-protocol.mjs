@@ -43,11 +43,20 @@ for (const [name, def] of Object.entries(schema.$defs ?? {})) {
   dataInterfaces.push(body.trim());
 }
 
+// OPT-10c：UI 订阅的事件名单由协议 enum 派生（不再手抄）——改 schema 不重生成即 --check 判红。
+const eventTypeNames = schema.properties?.type?.enum ?? [];
+const eventTypeNamesTs =
+  "\n// Derived from the schema's `type` enum (OPT-10c): consumers must not hand-write the event list.\n" +
+  "export const EVENT_TYPE_NAMES = [\n" +
+  eventTypeNames.map((name) => `  ${JSON.stringify(String(name))},`).join("\n") +
+  "\n] as const;\n";
+
 const generated =
   envelopeTs +
   "\n// ── per-type event data payloads (field-level; a schema field change not reflected here fails --check) ──\n" +
   dataInterfaces.join("\n") +
-  "\n";
+  "\n" +
+  eventTypeNamesTs;
 
 // §6-5：把 sidecar_status.schema.json 编成具名 TS 类型（state 枚举→字面量联合）；
 // 改 schema 不重生成则 --check 判红，与 Python 侧字段级门同经同纬。

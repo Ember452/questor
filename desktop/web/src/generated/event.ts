@@ -234,3 +234,34 @@ export interface TurnCompletedData {
   };
   interrupted?: boolean;
 }
+
+// Derived from the schema's `type` enum (OPT-10c): consumers must not hand-write the event list.
+export const EVENT_TYPE_NAMES = [
+  "run_started",
+  "turn_started",
+  "text_delta",
+  "reasoning_delta",
+  "message_completed",
+  "tool_started",
+  "tool_progress",
+  "tool_completed",
+  "approval_request",
+  "approval_resolved",
+  "permission_mode_changed",
+  "node_updated",
+  "usage_delta",
+  "heartbeat",
+  "run_cancelled",
+  "run_failed",
+  "run_completed",
+  "resync_required",
+  "warning",
+  "memory_written",
+  "peer_started",
+  "peer_ended",
+  "tools_changed",
+  "compact_started",
+  "compact_applied",
+  "user_message",
+  "turn_completed",
+] as const;

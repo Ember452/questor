@@ -3,16 +3,12 @@
 import { CommandClient } from "./api/commandClient";
 import { ThreadEventStream } from "./api/eventStream";
 import { statusBanner } from "./api/status";
+import { EVENT_TYPE_NAMES } from "./generated/event";
 import type { QuestorExternalEventProjectionV1 as Event } from "./generated/event";
 import type { SidecarStatus } from "./generated/sidecarStatus";
 
 // 订阅 UI 关心的事件类型（均来自协议）。EventSource 只对命名事件分发，故逐类型 addEventListener。
-const EVENT_TYPES: string[] = [
-  "run_started", "turn_started", "text_delta", "reasoning_delta", "message_completed",
-  "tool_started", "tool_progress", "tool_completed", "approval_request", "approval_resolved",
-  "permission_mode_changed", "node_updated", "usage_delta", "heartbeat", "run_cancelled",
-  "run_failed", "run_completed", "resync_required", "warning", "memory_written",
-];
+const EVENT_TYPES: readonly string[] = EVENT_TYPE_NAMES;
 
 // 会话 token：壳把 bootstrap 里的 token 经 URL 查询注入（http://127.0.0.1:port/?token=…）；前端读取后
 // 随写命令头/事件流查询带上。无 token 的本地其它进程会被服务端 401 拒（HITL 不被本机旁路）。
