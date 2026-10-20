@@ -22,12 +22,14 @@ import hashlib
 import json
 import os
 import tempfile
+from collections.abc import Sequence
 from typing import Any
 
 import aiosqlite
 
 from questor.contracts.common import JsonObject, utc_now
 from questor.contracts.memory import (
+    EmbeddingPort,
     MemoryChunk,
     MemoryScope,
     MemorySearchResult,
@@ -151,11 +153,20 @@ def _cosine(a: tuple[float, ...] | list[float], b: list[float]) -> float | None:
 class SQLiteMemoryStore(MemoryStorePort):
     """MemoryStorePort 的 SQLite 适配器（文件真源 + 派生索引）。用前先 ``await connect()``。"""
 
-    def __init__(self, db_path: str = ":memory:", memory_root: str = "memory_store", config: MemoryStrategyConfig | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str = ":memory:",
+        memory_root: str = "memory_store",
+        config: MemoryStrategyConfig | None = None,
+        embedder: EmbeddingPort | None = None,
+    ) -> None:
         self.db_path = db_path
         self.memory_root = memory_root
         # 检索旋钮可插拔（DoD④）：换 config 即换融合/衰减行为，不动 kernel。
         self.config = config or MemoryStrategyConfig()
+        # 向量生成器（B8；§20 C-3）：**只产向量**，入库仍走本 store 同一 `memory_chunks.embedding`
+        # 列——不起第二 store、不起第二索引表。None = 无向量能力，检索自然降级关键词-only。
+        self.embedder = embedder
         self._db: aiosqlite.Connection | None = None
         self.vector: SQLiteVectorBackend | None = None
         # 单连接事务不得跨协程交错（与事件 store 同理，track4 BLK-1）：--serve 多 run 共享本 store，
@@ -222,7 +233,7 @@ class SQLiteMemoryStore(MemoryStorePort):
                     await db.execute("COMMIT")
                     return {"path": row[0], "start_line": row[1], "end_line": row[2], "chunk_count": row[3], "idempotent": True}
                 rel, start, end, chunk = await asyncio.to_thread(self._append_to_source_file, write, idempotency_key)
-                await self._index_chunk(chunk, embedding=None)
+                await self._index_chunk(chunk, embedding=await self._embed_one(chunk.text))
                 await db.execute(
                     "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,?,?,?,?)",
                     (idempotency_key, rel, start, end, 1, utc_now().isoformat()),
@@ -287,6 +298,26 @@ class SQLiteMemoryStore(MemoryStorePort):
         end = len(new_content.splitlines())
         return rel, start, end, _chunk(start, end)
 
+    async def _embed_one(self, text: str) -> tuple[float, ...] | None:
+        """单条文本的向量；无 embedder / embedding 故障→ ``None``（降级关键词，不抛）。"""
+        if self.embedder is None:
+            return None
+        try:
+            vectors = await self.embedder.embed([text])
+        except Exception:  # noqa: BLE001 - 向量后端不可用是合法降级（ADR-0026），不得拖垮记忆写
+            return None
+        return tuple(vectors[0]) if vectors else None
+
+    async def _embed_many(self, texts: Sequence[str]) -> list[tuple[float, ...] | None]:
+        """批量 embedding（**一次调用处理 N 条**，不逐条往返）；失败返回全 None。"""
+        if self.embedder is None or not texts:
+            return [None] * len(texts)
+        try:
+            vectors = await self.embedder.embed(list(texts))
+        except Exception:  # noqa: BLE001 - 同上：降级关键词-only
+            return [None] * len(texts)
+        return [tuple(vector) if vector is not None else None for vector in vectors] if len(vectors) == len(texts) else [None] * len(texts)
+
     async def _index_chunk(self, chunk: MemoryChunk, *, embedding: tuple[float, ...] | None) -> None:
         db = self._dbp()
         await db.execute(
@@ -327,6 +358,10 @@ class SQLiteMemoryStore(MemoryStorePort):
         ``snippet_max_bytes`` 有界（HARD C18/ADR-0019）。融合/衰减纯函数住在 memory/search.py。"""
         cfg = self.config
         wide = max(k * 3, k)
+        # 向量通道（B8）：调用方没传 query_embedding 且配了 embedder 时，现在算一个；
+        # 算不出来就留 None——store.search 自己会降级关键词-only（不抛）。
+        if query_embedding is None and self.embedder is not None:
+            query_embedding = await self._embed_one(query)
         async with self._lock:
             keyword_ids, by_id = await self._keyword_candidates(query, scope=scope, limit=wide)
             vector_ids: list[str] = []
@@ -419,14 +454,17 @@ class SQLiteMemoryStore(MemoryStorePort):
         索引损坏或 ``CHUNKER_VERSION`` 变更都可由本函数自愈——文件永远权威；dreams 按映射排除不索。"""
         files = self._scan_source_files()
         chunks = build_chunks(files)
+        # 重建索引时只用**一次** embedding 调用处理 N 条（CrewAI EncodingFlow 的形状；
+        # 逐条往返在千条级上就是时长炸弹）。
+        embeddings = await self._embed_many([chunk.text for chunk in chunks])
         db = self._dbp()
         async with self._lock:
             await db.execute("BEGIN IMMEDIATE")
             try:
                 await db.execute("DELETE FROM memory_chunks_fts")
                 await db.execute("DELETE FROM memory_chunks")
-                for chunk in chunks:
-                    await self._index_chunk(chunk, embedding=None)
+                for chunk, embedding in zip(chunks, embeddings, strict=True):
+                    await self._index_chunk(chunk, embedding=embedding)
                 await db.execute("COMMIT")
             except BaseException:
                 await db.execute("ROLLBACK")
