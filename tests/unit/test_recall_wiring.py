@@ -40,7 +40,13 @@ async def test_production_composition_wires_an_enabled_recall(monkeypatch, tmp_p
         recall = app.surface.recall
         assert isinstance(recall, MemoryRecall)
         assert recall.enabled is True and recall.limit == MAX_SELECTED
-        assert recall.embedder is not None and recall.store is app.memory
+        assert recall.store is app.memory
+        # B8 收口修正（review 驱动）：生产**不再**拿确定性 fake 当向量能力——本仓无真 embedding
+        # 适配器，所以默认是 keyword + structured 开、向量通道关。曾经此处断言
+        # `recall.embedder is not None`（同一 PR 内 4 个 commit 前的决定），现按事实改回；
+        # “召回默认开”的既定行为不变（上面两行仍是它的判据）。
+        assert recall.embedder is None
+        assert recall.vector_channel_enabled is False
     finally:
         await close_app(app)
 

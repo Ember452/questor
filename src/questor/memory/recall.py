@@ -205,6 +205,16 @@ class MemoryRecall:
         self.k = k
         self.limit = limit
 
+    @property
+    def vector_channel_enabled(self) -> bool:
+        """向量通道是否真开着（B8 收口修正）：**能力声明与实现同源**的只读出口。
+
+        只供观测与断言（`--context`/日志/测试）：“召回开了”不等于“向量在跑”。生产默认是
+        keyword + structured 开、向量关（本仓无真 embedding 适配器）；拿 fake 向量顶位会造成
+        “半接”状态：query 与 stored 向量不同空间时，融合排序按噪声决定注入哪几条且不会判红。
+        """
+        return self.enabled and self.store is not None and self.embedder is not None
+
     async def recall(
         self, query: str, *, scope: object | None = None, skip: bool = False
     ) -> RecallBlock | None:

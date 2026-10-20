@@ -20,6 +20,7 @@ from questor.contracts.memory import (
 from questor.contracts.state_schema import ContentBlock, Message, Role
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.settle import TurnBoundary, TurnSettler
+from questor.memory import write_policy
 from questor.memory.consolidate import consolidate
 from questor.memory.write_policy import (
     MAX_RECORD_BYTES,
@@ -187,20 +188,28 @@ async def test_expired_memory_leaves_search_while_decay_stays_scoring_only(tmp_p
 
 
 # ---- ⑧ 代际平行根 ---------------------------------------------------------- #
-def test_generation_roots_are_parallel_and_symlinks_are_refused(tmp_path: Path) -> None:
+def test_generation_roots_are_parallel_and_symlinks_are_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     base = tmp_path / "memory_store"
     assert generation_root(str(base), 1) == str(base)
     assert generation_root(str(base), 2) == f"{base}_v2"
     assert generation_root(str(base), 3) == f"{base}_v3"
     with pytest.raises(ValueError, match="generation must be >= 1"):
         generation_root(str(base), 0)
-    link = tmp_path / "linked_root"
-    try:
-        link.symlink_to(tmp_path / "somewhere_else", target_is_directory=True)
-    except OSError:  # Windows 无符号链接权限时只跳过本分支（上面的平行根判定已跑）
-        pytest.skip("symlink creation not permitted on this host")
-    with pytest.raises(ValueError, match="symlink"):
-        generation_root(str(link), 1)
+    # 符号链接根/中间目录两条分支：**注入 islink 判定**，不再依赖主机特权（旧版在这里 skip，
+    # 于是这台 Windows 上该分支永不被测）。真实语义仍由下一段的形状校验守住。
+    link = str(tmp_path / "linked_root")
+    nested = str(tmp_path / "linked_root" / "inner")
+    monkeypatch.setattr(write_policy.os.path, "islink", lambda path: str(path) == link)
+    with pytest.raises(ValueError, match="is a symlink"):
+        generation_root(link, 1)
+    with pytest.raises(ValueError, match="symlinked parent"):
+        generation_root(nested, 1)
+    # 反证：没有链接位时同一个根正常返回（证明上面两条红是链接位造成的，不是恒拒）
+    monkeypatch.setattr(write_policy.os.path, "islink", lambda path: False)
+    assert generation_root(link, 1) == link
+
 
 
 # ---- 记忆写只经 settle 回调（surface 不旁路）------------------------------ #

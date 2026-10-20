@@ -36,6 +36,11 @@ KERNEL_DIR = ROOT / "src" / "questor" / "kernel"
 BUSINESS_CALLS = frozenset({"reduce", "apply"})
 FORBIDDEN_NODES = (ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)
 
+#: 测试替身模块：生产组合根不得 import（“把假实现当能力开”的硬回归点，B8 收口）。
+#: 只管组合根，不管 providers：`provider_factory` 用 `EchoProvider` 当离线兜底是已核计决定，
+#: 而“无真实现时默认开 fake”不是——差别在**声明了不存在的通道**。
+TEST_DOUBLE_MODULES = frozenset({"questor.providers.fake"})
+
 
 def check_points() -> list[str]:
     """13+4 封闭 + 预留名拒绝 + OBSERVE 失败归一。"""
@@ -105,12 +110,18 @@ def check_kernel_imports() -> list[str]:
 
 
 def analyze_composition(source: str, path: str = "composition.py") -> list[str]:
-    """组合根只允许装配：if 仅限 spec 收窄；禁止循环/try/with/match/业务调用。"""
+    """组合根只允许装配：if 仅限 spec 收窄；禁止循环/try/with/match/业务调用；**不得 import 测试替身**。"""
     tree = ast.parse(source)
     violations: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, FORBIDDEN_NODES):
             violations.append(f"{path}:{node.lineno}: composition root contains {type(node).__name__} (assembly-only)")
+        elif isinstance(node, ast.ImportFrom) and (node.module or "") in TEST_DOUBLE_MODULES:
+            violations.append(f"{path}:{node.lineno}: composition root imports test double {node.module!r} (production must not ship fakes as capability)")
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in TEST_DOUBLE_MODULES:
+                    violations.append(f"{path}:{node.lineno}: composition root imports test double {alias.name!r}")
         elif isinstance(node, ast.If):
             names = {child.id for child in ast.walk(node.test) if isinstance(child, ast.Name)}
             if "spec" not in names:
@@ -128,6 +139,9 @@ def check_composition() -> list[str]:
 def self_test() -> int:
     red_composition = "def build_app():\n    for x in range(3):\n        pass\n"
     green_composition = "def build_app(spec):\n    if spec is None:\n        spec = object()\n    return spec\n"
+    # 测试替身当生产能力（B8 收口后的回归点）：必须能单独判红。
+    red_doubles = "from questor.providers.fake import FakeEmbedder\n\ndef build_app():\n    return FakeEmbedder()\n"
+    green_doubles = "from questor.providers.embedder_factory import embedder_from_env\n\ndef build_app(spec):\n    if spec.surface is None:\n        return embedder_from_env()\n    return None\n"
     red_kernel = "from questor.policy import registry\n"
     green_kernel = "from questor.contracts import events\n"
     points = check_points()
@@ -135,6 +149,8 @@ def self_test() -> int:
         ("points-closed", not points, f"{len(points)} violation(s)"),
         ("composition-for-red", bool(analyze_composition(red_composition)), "for-loop detected"),
         ("composition-spec-green", not analyze_composition(green_composition), "spec narrowing allowed"),
+        ("composition-test-double-red", bool(analyze_composition(red_doubles)), "FakeEmbedder import detected"),
+        ("composition-real-factory-green", not analyze_composition(green_doubles), "providers factory allowed"),
         ("kernel-policy-red", bool(analyze_kernel_source(red_kernel, "kernel/x.py")), "policy import detected"),
         ("kernel-contracts-green", not analyze_kernel_source(green_kernel, "kernel/x.py"), "contracts import allowed"),
     ]

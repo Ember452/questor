@@ -22,11 +22,11 @@ from pathlib import Path
 
 from questor.capabilities.tools.ask_user import AskUserTool
 from questor.config.model import load_config
-from questor.contracts.memory import MemoryStorePort, RecallPort
+from questor.contracts.memory import EmbeddingPort, MemoryStorePort, RecallPort
 from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort, SurfacePort
 from questor.memory.recall import MemoryRecall
 from questor.providers.artifact_store import FileSystemArtifactStore
-from questor.providers.fake import FakeEmbedder
+from questor.providers.embedder_factory import embedder_from_env, shared_embedder
 from questor.providers.process_runner import SandboxedProcessRunner
 from questor.providers.provider_factory import provider_from_env
 from questor.providers.sandbox import select_sandbox
@@ -112,6 +112,10 @@ class AssembleSpec:
     sandbox_backend: str | None = None
     #: 记忆召回端口（B8）：None = 组合根自己构造默认实现（生产默认开，见 `build_app`）。
     recall: RecallPort | None = None
+    #: 向量能力（B8 收口修正）：**单一接缝**——同一个实例同时交给 store（写/重建索引）与 recall
+    #: （query 向量）。None = 按 env 决定（本仓无真 embedding 适配器 → 向量通道关）。
+    #: 不得在两边分别传：query 与 stored 向量不同空间时，融合排序会按噪声决定注入哪几条。
+    embedder: EmbeddingPort | None = None
 
 
 @dataclass
@@ -140,7 +144,14 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
     path = store_path()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     store = spec.store if spec.store is not None else await SQLiteStore(path).connect()
-    memory = spec.memory if spec.memory is not None else await SQLiteMemoryStore(db_path=memory_db_path(), memory_root=memory_root()).connect()
+    # 向量能力在**构造 store 之前**定下来：store 侧（写入/`sync` 重建索引）与 recall 侧（query 向量）
+    # 必须共用同一个实例，否则就是“半接”状态（比不接更槽，且无测试会红）。
+    embedder = spec.embedder if spec.embedder is not None else embedder_from_env()
+    memory = (
+        spec.memory
+        if spec.memory is not None
+        else await SQLiteMemoryStore(db_path=memory_db_path(), memory_root=memory_root(), embedder=embedder).connect()
+    )
     # exec 三件套：内容寻址归档 + 平台 sandbox 探测 + 受控进程执行器（#154）。
     data_root = Path(store_path()).parent
     artifact_store = spec.artifact if spec.artifact is not None else FileSystemArtifactStore(data_root / "artifacts")
@@ -155,8 +166,11 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
             else provider_from_env(payload_preview=payload_preview_from_env())
         )
         # B8 `[behavior]`：生产入口默认开自动召回（直接构造 CliSurface 仍默认无召回）。
-        # embedding 用确定性 fake：CI 无密钥时只证向量通道接得通，真检索质量仍 UNVERIFIED。
-        recall = spec.recall if spec.recall is not None else MemoryRecall(memory, embedder=FakeEmbedder(), enabled=True)
+        # 但**向量通道只在真拿到 embedding 实现时才开**：本仓没有 embedding 适配器，所以生产默认
+        # 是 keyword + structured 开、向量关（不再拿 `FakeEmbedder` 顶位——那是“看起来完成、
+        # 实际未验证”的典型，且与 store 侧向量不同空间时会把排序变成噪声）。测试/离线演示想验
+        # 向量通道，请显式构造 `MemoryRecall(..., embedder=FakeEmbedder())`（或注 `spec.embedder`）。
+        recall = spec.recall if spec.recall is not None else MemoryRecall(memory, embedder=shared_embedder(memory, embedder), enabled=True)
         # B10 `[behavior]`：生产入口默认开可恢复压缩。翻的是**默认值**而不是**开关能力**：
         # 显式 QUESTOR_COMPACTION=off 仍逐字关；直接构造 CliSurface 的路径不读这个口径（不变）。
         model = model_from_env()
