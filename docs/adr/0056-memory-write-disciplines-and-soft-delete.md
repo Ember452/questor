@@ -24,8 +24,11 @@
      矛盾事实同时可召回；无 `soft_delete` 能力时**如实报告降级**，不假装退役成功。
   5. **巩固不阻塞回复**：per-session 锁 + 有界重试（``MAX_DISTILL_ATTEMPTS=2``）；蒸馏器抛错
      只留痕；配额不足返回 `quota_hold`，不补跑 N 次。
-  6. **写路径仍唯一**：所有写入经 `WriteMemory`→reduce→消费点；`TurnSettler` 是 turn 边界的
-     唯一写回者（surface 不旁路）；B14 的用户显式改写走 `UpdateMemory`/`DeleteMemory`，不是第二条旁路。
+  6. **写路径唯一**：在线写必经 `WriteMemory`/`DeleteMemory`→reduce→消费点，`TurnSettler` 是 turn
+     边界的唯一写回者（surface 不旁路）；B14 的用户显式改写走命令面而非直接调库。离线维护
+     （`memory/distill.py` 的固化写、`consolidate`/`supersede`）沿用同一 `MemoryStorePort` 收口
+     （ADR-0025），**不开第二持久化路径也不建第二表**；代价是这类离线退役本身不新增事件，
+     可审计的撤回史仍只有 `memory_deleted` 一条来源。
 - 后果：
   - 正面：撤回可回放且不多一张无界增长表；过期与衰减职责分离（排序 vs 退出）；被否定过的事实
     真的不再回来；巩固/蒸馏有配额与重试边界。
