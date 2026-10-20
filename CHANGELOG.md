@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — 守卫基础设施：共用 kit + 文档一致性守卫（advisory；v3 §21 G2 / §15.6 / §20.3）
+- **`scripts/_guard_kit.py`（新）**：§21 G2 要求的「共 walker 引擎」落地——`walk_py`（`Path.rglob` + 剪枝 `__pycache__/.venv/.ruff_cache/build`、排序）/ `read_text`+`count_lines`（UTF-8-sig + `splitlines()`，与 §15.6 口径声明同一口径）/ `run_self_test`（统一 `[PASS]/[FAIL]` + `self-test: PASS|FAIL`）/ `fail_on_empty`（空集合退 **2**，不是通过）/ `EXIT_OK|EXIT_RED|EXIT_CONFIG`。顶层 docstring 写死「新守卫必须复用本 kit，否则不得入 CI」。
+- **`scripts/check_doc_cross_refs.py`（新，advisory）**：只读设计文档，四项检查——**A** 9 条 EXPECTED（取舍 19 / 刀 17 / 点位 12+5 / `src/**/*.py` 121 / 门脚本 15 / boundaries 门步 17 / `reduce()` 17 / 测试 182=107+69+3+2+1；基线 913/6 只注释不断言）且**标题声明数必须等于表行数**；**B** §n·附录X·B刀·C条引用必须在文内有定义（外部文档引用按限定词/显式理由豁免）；**C** §15.6/§20.3 每行必须同时有「原写」侧与「已改」侧；**D** PLAN §3 否决词出现必须同句带 `C-\d|已改|不建|不拆|仅借`。缺省 `SKIP: doc not present` 退 0（文档在仓外一层）。
+- **两个已实测的坑写进代码**：`各自\s*os\.walk` 只许扫 §21 G2 行（裸搜全文会误伤 §15.5.1/§16 的「外部仓扫描方法」正确文本）；`unit\s*\*{0,2}83` 只许扫 §4 行（裸搜会误伤「83→107」勘误记录）。
+- **CI**：`boundaries` job 末尾加 `doc cross-refs (advisory)`（`continue-on-error: true`），不改任何既有 step 的阻塞性、不动 `pytest` 的 `needs`；仓内无文档时该步打印 SKIP，真断言在本地/pre-commit 跑。
+- **口径澄清（本轮只读文档，仅登记不修）**：§21「boundaries 实串 17 步」= **blocking 门步**（21 step = 3 个 `uses:` + `uv sync` + 17 blocking + advisory）；字面「step 数 − Setup Node」= 20，会误判。§21「15 个质量门脚本」同按 blocking 口径计（advisory 守卫单列）；加本守卫后磁盘上 `check_*/verify_*` 共 **16** 个（14+2）。
+- **判据**：`check_doc_cross_refs.py` 退 0、`--self-test` 退 0（改 EXPECTED / 删定义 / 拆已改对 / 塞裸否决词 + 两个坑的反例，共 **6 种判红各演示一次**，另证 fixture 基线为绿）、全量 pytest **913 passed / 6 skipped 零变化**、`ruff check .` All checks passed。
+
 ### Added — P10 加固（可恢复压缩 / observability 刀 3 / 评测回归网）（分支 `feat/p10-hardening`；详 `docs/plan/10-p10-hardening.md`；ADR-0048~0051）
 - **可恢复上下文压缩转正（Lane A，ADR-0048）**：`LoopPolicy.disable_compaction` 转正为 `CompactionConfig`；新内核内部 `CompactContext` Command 经 Command→reduce→durable（C2/C16，禁 out-of-band）；`kernel/compaction.py` 纯决策（`covered_hash` 剔 per-run seq/tool_call_id、确定性启发式摘要、只截 `closed_prefix` 内 C19 不孤儿化 open tool_use）；`reduce` 只纯校验+纯应用（摘要/锚由 loop 侧算好随命令携带，MAJ-8 保回放确定性）；`compact_started`/`compact_applied` additive 事件（22→25 type、四处 lockstep、`v` 不 bump）+ `baseline_seq` 栅栏 + `pre_compact` 补点；L2' 蒸馏桥（压缩丢弃区→`WriteMemory(distill)`→daily，可检索回读，ADR-0024/0025 生产者转正）；`check_replay_determinism._canonical` 纳入压缩态 + compaction fixture。
 - **observability 刀 3（Lane B，ADR-0049）**：`python -m questor logs` 只读消费命令（`surfaces/logs.py`，`event_log` 主干 + 旁路按日 JSONL 按 `run_id+seq` 合并、坏行跳计 `malformed_lines`、全程只读不写）；`--log-payload`/`QUESTOR_LOG_PAYLOAD=truncate:N` preview 实装（C20 三闸：显式授权 + 独立 `questor.llm.preview` logger/`llm-<date>.jsonl` 通道 + 有界截断；`sink_file` 主干排除该 logger 保 D4 零原文；preview 过单一脱敏 filter；非法值仍 fail-closed 拒绝启动）；`logs --totals` session 用量聚合 = 跨 run 读 **durable `run_completed.usage`** 的 gseq 读侧投影（**不用从不发射的 `usage_delta`**，MAJ-4，非第二真相 ADR-0041/C13）。

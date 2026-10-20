@@ -158,6 +158,14 @@ jobs:
         run: |
           uv run python scripts/check_comment_refs.py --self-test
           uv run python scripts/check_comment_refs.py
+      # 文档一致性守卫（advisory；v3 §21 G2 + §15.6 + §20.3）：9 条计数 / §n·附录X·B刀·C条引用 /
+      # "原写↔已改"成对 / PLAN §3 否决词必须同句标注。**设计文档在仓外一层**（仓根=questor/），
+      # 所以 CI 里必然打印 `SKIP: doc not present` 并退 0——这一步是"接线不在家也亮着"：真断言在
+      # 本地/pre-commit 跑（文档一旦 vendored 进仓即自动生效）。continue-on-error 保 advisory 语义，
+      # 不改任何既有 step 的阻塞性，也不动 pytest 的 needs。
+      - name: doc cross-refs (advisory)
+        continue-on-error: true
+        run: uv run python scripts/check_doc_cross_refs.py
 
   # P2 T20：平台分相真机跑 shell 工具的 DoD —— Windows 真 PowerShell、Ubuntu 真 bash；
   # 缺平台时对应测试自行 skip（不 fake 冒充覆盖）。
