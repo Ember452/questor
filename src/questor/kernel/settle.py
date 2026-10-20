@@ -15,13 +15,20 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, replace
+from datetime import datetime
 
 from questor.contracts.events import WriteMemory
 from questor.contracts.memory import MemoryScope, MemoryStorePort, MemoryWrite, MemoryWriteKind
+from questor.memory.write_policy import WritePolicy, prepare_write
 from questor.state.domain_state import Run
 from questor.state.transition import apply
 
 _log = logging.getLogger("questor.settle")
+
+
+def _attribution(boundary: TurnBoundary) -> str:
+    """纪律⑤：turn 定稿对里“用户原话”部分占主导 → 标 `user`；无用户原话时不应写（已在判据里拦）。"""
+    return "user" if boundary.user_text else "assistant"
 
 #: 单次写回正文上限（与 reduce 的 16KiB 写上限同源；超限截断并带标记，不静默丢）。
 MAX_SETTLE_BYTES = 16 * 1024
@@ -58,12 +65,15 @@ class TurnSettler:
         session_id: str,
         *,
         timeout: float = 2.0,
+        expires_at: datetime | None = None,
     ) -> None:
         self.bus = bus
         self.store = store
         self.memory_store = memory_store
         self.session_id = session_id
         self.timeout = timeout
+        #: 纪律⑦：session 层记忆的硬过期时刻（None = 不过期）；与衰减排序分离。
+        self.expires_at = expires_at
         self._settled: set[tuple[str, int]] = set()
         self._session_runs: dict[str, Run] = {}
 
@@ -79,12 +89,20 @@ class TurnSettler:
         if key in self._settled:
             return False
         text = _bounded(f"user: {boundary.user_text}\nassistant: {boundary.assistant_text}")
-        payload = MemoryWrite(
-            kind=MemoryWriteKind.DAILY,
-            scope=MemoryScope.SESSION,
-            text=text,
-            note="settle_turn",
-        )
+        # B9 纪律③④⑤⑦：写前先过入站清洗（脱敏/媒体占位/单条预算/归因位）。
+        # 清洗失败（全篇都是媒体等）降级为“不写”，不写半成品记忆。
+        try:
+            payload = prepare_write(
+                text,
+                kind=MemoryWriteKind.DAILY,
+                scope=MemoryScope.SESSION,
+                note="settle_turn",
+                policy=WritePolicy(attributed_to=_attribution(boundary)),
+                expires_at=self.expires_at,
+            )
+        except ValueError:
+            _log.warning("settle_turn produced no writable record for run=%s turn=%s", boundary.run_id, boundary.turn)
+            return False
         try:
             await asyncio.wait_for(self._write(boundary, payload), timeout=self.timeout)
         except Exception:  # noqa: BLE001 - 记忆写是 best-effort：失败只告警，不阻塞回复

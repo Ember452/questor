@@ -58,6 +58,15 @@ def _redact_text(text: str) -> tuple[str, bool]:
     return out, hit
 
 
+def redact_secrets(text: str) -> str:
+    """对任意一段文本做密钥脱敏，只返回脱敏后文本（B9 纪律③：入站脱敏）。
+
+    日志主干与**记忆写入前**共用同一组规则；不报“是否命中”是因为写入侧只需要结果。
+    包一层而不改 :func:`_redact_text`：后者被测试用来验 fail-closed 降级，契约不动。
+    """
+    return _redact_text(text)[0]
+
+
 def _drop_context_clash(context: dict[str, str | int | float | bool | None]) -> dict:
     """从 ``context`` 里去掉与待注入标记键 ``redacted`` 同名的项（不变式 5 禁同键）。
 
