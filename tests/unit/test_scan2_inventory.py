@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 _TESTS = Path(__file__).resolve().parents[1]
-_BUCKETS = ("unit", "integration", "support", "evals")
+_BUCKETS = ("unit", "integration", "support", "evals", "e2e")
 
 
 def _py_files(root: Path) -> list[Path]:
