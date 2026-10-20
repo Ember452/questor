@@ -31,7 +31,7 @@ from questor.providers.provider_factory import provider_from_env
 from questor.providers.sandbox import select_sandbox
 from questor.providers.store_memory_sqlite import SQLiteMemoryStore
 from questor.providers.store_sqlite import SQLiteStore
-from questor.surfaces._assembly import log_dir_from_env, payload_preview_from_env
+from questor.surfaces._assembly import log_dir_from_env, payload_preview_from_env, production_compaction_from_env
 from questor.surfaces.cli import CliSurface
 
 #: 组合根自述行 logger（一方 inline 记录；DoD A① "起手即有日志"由装配点兑现，两个入口共用）。
@@ -156,11 +156,14 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
         # B8 `[behavior]`：生产入口默认开自动召回（直接构造 CliSurface 仍默认无召回）。
         # embedding 用确定性 fake：CI 无密钥时只证向量通道接得通，真检索质量仍 UNVERIFIED。
         recall = spec.recall if spec.recall is not None else MemoryRecall(memory, embedder=FakeEmbedder(), enabled=True)
+        # B10 `[behavior]`：生产入口默认开可恢复压缩。翻的是**默认值**而不是**开关能力**：
+        # 显式 QUESTOR_COMPACTION=off 仍逐字关；直接构造 CliSurface 的路径不读这个口径（不变）。
+        model = model_from_env()
         surface = CliSurface(
             store=store,
             memory_store=memory,
             provider=provider,
-            model=model_from_env(),
+            model=model,
             skills_dir=Path(skills_dir_from_env()),
             mcp_json_path=Path(mcp_json_from_env()),
             log_dir=Path(log_dir_from_env()),
@@ -171,6 +174,7 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
             # B7 `[behavior]`：生产入口默认开档1 记忆索引注入（直接构造 CliSurface 仍默认关）。
             memory_index_enabled=True,
             recall=recall,
+            compaction=production_compaction_from_env(model),
         )
     else:
         surface = spec.surface
