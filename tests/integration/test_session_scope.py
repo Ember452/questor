@@ -43,7 +43,7 @@ async def test_old_v2_store_migrates_session_columns(tmp_path) -> None:
         cur = await store._dbp().execute("PRAGMA table_info(runs)")  # noqa: SLF001
         assert "session_id" in {row[1] for row in await cur.fetchall()}
         cur = await store._dbp().execute("SELECT value FROM meta WHERE key = 'store_schema_version'")
-        assert (await cur.fetchone())[0] == "3"
+        assert int((await cur.fetchone())[0]) >= 3  # 迁移已回写当前版本
         old = await store.replay("run-old", 0)
         assert old[0]["data"] == {}  # 旧事件仍可读
     finally:

@@ -204,5 +204,7 @@ async def test_logs_totals_and_expand_still_work(tmp_path) -> None:
     try:
         out = await run_logs_command(store, tmp_path / "logs", run_id=None, totals=True, expand=False)
         assert isinstance(out, str) and out
+        expanded = await run_logs_command(store, tmp_path / "logs", run_id=None, totals=False, expand=True)
+        assert "requires --run" in expanded
     finally:
         await store.close()
