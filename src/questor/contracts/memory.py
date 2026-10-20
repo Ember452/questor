@@ -13,7 +13,8 @@ providers/policy/surfaces），故本文件只依赖 :mod:`questor.contracts.com
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
@@ -396,6 +397,76 @@ class EmbeddingPort(Protocol):
         ...
 
 
+#: 消费打点的层级枚举（与 wire `memory_consumed.kind` 同源；§6.3 要求 kind 级 + 条目级两层）。
+CONSUMPTION_KINDS: frozenset[str] = frozenset({"memory_md", "index", "raw", "summary", "skills"})
+
+
+def consumption_kind_for(path: str) -> str:
+    """把记忆真源路径归到消费层级（“读了 MEMORY.md”与“读了 daily 原文”不是同一回事）。
+
+    不确定时归 ``raw``（保守）；本函数入 L0 是因为 kernel（发事）与评测环（读数）都要用
+    同一口径，两处各写一套就会分叉。
+    """
+    norm = (path or "").replace("\\", "/").lower()
+    if norm.endswith("memory.md"):
+        return "memory_md"
+    if "skills" in norm:
+        return "skills"
+    if norm.startswith("dreams/") or "/dreams/" in norm:
+        return "summary"
+    if norm.startswith("index/") or "/index/" in norm:
+        return "index"
+    return "raw"
+
+
+#: 模型自报引用的协议块标记（§6.3）；harness 解析后**从正文剥掉**，永不回送 provider。
+CITATION_OPEN = "<citation_entries>"
+CITATION_CLOSE = "</citation_entries>"
+
+#: 引用条目上限（与 `protocol/event.schema.json` 的 `maxItems` 同源）。
+CITATION_MAX_ENTRIES = 10
+
+
+def parse_citation(
+    text: str, *, max_entries: int = CITATION_MAX_ENTRIES
+) -> tuple[str, MemoryCitation | None]:
+    """从模型正文里剥出 ``<citation_entries>…</citation_entries>`` → (干净正文, 引用)。
+
+    解析失败/形状非法 → 返回原正文 + ``None``（**不猜**：宁可少一份归因，也不记一条假的）；
+    未闭合只剥标记、不动用户可见正文。解析成功则整块删除，不进下一轮请求体。
+    入 L0 是因为 kernel（剥）、评测环（读数）与 surface 要用同一份解析口径。
+    """
+    if not text or CITATION_OPEN not in text:
+        return text, None
+    start = text.index(CITATION_OPEN)
+    tail = text[start + len(CITATION_OPEN) :]
+    if CITATION_CLOSE not in tail:
+        return text.replace(CITATION_OPEN, ""), None
+    body, rest = tail.split(CITATION_CLOSE, 1)
+    cleaned = (text[:start] + rest).strip()
+    try:
+        payload: object = json.loads(body.strip())
+    except (json.JSONDecodeError, ValueError):
+        return cleaned, None
+    citation = citation_from_payload(payload, max_entries=max_entries)
+    return cleaned, citation
+
+
+def recall_skipped_by_flags(flags: Mapping[str, object] | None) -> bool:
+    """提交方 ``flags.skip_recall`` 的**唯一**谓词（B8 门控③）。
+
+    放在 L0 是因为两头都要用：内核从 ``SubmitMessage.flags`` 读它，召回侧从自己的入口读它。
+    不定义一份就会两处各写一套真值判定（开放词表里“什么算 true”很易漂）。
+    未知 key 一律忽略（与 §20 C-6 的 source 口径一致）。
+    """
+    if not flags:
+        return False
+    value = flags.get("skip_recall")
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 @runtime_checkable
 class RecallPort(Protocol):
     """记忆召回接缝（B8；§6.2）：内核只持本端口，不 import ``memory/``、不持 store 裸句柄。
@@ -428,4 +499,11 @@ __all__ = [
     "EmbeddingPort",
     "RecallBlock",
     "RecallPort",
+    "recall_skipped_by_flags",
+    "CONSUMPTION_KINDS",
+    "consumption_kind_for",
+    "CITATION_MAX_ENTRIES",
+    "CITATION_CLOSE",
+    "CITATION_OPEN",
+    "parse_citation",
 ]
