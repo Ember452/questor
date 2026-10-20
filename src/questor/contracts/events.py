@@ -350,6 +350,10 @@ class EventType:
     TOOLS_CHANGED = "tools_changed"  # 能力名册变更 live-only 告警（P9；ADR-0046，design/02 §7）
     COMPACT_STARTED = "compact_started"  # 压缩开始（P10；ADR-0048，design/02 §10）
     COMPACT_APPLIED = "compact_applied"  # 压缩应用 + baseline_seq 栅栏（P10；ADR-0048，design/02 §10）
+    # 用户原话 durable（B1；设计文档 §4.2 事实流补齐）：非 idle 提交把有界正文写进事实流，
+    # 使「重放 = 生产」与 --resume 的可见转录不依赖第二真相（idle 首条仍由 run_started + 快照承载，
+    # 既有冻结断言 test_reduce.py:51 / test_transition_chokepoint.py:45 不改）。
+    USER_MESSAGE = "user_message"
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。

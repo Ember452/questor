@@ -25,6 +25,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from questor.contracts.artifacts import OutputBudget
 from questor.contracts.errors import MAX_ERROR_MESSAGE_CHARS
 from questor.contracts.events import EventType
 from questor.contracts.sidecar_status import _MAX_DETAIL_LEN, SIDECAR_LIFECYCLE_STATES, SIDECAR_STATUS_FIELDS
@@ -127,6 +128,11 @@ def _max_length_drift(event_schema: dict, status_schema: dict) -> list[str]:
             "message_completed.final_text vs reduce._MSG_FINAL_TEXT_CHARS",
         ),
         (
+            _maxlen(event_schema, "$defs", "user_message", "properties", "text", "maxLength"),
+            OutputBudget().model_result_bytes,
+            "user_message.text vs artifacts.OutputBudget.model_result_bytes",
+        ),
+        (
             _maxlen(event_schema, "$defs", "run_failed", "properties", "error", "properties", "message", "maxLength"),
             MAX_ERROR_MESSAGE_CHARS,
             "run_failed.error.message vs errors.MAX_ERROR_MESSAGE_CHARS",
@@ -197,6 +203,8 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         "text_delta": _envelope("text_delta", {"delta": "hi"}),
         "reasoning_delta": _envelope("reasoning_delta", {"delta": "think"}),
         "message_completed": _envelope("message_completed", {"message_id": "msg_1"}),
+        # B1 additive：user_message（用户原话进事实流；text 有界 + truncated）。
+        "user_message": _envelope("user_message", {"text": "hello", "truncated": False}),
         "tool_started": _envelope(
             "tool_started",
             {"tool_call_id": "tc1", "name": "read", "capability": "readonly", "risk": "low", "args_summary": "a.txt"},
@@ -257,6 +265,9 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     missing_required = json.loads(json.dumps(_valid_fixtures()["approval_request"]))
     del missing_required["data"]["reason"]  # 缺 required 判红
     oversized = _envelope("text_delta", {"delta": "x" * 9000})  # 超 maxLength 判红
+    # B1：user_message.text 超 maxLength（= OutputBudget().model_result_bytes 的字节预算）必须被拒——
+    # 「用户正文有界」不是口头，而是本 schema 的机守。
+    user_message_oversized = _envelope("user_message", {"text": "x" * (OutputBudget().model_result_bytes + 1)})
     # P8 peer_*：非枚举终态 + 未知载荷字段（additionalProperties:false）都必被拒。
     peer_bad_status = _envelope("peer_ended", {"parent_run_id": "rp", "child_run_id": "rc", "node_id": "n1", "terminal_status": "weird"})
     peer_over_field = _envelope("peer_started", {"parent_run_id": "rp", "child_run_id": "rc", "node_id": "n1", "prompt": "leak"})
@@ -269,6 +280,7 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
         "over_field": over_field,
         "missing_required": missing_required,
         "oversized": oversized,
+        "user_message_oversized": user_message_oversized,
         "peer_bad_status": peer_bad_status,
         "peer_over_field": peer_over_field,
         "tools_bad_domain": tools_bad_domain,
