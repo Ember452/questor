@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -98,9 +99,14 @@ async def serve(server: EventServer, *, generation: int, bootstrap_path: Path, s
         uv_server.should_exit = True
 
     watcher = asyncio.create_task(_watch_shutdown())
+    scheduler_task = asyncio.create_task(server.run_scheduler()) if server.scheduler is not None else None
     try:
         await uv_server.serve(sockets=[sock])
     finally:
         watcher.cancel()
+        if scheduler_task is not None:
+            scheduler_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await scheduler_task
         sock.close()
     return boot

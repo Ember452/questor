@@ -127,6 +127,16 @@ class DeliveryConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ScheduleConfig:
+    """E 环最小调度器开关（B11；默认 off，serve 后台 tick）。"""
+
+    enabled: bool
+    interval_seconds: float
+    max_per_hour: int
+    quota_retry_seconds: float
+
+
+@dataclass(frozen=True, slots=True)
 class Config:
     """一次配置快照（frozen）：``load_config()`` 的返回，调用方按需取子块。"""
 
@@ -136,6 +146,7 @@ class Config:
     sidecar: SidecarConfig
     openai: OpenAIConfig
     delivery: DeliveryConfig
+    schedule: ScheduleConfig
     dream_lookback_raw: str
 
     @property
@@ -185,6 +196,12 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
             max_rows=500,
             retry_base_seconds=5.0,
         ),
+        schedule=ScheduleConfig(
+            enabled=_bool_or(source.get("QUESTOR_SCHEDULE", "off"), False),
+            interval_seconds=30.0,
+            max_per_hour=6,
+            quota_retry_seconds=3600.0,
+        ),
         dream_lookback_raw=source.get("QUESTOR_DREAM_LOOKBACK", "7"),
     )
 
@@ -201,6 +218,7 @@ __all__ = [
     "LoggingConfig",
     "OpenAIConfig",
     "PathsConfig",
+    "ScheduleConfig",
     "SidecarConfig",
     "ledger_enabled",
     "load_config",

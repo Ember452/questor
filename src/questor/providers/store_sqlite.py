@@ -150,6 +150,36 @@ CREATE TABLE IF NOT EXISTS command_window (
     UNIQUE (run_id, idem_key)
 );
 CREATE INDEX IF NOT EXISTS idx_cw_run ON command_window (run_id, cseq);
+CREATE TABLE IF NOT EXISTS schedules (
+    schedule_id      TEXT PRIMARY KEY,
+    session_id       TEXT NOT NULL,
+    subject          TEXT NOT NULL,
+    text             TEXT NOT NULL,
+    interval_seconds REAL NOT NULL,
+    next_run_at      REAL NOT NULL,
+    enabled          INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_sched_due ON schedules (enabled, next_run_at);
+CREATE TABLE IF NOT EXISTS occurrences (
+    schedule_id TEXT NOT NULL,
+    due_at      REAL NOT NULL,
+    fired_at    REAL,
+    state       TEXT NOT NULL,
+    execution_id TEXT,
+    PRIMARY KEY (schedule_id, due_at)
+);
+CREATE TABLE IF NOT EXISTS executions (
+    execution_id TEXT PRIMARY KEY,
+    schedule_id  TEXT NOT NULL,
+    due_at       REAL NOT NULL,
+    session_id   TEXT NOT NULL,
+    subject      TEXT NOT NULL,
+    state        TEXT NOT NULL,
+    started_at   REAL NOT NULL,
+    ended_at     REAL,
+    result       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_exec_guard ON executions (session_id, subject, started_at);
 """
 
 
@@ -701,6 +731,114 @@ class SQLiteStore(StorePort):
             except BaseException:
                 await db.execute("ROLLBACK")
                 raise
+
+    # ---- B11/E 环：occurrences/executions + 会话静默（调度器只经 submissions 入队）----
+    async def upsert_schedule(
+        self,
+        schedule_id: str,
+        session_id: str,
+        subject: str,
+        text: str,
+        interval_seconds: float,
+        next_run_at: float,
+        *,
+        enabled: bool = True,
+    ) -> None:
+        async with self._lock:
+            await self._dbp().execute(
+                "INSERT INTO schedules (schedule_id, session_id, subject, text, interval_seconds, next_run_at, enabled) "
+                "VALUES (?,?,?,?,?,?,?) ON CONFLICT(schedule_id) DO UPDATE SET session_id=excluded.session_id, "
+                "subject=excluded.subject, text=excluded.text, interval_seconds=excluded.interval_seconds, "
+                "next_run_at=excluded.next_run_at, enabled=excluded.enabled",
+                (schedule_id, session_id, subject, text, interval_seconds, next_run_at, 1 if enabled else 0),
+            )
+
+    async def due_schedules(self, now: float) -> list[JsonObject]:
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT schedule_id, session_id, subject, text, interval_seconds, next_run_at FROM schedules "
+                "WHERE enabled = 1 AND next_run_at <= ? ORDER BY next_run_at",
+                (now,),
+            )
+            rows = await cur.fetchall()
+            return [
+                {
+                    "schedule_id": r[0],
+                    "session_id": r[1],
+                    "subject": r[2],
+                    "text": r[3],
+                    "interval_seconds": r[4],
+                    "next_run_at": r[5],
+                }
+                for r in rows
+            ]
+
+    async def advance_schedule(self, schedule_id: str, next_run_at: float) -> int:
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "UPDATE schedules SET next_run_at = ? WHERE schedule_id = ?", (next_run_at, schedule_id)
+            )
+            return cur.rowcount or 0
+
+    async def mark_occurrence(
+        self,
+        schedule_id: str,
+        due_at: float,
+        state: str,
+        *,
+        fired_at: float | None = None,
+        execution_id: str | None = None,
+    ) -> None:
+        async with self._lock:
+            await self._dbp().execute(
+                "INSERT INTO occurrences (schedule_id, due_at, fired_at, state, execution_id) VALUES (?,?,?,?,?) "
+                "ON CONFLICT(schedule_id, due_at) DO UPDATE SET fired_at=excluded.fired_at, state=excluded.state, execution_id=excluded.execution_id",
+                (schedule_id, due_at, fired_at, state, execution_id),
+            )
+
+    async def record_execution(
+        self,
+        execution_id: str,
+        schedule_id: str,
+        due_at: float,
+        session_id: str,
+        subject: str,
+        state: str,
+        started_at: float,
+        *,
+        ended_at: float | None = None,
+        result: str | None = None,
+    ) -> None:
+        async with self._lock:
+            await self._dbp().execute(
+                "INSERT OR REPLACE INTO executions (execution_id, schedule_id, due_at, session_id, subject, state, started_at, ended_at, result) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (execution_id, schedule_id, due_at, session_id, subject, state, started_at, ended_at, result),
+            )
+
+    async def count_executions(self, session_id: str, subject: str, since: float) -> int:
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT COUNT(*) FROM executions WHERE session_id = ? AND subject = ? AND started_at >= ?",
+                (session_id, subject, since),
+            )
+            return int((await cur.fetchone())[0])
+
+    async def set_session_quiet(self, session_id: str, date: str) -> int:
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "UPDATE sessions SET metadata_json = json_set(metadata_json, '$.quiet_date', ?), updated_at = ? WHERE session_id = ?",
+                (date, utc_now().isoformat(), session_id),
+            )
+            return cur.rowcount or 0
+
+    async def session_quiet(self, session_id: str) -> str | None:
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT json_extract(metadata_json, '$.quiet_date') FROM sessions WHERE session_id = ?", (session_id,)
+            )
+            row = await cur.fetchone()
+            return None if row is None else row[0]
 
     async def acquire_lease(self, run_id: str, holder: str, epoch: int, ttl_seconds: float) -> bool:
         """获取 run 驱动租约（单机多进程单写者）：同 holder/已过期可取，他人未过期拒。"""

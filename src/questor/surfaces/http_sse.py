@@ -84,12 +84,11 @@ def _receipt_response(receipt: InboxReceipt) -> JSONResponse:
 class EventServer:
     """持有端点共享的 store + bus + active run 的 Command Inbox 注册表。"""
 
-    def __init__(self, surface: CliSurface, store: StorePort, *, ledger_enabled: bool = True, scheduler_enabled: bool = False) -> None:
+    def __init__(self, surface: CliSurface, store: StorePort, *, ledger_enabled: bool = True, scheduler: object | None = None) -> None:
         self.surface = surface
         self.store = store
         self.ledger_enabled = ledger_enabled
-        self.scheduler_enabled = scheduler_enabled
-        self.scheduler = None
+        self.scheduler = scheduler
         # 让 EventServer 构造的 turn loop 也持久化 checkpoint（P3 resume 前置）；surface 仍只持 StorePort 抽象。
         if surface.store is None:
             surface.store = store
@@ -107,6 +106,12 @@ class EventServer:
     def request_shutdown(self) -> None:
         """请求优雅关闭（仅置信号，不硬杀）；serve 看门狗会拾起并让 uvicorn 退出。"""
         self.shutdown_event.set()
+
+    async def run_scheduler(self) -> None:
+        """B11：serve 后台调度循环；未注入 scheduler 时为空操作。"""
+        if self.scheduler is None:
+            return
+        await self.scheduler.run_forever()  # type: ignore[attr-defined]
 
     def _loop(self, cancel: asyncio.Event, surface: RunToolSurface, run_id: str = "", session_id: str = "") -> DefaultTurnLoop:
         """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。

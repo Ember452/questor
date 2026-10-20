@@ -159,6 +159,61 @@ class StorePort(Protocol):
         """只裁 acked/abandoned/discarded 的旧行；返回删除数。"""
         ...
 
+    # ---- B11/E 环：调度器账本（occurrences/executions；触发只经 submissions）----
+    async def upsert_schedule(
+        self,
+        schedule_id: str,
+        session_id: str,
+        subject: str,
+        text: str,
+        interval_seconds: float,
+        next_run_at: float,
+        *,
+        enabled: bool = True,
+    ) -> None:
+        ...
+
+    async def due_schedules(self, now: float) -> list[JsonObject]:
+        ...
+
+    async def advance_schedule(self, schedule_id: str, next_run_at: float) -> int:
+        ...
+
+    async def mark_occurrence(
+        self,
+        schedule_id: str,
+        due_at: float,
+        state: str,
+        *,
+        fired_at: float | None = None,
+        execution_id: str | None = None,
+    ) -> None:
+        ...
+
+    async def record_execution(
+        self,
+        execution_id: str,
+        schedule_id: str,
+        due_at: float,
+        session_id: str,
+        subject: str,
+        state: str,
+        started_at: float,
+        *,
+        ended_at: float | None = None,
+        result: str | None = None,
+    ) -> None:
+        ...
+
+    async def count_executions(self, session_id: str, subject: str, since: float) -> int:
+        ...
+
+    async def set_session_quiet(self, session_id: str, date: str) -> int:
+        ...
+
+    async def session_quiet(self, session_id: str) -> str | None:
+        ...
+
     async def ack_delivery(self, delivery_id: str) -> bool:
         """投递完成确认：置 acked（幂等；对未知/已 acked 返回当前是否处于 acked）。"""
         ...

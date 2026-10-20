@@ -6,6 +6,8 @@ import aiosqlite
 
 from questor.contracts.events import ReportChildTerminal
 from questor.providers.store_sqlite import SQLiteStore
+from questor.schedule import Scheduler, current_execution_identity
+from questor.surfaces.logs import run_logs_command
 from questor.surfaces.subagent_orchestrator import SubagentOrchestrator
 
 
@@ -116,3 +118,91 @@ async def test_ledger_failure_never_blocks_report_send() -> None:
     orchestrator = SubagentOrchestrator(surface=None, bus=None, store=_RaisingStore(), registry=registry)  # type: ignore[arg-type]
     await orchestrator._complete_child("child", "parent", "node", "completed", "done")  # noqa: SLF001
     assert len(registry.calls) == 1 and isinstance(registry.calls[0], ReportChildTerminal)
+
+
+async def _schedule(store: SQLiteStore, *, due: float = 100.0, interval: float = 60.0, subject: str = "reminder") -> None:
+    await store.create_session("s1")
+    await store.upsert_schedule("sch-1", "s1", subject, "take a break", interval, due)
+
+
+async def test_scheduler_fires_only_via_submissions(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "sched.db")).connect()
+    try:
+        await _schedule(store)
+        result = await Scheduler(store).tick(now=100.0)
+        assert result == {"fired": 1, "skipped": 0, "held": 0}
+        rows = await store.submissions_since("s1", 0)
+        assert len(rows) == 1 and rows[0]["source"] == "scheduler" and rows[0]["kind"] == "user_message"
+        assert await store.watermark() == 0  # 调度器不 append event_log
+        assert (await store.due_schedules(999.0)) == [] or (await store.due_schedules(999.0))[0]["next_run_at"] == 160.0
+    finally:
+        await store.close()
+
+
+async def test_scheduler_ownership_is_exclusive(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "owner.db")).connect()
+    try:
+        await _schedule(store)
+        assert await store.acquire_lease("sched:main", "other-owner", 1, ttl_seconds=60) is True
+        assert await Scheduler(store).tick(now=100.0) == {"fired": 0, "skipped": 0, "held": 0}
+        assert await store.submissions_since("s1", 0) == []
+        await store.release_lease("sched:main", "other-owner", 1)
+    finally:
+        await store.close()
+
+
+async def test_scheduler_quota_hold_stops_at_boundary(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "quota.db")).connect()
+    try:
+        await _schedule(store)
+        result = await Scheduler(store, quota_remaining=lambda: 0, quota_retry_seconds=500).tick(now=100.0)
+        assert result == {"fired": 0, "skipped": 0, "held": 1}
+        assert await store.submissions_since("s1", 0) == []
+        due = await store.due_schedules(10_000.0)
+        assert due and due[0]["next_run_at"] == 600.0  # 停在恢复边界，不补跑
+    finally:
+        await store.close()
+
+
+async def test_scheduler_hourly_cap_and_quiet(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "guard.db")).connect()
+    try:
+        await _schedule(store, interval=1.0)
+        scheduler = Scheduler(store, max_per_hour=2)
+        assert (await scheduler.tick(now=100.0))["fired"] == 1
+        assert (await scheduler.tick(now=101.0))["fired"] == 1
+        assert (await scheduler.tick(now=102.0))["skipped"] == 1  # 同会话同主体每小时上限
+        assert len(await store.submissions_since("s1", 0)) == 2
+
+        await store.set_session_quiet("s1", "1970-01-01")
+        assert (await scheduler.tick(now=200.0))["skipped"] == 1  # 今日静默
+        assert len(await store.submissions_since("s1", 0)) == 2
+    finally:
+        await store.close()
+
+
+async def test_scheduler_execution_identity_is_visible(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "identity.db")).connect()
+    try:
+        await _schedule(store)
+        seen: list[str | None] = []
+        original = store.enqueue_submission
+
+        async def spy(*args, **kwargs):  # noqa: ANN002, ANN003
+            seen.append(current_execution_identity())
+            return await original(*args, **kwargs)
+
+        store.enqueue_submission = spy  # type: ignore[method-assign]
+        await Scheduler(store).tick(now=100.0)
+        assert seen == ["sched:sch-1:100.0"]
+    finally:
+        await store.close()
+
+
+async def test_logs_totals_and_expand_still_work(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "logs.db")).connect()
+    try:
+        out = await run_logs_command(store, tmp_path / "logs", run_id=None, totals=True, expand=False)
+        assert isinstance(out, str) and out
+    finally:
+        await store.close()

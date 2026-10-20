@@ -30,6 +30,7 @@ LAYER_RANK: dict[str, int] = {
     "policy": 4,
     "providers": 5,
     "surfaces": 6,
+    "schedule": 6,  # B11：E 环调度器与 surfaces 同层；不得 import surfaces/providers 具体实现。
     "config": 7,
     "observability": 7,
 }
@@ -60,6 +61,13 @@ FORBIDDEN_IMPORTS: dict[str, tuple[str, ...]] = {
     # 策略只读视图→出意图；绝不持记忆库/向量库裸句柄（C4）。
     "policy": (
         "questor.providers.store_memory_sqlite",
+    ),
+    # B11：调度器只持 StorePort/contracts，不得 import surfaces 或 providers 具体实现。
+    "schedule": (
+        "questor.surfaces",
+        "questor.providers",
+        "questor.state.reduce",
+        "subprocess",
     ),
     # L0 词汇层只放数据与纯不变式，不碰 IO/网络/进程。
     "contracts": (
@@ -175,12 +183,15 @@ def self_test() -> int:
     good_hits = analyze_source(good, "kernel")
     obs_bad_hits = analyze_source(obs_to_kernel, "observability")
     obs_good_hits = analyze_source(obs_to_contracts, "observability")
+    schedule_bad = analyze_source("from questor.surfaces import cli\n", "schedule")
+    schedule_good = analyze_source("from questor.contracts import events\n", "schedule")
     ok = (
         bool(bad_hits) and bool(pkg_hits) and bool(forbidden_hits) and bool(surfaces_hits) and bool(memory_hits)
-        and bool(caps_store_hits) and bool(obs_bad_hits) and not allowed_hits and not good_hits and not obs_good_hits
+        and bool(caps_store_hits) and bool(obs_bad_hits) and bool(schedule_bad) and not schedule_good
+        and not allowed_hits and not good_hits and not obs_good_hits
     )
-    print(f"self-test: dyn-import={bool(bad_hits)} package-import={bool(pkg_hits)} forbidden-caps={bool(forbidden_hits)} surfaces-reduce={bool(surfaces_hits)} memory-outer={bool(memory_hits)} caps-store={bool(caps_store_hits)} crosscut-to-business={bool(obs_bad_hits)} providers->memory-allowed={not allowed_hits} clean-passed={not good_hits and not obs_good_hits}")
-    for msg in (*bad_hits, *pkg_hits, *forbidden_hits, *surfaces_hits, *memory_hits, *caps_store_hits, *obs_bad_hits):
+    print(f"self-test: dyn-import={bool(bad_hits)} package-import={bool(pkg_hits)} forbidden-caps={bool(forbidden_hits)} surfaces-reduce={bool(surfaces_hits)} memory-outer={bool(memory_hits)} caps-store={bool(caps_store_hits)} crosscut-to-business={bool(obs_bad_hits)} schedule-surfaces={bool(schedule_bad)} providers->memory-allowed={not allowed_hits} clean-passed={not good_hits and not obs_good_hits and not schedule_good}")
+    for msg in (*bad_hits, *pkg_hits, *forbidden_hits, *surfaces_hits, *memory_hits, *caps_store_hits, *obs_bad_hits, *schedule_bad):
         print(f"  expected-red -> {msg}")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
