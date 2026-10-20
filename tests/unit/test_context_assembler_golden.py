@@ -12,7 +12,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questor.surfaces._assembly import DEFAULT_CONTEXT_ASSEMBLER, DefaultContextAssembler, assemble_system_prompt
+from questor.providers.fake import EchoProvider
+from questor.surfaces._assembly import (
+    DEFAULT_CONTEXT_ASSEMBLER,
+    DefaultContextAssembler,
+    assemble_system_prompt,
+    inject_memory_block,
+)
+from questor.surfaces.cli import CliSurface
 
 _GOLDEN_DIR = Path(__file__).resolve().parents[1] / "golden"
 
@@ -59,3 +66,26 @@ def test_no_skills_dir_leaves_system_unchanged() -> None:
     assert assemble_system_prompt(None, None) is None
     assert assemble_system_prompt(_SYSTEM, None) == _SYSTEM
     assert DefaultContextAssembler().assemble(_SYSTEM, Path("/no/such/dir")) == _SYSTEM
+
+
+def test_memory_injection_is_off_by_default(tmp_path: Path) -> None:
+    """记忆注入位默认关：默认装配器与 surface 默认路径都逐字节等于 golden。"""
+    skills = _skills_fixture(tmp_path)
+    golden = _golden("prompt_system.txt")
+    assert DefaultContextAssembler().assemble(_SYSTEM, skills) == golden
+    assert DEFAULT_CONTEXT_ASSEMBLER.assemble(_SYSTEM, skills) == golden
+    # surface 默认路径（组合根不传 context_assembler）→ 同一个默认装配器 → ProviderRequest.system 不变。
+    assert CliSurface(provider=EchoProvider(), system=_SYSTEM, skills_dir=skills).system == golden
+    # 供给器返回空块也视为“本轮无记忆”：仍是逐字节原样。
+    assert DefaultContextAssembler(memory_block_provider=lambda: "").assemble(_SYSTEM, skills) == golden
+
+
+def test_memory_block_seam_is_opt_in(tmp_path: Path) -> None:
+    """接缝确实在位：显式供给器才追加，且只追加一段 ``\\n\\n`` 分隔的文本。"""
+    skills = _skills_fixture(tmp_path)
+    golden = _golden("prompt_system.txt")
+    assembler = DefaultContextAssembler(memory_block_provider=lambda: "MEMORY: user prefers short answers")
+    assert assembler.assemble(_SYSTEM, skills) == f"{golden}\n\nMEMORY: user prefers short answers"
+    # 无 system 时块就是全文；无 prompt 且无块时仍是 None（不造空串）。
+    assert inject_memory_block(None, lambda: "MEM") == "MEM"
+    assert inject_memory_block(None, None) is None

@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from questor.capabilities.skills.catalog import build_skill_catalog
@@ -62,15 +63,42 @@ def assemble_system_prompt(system: str | None, skills_dir: Path | None) -> str |
     return f"{system}\n\n{catalog}".strip() if catalog else system
 
 
+#: 记忆块供给器：返回要追加到 system 末尾的文本（空串/None = 本轮不注入）。
+MemoryBlockProvider = Callable[[], str | None]
+
+
 class DefaultContextAssembler:
-    """``ContextAssemblerPort`` 的现路径实现：system + skills catalog，无记忆注入。"""
+    """``ContextAssemblerPort`` 的现路径实现：system + skills catalog（+ 可选记忆块）。
+
+    **记忆注入位默认关**（OPT-12a b3）：``memory_block_provider=None`` 时只做历史拼接，
+    ``ProviderRequest.system`` 一个字节都不变；接上供给器也只是在末尾追加一块文本，
+    不参与权限/排序/压缩判定（那些属 kernel，不在本接缝）。
+    """
+
+    def __init__(self, memory_block_provider: MemoryBlockProvider | None = None) -> None:
+        self._memory_block_provider = memory_block_provider
 
     def assemble(self, system: str | None, skills_dir: Path | None) -> str | None:
-        """等价于历史 surface 内联拼接（逐字节）；无技能目录时原样返回。"""
-        return assemble_system_prompt(system, skills_dir)
+        """= 历史内联拼接（逐字节）+ 记忆块（默认无）；无技能目录时 system 原样。"""
+        return inject_memory_block(assemble_system_prompt(system, skills_dir), self._memory_block_provider)
 
 
-#: 默认装配器单例（无状态，可直接共享）。
+def inject_memory_block(prompt: str | None, provider: MemoryBlockProvider | None) -> str | None:
+    """记忆注入位（OPT-12a b3）：**默认关**，关时逐字节返回入参。
+
+    开时把供给器返回的非空块以 ``"\\n\\n"`` 接到 prompt 末尾（无 prompt 时就是该块本身）；
+    供给器返回空/None 视为“本轮无记忆”，仍原样返回——不凭空造空串/分隔符。
+    失败语义：供给器自身抛异常则上冒（调用方决定降级；此处不静默吞）。
+    """
+    if provider is None:
+        return prompt
+    block = (provider() or "").strip()
+    if not block:
+        return prompt
+    return f"{prompt}\n\n{block}" if prompt else block
+
+
+#: 默认装配器单例（记忆注入默认关，无状态、可安全共享）。
 DEFAULT_CONTEXT_ASSEMBLER = DefaultContextAssembler()
 
 
