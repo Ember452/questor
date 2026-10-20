@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""文档一致性守卫：计数 / 交叉引用 / "原写↔已改"成对 / 跨文档否决词（advisory；v3 §21 G2 + §15.6 + §20.3）。
+"""文档一致性守卫：计数 / 交叉引用 / "原写↔已改"成对 / 跨文档否决词 / 主题状态一致（advisory；v3 §21 G2 + §15.6 + §20.3 + §17.1）。
 
 文档是单一真源（§20 互锁表 + §15.6 锚点勘误 + §21 G11「文档即契约」），但它会漂：§15.6 的背景
 自述「新表改对、旧表未回灌」的漂移复发，就是本守卫要机守的缺陷类。本守卫**只读**文档与仓库计数，
@@ -10,7 +10,7 @@
     1 = 文档存在但不一致（红）
     2 = 参数/自身错误（文档为空、workflow/脚本/内核文件缺失等 fail-on-empty）
 
-四项检查：
+五项检查：
   A. **计数一致**：9 条 EXPECTED（见下方常量，逐条注明来源 §）。第 9 条（基线 913/6）**只做注释**——
      它随每次开发变化，断言它只会制造噪声红；真正的基线由 pytest 自己保证。
   B. **引用存在**：正文出现的 §n、附录X、B<数字>、C-<数字> 必须在文内有定义（外部文档引用由
@@ -20,6 +20,9 @@
   D. **跨文档否决词**：PLAN §3 的否决关键词（事实版本链|providers/*子包|Fiber/reflect|声明式失败|
      中间件链化|QueueHandler）在设计文档里出现时，同句必须带 `C-\\d|已改|不建|不拆|仅借`——
      否则读者无法判断"这条是复活了否决项，还是转述否决"。
+  E. **主题状态一致**（收口新增）：台账主题（STATE_TOPICS）的"已完成/未完成"措辞不得在文内相反。
+     本 PR 反复出现"新表对、旧处错"（人审 14 次），A–D 四类拓不到：它不是数字错、是同一事实
+     两处状态相反。**判定粒度是句而不是行**：§17 整节写在一行里，行级判定会被同句的"已改"豁免。
 
 两个已实测的坑（正则必须照此写，否则守卫自己假绿/假红；2026-10-20 实测）：
   ① **不要用裸 `os\\.walk` 断言全文**：§15.5.1/§16 里描述"外部仓扫描方法"的段落是**正确文本**，
@@ -55,16 +58,17 @@ EXPECTED: dict[str, int] = {
     "blades": 17,  # §13「17 刀（T16）」+ T16；数 `^| **B` 行（B0.5 算一刀）
     "points_live": 13,  # §5.1 表内 13 行生效点位（B6 启用 Stop）
     "points_reserved": 4,  # §5.1「预留 4 位」句里的 4 个名字（Notification/Elicitation/TaskUpdated/PlanStep）
-    "src_py": 144,  # §21 前提判断（B5 +4；B7 +2；B8 +1；B9 +2；B10 +1；B13 +1；B15 +2：ask_user / context_report）
+    "src_py": 145,  # §21 前提判断（B5 +4；B7 +2；B8 +1；B9 +2；B10 +1；B13 +1；B15 +2；收口 +1：providers/embedder_factory.py）
     "gate_scripts": 17,  # §21：15 个 check_*.py + 2 个 verify_*.py（不含 _diag_threads.py；B5 新增 check_extension_points.py）
     "ci_gate_steps": 19,  # §21 / PLAN SCAN-1：boundaries 恒阻塞 job 的「门步」数（B5 新增 1 步）
     "reduce_calls": 0,  # §2-1：B0 后 loop.py/recovery.py 不再直调 reduce（17 处全改走 apply()）
-    "test_files": 221,  # PLAN SCAN-2：tests/ 下 .py 合计 221（B5 +5、P10 +2、B7 +4、B8 +4、B9 +2、B10 +4、B12 +3、B13/14 +3、B15 +1）
-    "test_unit": 134,  # PLAN SCAN-2：unit 134（B5 +4、P10 +2、B7 +4、B8 +4、B9 +2、B10 +3、B13 +1、B15 +1）
+    "test_files": 223,  # PLAN SCAN-2：tests/ 下 .py 合计 223（到 B15 为止 221 + 收口新增 test_embedder_seam.py + e2e/test_closed_loop.py）
+    "test_unit": 135,  # PLAN SCAN-2：unit 135（134 + 收口新增 test_embedder_seam.py）
     "test_integration": 77,  # PLAN SCAN-2：integration 77（B5 +1 inspect-extensions；B13 +1 会话路由；B14 +1 记忆管理面）
     "test_support": 3,  # PLAN SCAN-2：support 3（fixture 基建，非 test_* 命名）
     "test_evals": 6,  # PLAN SCAN-2：evals 6（B10 新增 p99 1 个；B12 新增 tasks/metrics/test_b12_evals 3 个）
     "test_root": 1,  # tests/ 顶层 conftest.py
+    "test_e2e": 1,  # §0.9 闭环验收 E1–E8（e2e 桶：收口时新增的第五个桶）
 }
 
 #: 第 9 条 EXPECTED（基线）**只做注释、不做断言**：它会随每次开发变化，断言=制造噪声红。
@@ -111,6 +115,36 @@ ADVISORY_SCRIPTS: frozenset[str] = frozenset({"check_doc_cross_refs.py"})
 
 #: §21 G2 行（坑①的扫描面）。
 _G2_ROW_PREFIX = "| **G2"
+
+#: E 项（第五类）：**状态一致性**。本 PR 反复在犯同一类错——新表写了“已接线/已测”，
+#: 正文旧句还写着“未接线/未跑过用例”（人审已抓到 14 次）。计数/引用/成对/否决四类都拓不到它，
+#: 因为它不是数字错、是**同一事实在两处的状态相反**。
+#: 可执行口径（故意窄，不做“词义相似”的模糊判定）：
+#:   • 主题必须在台账里（提不到 = 检查被静默废弃 → 红）；
+#:   • 一旦文内有任何行声明该主题**已完成**，就不允许再有行声明它**未完成**；
+#:   • 带显式勘误标记（已作废/已改/状态以…为准/见 §17.1/历史记录/原写）的行例外：
+#:     那是在留勘误记录，不是在声称现状。
+#: 新主题要加进来：先确认它的两类措辞在文档里都是固定说法，再入台账（否则就是假阳机器）。
+_ERRATUM = re.compile(r"已作废|已改|状态以|以 §17|见 §17\.1|历史记录|原写")
+#: 句子切分：保留分隔符之前的内容，行号仍用原行（便于直接定位）。
+_SENTENCE_SPLIT = re.compile(r"(?<=[。；])")
+STATE_TOPICS: dict[str, tuple[re.Pattern[str], re.Pattern[str], re.Pattern[str]]] = {
+    "C-1 归档生产端（BLK-10）": (
+        re.compile(r"BLK-10|envelope_for_text|C-1 老化"),
+        re.compile(r"已接线|已落地|生产调用点 0 ?→? ?1"),
+        re.compile(r"0 调用|0 处|未接线|不得按.已具备"),
+    ),
+    "头部孤儿 property 是否已测": (
+        re.compile(r"头部孤儿"),
+        re.compile(r"已测|test_compaction_orphan|legal_evict_end"),
+        re.compile(r"未跑过构造用例|无一条断言|没有任何一条断言"),
+    ),
+    "DomainState 与会话入口": (
+        re.compile(r"DomainState"),
+        re.compile(r"UNWIRED|已标 UNWIRED|可选 session_id"),
+        re.compile(r"是死字段|0 构造、0 读取|没有 `session_id` 参数"),
+    ),
+}
 
 
 def _mismatch(name: str, got: int, want: int, source: str) -> str:
@@ -306,6 +340,7 @@ def check_repo_counts(root: Path, expected: dict[str, int]) -> list[str]:
         "test_integration": len(list(walk_py(tests / "integration"))),
         "test_support": len(list(walk_py(tests / "support"))),
         "test_evals": len(list(walk_py(tests / "evals"))),
+        "test_e2e": len(list(walk_py(tests / "e2e"))),
         "test_root": len(list((tests).glob("*.py"))),
     }
     if total != expected["test_files"]:
@@ -422,6 +457,43 @@ def check_traps(lines: list[str]) -> list[str]:
     return out
 
 
+def _segments(lines: list[str]) -> list[tuple[int, str]]:
+    """按句切分（维护原行号）。
+
+    为什么不能按行：设计文档 §17 整节是**一行**，行级判定会让同一行里的“已改”
+    把陈旧状态句豁免掉（实测跳过）。一句一个状态，才是本检查能站住的粒度。
+    """
+    out: list[tuple[int, str]] = []
+    for lineno, line in enumerate(lines, 1):
+        for piece in _SENTENCE_SPLIT.split(line):
+            if piece.strip():
+                out.append((lineno, piece))
+    return out
+
+
+def check_state_consistency(lines: list[str]) -> list[str]:
+    """E：同一主题的“已完成/未完成”措辞不得相反（除显式勘误句）。"""
+    out: list[str] = []
+    units = _segments(lines)
+    for topic, (mention, done, not_done) in STATE_TOPICS.items():
+        hits = [(lineno, seg) for lineno, seg in units if mention.search(seg)]
+        if not hits:
+            out.append(f"state topic vanished [{topic}]: no sentence mentions it any more (the check went blind)")
+            continue
+        claimed_done = [lineno for lineno, seg in hits if done.search(seg)]
+        if not claimed_done:
+            continue  # 还没人声称完成，那“未完成”的写法就是现状，不是矛盾
+        seen: set[str] = set()
+        for lineno, seg in hits:
+            if not_done.search(seg) and not _ERRATUM.search(seg) and seg not in seen:
+                seen.add(seg)
+                out.append(
+                    f"contradictory state [{topic}]: L{lineno} says not-done while L{claimed_done[0]} says done "
+                    f"(mark it as errata: 已作废/状态以 §17.1 为准, or fix the claim): {seg.strip()[:90]}"
+                )
+    return out
+
+
 def collect_notices(lines: list[str], root: Path) -> list[str]:
     """不判红的漂移观察（`NOTE:` 前缀）：文档作业待办，不该阻塞本轮代码。"""
     out: list[str] = []
@@ -436,7 +508,7 @@ def collect_notices(lines: list[str], root: Path) -> list[str]:
 
 
 def check_all(text: str, root: Path, expected: dict[str, int]) -> list[str]:
-    """跑全部四项检查 + 两个坑的 scoped 断言；返回违规行（空 = 绿）。"""
+    """跑全部五项检查 + 两个坑的 scoped 断言；返回违规行（空 = 绿）。"""
     lines = text.splitlines()
     violations: list[str] = []
     violations += check_doc_counts(lines, expected)
@@ -445,10 +517,11 @@ def check_all(text: str, root: Path, expected: dict[str, int]) -> list[str]:
     violations += check_pairs(lines)
     violations += check_veto(lines)
     violations += check_traps(lines)
+    violations += check_state_consistency(lines)
     return violations
 
 
-#: --self-test 的合成文档：结构最小但四项检查全可验证（含 §19/附录A/B 刀/C 条的定义位）。
+#: --self-test 的合成文档：结构最小但五项检查全可验证（含 §19/附录A/B 刀/C 条的定义位）。
 FIXTURE_DOC = """# fixture
 
 ## 0. 定夺的 2 条取舍
@@ -502,6 +575,14 @@ FIXTURE_DOC = """# fixture
 ### A.1 两个真实缺口
 
 1. 见 §4.4 与 B1。
+
+### 17.1 收口状态
+
+| 项 | 状态 |
+|---|---|
+| 13 | C-1 归档生产端 **已接线**（`envelope_for_text` 经 surface 注入） |
+| 11-③ | 头部孤儿 property **已测**（`test_compaction_orphan.py` 与 `legal_evict_end`） |
+| 14 | `DomainState` 已标 UNWIRED；`/run` 带可选 session_id |
 """
 
 
@@ -543,6 +624,22 @@ def self_test() -> int:
     print(f"  expected-red -> {hits[0] if hits else '(none)'}")
     cases.append(("trap-unit83", any("unit 83" in h for h in hits), f"{len(hits)} hit(s)"))
 
+    # E 项：旧处没改 → 必须判红；标了勘误 → 必须绿（否则正文就不允许留勘误记录）。
+    contradicted = FIXTURE_DOC + "\n- BLK-10：`envelope_for_text` 生产端 0 调用（未接线）。\n"
+    hits = check_all(contradicted, ROOT, base)
+    print(f"  expected-red -> {next((h for h in hits if 'contradictory state' in h), '(none)')}")
+    cases.append(("state-contradiction", any("contradictory state" in h and "BLK-10" in h for h in hits), f"{len(hits)} hit(s)"))
+
+    erratum = FIXTURE_DOC + "\n- BLK-10：原写生产端 0 调用（未接线），已作废，状态以 §17.1 为准。\n"
+    hits = check_all(erratum, ROOT, base)
+    cases.append(("state-erratum-allowed", not any("contradictory state" in h for h in hits), f"{[h for h in hits if 'contradictory' in h]}"))
+
+    # 主题从文档里彻底消失 = 检查瞎了，也必须红（不记“没提 = 通过”）。
+    silent_topic = "\n".join(line for line in FIXTURE_DOC.splitlines() if "头部孤儿" not in line)
+    hits = check_all(silent_topic, ROOT, base)
+    print(f"  expected-red -> {next((h for h in hits if 'vanished' in h), '(none)')}")
+    cases.append(("state-topic-vanished", any("vanished" in h for h in hits), f"{len(hits)} hit(s)"))
+
     return run_self_test(cases)
 
 
@@ -567,7 +664,7 @@ def main(argv: list[str] | None = None) -> int:
         print(message, file=sys.stderr)
     if violations:
         return EXIT_RED
-    print(f"doc cross-refs: counts/refs/pairs/veto consistent ({len(text.splitlines())} lines, 9 EXPECTED items)")
+    print(f"doc cross-refs: counts/refs/pairs/veto/state consistent ({len(text.splitlines())} lines, {len(EXPECTED)} EXPECTED items)")
     return EXIT_OK
 
 

@@ -74,6 +74,16 @@ ADR-0056 记录“变更史 = 事实流”的落地与 `memory_history` 表被�
 
 ADR-0059 记录三刀的共同取舍（追加事实 + 投影，不开第二通道）与已知边界（自由文本答案、`--context` 的估算口径）；§17 第 14 条④ 由 `DomainState` 的显式 `UNWIRED` 说明交付。计数：`src_py` 142→144、`test_files` 217→221、`test_unit` 132→134、`test_integration` 75→77、`EventType` 38、`Command` 26。
 
+### Fixed / Added — w2-final · 收口（人审 #198 触发，3 组修复 + E1–E8）
+
+- **`fix(memory)` 生产不再把确定性 fake 当向量能力（ADR-0060）**：`composition.build_app()` 原先注 `MemoryRecall(..., embedder=FakeEmbedder(), enabled=True)`，而本仓没有任何真 embedding 适配器 → 向量通道在生产**永远不可能真工作**；且能力被拆成两个独立注入口（store 侧与 query 侧），今天 store 侧为 None 使通道空转（评审原话"假向量挤掉正确结果"在当前接线不成立，实测机理不同），但任一侧单独接真实现就会让 query/stored 向量来自不同空间——`recall.select` 按 `-score` 排序，噪声直接决定注入哪 5 条且**没有测试会红**。新增 `providers/embedder_factory.py`（`EMBEDDER_BUILDERS` 数据表 + `embedder_from_env()`：无实现即出声 warning 并返回 None，**绝不退回 fake**）、`AssembleSpec.embedder` 单一接缝（先解析 embedder 再建 store，两侧共用同一实例）、`shared_embedder()`（半接即关）、`MemoryRecall.vector_channel_enabled`（开关可观测）。判据：`tests/unit/test_embedder_seam.py`（6 条）；组合根守卫新增「不得 import 测试替身」+ 两例 `--self-test`。生产默认现为 **keyword + structured 开、向量关**（召回默认开不变）。
+- **`test(e2e)` 补 §0.9 闭环验收 E1–E8**：新增 `tests/e2e/test_closed_loop.py`（8 条，scripted provider、无网络），`e2e` 成新登记的第五个桶（`test_scan2_inventory` 与 `check_doc_cross_refs` 同步）。过程纠正了三条按"想当然契约"写的判据：`memory_injected`/`memory_consumed` 是 live-only（`replay` 里没有）、idle 首条不发 `user_message`（B1 口径）、噪声率分母要的是"已到期且未消费"那条。
+- **`test(docs)` 两处平台/文档失明的修法**：符号链接判据改为注入 `os.path.islink` 真跑两条分支 + 反证（全量 skip 由 7 回到基线 **6**）；`check_doc_cross_refs.py` 新增**第五类检查（主题状态一致性）**——`STATE_TOPICS` 台账 + 句级判定 + 勘误句豁免，并据此把 §17 第 11-③ / 14 条、§6.2 与 §17.1 的对齐补齐（同一"新表对、旧处错"缺陷类的人审第 14 次）。
+- **披露**：本轮改写了同一 PR 内自己先前写的一条断言（`test_recall_wiring` 的"生产 recall 带 embedder"），按事实改为 `embedder is None` + `vector_channel_enabled is False`；历史基线断言（`--help` 快照、11 工具名册、`compaction_from_env` 默认关、索引金标、`test_settle_turn`）仍零改动。
+
+计数：`src_py` 144→**145**、`test_files` 221→**223**、`test_unit` 134→**135**、新增 `test_e2e` **1**；全量 **1203 passed / 6 skipped**。
+
+
 
 
 
