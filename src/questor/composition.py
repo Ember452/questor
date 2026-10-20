@@ -26,7 +26,7 @@ from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePor
 from questor.providers.artifact_store import FileSystemArtifactStore
 from questor.providers.process_runner import SandboxedProcessRunner
 from questor.providers.provider_factory import provider_from_env
-from questor.providers.sandbox import detect_sandbox
+from questor.providers.sandbox import select_sandbox
 from questor.providers.store_memory_sqlite import SQLiteMemoryStore
 from questor.providers.store_sqlite import SQLiteStore
 from questor.surfaces._assembly import log_dir_from_env, payload_preview_from_env
@@ -105,6 +105,8 @@ class AssembleSpec:
     context_assembler: ContextAssemblerPort | None = None
     memory_strategy: object | None = None
     profile: str | None = None
+    #: 沙箱后端选择（OPT-7）：只选后端、不放宽 fail-closed；None = 现探测。
+    sandbox_backend: str | None = None
 
 
 @dataclass
@@ -139,7 +141,7 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
     artifact_store = spec.artifact if spec.artifact is not None else FileSystemArtifactStore(data_root / "artifacts")
     if spec.artifact is None:
         await artifact_store.connect()
-    sandbox = spec.sandbox if spec.sandbox is not None else detect_sandbox()
+    sandbox = spec.sandbox if spec.sandbox is not None else select_sandbox(spec.sandbox_backend)
     process_runner = SandboxedProcessRunner(sandbox, artifact_store=artifact_store, data_root=data_root)
     if spec.surface is None:
         provider = (
