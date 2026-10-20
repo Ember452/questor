@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **p3 协议/文档计数纠偏（以实测为准）**：`protocol/README.md` 新增计数行——**27 个 `EventType` / 20 个 `Command`**（`contracts/events.py:341-375` / `:296-317`），并明写“`check_protocol_schema --check` 才是真源、本行仅文档”；`docs/ROADMAP.md` 里旧的“20 个 `EventType`（`events.py:251-273`）”校正为 27/现行行号；`contracts/__init__.py` 的“无实现”改口为“抽象接口 + frozen 数据 + 确定性纯函数，零 IO/零外层 import/无业务分支”（PLAN §5 已核项）。零代码行为变更。
 
+- **p4 SCAN-2 全量清单机守**：新增 `tests/unit/test_scan2_inventory.py`（9 条）把“tests/ 口径”从纸面变可执行：四个桶非空、**各桶之和 == tests/ 下 .py 总数**（新增目录必须登记，否则立即红）、support fixture 可见、`unit/{capabilities,observability}` 子树计入（旧口径只数顶层的原病）、跨桶文件名不重。刻意不断言绝对数字（数字归 `check_doc_cross_refs.EXPECTED`，形状归本测试）；PLAN §4 SCAN-2 转 ✅。
+
 ### Changed — OPT-2a / OPT-12a / OPT-3 / OPT-4：组合根接缝 + 上下文装配器 + 配置/profile 词汇（分支 `opt-seams`；12 commit，a1–a3 / b1–b3 / c1–c6 各自可 revert；**零行为变更**）
 - **OPT-2a 组合根接缝（a1–a3）**：新增 `composition.AssembleSpec`（frozen 纯数据，12 字段全默认 `None` = 走现路径自建；不是服务定位器）+ `build_app(spec=None)`（未给字段仍按历史顺序自建）+ `App.surface` 放宽为最小 `contracts.ports.SurfacePort`（只声明调用方实际用到的 `run_once`/`resume`/`_loop`/`_discover_mcp`/`_freeze_surface`/`_resolve_for_run` 与 `store`）。判据：`tests/integration/test_assemble_spec_default.py`——默认 spec 与 `build_app()` **逐字段等价**、注入字段真被使用（未给的仍自建）、`--help` stdout/exit-code **逐字节快照**。
 - **OPT-12a 上下文装配器（b1–b3）**：`CliSurface.__init__` 里的 `f"{system}\n\n{catalog}".strip() if catalog else system` 原样搬到 `surfaces/_assembly.py::assemble_system_prompt`，经新增 `ContextAssemblerPort` 接缝（`AssembleSpec.context_assembler` 已接线）；**逐字节等价，包括 `system=None` 时那个字面 `"None"`**（修它是 OPT-12b/B7，不在本刀）。新增 `tests/golden/prompt_system{,_none}.txt`（由**当前实现**生成一次并入库、LF-only）+ 逐字节单测；记忆注入位 `memory_block_provider` **默认关**，默认路径 `ProviderRequest.system` 一个字节不变。
