@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 from datetime import UTC, datetime
 
 import pytest
@@ -23,6 +24,7 @@ from questor.contracts.events import (
     RequestApproval,
     ResolveApproval,
     SetPermissionMode,
+    SubmitMessage,
 )
 from questor.contracts.state_schema import (
     CLOSED_TOOL_CALL_STATUSES,
@@ -38,6 +40,7 @@ from questor.contracts.state_schema import (
     ToolCall,
     ToolCallStatus,
 )
+from questor.contracts.submissions import canonical_json, command_digest, command_payload, kind_for_command, normalize_source
 from questor.contracts.tool import Capability
 from questor.state.domain_state import PermissionCtx, Run
 
@@ -283,3 +286,16 @@ def test_p2_approval_and_lifecycle_commands_carry_identity() -> None:
             reason="test",
             expires_at=datetime(2026, 1, 1),
         )
+
+
+def test_submission_digest_is_canonical_not_repr() -> None:
+    """B3：同一命令的指纹由 canonical JSON 决定；repr 口径必须被弃用。"""
+    message = Message(id="m", role=Role.USER, content=(ContentBlock(type="text", text="hello"),), seq=0)
+    command = SubmitMessage(run_id="run", content=message)
+    same = SubmitMessage(run_id="run", content=message)
+    assert command_digest(command) == command_digest(same)
+    assert command_digest(command) != hashlib.sha256(repr(command).encode("utf-8")).hexdigest()
+    assert "hello" in canonical_json(command_payload(command))
+    assert normalize_source("desktop") == "desktop"
+    assert normalize_source("im") == "unknown:im"
+    assert kind_for_command(command) == "user_message"

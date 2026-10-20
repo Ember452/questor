@@ -137,6 +137,45 @@ class StorePort(Protocol):
         破 exactly-once；acked 行的回收与 event_log 裁剪绑定后置）。"""
         ...
 
+    # ---- B3：耐久提交队列（session 作用域；纯增量，不改既有 append/租约语义）----
+    async def enqueue_submission(
+        self,
+        session_id: str,
+        kind: str,
+        payload: JsonObject,
+        *,
+        source: str,
+        idem_key: str,
+        digest: str,
+        run_id: str | None = None,
+    ) -> JsonObject:
+        """入队一条提交：同 ``(session_id, idem_key)`` 同 digest → duplicate；异 digest → 冲突拒绝。
+
+        返回 ``{item_id, change_version, duplicate}``（bounded）；在途数达 ``MAX_QUEUE_ITEMS`` 抛
+        ``SubmissionQueueFullError``。多进程写者只在此表并发（各自 BEGIN IMMEDIATE + UNIQUE），
+        ``event_log`` 仍只由持租约者 append。"""
+        ...
+
+    async def claim_submissions(self, session_id: str, *, limit: int = 100, run_id: str | None = None) -> list[JsonObject]:
+        """原子 claim 该会话的 pending/deferred 行（置 deferred 并填 run_id）；按 seq_in_session 返回。"""
+        ...
+
+    async def ack_submissions(self, item_ids: tuple[str, ...]) -> int:
+        """已应用命令置 consumed；返回受影响行数。"""
+        ...
+
+    async def release_submissions(self, item_ids: tuple[str, ...]) -> int:
+        """未匹配/未应用的 claim 退回 pending（run_id 清空）；返回受影响行数。"""
+        ...
+
+    async def submissions_since(self, session_id: str, after_version: int, limit: int = 512) -> list[JsonObject]:
+        """``change_version > after_version`` 的队列行（多端观察同一队；按 change_version 升序）。"""
+        ...
+
+    async def pending_submission_count(self, session_id: str) -> int:
+        """该会话在途（pending + deferred）条数；入队背压判据。"""
+        ...
+
 
 @runtime_checkable
 class Clock(Protocol):
