@@ -93,6 +93,8 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.CACHE_BREAK: frozenset({"system_hash", "tools_hash", "history_hash", "reason", "breakpoints"}),
     # memory_consumed（B8；§6.3）：层级 kind + 条目级 entry_id + 是哪个工具取的；无正文（C18/C20）。
     EventType.MEMORY_CONSUMED: frozenset({"kind", "entry_id", "tool_name"}),
+    # memory_deleted（B9；§6.4-6）： durable 撤回回执。只条目 id + 短原因；**不建 memory_history 表**（C-7）。
+    EventType.MEMORY_DELETED: frozenset({"entry_id", "reason"}),
 }
 
 

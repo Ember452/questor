@@ -262,6 +262,8 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         "cache_break": _envelope("cache_break", {"system_hash": "sha256:aaa", "tools_hash": None, "history_hash": None, "reason": "cold", "breakpoints": 1}),
         # B8 additive：memory_consumed（命中不算消费，只有真读/引用才发）与 message_completed.citations。
         "memory_consumed": _envelope("memory_consumed", {"kind": "raw", "entry_id": "memory/2026-10-01.md:3-7", "tool_name": "read"}),
+        # B9 additive：memory_deleted（撤回回执：只条目 id + 短原因；变更史只有事件流一份，C-7）。
+        "memory_deleted": _envelope("memory_deleted", {"entry_id": "memory/2026-10-01.md:3-7", "reason": "user revoked"}),
     }
 
 
@@ -299,6 +301,8 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     citations_missing_line_range = _envelope(
         "message_completed", {"message_id": "m1", "citations": {"entries": [{"path": "MEMORY.md"}]}}
     )
+    # B9：memory_deleted 不得携被删正文（软删位 + 事件就是全部历吏，C-7/C18）。
+    memory_deleted_with_body = _envelope("memory_deleted", {"entry_id": "MEMORY.md:1-2", "text": "leaked revoked body"})
     return {
         "over_field": over_field,
         "missing_required": missing_required,
@@ -317,6 +321,7 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
         "memory_consumed_missing_entry": memory_consumed_missing_entry,
         "citations_over_field": citations_over_field,
         "citations_missing_line_range": citations_missing_line_range,
+        "memory_deleted_with_body": memory_deleted_with_body,
     }
 
 

@@ -26,6 +26,7 @@ from questor.contracts.events import (
     Cancel,
     Command,
     CompactContext,
+    DeleteMemory,
     Envelope,
     EventType,
     ExpireApproval,
@@ -425,6 +426,20 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
         new = replace(run, seq=run.seq + 1)
         return new, [
             _event(new.seq, new, run.turn, EventType.MEMORY_WRITTEN, {"kind": payload.kind.value, "chunk_count": 1, "source": source_for_write(payload.kind).value})
+        ]
+
+    if isinstance(command, DeleteMemory):
+        # B9 纪律⑥（§20 C-7）：撤回 = 一个 durable seq + `memory_deleted` 事件，**不建历史表**。
+        # 真源 md 不就地删（文件仍是真源）；软删位由消费点经 MemoryStorePort 完成（本层零 IO）。
+        new = replace(run, seq=run.seq + 1)
+        return new, [
+            _event(
+                new.seq,
+                new,
+                run.turn,
+                EventType.MEMORY_DELETED,
+                {"entry_id": command.entry_id, "reason": command.reason},
+            )
         ]
 
     if isinstance(command, CompactContext):

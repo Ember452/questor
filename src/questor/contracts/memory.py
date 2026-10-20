@@ -16,10 +16,11 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from questor.contracts.common import JsonObject, freeze, require_non_empty
+from questor.contracts.common import JsonObject, freeze, require_aware, require_non_empty
 
 
 class MemoryScope(StrEnum):
@@ -52,6 +53,10 @@ class MemoryWriteKind(StrEnum):
     DISTILL = "distill"
 
 
+#: 归因位取值域（B9 纪律⑤；写入必标其一，使“用户说的”与“模型推的”可分别处理）。
+ATTRIBUTION_VALUES: frozenset[str] = frozenset({"user", "assistant"})
+
+
 #: 写 kind → 记忆 source 层（distill 浓缩固化进 daily，design/06 §3）。L0 词汇映射，
 #: 供 ``reduce``（发 memory_written 事件）与 store（落库）共用，避免 kind/source 语义漂移。
 _WRITE_KIND_TO_SOURCE: dict[MemoryWriteKind, MemorySource] = {
@@ -82,6 +87,12 @@ class MemoryChunk:
     hash: str  # 内容哈希，用于 sync 去重 / stale reconcile
     embedding: tuple[float, ...] | None = None  # 缺省 None → 检索降级关键词-only（ADR-0026）
     metadata: JsonObject | None = None
+    #: 软删位（B9 纪律⑥）：撤回不删真源、不建历史表，只在派生索引上抹除（默认 False = 旧行为）。
+    is_deleted: bool = False
+    #: 硬过期时刻（B9 纪律⑦）：与衰减排序分离；None = 永不过期。
+    expires_at: datetime | None = None
+    #: 归因位（B9 纪律⑤）：从真源节头 `attributed=` 恢复，无标记时 None（不猜）。
+    attributed_to: str | None = None
 
     def __post_init__(self) -> None:
         require_non_empty(self.id, "MemoryChunk.id")
@@ -89,6 +100,10 @@ class MemoryChunk:
         require_non_empty(self.hash, "MemoryChunk.hash")
         if self.start_line < 0 or self.end_line < self.start_line:
             raise ValueError("MemoryChunk requires 0 <= start_line <= end_line")
+        if self.attributed_to is not None and self.attributed_to not in ATTRIBUTION_VALUES:
+            raise ValueError(f"MemoryChunk.attributed_to must be one of {sorted(ATTRIBUTION_VALUES)}")
+        if self.expires_at is not None:
+            require_aware(self.expires_at, "MemoryChunk.expires_at")
         if self.metadata is not None:
             object.__setattr__(self, "metadata", freeze(self.metadata))
 
@@ -108,6 +123,9 @@ class MemorySearchResult:
     source: MemorySource
     scope: MemoryScope = MemoryScope.USER
     artifact_ref: str | None = None  # 超阈全文的外置引用（ADR-0019 语义）
+    #: 归因/过期位随命中一起外发（有界枚举，无正文），供消费打点与面板显示。
+    attributed_to: str | None = None
+    expires_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if self.end_line < self.start_line:
@@ -154,10 +172,18 @@ class MemoryWrite:
     covered_to: int | None = None  # 同上，被压原文区终点（context 快照索引）
     covered_hash: str | None = None  # 仅 distill：覆盖区语义哈希锚（读取 fail-closed 校验）
     note: str | None = None  # 有界来源说明（勿塞原始 transcript）
+    #: 归因位（B9 纪律⑤）：用户声明的事实优先于模型推断；未知/未给时按 ``assistant`` 写。
+    attributed_to: str | None = None
+    #: 硬过期时刻（B9 纪律⑦）：与时间衰减**分离**——衰减只排序，过期才退出检索。
+    expires_at: datetime | None = None
     metadata: JsonObject | None = None
 
     def __post_init__(self) -> None:
         require_non_empty(self.text, "MemoryWrite.text")
+        if self.attributed_to is not None and self.attributed_to not in ATTRIBUTION_VALUES:
+            raise ValueError(f"MemoryWrite.attributed_to must be one of {sorted(ATTRIBUTION_VALUES)}")
+        if self.expires_at is not None:
+            require_aware(self.expires_at, "MemoryWrite.expires_at")
         if self.kind is MemoryWriteKind.DISTILL:
             # distill 写必须成对给出可校验的覆盖区锚，否则读回无法 fail-closed（ADR-0024）。
             if self.covered_from is None or self.covered_to is None or not self.covered_hash:
@@ -249,6 +275,14 @@ class MemoryStorePort(Protocol):
 
     async def delete(self, chunk_ids: tuple[str, ...]) -> None:
         """归档/删除索引条目（rotation 等）；真源文件的修剪后置 P10。"""
+        ...
+
+    async def soft_delete(self, entry_id: str, *, idempotency_key: str) -> JsonObject:
+        """按条目级 id（``path:start-end``）置软删位并从检索索引摸掉（B9 纪律⑥）。
+
+        **不删真源 md 文件**、**不建历史表**：撤回史只有 durable `memory_deleted` 事件一份；
+        重复 ``idempotency_key`` 必须幂等。返回有界 receipt（命中条数与 path）。
+        """
         ...
 
     # ---- 离线维护路径（Deep Dream / run-边界 flush；ADR-0025：同一收口、无旁路）----
@@ -491,6 +525,7 @@ __all__ = [
     "RecoveryPointer",
     "MemoryWrite",
     "MemoryStrategyConfig",
+    "ATTRIBUTION_VALUES",
     "VectorBackend",
     "MemoryStorePort",
     "CitationEntry",

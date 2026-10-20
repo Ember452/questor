@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, ClassVar
 
-from questor.contracts.common import JsonObject, freeze, require_aware, utc_now
+from questor.contracts.common import JsonObject, freeze, require_aware, require_non_empty, utc_now
 from questor.contracts.errors import ErrorEntry
 from questor.contracts.memory import MemoryCitation, MemoryWrite, RecoveryPointer
 from questor.contracts.state_schema import CancelReason, Message, TaskNode
@@ -140,6 +140,26 @@ class WriteMemory:
     run_id: str
     payload: MemoryWrite
     type: ClassVar[str] = "write_memory"
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteMemory:
+    """记忆撤回的唯一途径：同样经 Command→reduce→消费点（C4/C16）。
+
+    ``entry_id`` 是条目级指针 ``path:start-end``（与 citation/消费打点同粒度），不是数据库主键；
+    reduce 只产一条 durable ``memory_deleted`` 事件 + **软删位**，**不建历史表**（§20 C-7）：
+    “这条被改过几次”只能从事件流投影。真源 md 文件**不就地删文**（事实流与快照仍是真相）。
+    """
+
+    run_id: str
+    entry_id: str
+    reason: str | None = None
+    type: ClassVar[str] = "delete_memory"
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.entry_id, "DeleteMemory.entry_id")
+        if len(self.entry_id) > 288:
+            raise ValueError("DeleteMemory.entry_id exceeds 288 chars")
 
 
 @dataclass(frozen=True, slots=True)
@@ -319,6 +339,7 @@ Command = (
     | MarkToolRunning
     | Cancel
     | WriteMemory
+    | DeleteMemory
     | CompactContext
     | AppendAssistantMessage
     | AdvanceTurn
@@ -400,6 +421,9 @@ class EventType:
     # entry_id = 条目级 `path:start-end`。命不等于消费：`memory_search` 命中不发本事件，
     # 只有真读了（Read/memory_read）或被 citation 引用才算；不可识别的工具直接不计数（宁缺不猜）。
     MEMORY_CONSUMED = "memory_consumed"
+    # 记忆撤回（B9；§6.4-6 / §20 C-7）：durable，与 `is_deleted` 软删位同步产生。
+    # 只带条目 id 与短原因，无正文；**不开 `memory_history` 表**，回放时从事件流重建撤回史。
+    MEMORY_DELETED = "memory_deleted"
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。
@@ -415,6 +439,7 @@ __all__ = [
     "ResolveApproval",
     "Cancel",
     "WriteMemory",
+    "DeleteMemory",
     "CompactContext",
     "AppendAssistantMessage",
     "AdvanceTurn",

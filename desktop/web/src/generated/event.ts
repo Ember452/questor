@@ -50,7 +50,8 @@ export type QuestorExternalEventProjectionV1 = {
     | "turn_completed"
     | "memory_injected"
     | "cache_break"
-    | "memory_consumed";
+    | "memory_consumed"
+    | "memory_deleted";
   data: {
     [k: string]: unknown;
   };
@@ -640,6 +641,13 @@ export interface MemoryConsumedData {
   entry_id: string;
   tool_name?: string | null;
 }
+/**
+ * Memory revocation receipt (B9; design 6.4 rule 6 / 20.3 C-7): a soft-delete bit plus this durable event is the whole revocation history. No memory_history table exists and no body is carried (C18/C20).
+ */
+export interface MemoryDeletedData {
+  entry_id: string;
+  reason?: string | null;
+}
 
 // Derived from the schema's `type` enum (OPT-10c): consumers must not hand-write the event list.
 export const EVENT_TYPE_NAMES = [
@@ -673,4 +681,5 @@ export const EVENT_TYPE_NAMES = [
   "memory_injected",
   "cache_break",
   "memory_consumed",
+  "memory_deleted",
 ] as const;

@@ -44,7 +44,8 @@
         "turn_completed",
         "memory_injected",
         "cache_break",
-        "memory_consumed"
+        "memory_consumed",
+        "memory_deleted"
       ]
     },
     "data": { "type": "object" }
@@ -79,7 +80,8 @@
     { "if": { "properties": { "type": { "const": "turn_completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/turn_completed" } } } },
     { "if": { "properties": { "type": { "const": "memory_injected" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_injected" } } } },
     { "if": { "properties": { "type": { "const": "cache_break" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/cache_break" } } } },
-    { "if": { "properties": { "type": { "const": "memory_consumed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_consumed" } } } }
+    { "if": { "properties": { "type": { "const": "memory_consumed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_consumed" } } } },
+    { "if": { "properties": { "type": { "const": "memory_deleted" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_deleted" } } } }
   ],
   "$defs": {
     "run_started": {
@@ -412,6 +414,16 @@
         "kind": { "type": "string", "enum": ["memory_md", "index", "raw", "summary", "skills"] },
         "entry_id": { "type": "string", "minLength": 1, "maxLength": 288 },
         "tool_name": { "type": ["string", "null"], "maxLength": 64 }
+      }
+    },
+    "memory_deleted": {
+      "type": "object",
+      "required": ["entry_id"],
+      "additionalProperties": false,
+      "description": "Memory revocation receipt (B9; design 6.4 rule 6 / 20.3 C-7): a soft-delete bit plus this durable event is the whole revocation history. No memory_history table exists and no body is carried (C18/C20).",
+      "properties": {
+        "entry_id": { "type": "string", "minLength": 1, "maxLength": 288 },
+        "reason": { "type": ["string", "null"], "maxLength": 256 }
       }
     }
   }

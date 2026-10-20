@@ -36,6 +36,7 @@ from questor.contracts.events import (
     Cancel,
     Command,
     CompactContext,
+    DeleteMemory,
     Envelope,
     EventType,
     ExpireApproval,
@@ -587,9 +588,16 @@ class DefaultTurnLoop:
                     # 门控③：系统/自动轮次（提交方显式标了 skip_recall）下一轮不召回。
                     self._recall_skip = True
                 if isinstance(command, WriteMemory) and self.memory_store is not None:
-                    ack = next((e for e in events if e.type == EventType.MEMORY_WRITTEN), None)
+                    ack = next((env for env in events if env.type == EventType.MEMORY_WRITTEN), None)
                     if ack is not None:
                         await self.memory_store.write(command.payload, idempotency_key=f"mem:{command.run_id}:{ack.seq}")
+                if isinstance(command, DeleteMemory) and self.memory_store is not None:
+                    # B9 纪律⑥：事件已受理才做软删（与写同纪律：reduce 发事、消费点做 IO）。
+                    ack = next((env for env in events if env.type == EventType.MEMORY_DELETED), None)
+                    if ack is not None:
+                        soft_delete = getattr(self.memory_store, "soft_delete", None)
+                        if callable(soft_delete):  # 旧/简 store 无此能力时跳过（additive 端口方法）
+                            await soft_delete(command.entry_id, idempotency_key=f"memdel:{command.run_id}:{ack.seq}")
                 # P8（ADR-0038/§4.1）：reduce 受理 SpawnSubagent（产出 peer_started = 已绑 node）后，
                 # 才由端口实体化子 run——对齐 WriteMemory 的"reduce 发事件、消费点做 IO"。reduce 若判重/拒
                 # （无 peer_started）则不建子，避免重投/回放留下孤儿子。
