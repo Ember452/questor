@@ -16,7 +16,7 @@ from typing import Any, ClassVar
 
 from questor.contracts.common import JsonObject, freeze, require_aware, utc_now
 from questor.contracts.errors import ErrorEntry
-from questor.contracts.memory import MemoryWrite, RecoveryPointer
+from questor.contracts.memory import MemoryCitation, MemoryWrite, RecoveryPointer
 from questor.contracts.state_schema import CancelReason, Message, TaskNode
 
 #: 关联键——一旦发布永不改名/删除（design/02 §1）。
@@ -33,11 +33,21 @@ EVENT_SCHEMA_VERSION = 1
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class SubmitMessage:
-    """用户发起一轮：受理时即占用 durable seq（02 §10）。"""
+    """用户发起一轮：受理时即占用 durable seq（02 §10）。
+
+    ``flags`` 是**提交方自报的有界标记**（B8 三门控的可跳过一位，如 ``{"skip_recall": true}``
+    ——系统/自动轮次不做召回）；它不改正文、不参与安全判定，未知 key 一律忽略（开放词表，
+    与 §20 C-6 的 source 口径一致）。additive：默认 ``None`` = 与旧行为逐字等价。
+    """
 
     run_id: str
     content: Message
+    flags: JsonObject | None = None
     type: ClassVar[str] = "submit_message"
+
+    def __post_init__(self) -> None:
+        if self.flags is not None:
+            object.__setattr__(self, "flags", freeze(self.flags))
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,11 +199,17 @@ class CompactContext:
 # ---- 内核内部 Command（仍是 Command，仍经 reduce 单写；C2）----
 @dataclass(frozen=True, slots=True)
 class AppendAssistantMessage:
-    """定稿一条 assistant 消息；其 tool_use 块会在账本登记为 pending 调用。"""
+    """定稿一条 assistant 消息；其 tool_use 块会在账本登记为 pending 调用。
+
+    ``citations`` 是 harness 从正文里解析出来的**条目级引用**（B8；§6.3）：它随命令进入、
+    由 reduce 挂到 ``message_completed`` 事件字段，**不回写进 context 正文**（解析即剥）。
+    默认 ``None`` = 旧行为逐字等价。
+    """
 
     run_id: str
     turn: int
     message: Message
+    citations: MemoryCitation | None = None
     type: ClassVar[str] = "append_assistant_message"
 
 
@@ -380,6 +396,10 @@ class EventType:
     # prompt cache 断裂（B7；设计文档 §6.1 cache 三条款之第 3 条）：live-only，只带三段 hash
     # （system 块 / 工具面 / 历史起点）+ 断裂原因位 + 断点数，零明文（C18/C20）。
     CACHE_BREAK = "cache_break"
+    # 记忆被**消费**（B8；设计文档 §6.3 硬规定）：live-only。kind = 层级（memory_md/index/raw/summary/skills），
+    # entry_id = 条目级 `path:start-end`。命不等于消费：`memory_search` 命中不发本事件，
+    # 只有真读了（Read/memory_read）或被 citation 引用才算；不可识别的工具直接不计数（宁缺不猜）。
+    MEMORY_CONSUMED = "memory_consumed"
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。

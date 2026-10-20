@@ -13,6 +13,7 @@ providers/policy/surfaces），故本文件只依赖 :mod:`questor.contracts.com
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
@@ -271,6 +272,144 @@ class MemoryStorePort(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class CitationEntry:
+    """一条**条目级**引用（§6.3）：粒度到 `path:start_line-end_line`，不是文件级。
+
+    为什么必须到行区间：只到文件就分不清“模型真读了哪段”与“只是命中过”，
+    写入噪声率（§10 指标）会假清零（命中 = 消费的错觉）。
+    """
+
+    path: str
+    line_start: int
+    line_end: int
+    note: str | None = None
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.path, "CitationEntry.path")
+        if self.line_start < 0 or self.line_end < self.line_start:
+            raise ValueError("CitationEntry requires 0 <= line_start <= line_end")
+
+    @property
+    def entry_id(self) -> str:
+        """条目级 id（与消费打点/索引共用同一粒度）。"""
+        return f"{self.path}:{self.line_start}-{self.line_end}"
+
+    def to_payload(self) -> JsonObject:
+        body: dict[str, object] = {"path": self.path, "line_start": self.line_start, "line_end": self.line_end}
+        if self.note:
+            body["note"] = self.note
+        return body
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryCitation:
+    """模型自报的“本轮引用了哪些记忆”（§6.3；仿 codex `memory_citation.rs`）。
+
+    它是**事件字段**，不是 provider 输入：解析后从 assistant 正文剥掉，不进下一轮请求体。
+    """
+
+    entries: tuple[CitationEntry, ...] = ()
+    rollout_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "entries", tuple(self.entries))
+        object.__setattr__(self, "rollout_ids", tuple(self.rollout_ids))
+
+    @property
+    def entry_ids(self) -> tuple[str, ...]:
+        return tuple(entry.entry_id for entry in self.entries)
+
+    def to_payload(self) -> JsonObject:
+        return {
+            "entries": [entry.to_payload() for entry in self.entries],
+            "rollout_ids": list(self.rollout_ids),
+        }
+
+
+def citation_from_payload(payload: object, *, max_entries: int = 10) -> MemoryCitation | None:
+    """把解析好的 dict 转成 typed 引用；非法/超上限条目**丢弃不猜**（宁缺不假归因）。
+
+    上限与 `protocol/event.schema.json` 的 `maxItems` 同源，避免一条回答把引用面撞成堆。
+    """
+    if not isinstance(payload, dict):
+        return None
+    raw_entries = payload.get("entries")
+    if not isinstance(raw_entries, list) or not raw_entries:
+        return None
+    entries: list[CitationEntry] = []
+    for item in raw_entries[:max_entries]:
+        if not isinstance(item, dict):
+            continue
+        path = item.get("path")
+        start = item.get("line_start")
+        end = item.get("line_end")
+        if not isinstance(path, str) or not isinstance(start, int) or not isinstance(end, int):
+            continue
+        note = item.get("note")
+        try:
+            entries.append(CitationEntry(path=path, line_start=start, line_end=end, note=note if isinstance(note, str) else None))
+        except ValueError:
+            continue  # 行区间非法：丢掉这一条，不修正、不猜
+    if not entries:
+        return None
+    rollouts = payload.get("rollout_ids")
+    ids = tuple(str(item) for item in rollouts if isinstance(item, (str, int))) if isinstance(rollouts, list) else ()
+    return MemoryCitation(entries=tuple(entries), rollout_ids=ids)
+
+
+@dataclass(frozen=True, slots=True)
+class RecallBlock:
+    """一段可注入的召回正文（档2：**永不进 system**，只作 user-role 前缀消息）。
+
+    ``entry_ids`` 是条目级 id，专给 ``memory_injected`` 做消费可归因用（§6.3）。
+    """
+
+    text: str
+    entry_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.text, "RecallBlock.text")
+        object.__setattr__(self, "entry_ids", tuple(self.entry_ids))
+
+    def event_data(self, *, kind: str = "recall", max_ids: int = 40) -> JsonObject:
+        """``memory_injected`` 载荷：只 kind/条目 id/计量，**无正文**（C18/C20）。"""
+        return {
+            "kind": kind,
+            "entry_ids": list(self.entry_ids[:max_ids]),
+            "lines": len(self.text.splitlines()),
+            "bytes": len(self.text.encode("utf-8")),
+            "truncated": len(self.entry_ids) > max_ids,
+        }
+
+
+@runtime_checkable
+class EmbeddingPort(Protocol):
+    """向量生成接缝（§6.2）：**只产向量，不管存储**（§20 C-3 单库约束）。
+
+    入库仍必须走同一个 :class:`MemoryStorePort` 与同一份 `memory_chunks.embedding` 列；
+    不得起第二 store/第二索引表。CI 无密钥时由 `providers/fake.py` 的确定性 fake 顶。
+    """
+
+    async def embed(self, texts: Sequence[str]) -> tuple[tuple[float, ...], ...]:
+        """一批文本 → 等长向量元组（一次调用处理 N 条，不逐条往返）。"""
+        ...
+
+
+@runtime_checkable
+class RecallPort(Protocol):
+    """记忆召回接缝（B8；§6.2）：内核只持本端口，不 import ``memory/``、不持 store 裸句柄。
+
+    “三通道 + 三门控 + 终选”全部住在实现侧（`memory/recall.py`）；内核只问“本轮该注入什么”，
+    拿回一个**已定界、已弹足计量**的块（或 ``None`` = 不注入）。返回块必须带 ``entry_ids``
+    才能发 ``memory_injected``——**不可归因的召回不得注入**（门控②）。
+    """
+
+    async def recall(
+        self, query: str, *, scope: MemoryScope | None = None, skip: bool = False
+    ) -> RecallBlock | None: ...
+
+
 __all__ = [
     "MemoryScope",
     "MemorySource",
@@ -283,4 +422,10 @@ __all__ = [
     "MemoryStrategyConfig",
     "VectorBackend",
     "MemoryStorePort",
+    "CitationEntry",
+    "MemoryCitation",
+    "citation_from_payload",
+    "EmbeddingPort",
+    "RecallBlock",
+    "RecallPort",
 ]

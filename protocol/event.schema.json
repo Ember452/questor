@@ -43,7 +43,8 @@
         "user_message",
         "turn_completed",
         "memory_injected",
-        "cache_break"
+        "cache_break",
+        "memory_consumed"
       ]
     },
     "data": { "type": "object" }
@@ -77,7 +78,8 @@
     { "if": { "properties": { "type": { "const": "user_message" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/user_message" } } } },
     { "if": { "properties": { "type": { "const": "turn_completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/turn_completed" } } } },
     { "if": { "properties": { "type": { "const": "memory_injected" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_injected" } } } },
-    { "if": { "properties": { "type": { "const": "cache_break" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/cache_break" } } } }
+    { "if": { "properties": { "type": { "const": "cache_break" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/cache_break" } } } },
+    { "if": { "properties": { "type": { "const": "memory_consumed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_consumed" } } } }
   ],
   "$defs": {
     "run_started": {
@@ -123,12 +125,35 @@
       "type": "object",
       "required": ["message_id"],
       "additionalProperties": false,
-      "description": "A finalized message (D-P7-C option (1); ADR-0034). final_text is the bounded committed body so after_seq replay alone recovers text for every surface; oversized bodies set truncated (full text stays authoritative in checkpoint). Not logged (C20).",
+      "description": "A finalized message (D-P7-C option (1); ADR-0034). final_text is the bounded committed body so after_seq replay alone recovers text for every surface; oversized bodies set truncated (full text stays authoritative in checkpoint). citations (B7/B8; design 6.3) are entry-granular memory references parsed off the model body; the raw body is not carried here. Not logged (C20).",
       "properties": {
         "message_id": { "type": "string", "minLength": 1, "maxLength": 128 },
         "item_id": { "type": ["string", "null"], "maxLength": 128 },
         "final_text": { "type": "string", "maxLength": 8192 },
-        "truncated": { "type": "boolean" }
+        "truncated": { "type": "boolean" },
+        "citations": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["entries"],
+          "properties": {
+            "entries": {
+              "type": "array",
+              "maxItems": 10,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "line_start", "line_end"],
+                "properties": {
+                  "path": { "type": "string", "minLength": 1, "maxLength": 256 },
+                  "line_start": { "type": "integer", "minimum": 0 },
+                  "line_end": { "type": "integer", "minimum": 0 },
+                  "note": { "type": "string", "maxLength": 256 }
+                }
+              }
+            },
+            "rollout_ids": { "type": "array", "maxItems": 10, "items": { "type": "string", "maxLength": 128 } }
+          }
+        }
       }
     },
     "tool_started": {
@@ -376,6 +401,17 @@
         "history_hash": { "type": ["string", "null"], "maxLength": 80 },
         "reason": { "type": "string", "enum": ["cold", "system", "tools", "history", "ttl", "budget"] },
         "breakpoints": { "type": "integer", "minimum": 0, "maximum": 4 }
+      }
+    },
+    "memory_consumed": {
+      "type": "object",
+      "required": ["kind", "entry_id"],
+      "additionalProperties": false,
+      "description": "Memory actually consumed by the model (B8; design 6.3): a search hit is NOT consumption - only a real read or a citation counts. kind is the tier, entry_id is entry-granular path:start-end, tool_name is the reader (null when the citation produced it). Unrecognisable tools are simply not counted. No body is carried (C18/C20).",
+      "properties": {
+        "kind": { "type": "string", "enum": ["memory_md", "index", "raw", "summary", "skills"] },
+        "entry_id": { "type": "string", "minLength": 1, "maxLength": 288 },
+        "tool_name": { "type": ["string", "null"], "maxLength": 64 }
       }
     }
   }

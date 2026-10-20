@@ -49,7 +49,8 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.REASONING_DELTA: frozenset({"delta"}),
     # 重连定稿正文（D-P7-C 选型①；ADR-0034）：additive 有界 final_text + item_id（单一真源，不另开 /transcript）。
     # final_text 只进事件协议，绝不进带外投影白名单（projection._DATA_KEYS 不含，C20）。
-    EventType.MESSAGE_COMPLETED: frozenset({"message_id", "item_id", "final_text", "truncated"}),
+    # citations（B8；§6.3）：模型自报的**条目级**引用（path:start-end），只进事件协议、不进日志。
+    EventType.MESSAGE_COMPLETED: frozenset({"message_id", "item_id", "final_text", "truncated", "citations"}),
     EventType.TOOL_STARTED: frozenset({"tool_call_id", "name", "capability", "risk", "args_summary"}),
     EventType.TOOL_PROGRESS: frozenset({"message"}),
     # 工具卡（P7 T7）additive：有界 preview + artifact 指针 + truncated（C18/C20；ADR-0035）。
@@ -90,6 +91,8 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.MEMORY_INJECTED: frozenset({"kind", "entry_ids", "lines", "bytes", "truncated"}),
     # cache_break（B7；§6.1 cache 三条款）：三段 sha256 + 原因 + 断点数；hash 不可逆，零明文（C18/C20）。
     EventType.CACHE_BREAK: frozenset({"system_hash", "tools_hash", "history_hash", "reason", "breakpoints"}),
+    # memory_consumed（B8；§6.3）：层级 kind + 条目级 entry_id + 是哪个工具取的；无正文（C18/C20）。
+    EventType.MEMORY_CONSUMED: frozenset({"kind", "entry_id", "tool_name"}),
 }
 
 

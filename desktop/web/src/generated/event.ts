@@ -49,7 +49,8 @@ export type QuestorExternalEventProjectionV1 = {
     | "user_message"
     | "turn_completed"
     | "memory_injected"
-    | "cache_break";
+    | "cache_break"
+    | "memory_consumed";
   data: {
     [k: string]: unknown;
   };
@@ -77,13 +78,385 @@ export interface ReasoningDeltaData {
   delta: string;
 }
 /**
- * A finalized message (D-P7-C option (1); ADR-0034). final_text is the bounded committed body so after_seq replay alone recovers text for every surface; oversized bodies set truncated (full text stays authoritative in checkpoint). Not logged (C20).
+ * A finalized message (D-P7-C option (1); ADR-0034). final_text is the bounded committed body so after_seq replay alone recovers text for every surface; oversized bodies set truncated (full text stays authoritative in checkpoint). citations (B7/B8; design 6.3) are entry-granular memory references parsed off the model body; the raw body is not carried here. Not logged (C20).
  */
 export interface MessageCompletedData {
   message_id: string;
   item_id?: string | null;
   final_text?: string;
   truncated?: boolean;
+  citations?: {
+    /**
+     * @maxItems 10
+     */
+    entries:
+      | []
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ];
+    /**
+     * @maxItems 10
+     */
+    rollout_ids?:
+      | []
+      | [string]
+      | [string, string]
+      | [string, string, string]
+      | [string, string, string, string]
+      | [string, string, string, string, string]
+      | [string, string, string, string, string, string]
+      | [string, string, string, string, string, string, string]
+      | [string, string, string, string, string, string, string, string]
+      | [string, string, string, string, string, string, string, string, string]
+      | [string, string, string, string, string, string, string, string, string, string];
+  } | null;
 }
 export interface ToolStartedData {
   tool_call_id: string;
@@ -259,6 +632,14 @@ export interface CacheBreakData {
   reason: "cold" | "system" | "tools" | "history" | "ttl" | "budget";
   breakpoints?: number;
 }
+/**
+ * Memory actually consumed by the model (B8; design 6.3): a search hit is NOT consumption - only a real read or a citation counts. kind is the tier, entry_id is entry-granular path:start-end, tool_name is the reader (null when the citation produced it). Unrecognisable tools are simply not counted. No body is carried (C18/C20).
+ */
+export interface MemoryConsumedData {
+  kind: "memory_md" | "index" | "raw" | "summary" | "skills";
+  entry_id: string;
+  tool_name?: string | null;
+}
 
 // Derived from the schema's `type` enum (OPT-10c): consumers must not hand-write the event list.
 export const EVENT_TYPE_NAMES = [
@@ -291,4 +672,5 @@ export const EVENT_TYPE_NAMES = [
   "turn_completed",
   "memory_injected",
   "cache_break",
+  "memory_consumed",
 ] as const;

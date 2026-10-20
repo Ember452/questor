@@ -260,6 +260,8 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         # B7 additive：memory_injected（live-only 审计条目，只条目 id + 计量）与 cache_break（三段 hash + 原因）。
         "memory_injected": _envelope("memory_injected", {"kind": "index", "entry_ids": ["MEMORY.md:1-1"], "lines": 3, "bytes": 240, "truncated": False}),
         "cache_break": _envelope("cache_break", {"system_hash": "sha256:aaa", "tools_hash": None, "history_hash": None, "reason": "cold", "breakpoints": 1}),
+        # B8 additive：memory_consumed（命中不算消费，只有真读/引用才发）与 message_completed.citations。
+        "memory_consumed": _envelope("memory_consumed", {"kind": "raw", "entry_id": "memory/2026-10-01.md:3-7", "tool_name": "read"}),
     }
 
 
@@ -288,6 +290,15 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     memory_injected_bad_kind = _envelope("memory_injected", {"kind": "bogus"})
     cache_break_bad_reason = _envelope("cache_break", {"reason": "magic", "breakpoints": 1})
     cache_break_over_budget = _envelope("cache_break", {"reason": "budget", "breakpoints": 9})
+    # B8：memory_consumed 缺 entry_id 必拒（条目级归因不允许降为文件级）；citations 多余字段必拒。
+    memory_consumed_missing_entry = _envelope("memory_consumed", {"kind": "raw"})
+    citations_over_field = _envelope(
+        "message_completed",
+        {"message_id": "m1", "citations": {"entries": [{"path": "MEMORY.md", "line_start": 1, "line_end": 2, "text": "leaked body"}]}},
+    )
+    citations_missing_line_range = _envelope(
+        "message_completed", {"message_id": "m1", "citations": {"entries": [{"path": "MEMORY.md"}]}}
+    )
     return {
         "over_field": over_field,
         "missing_required": missing_required,
@@ -303,6 +314,9 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
         "memory_injected_bad_kind": memory_injected_bad_kind,
         "cache_break_bad_reason": cache_break_bad_reason,
         "cache_break_over_budget": cache_break_over_budget,
+        "memory_consumed_missing_entry": memory_consumed_missing_entry,
+        "citations_over_field": citations_over_field,
+        "citations_missing_line_range": citations_missing_line_range,
     }
 
 
