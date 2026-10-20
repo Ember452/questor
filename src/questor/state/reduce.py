@@ -31,6 +31,7 @@ from questor.contracts.events import (
     EventType,
     ExpireApproval,
     FinalizeRun,
+    ForkSession,
     MarkToolDenied,
     MarkToolRunning,
     MarkToolValidated,
@@ -40,14 +41,17 @@ from questor.contracts.events import (
     ReportChildTerminal,
     RequestApproval,
     ResolveApproval,
+    RewindRun,
     SetPermissionMode,
     SpawnSubagent,
     SubmitMessage,
+    UpdateMemory,
+    UpdateSession,
     UpdateTaskTree,
     WarnCompaction,
     WriteMemory,
 )
-from questor.contracts.memory import MemoryCitation, source_for_write
+from questor.contracts.memory import MemoryCitation, consumption_kind_for, source_for_write
 from questor.contracts.profile import PERMISSION_MODE_SET
 from questor.contracts.state_schema import (
     OPEN_TOOL_CALL_STATUSES,
@@ -460,6 +464,69 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
                     "threshold": command.threshold,
                     "window_number": command.window_number,
                     "failures": command.failures,
+                },
+            )
+        ]
+
+    if isinstance(command, RewindRun):
+        # B13（可退）：回退在**新 run** 上落一条 durable 事实，并把旧前缀的锚写进权威状态。
+        # 旧 run 的事件流**一行不改**：“回到过去”必须是新增事实，不是篡改历史（C5/C13）。
+        new = replace(run, seq=run.seq + 1, history_base={"run_id": command.base_run_id, "to_seq": command.base_to_seq})
+        return new, [
+            _event(
+                new.seq,
+                new,
+                run.turn,
+                EventType.RUN_REWOUNDED,
+                {"base_run_id": command.base_run_id, "base_to_seq": command.base_to_seq, "reason": command.reason},
+            )
+        ]
+
+    if isinstance(command, ForkSession):
+        # B13：分叉同样不改写源会话流；只在新流上留“从哪里、到哪个位点分出来”的锚。
+        new = replace(run, seq=run.seq + 1)
+        return new, [
+            _event(
+                new.seq,
+                new,
+                run.turn,
+                EventType.SESSION_FORKED,
+                {"source_session_id": command.source_session_id, "from_seq": command.from_seq, "reason": command.reason},
+            )
+        ]
+
+    if isinstance(command, UpdateSession):
+        # B13：会话元数据变更。只对**本次真给了**的 facet 各发一条（不猜、不空发）；连续取号。
+        # 状态本身不存会话行（那是 store 的 `sessions` 表）：本层只产可回放的事实（C13）。
+        seq = run.seq
+        events: list[Envelope] = []
+        if command.title is not None:
+            seq += 1
+            events.append(_event(seq, run, None, EventType.SESSION_RENAMED, {"session_id": command.session_id, "title": command.title}))
+        if command.archived is not None:
+            seq += 1
+            events.append(_event(seq, run, None, EventType.SESSION_ARCHIVED, {"session_id": command.session_id, "archived": command.archived}))
+        if command.pinned is not None:
+            seq += 1
+            events.append(_event(seq, run, None, EventType.SESSION_PINNED, {"session_id": command.session_id, "pinned": command.pinned}))
+        return replace(run, seq=seq), events
+
+    if isinstance(command, UpdateMemory):
+        # B14：改写一条记忆。事件只带条目 id/层级/字节数，**新正文不进事实流**（C18/C20）；
+        # 真源 md 不删，IO 由消费点经 MemoryStorePort 完成（与写/撤回同一纪律）。
+        new = replace(run, seq=run.seq + 1)
+        path = command.entry_id.rsplit(":", 1)[0]
+        return new, [
+            _event(
+                new.seq,
+                new,
+                run.turn,
+                EventType.MEMORY_UPDATED,
+                {
+                    "entry_id": command.entry_id,
+                    "layer": consumption_kind_for(path),
+                    "bytes": len(command.text.encode("utf-8")),
+                    "reason": command.reason,
                 },
             )
         ]

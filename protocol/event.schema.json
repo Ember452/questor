@@ -46,7 +46,13 @@
         "memory_injected",
         "cache_break",
         "memory_consumed",
-        "memory_deleted"
+        "memory_deleted",
+        "memory_updated",
+        "run_rewounded",
+        "session_forked",
+        "session_renamed",
+        "session_archived",
+        "session_pinned"
       ]
     },
     "data": { "type": "object" }
@@ -83,7 +89,13 @@
     { "if": { "properties": { "type": { "const": "memory_injected" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_injected" } } } },
     { "if": { "properties": { "type": { "const": "cache_break" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/cache_break" } } } },
     { "if": { "properties": { "type": { "const": "memory_consumed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_consumed" } } } },
-    { "if": { "properties": { "type": { "const": "memory_deleted" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_deleted" } } } }
+    { "if": { "properties": { "type": { "const": "memory_deleted" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_deleted" } } } },
+    { "if": { "properties": { "type": { "const": "memory_updated" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_updated" } } } },
+    { "if": { "properties": { "type": { "const": "run_rewounded" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/run_rewounded" } } } },
+    { "if": { "properties": { "type": { "const": "session_forked" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session_forked" } } } },
+    { "if": { "properties": { "type": { "const": "session_renamed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session_renamed" } } } },
+    { "if": { "properties": { "type": { "const": "session_archived" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session_archived" } } } },
+    { "if": { "properties": { "type": { "const": "session_pinned" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session_pinned" } } } }
   ],
   "$defs": {
     "run_started": {
@@ -455,6 +467,70 @@
       "properties": {
         "entry_id": { "type": "string", "minLength": 1, "maxLength": 288 },
         "reason": { "type": ["string", "null"], "maxLength": 256 }
+      }
+    },
+    "memory_updated": {
+      "type": "object",
+      "required": ["entry_id", "layer", "bytes"],
+      "additionalProperties": false,
+      "description": "User edited one memory entry (B14; design 6.4): entry-level receipt only. The new body is deliberately NOT carried — the fact stream is not a second copy of memory (C18/C20), and rewrites take effect through the derived index, not through this frame. `layer` uses the same closed vocabulary as memory_consumed so consumption attribution and edits stay comparable.",
+      "properties": {
+        "entry_id": { "type": "string", "minLength": 1, "maxLength": 288 },
+        "layer": { "type": "string", "enum": ["memory_md", "index", "raw", "summary", "skills"] },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "reason": { "type": ["string", "null"], "maxLength": 256 }
+      }
+    },
+    "run_rewounded": {
+      "type": "object",
+      "required": ["base_run_id", "base_to_seq"],
+      "additionalProperties": false,
+      "description": "A new run rewound to a point inside an older run (B13; design 8). Durable and append-only: the older run's frames are never rewritten or removed, and the anchor `{base_run_id, base_to_seq}` is exactly what the new run's `history_base` carries. Replaying this stream therefore reproduces the rewind as a fact instead of pretending history shrank.",
+      "properties": {
+        "base_run_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "base_to_seq": { "type": "integer", "minimum": 0 },
+        "reason": { "type": ["string", "null"], "maxLength": 256 }
+      }
+    },
+    "session_forked": {
+      "type": "object",
+      "required": ["source_session_id", "from_seq"],
+      "additionalProperties": false,
+      "description": "A session forked off an existing one at a point (B13). Lands on the NEW session's scoped stream `sess:<id>`; the source stream is untouched and no second session table appears.",
+      "properties": {
+        "source_session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "from_seq": { "type": "integer", "minimum": 0 },
+        "reason": { "type": ["string", "null"], "maxLength": 256 }
+      }
+    },
+    "session_renamed": {
+      "type": "object",
+      "required": ["session_id", "title"],
+      "additionalProperties": false,
+      "description": "Session renamed (B13). title is bounded user metadata, not body text; the sessions row's existing `title` column stays the write target — this frame exists so a session list can be rebuilt from events instead of only from the table (C13).",
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 }
+      }
+    },
+    "session_archived": {
+      "type": "object",
+      "required": ["session_id", "archived"],
+      "additionalProperties": false,
+      "description": "Session archived / un-archived (B13): a boolean facet on the existing sessions row, no new column and no new table.",
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "archived": { "type": "boolean" }
+      }
+    },
+    "session_pinned": {
+      "type": "object",
+      "required": ["session_id", "pinned"],
+      "additionalProperties": false,
+      "description": "Session pinned / unpinned (B13): a boolean facet on the existing sessions row.",
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "pinned": { "type": "boolean" }
       }
     }
   }

@@ -269,6 +269,13 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         "memory_consumed": _envelope("memory_consumed", {"kind": "raw", "entry_id": "memory/2026-10-01.md:3-7", "tool_name": "read"}),
         # B9 additive：memory_deleted（撤回回执：只条目 id + 短原因；变更史只有事件流一份，C-7）。
         "memory_deleted": _envelope("memory_deleted", {"entry_id": "memory/2026-10-01.md:3-7", "reason": "user revoked"}),
+        # B13/B14 additive：会话形状与记忆改写。全部 durable、零正文（正文绝不进这些帧）。
+        "memory_updated": _envelope("memory_updated", {"entry_id": "memory/2026-10-01.md:3-7", "layer": "raw", "bytes": 42, "reason": "typo"}),
+        "run_rewounded": _envelope("run_rewounded", {"base_run_id": "run_old", "base_to_seq": 5, "reason": None}),
+        "session_forked": _envelope("session_forked", {"source_session_id": "sess_old", "from_seq": 12, "reason": None}),
+        "session_renamed": _envelope("session_renamed", {"session_id": "sess_old", "title": "launch review"}),
+        "session_archived": _envelope("session_archived", {"session_id": "sess_old", "archived": True}),
+        "session_pinned": _envelope("session_pinned", {"session_id": "sess_old", "pinned": False}),
     }
 
 
@@ -292,6 +299,13 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     compact_over_field = _envelope("compact_applied", {"baseline_seq": 7, "covered_from": 1, "covered_to": 3, "summary_bytes": 42, "summary_text": "leaked body"})
     # B10 compact_warning：reason 是闭集（pressure/breaker_tripped），不接受自由文本（不泄正文）。
     compact_warning_bad_reason = _envelope("compact_warning", {"reason": "nearly out of context", "trigger": "auto"})
+    # B13/B14：记忆改写不得带新正文；锚位不得为负；标题不得为空；布尔位不接受字符串。
+    memory_updated_over_field = _envelope("memory_updated", {"entry_id": "m:1-2", "layer": "raw", "bytes": 3, "text": "leaked body"})
+    memory_updated_bad_layer = _envelope("memory_updated", {"entry_id": "m:1-2", "layer": "magic", "bytes": 3})
+    rewind_negative_seq = _envelope("run_rewounded", {"base_run_id": "run_old", "base_to_seq": -1})
+    fork_missing_from_seq = _envelope("session_forked", {"source_session_id": "sess_old"})
+    rename_blank_title = _envelope("session_renamed", {"session_id": "s", "title": ""})
+    archived_string_bool = _envelope("session_archived", {"session_id": "s", "archived": "yes"})
     # B6：turn_completed 不得携正文/额外字段（additionalProperties:false）。
     turn_completed_over_field = _envelope("turn_completed", {"usage": {}, "interrupted": False, "text": "leak"})
     # B7：memory_injected 不得携索引正文；cache_break 的 reason 必在枚举内、断点数不超 4 个预算。
@@ -321,6 +335,12 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
         "policy_over_field": policy_over_field,
         "compact_over_field": compact_over_field,
         "compact_warning_bad_reason": compact_warning_bad_reason,
+        "memory_updated_over_field": memory_updated_over_field,
+        "memory_updated_bad_layer": memory_updated_bad_layer,
+        "rewind_negative_seq": rewind_negative_seq,
+        "fork_missing_from_seq": fork_missing_from_seq,
+        "rename_blank_title": rename_blank_title,
+        "archived_string_bool": archived_string_bool,
         "turn_completed_over_field": turn_completed_over_field,
         "memory_injected_over_field": memory_injected_over_field,
         "memory_injected_bad_kind": memory_injected_bad_kind,

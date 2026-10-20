@@ -52,7 +52,13 @@ export type QuestorExternalEventProjectionV1 = {
     | "memory_injected"
     | "cache_break"
     | "memory_consumed"
-    | "memory_deleted";
+    | "memory_deleted"
+    | "memory_updated"
+    | "run_rewounded"
+    | "session_forked"
+    | "session_renamed"
+    | "session_archived"
+    | "session_pinned";
   data: {
     [k: string]: unknown;
   };
@@ -673,6 +679,52 @@ export interface MemoryDeletedData {
   entry_id: string;
   reason?: string | null;
 }
+/**
+ * User edited one memory entry (B14; design 6.4): entry-level receipt only. The new body is deliberately NOT carried — the fact stream is not a second copy of memory (C18/C20), and rewrites take effect through the derived index, not through this frame. `layer` uses the same closed vocabulary as memory_consumed so consumption attribution and edits stay comparable.
+ */
+export interface MemoryUpdatedData {
+  entry_id: string;
+  layer: "memory_md" | "index" | "raw" | "summary" | "skills";
+  bytes: number;
+  reason?: string | null;
+}
+/**
+ * A new run rewound to a point inside an older run (B13; design 8). Durable and append-only: the older run's frames are never rewritten or removed, and the anchor `{base_run_id, base_to_seq}` is exactly what the new run's `history_base` carries. Replaying this stream therefore reproduces the rewind as a fact instead of pretending history shrank.
+ */
+export interface RunRewoundedData {
+  base_run_id: string;
+  base_to_seq: number;
+  reason?: string | null;
+}
+/**
+ * A session forked off an existing one at a point (B13). Lands on the NEW session's scoped stream `sess:<id>`; the source stream is untouched and no second session table appears.
+ */
+export interface SessionForkedData {
+  source_session_id: string;
+  from_seq: number;
+  reason?: string | null;
+}
+/**
+ * Session renamed (B13). title is bounded user metadata, not body text; the sessions row's existing `title` column stays the write target — this frame exists so a session list can be rebuilt from events instead of only from the table (C13).
+ */
+export interface SessionRenamedData {
+  session_id: string;
+  title: string;
+}
+/**
+ * Session archived / un-archived (B13): a boolean facet on the existing sessions row, no new column and no new table.
+ */
+export interface SessionArchivedData {
+  session_id: string;
+  archived: boolean;
+}
+/**
+ * Session pinned / unpinned (B13): a boolean facet on the existing sessions row.
+ */
+export interface SessionPinnedData {
+  session_id: string;
+  pinned: boolean;
+}
 
 // Derived from the schema's `type` enum (OPT-10c): consumers must not hand-write the event list.
 export const EVENT_TYPE_NAMES = [
@@ -708,4 +760,10 @@ export const EVENT_TYPE_NAMES = [
   "cache_break",
   "memory_consumed",
   "memory_deleted",
+  "memory_updated",
+  "run_rewounded",
+  "session_forked",
+  "session_renamed",
+  "session_archived",
+  "session_pinned",
 ] as const;

@@ -397,6 +397,8 @@ def to_snapshot(run: Run) -> dict[str, Any]:
         "errors": [_error_to(e) for e in run.error_stack],
         # P9/ADR-0045 additive：无策略引用时写 None（旧消费者忽略即可，不 bump SNAPSHOT_VERSION）。
         "policy_ref": ({"id": run.policy_ref.id, "fingerprint": run.policy_ref.fingerprint} if run.policy_ref else None),
+        # B13 additive：回退/分叉指针；无则 None（旧消费者忽略即可，不 bump SNAPSHOT_VERSION）。
+        "history_base": thaw(run.history_base) if run.history_base else None,
     }
 
 
@@ -447,6 +449,8 @@ def from_snapshot(d: dict[str, Any]) -> Run:
         cancel_reason=CancelReason(d["cancel_reason"]) if d.get("cancel_reason") else None,
         # P9 additive：旧快照无 policy_ref 键→读回 None（不猜测、不破坏 v1/v2/v3 兼容）。
         policy_ref=PolicyRef(**d["policy_ref"]) if d.get("policy_ref") else None,
+        # B13 additive：旧快照无此键 → None（不猜一个基座）。
+        history_base=d.get("history_base"),
         created_at=datetime.fromisoformat(d["created_at"]),
         completed_at=_parse_dt(d.get("completed_at")),
     )

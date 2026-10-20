@@ -33,8 +33,10 @@ from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.kernel.seed import SeedRef, SeedRejected, build_seed_context, coerce_seed_refs
+from questor.kernel.session_ops import apply_fork, make_rewind, prefix_seed_refs, session_stream_id
 from questor.observability.projection import log_envelope
 from questor.state.domain_state import Run
+from questor.state.transition import apply
 from questor.surfaces.approval import http_status_for_receipt
 from questor.surfaces.cli import CliSurface
 from questor.surfaces.run_registry import RunRegistry
@@ -169,6 +171,7 @@ class EventServer:
         run_id: str | None = None,
         session_id: str | None = None,
         seed_refs: object | None = None,
+        prelude: object | None = None,
     ) -> str:
         """后台启动一次 run（用户文本经 SubmitMessage Command 进入 inbox）。
 
@@ -180,6 +183,12 @@ class EventServer:
         sid, seed_requested = await self._prepare_session(run_id, session_id)
         # P9/ADR-0045：创建 run 时按 run 解析策略、冻结 policy_ref（reduce 会在 run_started 带出）。
         run = Run(run_id=run_id, budget=Budget(), policy_ref=self.surface._resolve_for_run(run_id)[1])
+        if prelude is not None:
+            # B13：预置命令经同一个咽喉取号并交总线持久化（surface 不自建事件、不直调 reduce 之外的写）。
+            applied = apply(self.store, run, prelude, source="http", idempotency_key=f"prelude:{run_id}:{getattr(prelude, 'type', 'cmd')}")  # type: ignore[arg-type]
+            run, pre_events = applied
+            for env in pre_events:
+                await self.bus.emit(env)
         seed_message = await self._seed_message(run, sid, seed_requested, seed_refs)
         # 单写者栅栏（C2/ADR-0047）：start_run 也取租约，防另一进程对同 run_id 的 resume 抢驱。
         # holder 每驱动任务唯一（非 pid），使同进程对同一 run 的二次驱动也会被拒（非静默覆盖）。
@@ -198,6 +207,53 @@ class EventServer:
         task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）
         self.registry.set_task(run_id, task)
         return run_id
+
+    async def rewind(
+        self,
+        base_run_id: str,
+        *,
+        base_to_seq: int,
+        text: str = "",
+        session_id: str | None = None,
+        reason: str | None = None,
+    ) -> str:
+        """B13（可退）：开一个**新 run** 回到旧 run 的某个位点；旧事件流一行不改。
+
+        旧前缀经 B4 已有的 seed 接缝带入（`prefix_seed_refs` 把 per-run seq 换算成全局 gseq）。
+        回退本身走 `start_run(prelude=...)`：先 start 再投 inbox 会跟驱动赛跑，快 run 先终态
+        就把回退拒成一条 warning，所以必须同一个创建点取号。
+        """
+        sid = session_id or await self.store.run_session(base_run_id) or f"sess:{base_run_id}"
+        refs = await prefix_seed_refs(self.store, base_run_id=base_run_id, base_to_seq=base_to_seq, session_id=str(sid))
+        new_run_id = new_id("run")
+        return await self.start_run(
+            text or "(rewound)",
+            run_id=new_run_id,
+            session_id=str(sid),
+            seed_refs=refs,
+            prelude=make_rewind(new_run_id=new_run_id, base_run_id=base_run_id, base_to_seq=base_to_seq, reason=reason),
+        )
+
+    async def session_head(self, session_id: str) -> int:
+        """会话作用域流的当前头（分叉缺省位点）；只读，不取号。"""
+        return int(await self.store.sequence_head(session_stream_id(session_id)))
+
+    async def fork_session(self, source_session_id: str, *, from_seq: int, reason: str | None = None) -> str:
+        """B13：分叉一支新会话；`session_forked` 只落在新流 `sess:<new>` 上，源流不改写。
+
+        会话行仍只有 `sessions` 一张表（复用 `create_session`）；历史前缀由后续 run 的 seed_refs
+        自己带，不在这里另开第二条历史通道。
+        """
+        new_session_id = await self.store.create_session(model=self.surface.model, workspace_root=str(self.surface.workspace_root))
+        await apply_fork(
+            self.store,
+            self.bus,
+            new_session_id=str(new_session_id),
+            source_session_id=source_session_id,
+            from_seq=from_seq,
+            reason=reason,
+        )
+        return str(new_session_id)
 
     async def _prepare_session(self, run_id: str, session_id: str | None) -> tuple[str, bool]:
         """确保会话行 + 绑定 run；返回 (session_id, 是否请求 seed)。"""
@@ -375,6 +431,38 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
     async def resume_run(run_id: str) -> dict:
         """从持久态续跑被 kill/重启的 run（P3）；提交驱动，不直 reduce。"""
         return {"run_id": await server.resume(run_id)}
+
+    # ---- B13（可退）：回退与分叉。两者都只追加事实，绝不改写旧流 ----
+    @app.post("/runs/{run_id}/rewind", dependencies=[Depends(require_token)])
+    async def rewind_run(run_id: str, payload: dict) -> dict:
+        """开新 run 回到 `run_id` 的 `to_seq` 位点；返回新 run id（旧流一行不动）。"""
+        try:
+            to_seq = int(payload.get("to_seq", 0))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="to_seq must be an integer >= 0") from None
+        if to_seq < 0:
+            raise HTTPException(status_code=400, detail="to_seq must be >= 0")
+        new_run_id = await server.rewind(
+            run_id,
+            base_to_seq=to_seq,
+            text=str(payload.get("text", "")),
+            session_id=payload.get("session_id"),
+            reason=payload.get("reason"),
+        )
+        return {"run_id": new_run_id, "base_run_id": run_id, "base_to_seq": to_seq}
+
+    @app.post("/sessions/{session_id}/fork", dependencies=[Depends(require_token)])
+    async def fork_session(session_id: str, payload: dict) -> dict:
+        """从现有会话分叉一支新会话（B13）；`from_seq` 缺省取会话当前头。"""
+        raw_from = payload.get("from_seq")
+        try:
+            from_seq = int(raw_from) if raw_from is not None else int(await server.session_head(session_id))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="from_seq must be an integer >= 0") from None
+        if from_seq < 0:
+            raise HTTPException(status_code=400, detail="from_seq must be >= 0")
+        new_session_id = await server.fork_session(session_id, from_seq=from_seq, reason=payload.get("reason"))
+        return {"session_id": new_session_id, "source_session_id": session_id, "from_seq": from_seq}
 
     @app.get("/sessions/{session_id}/submissions", dependencies=[Depends(require_token)])
     async def session_submissions(session_id: str, after_version: int = 0) -> dict:

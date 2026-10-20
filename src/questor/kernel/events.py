@@ -113,6 +113,15 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.MEMORY_CONSUMED: frozenset({"kind", "entry_id", "tool_name"}),
     # memory_deleted（B9；§6.4-6）： durable 撤回回执。只条目 id + 短原因；**不建 memory_history 表**（C-7）。
     EventType.MEMORY_DELETED: frozenset({"entry_id", "reason"}),
+    # B13 会话形状（均 durable）：回退/分叉只带锚点与短原因；元数据变更只带标题/布尔位。
+    # 会话列表因此可从 `sess:<id>` 流重建，而不是只能读表（C13）。
+    EventType.RUN_REWOUNDED: frozenset({"base_run_id", "base_to_seq", "reason"}),
+    EventType.SESSION_FORKED: frozenset({"source_session_id", "from_seq", "reason"}),
+    EventType.SESSION_RENAMED: frozenset({"session_id", "title"}),
+    EventType.SESSION_ARCHIVED: frozenset({"session_id", "archived"}),
+    EventType.SESSION_PINNED: frozenset({"session_id", "pinned"}),
+    # memory_updated（B14；§6.4）：条目 id + 层级 + 字节数；**新正文不进事件**（C18/C20）。
+    EventType.MEMORY_UPDATED: frozenset({"entry_id", "layer", "bytes", "reason"}),
 }
 
 

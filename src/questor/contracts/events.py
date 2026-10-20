@@ -163,6 +163,105 @@ class DeleteMemory:
 
 
 @dataclass(frozen=True, slots=True)
+class RewindRun:
+    """B13（可退）：回到旧 run 的某个时点重新往下。
+
+    **旧事件流一行不改写**：本命令在**新 run** 上落一条 durable `run_rewounded`，并把
+    `history_base={run_id, to_seq}` 记在新 run 的权威状态上（旧前缀由 seed 机制注入）——
+    “回到过去”在事实流里必须是一个**新事实**，而不是对历史的篡改（C5/C13）。
+    """
+
+    run_id: str
+    base_run_id: str
+    base_to_seq: int
+    reason: str | None = None
+    type: ClassVar[str] = "rewind_run"
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.base_run_id, "RewindRun.base_run_id")
+        if self.base_to_seq < 0:
+            raise ValueError("RewindRun.base_to_seq must be >= 0")
+        if self.base_run_id == self.run_id:
+            raise ValueError("RewindRun cannot rewind a run onto itself")
+        if self.reason is not None and len(self.reason) > 200:
+            raise ValueError("RewindRun.reason exceeds 200 chars")
+
+
+@dataclass(frozen=True, slots=True)
+class ForkSession:
+    """B13：从现有会话的某个位点开一支新会话（分叉不是搬家）。
+
+    与 rewind 同一取向：源会话的事件流不改写，只在新流上落 `session_forked`；
+    新会话行由 surface 创建并复用 B4 的 seed 接缝带历史前缀。**不开第二张会话表**。
+    """
+
+    run_id: str
+    source_session_id: str
+    from_seq: int
+    reason: str | None = None
+    type: ClassVar[str] = "fork_session"
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.source_session_id, "ForkSession.source_session_id")
+        if self.from_seq < 0:
+            raise ValueError("ForkSession.from_seq must be >= 0")
+        if self.reason is not None and len(self.reason) > 200:
+            raise ValueError("ForkSession.reason exceeds 200 chars")
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateSession:
+    """B13（可看可改）：改名 / 归档 / 置顶。一次命令只对本次**真变了**的 facet 各发一条事件。
+
+    只存会话行上已有的列（title/archived/pinned）——**不新建表也不新建列**；事件落在会话作用域流
+    `sess:<id>` 上，使“会话列表”可以从事件重建，而不是只能读行（C13）。
+    """
+
+    run_id: str
+    session_id: str
+    title: str | None = None
+    archived: bool | None = None
+    pinned: bool | None = None
+    type: ClassVar[str] = "update_session"
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.session_id, "UpdateSession.session_id")
+        if len(self.session_id) > 128:
+            raise ValueError("UpdateSession.session_id exceeds 128 chars")
+        if self.title is None and self.archived is None and self.pinned is None:
+            raise ValueError("UpdateSession requires at least one facet to change")
+        if self.title is not None and not self.title.strip():
+            raise ValueError("UpdateSession.title must be non-blank when given")
+        if self.title is not None and len(self.title) > 200:
+            raise ValueError("UpdateSession.title exceeds 200 chars")
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateMemory:
+    """B14：用户改掉一条记忆。**真源 md 不删**，只写新正文 + 重写派生索引。
+
+    与 `DeleteMemory` 同粒度（条目级 `path:start-end`），事件只带条目 id / 层级 / 字节数，
+    **不带新正文**（C18/C20）；改后下次召回不含旧值，靠的是派生索引重写而非事件携带。
+    """
+
+    run_id: str
+    entry_id: str
+    text: str
+    reason: str | None = None
+    type: ClassVar[str] = "update_memory"
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.entry_id, "UpdateMemory.entry_id")
+        if len(self.entry_id) > 288:
+            raise ValueError("UpdateMemory.entry_id exceeds 288 chars")
+        require_non_empty(self.text, "UpdateMemory.text")
+        if len(self.text.encode("utf-8")) > 16 * 1024:
+            raise ValueError("UpdateMemory.text exceeds the 16 KiB write budget")
+        if self.reason is not None and len(self.reason) > 200:
+            raise ValueError("UpdateMemory.reason exceeds 200 chars")
+
+
+@dataclass(frozen=True, slots=True)
 class RecordWarning:
     """内核需在 ``reduce`` 之外落一条 durable 告警时的唯一入口（保 seq 单调，C2）。
 
@@ -387,6 +486,10 @@ Command = (
     | Cancel
     | WriteMemory
     | DeleteMemory
+    | RewindRun
+    | ForkSession
+    | UpdateSession
+    | UpdateMemory
     | WarnCompaction
     | CompactContext
     | AppendAssistantMessage
@@ -475,6 +578,16 @@ class EventType:
     # 记忆撤回（B9；§6.4-6 / §20 C-7）：durable，与 `is_deleted` 软删位同步产生。
     # 只带条目 id 与短原因，无正文；**不开 `memory_history` 表**，回放时从事件流重建撤回史。
     MEMORY_DELETED = "memory_deleted"
+    # B13（可退）：两个 **durable** 会话形状——回退与分叉都是事实，不是就地改写。
+    # 只带锚点（base run/seq、source session/seq）与短原因，零正文（C18/C20）。
+    RUN_REWOUNDED = "run_rewounded"
+    SESSION_FORKED = "session_forked"
+    # B13：会话元数据变更（改名/归档/置顶）落在会话作用域流 `sess:<id>` 上。
+    SESSION_RENAMED = "session_renamed"
+    SESSION_ARCHIVED = "session_archived"
+    SESSION_PINNED = "session_pinned"
+    # B14：用户改掉一条记忆（与 `memory_deleted` 同作：新 durable 事件 + 派生索引重写，真源保留）。
+    MEMORY_UPDATED = "memory_updated"
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。
@@ -491,6 +604,10 @@ __all__ = [
     "Cancel",
     "WriteMemory",
     "DeleteMemory",
+    "RewindRun",
+    "ForkSession",
+    "UpdateSession",
+    "UpdateMemory",
     "WarnCompaction",
     "COMPACT_TRIGGERS",
     "COMPACT_WARNING_REASONS",
