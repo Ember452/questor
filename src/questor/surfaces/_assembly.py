@@ -13,12 +13,12 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
 from questor.capabilities.skills.catalog import build_skill_catalog
+from questor.config.model import load_config
 from questor.contracts.policy import CompactionConfig
 from questor.observability.configure import configure_logging, logging_status
 from questor.observability.entry import LogLevel
@@ -28,21 +28,20 @@ _LOG = logging.getLogger("questor.assembly")
 
 
 def console_level_from_env() -> LogLevel:
-    """console 级别取自 ``QUESTOR_LOG_LEVEL``（默认 INFO）。"""
-    return getattr(LogLevel, os.environ.get("QUESTOR_LOG_LEVEL", "INFO").upper(), LogLevel.INFO)
+    """console 级别取自 ``QUESTOR_LOG_LEVEL``（默认 INFO；未知名字回落 INFO）。
+
+    读在 ``config``（OPT-3 c2），解析在本文件：``LogLevel`` 属 observability，config 不得 import 它。"""
+    return getattr(LogLevel, load_config().logging.console_level.upper(), LogLevel.INFO)
 
 
 def log_dir_from_env() -> str:
     """日志目录取自 ``QUESTOR_LOG_DIR``（默认 ``<cwd>/.questor/logs``）。"""
-    return os.environ.get("QUESTOR_LOG_DIR", str(Path.cwd() / ".questor" / "logs"))
+    return load_config().logging.log_dir
 
 
 def keep_days_from_env() -> int:
     """保留天数取自 ``QUESTOR_LOG_KEEP_DAYS``（默认 14）；解析失败回落默认，绝不在装配期崩。"""
-    try:
-        return int(os.environ.get("QUESTOR_LOG_KEEP_DAYS", "14"))
-    except ValueError:
-        return 14
+    return load_config().logging.keep_days
 
 
 #: preview 截断上限（有界，防超大 preview 把 llm 通道撑爆；承 C18/DESIGN §12）。
@@ -111,7 +110,7 @@ def compaction_from_env() -> CompactionConfig | None:
     - ``items:N`` → 自定义条数阈值（max_items=N，N>24 才合理但尊重调用方）。
     触发用 ``max_items``（context 体量）而非 ``trigger_tokens``（累计花费）——修正我先前标注的“用错信号”隐患。
     """
-    raw = os.environ.get("QUESTOR_COMPACTION", "off").strip().lower()
+    raw = load_config().logging.compaction.strip().lower()
     if raw in {"", "off"}:
         return None
     if raw == "on":
@@ -133,7 +132,7 @@ def payload_preview_from_env() -> int | None:
 
     为什么宁可不启动也不静默忽略：用户设了非法值却以为日志里有载荷，排障时才发现没有——
     比拒绝启动更坏（保持与旧 `reject_unimplemented_payload` 同口径的 fail-closed）。"""
-    raw = os.environ.get("QUESTOR_LOG_PAYLOAD", "off").strip().lower()
+    raw = load_config().logging.payload_preview.strip().lower()
     if raw in {"", "off"}:
         return None
     prefix = "truncate:"

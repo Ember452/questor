@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -37,6 +36,7 @@ from questor.composition import (
     sidecar_generation_from_env,
     web_dist_from_env,
 )
+from questor.config.model import load_config
 from questor.memory.distill import DistillOutcome, deep_dream
 from questor.surfaces._assembly import assemble_logging, log_dir_from_env, reconfigure_output_streams
 from questor.surfaces.cli import interactive
@@ -118,13 +118,15 @@ async def _amain(argv: list[str]) -> int:
         print(_USAGE, file=sys.stderr)
         return 2
     assemble_logging()
+    # env 读取收口在 config（OPT-3 c2）：本入口只取子块；解析/校验仍在各自使用点。
+    cfg = load_config()
     # 唯一装配口径（#161/#154）：所有 store/memory/exec 三件套/surface 均在 composition.build_app 构造，
     # 与 surfaces.cli.main() 共用同一路径——两个生产入口不再漂移。
     app = await build_app()
     _LOG.info("cli entry dispatched", extra={"log_fields": {"entry": argv[0] if argv else "repl"}})
     try:
         if argv and argv[0] == "--dream":
-            lookback = int(os.environ.get("QUESTOR_DREAM_LOOKBACK", "7"))
+            lookback = cfg.dream_lookback
             result = await deep_dream(app.memory, _HeuristicDistiller(), lookback_days=lookback)
             print(
                 f"deep_dream: wrote={result.get('wrote')} reason={result.get('reason', '-')} "
@@ -145,15 +147,12 @@ async def _amain(argv: list[str]) -> int:
             return 0
         if argv and argv[0] == "--serve-openai":
             # 鉴权外部 OpenAI lane（ADR-0043）：fail-closed——无 API key 直接拒起，绝不开无鉴权对外端点。
-            keys = [k.strip() for k in os.environ.get("QUESTOR_OPENAI_API_KEYS", "").split(",") if k.strip()]
+            keys = list(cfg.openai.api_keys)
             if not keys:
                 print("--serve-openai refuses to start without QUESTOR_OPENAI_API_KEYS (fail-closed)", file=sys.stderr)
                 return 2
-            host = os.environ.get("QUESTOR_OPENAI_HOST", "127.0.0.1")  # 默认 loopback；跨机暴露属算子显式配置（C12）。
-            try:
-                port = int(os.environ.get("QUESTOR_OPENAI_PORT", "8000"))
-            except ValueError:
-                port = 8000
+            host = cfg.openai.host  # 默认 loopback；跨机暴露属算子显式配置（C12）。
+            port = cfg.openai.port
             import uvicorn  # 延迟 import：仅服务入口需要。
 
             server = EventServer(surface, app.store)

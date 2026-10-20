@@ -27,6 +27,7 @@ from questor.capabilities.tools.powershell import PowerShellTool
 from questor.capabilities.tools.read import ReadTool
 from questor.capabilities.tools.registry import ToolRegistry
 from questor.capabilities.tools.write import WriteTool
+from questor.config.model import load_config
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
 from questor.contracts.memory import MemoryStorePort
@@ -86,11 +87,15 @@ def _final_answer_text(run: Run) -> str:
 
 
 def provider_from_env() -> ProviderPort:
-    """根据环境变量选 provider：有 model+key 走 LiteLLM，否则离线 Echo。"""
-    model = os.environ.get("QUESTOR_MODEL")
-    if model and os.environ.get("LITELLM_API_KEY"):
+    """根据环境变量选 provider：有 model+key 走 LiteLLM，否则离线 Echo。
+
+    env 读取与判定口径收口在 ``config``（OPT-3 c2）：``model`` 保留原样（未设 = None）、
+    密钥只判存在；无 model 或无 key 一律 Echo（与历史逐字等价）。
+    """
+    cfg = load_config()
+    if cfg.llm.model and cfg.llm.has_litellm_key:
         # P10/ADR-0049：preview 预算由组合根解析注入（None=零原文默认）；非空才落独立 llm 通道。
-        return LiteLLMProvider(model, payload_preview=payload_preview_from_env())
+        return LiteLLMProvider(cfg.llm.model, payload_preview=payload_preview_from_env())
     return EchoProvider()
 
 
