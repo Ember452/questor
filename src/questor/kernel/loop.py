@@ -87,6 +87,7 @@ from questor.kernel.settle import TurnBoundary
 from questor.kernel.shell_parse_posix import parse_posix_shell
 from questor.kernel.shell_parse_powershell import parse_powershell
 from questor.kernel.tool_arguments import extract_shell_commands
+from questor.memory.cache_plan import CachePlan, CacheSegments, break_reason, cache_ttl_for, plan_cache
 from questor.observability.redact import strip_prompt_echo
 from questor.observability.scope import bind
 from questor.state.checkpoint import open_tool_use_ids
@@ -328,6 +329,7 @@ class DefaultTurnLoop:
         settle: Callable[[TurnBoundary], Awaitable[None]] | None = None,
         stop: ObserveChain | None = None,
         memory_injection: JsonObject | None = None,
+        query_source: str = "main",
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -357,6 +359,11 @@ class DefaultTurnLoop:
         # 只在首次真正发出请求时落一条 live-only `memory_injected`（“请求里确实带了它”才可归因）。
         self.memory_injection = memory_injection
         self._memory_injection_announced = False
+        # B7（§6.1 cache 三条款）：TTL 按 query source 门控——side-query（终选器/摘要器）
+        # 不开 cache，也就不得把用户前缀的断裂事件规到自己头上（避免面板/日志被内部调用污染）。
+        self.query_source = query_source
+        self._cache_ttl = cache_ttl_for(query_source)
+        self._cache_plan: CachePlan | None = None
         # P9/ADR-0046：能力名册探针（未注入则不发 tools_changed）。loop 每安全点比对、变化即发 live-only。
         self.capability_probe = capability_probe
         self._capability_gen = capability_probe() if capability_probe is not None else 0
@@ -729,6 +736,7 @@ class DefaultTurnLoop:
             messages = (summary_msg, *messages)
         await self._announce_memory_injection(run, turn)
         request = ProviderRequest(model=self.model, messages=messages, tools=self._specs(), system=self.system)
+        await self._track_cache_break(run, turn, request)
         text_parts: list[str] = []
         usage: JsonObject = {}
         calls: dict[int, dict] = {}
@@ -1110,6 +1118,25 @@ class DefaultTurnLoop:
             return
         self._memory_injection_announced = True
         await self._live(run, turn, EventType.MEMORY_INJECTED, dict(self.memory_injection))
+
+    async def _track_cache_break(self, run: Run, turn: int, request: ProviderRequest) -> None:
+        """§6.1 条款 3：三段 hash（system 块 / 工具面 / 历史起点）一变就发 live-only ``cache_break``。
+
+        首轮只建基线（不算断裂）；不开 cache 的来源（side-query）不参与断裂观测。
+        载荷只含不可逆 hash 与断点数（条款 1 的预算口径），零正文（C18/C20）。
+        """
+        if self._cache_ttl is None:
+            return
+        segments = CacheSegments(
+            system=request.system,
+            tools=tuple(spec.name for spec in request.tools),
+            history_start=request.messages[0].seq if request.messages else None,
+        )
+        plan = plan_cache(segments)
+        reason = break_reason(self._cache_plan, plan)
+        self._cache_plan = plan
+        if reason is not None:
+            await self._live(run, turn, EventType.CACHE_BREAK, plan.event_data(reason=reason))
 
     async def _maybe_announce_capability(self, run: Run, turn: int) -> None:
         """安全点比对能力名册 generation：变化则发一条 live-only ``tools_changed``（ADR-0046）。
