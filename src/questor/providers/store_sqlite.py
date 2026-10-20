@@ -25,6 +25,7 @@ import time
 import aiosqlite
 
 from questor.contracts.common import JsonObject, new_id, thaw, utc_now
+from questor.contracts.events import EventType
 from questor.contracts.ports import StorePort
 from questor.contracts.submissions import (
     MAX_QUEUE_ITEMS,
@@ -204,6 +205,13 @@ def delivery_retry_not_before(error_class: str | None, attempts: int, now: float
     if error_class in {"flood", "rate_limit", "reconnect", "timeout"}:
         return now + base * (2 ** min(max(0, attempts), 6))
     return now + base
+
+
+def _bounded_window_id(run_id: str, number: int) -> str:
+    """窗口 id = ``<run_id>:w<n>``，截到协议 `maxLength`（80）内（B10/§7.1）。
+
+    截断不致冲突：后缀 `:w<n>` 总在尾部（代际信息保留），而 run_id 本身已是全局唯一前缀。"""
+    return f"{run_id}:w{number}"[:80]
 
 
 class SQLiteStore(StorePort):
@@ -1327,6 +1335,35 @@ class SQLiteStore(StorePort):
             except BaseException:
                 await db.execute("ROLLBACK")
                 raise
+
+    async def window_identity(self, run_id: str) -> JsonObject:
+        """本 run 的**压缩窗口身份**（B10/§7.1）：它回答“下一次折叠会开哪一个窗口”。
+
+        零新表——代际从两个已有出处取较大值：
+        ① `command_window` 里已受理的 `compact_context` 行数（W1 接接口约束：窗口身份必须读命令窗口）；
+        ② 事实流里 durable `compact_applied` 的个数（命令窗口会被折叠/裁剪，而事件不会）。
+        取最大值是为了：裁剪过窗口行也不会把“已压三次”的 run 报成第一代（窗口 id 回退=重复身份，
+        比不精确更难查）。id 形状固定 ``<run_id>:w<n>``，超长发 ``maxLength`` 前截断。
+        """
+        async with self._lock:
+            db = self._dbp()
+            cur = await db.execute(
+                "SELECT COUNT(*) FROM command_window WHERE run_id = ? AND type = ? AND accepted = 1",
+                (run_id, "compact_context"),
+            )
+            in_window = int((await cur.fetchone())[0])
+            cur = await db.execute(
+                "SELECT COUNT(*) FROM event_log WHERE run_id = ? AND type = ?",
+                (run_id, EventType.COMPACT_APPLIED),
+            )
+            applied = int((await cur.fetchone())[0])
+        current = max(in_window, applied)  # 已发生的折叠数 = 当前窗口的代
+        number = current + 1
+        return {
+            "window_number": number,
+            "window_id": _bounded_window_id(run_id, number),
+            "previous_window_id": _bounded_window_id(run_id, current),
+        }
 
     async def command_window_rows(
         self, *, run_id: str | None = None, session_id: str | None = None, limit: int | None = None
