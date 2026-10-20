@@ -212,6 +212,12 @@ class EventServer:
             )
         )
 
+    async def list_submissions(self, session_id: str, after_version: int = 0) -> dict:
+        """多端观察同一队列：返回 ``change_version > after_version`` 的行 + 当前 head。"""
+        items = await self.store.submissions_since(session_id, after_version)
+        head = max((item["change_version"] for item in items), default=after_version)
+        return {"session_id": session_id, "items": items, "head": head}
+
     async def resume(self, run_id: str) -> str:
         """从持久态续跑一个被 kill/重启的 run（P3，ADR-0021）。
 
@@ -320,6 +326,11 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
     async def resume_run(run_id: str) -> dict:
         """从持久态续跑被 kill/重启的 run（P3）；提交驱动，不直 reduce。"""
         return {"run_id": await server.resume(run_id)}
+
+    @app.get("/sessions/{session_id}/submissions", dependencies=[Depends(require_token)])
+    async def session_submissions(session_id: str, after_version: int = 0) -> dict:
+        """同一会话的待处理队列（多端一致）；只读投影，不触 reduce。"""
+        return await server.list_submissions(session_id, after_version)
 
     @app.get("/events/{run_id}", dependencies=[Depends(require_token)])
     async def events(request: Request, run_id: str, after_seq: int = 0) -> EventSourceResponse:

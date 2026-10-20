@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import httpx
 import pytest
 
 from questor.contracts.events import Cancel, ResolveApproval, SubmitMessage
@@ -17,6 +18,8 @@ from questor.contracts.submissions import (
 from questor.kernel.run_control import RunController
 from questor.providers.store_sqlite import SQLiteStore
 from questor.state.domain_state import Run
+from questor.surfaces.cli import CliSurface
+from questor.surfaces.http_sse import EventServer, create_app
 
 
 def _user(text: str) -> Message:
@@ -177,5 +180,26 @@ async def test_wait_for_releases_unmatched_and_returns_match() -> None:
         # 不匹配的 Cancel 已 release 回 pending，仍可被下一次 next_batch 取到。
         batch = await controller.next_batch()
         assert len(batch) == 1 and isinstance(batch[0], Cancel)
+    finally:
+        await store.close()
+
+
+async def test_http_session_submissions_after_version(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "queue.db")).connect()
+    try:
+        server = EventServer(CliSurface(workspace_root=tmp_path, store=store), store)
+        app = create_app(server)
+        first = await _enqueue(store, "s1", "k1", "a")
+        second = await _enqueue(store, "s1", "k2", "b")
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://svc", trust_env=False) as client:
+            response = await client.get("/sessions/s1/submissions", params={"after_version": 0})
+            assert response.status_code == 200
+            body = response.json()
+            assert [item["change_version"] for item in body["items"]] == [first["change_version"], second["change_version"]]
+            assert body["head"] == second["change_version"]
+
+            tail = await client.get("/sessions/s1/submissions", params={"after_version": first["change_version"]})
+            assert [item["change_version"] for item in tail.json()["items"]] == [second["change_version"]]
     finally:
         await store.close()
