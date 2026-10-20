@@ -176,6 +176,7 @@ class EventServer:
         B4：给 ``session_id`` 时确保会话行 + 绑定 run + 注入 SeedContext；不给时新建 session 行。
         """
         run_id = run_id or new_id("run")
+        await self.surface.refresh_memory_index()  # B7：逐 run 从真源重建档1 索引段（写入后下一轮可见）
         sid, seed_requested = await self._prepare_session(run_id, session_id)
         # P9/ADR-0045：创建 run 时按 run 解析策略、冻结 policy_ref（reduce 会在 run_started 带出）。
         run = Run(run_id=run_id, budget=Budget(), policy_ref=self.surface._resolve_for_run(run_id)[1])
@@ -271,6 +272,7 @@ class EventServer:
         if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
             raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
         sid = (await self.store.run_session(run_id)) or f"sess:{run_id}"
+        await self.surface.refresh_memory_index()  # B7：resume 也重建索引，不把 stale 段带进新 turn
         controller = RunController(run, queue=self.store, session_id=sid)
         self.registry.register(controller)
         task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder, session_id=sid))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约

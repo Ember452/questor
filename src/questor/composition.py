@@ -161,6 +161,8 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
             artifact_store=artifact_store,
             sandbox=sandbox,
             context_assembler=spec.context_assembler,
+            # B7 `[behavior]`：生产入口默认开档1 记忆索引注入（直接构造 CliSurface 仍默认关）。
+            memory_index_enabled=True,
         )
     else:
         surface = spec.surface

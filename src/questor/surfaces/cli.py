@@ -41,6 +41,7 @@ from questor.kernel.run_control import RunController
 from questor.kernel.seed import SeedRef, build_seed_context, coerce_seed_refs
 from questor.kernel.settle import TurnSettler
 from questor.memory.distill import flush_run_to_daily
+from questor.memory.index import MemoryIndexBlock, admitted, build_index_block
 from questor.observability.projection import log_envelope
 from questor.policy.null_policy import NullPolicy
 from questor.policy.react_policy import ReActPolicy
@@ -50,6 +51,7 @@ from questor.surfaces._assembly import (
     DEFAULT_CONTEXT_ASSEMBLER,
     assemble_logging,
     compaction_from_env,
+    inject_memory_block,
     payload_preview_from_env,
     reconfigure_output_streams,
 )
@@ -169,6 +171,7 @@ class CliSurface:
         artifact_store: object | None = None,
         sandbox: object | None = None,
         context_assembler: ContextAssemblerPort | None = None,
+        memory_index_enabled: bool = False,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
@@ -197,6 +200,29 @@ class CliSurface:
         # system 原样（None 仍 None）——不影既有 run。描述已在 catalog 内过 `bound_description` 有界。
         assembler = context_assembler if context_assembler is not None else DEFAULT_CONTEXT_ASSEMBLER
         self.system = assembler.assemble(system, skills_dir)
+        # B7（§6.1 档1）：记忆索引段。**默认关**，由生产组合根翻 on（D3）；开时每次 run 开始前
+        # 从真源 `MEMORY.md` 重建有界索引，作为定界静态子段接到 system 末尾（正文不进召回位）。
+        # `self.system` 本身**不动**：它仍是 skills 装配结果，既有逐字节 golden 契约零改动。
+        self.memory_index_enabled = memory_index_enabled
+        self.memory_index: MemoryIndexBlock | None = None
+
+    async def refresh_memory_index(self) -> None:
+        """从记忆真源重建档1 索引段（未开启/无 store/读失败 → `None` = 本轮不注入）。
+
+        只在异步入口（run_once / resume / HTTP start_run）调用：IO 经注入的 MemoryStorePort，
+        surface 不碰文件、不碰库实现（C4）。"""
+        if not self.memory_index_enabled or self.memory_store is None:
+            self.memory_index = None
+            return
+        try:
+            core = await self.memory_store.read_memory_text("MEMORY.md")
+        except Exception:  # noqa: BLE001 - 索引不可用是合法降级（不注入），不得拖垮装配
+            _log.warning("memory index refresh failed; running without the index section", exc_info=True)
+            self.memory_index = None
+            return
+        block = build_index_block(core)
+        # 四道约束缺一即整体降级为“不进 system”（§6.1）：宁可不注入也不破 prompt cache 纪律。
+        self.memory_index = block if admitted(block) else None
 
     def _resolve_for_run(self, run_id: str) -> tuple[PolicyPort, PolicyRef]:
         """按 run 解析策略（fail-open 回落默认）→ (PolicyPort, 冻结 PolicyRef)。"""
@@ -228,6 +254,9 @@ class CliSurface:
         settler = TurnSettler(bus, self.store, self.memory_store, session_id or f"sess:{run_id}")
         registry = self.build_extension_registry(settler)
         stop: ObserveChain = registry.resolve_observe(InterceptionPoint.STOP.value)
+        # B7：索引段作为定界静态子段接到本 run 的 system 末尾（一次性、跨 turn 不变 → 可入 cache 前缀）。
+        block = self.memory_index
+        system = inject_memory_block(self.system, (lambda: block.text) if block is not None else None)
         return DefaultTurnLoop(
             provider=self.provider,
             policy=policy,
@@ -240,7 +269,7 @@ class CliSurface:
             memory_store=self.memory_store,
             workspace_root=self.workspace_root,
             model=self.model,
-            system=self.system,
+            system=system,
             cancel_event=cancel,
             subagent_spawner=subagent_spawner,
             capability_probe=self.capability_probe,
@@ -249,6 +278,7 @@ class CliSurface:
             artifact_store=self.artifact_store,
             sandbox=self.sandbox,
             stop=stop,
+            memory_injection=block.event_data() if block is not None else None,
         )
 
     async def _discover_mcp(self, run_id: str) -> tuple[list[Tool], Teardown]:
@@ -290,6 +320,7 @@ class CliSurface:
         # 带外投影改挂 bus 级唯一只读订阅（ADR-0033）：不再逐消费者调 log_envelope，
         # 与 run 内 printer/approver 两个订阅队列并存也不会双投。
         bus.add_observer(log_envelope)
+        await self.refresh_memory_index()  # B7：真源为文件，逐 run 重建索引（写入后下一轮可见）
         cancel = asyncio.Event()
         run_id = new_id("run")
         _policy, ref = self._resolve_for_run(run_id)
@@ -403,6 +434,7 @@ class CliSurface:
             return None
         bus = InProcessEventBus(self.store)
         bus.add_observer(log_envelope)  # bus 级唯一投影订阅（ADR-0033）
+        await self.refresh_memory_index()  # B7：resume 同样重建索引（不拿 stale 段进新 turn）
         cancel = asyncio.Event()
         tool_surface = self.registry.freeze_for_run(run.run_id)
         sid = await self.store.run_session(run_id) if callable(getattr(self.store, "run_session", None)) else None

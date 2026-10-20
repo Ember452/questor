@@ -327,6 +327,7 @@ class DefaultTurnLoop:
         compaction: CompactionConfig | None = None,
         settle: Callable[[TurnBoundary], Awaitable[None]] | None = None,
         stop: ObserveChain | None = None,
+        memory_injection: JsonObject | None = None,
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -352,6 +353,10 @@ class DefaultTurnLoop:
         # ``settle=`` 是 R3 兼容薄糖（既有测试直接传 callable），内部包成单条 Stop 链，
         # **不存在第二套回调字段**。
         self._stop = stop if stop is not None else _settle_chain_from_callback(settle)
+        # B7（§6.1 第④约束）：已装进 system 定界子段的索引段计量。loop **不读正文**，
+        # 只在首次真正发出请求时落一条 live-only `memory_injected`（“请求里确实带了它”才可归因）。
+        self.memory_injection = memory_injection
+        self._memory_injection_announced = False
         # P9/ADR-0046：能力名册探针（未注入则不发 tools_changed）。loop 每安全点比对、变化即发 live-only。
         self.capability_probe = capability_probe
         self._capability_gen = capability_probe() if capability_probe is not None else 0
@@ -722,6 +727,7 @@ class DefaultTurnLoop:
                 seq=0,
             )
             messages = (summary_msg, *messages)
+        await self._announce_memory_injection(run, turn)
         request = ProviderRequest(model=self.model, messages=messages, tools=self._specs(), system=self.system)
         text_parts: list[str] = []
         usage: JsonObject = {}
@@ -1093,6 +1099,17 @@ class DefaultTurnLoop:
     async def _live(self, run: Run, turn: int, etype: str, data: dict) -> None:
         # live-only delta：只转发给订阅者，永不持久化（design/01 I3）。
         await self.bus.emit(Envelope(v=1, seq=run.seq, run_id=run.run_id, type=etype, turn=turn, data=data))
+
+    async def _announce_memory_injection(self, run: Run, turn: int) -> None:
+        """首次发出请求前落一条 live-only ``memory_injected``（每 run 一次）。
+
+        “已注入”的口径是“**本轮请求里带了它**”（§6.3 消费可归因的下笔），不是“surface 里有数据”；
+        载荷已由装配方裁剪（无正文），本方法不读记忆内容也不做业务判断（C1）。
+        """
+        if self.memory_injection is None or self._memory_injection_announced:
+            return
+        self._memory_injection_announced = True
+        await self._live(run, turn, EventType.MEMORY_INJECTED, dict(self.memory_injection))
 
     async def _maybe_announce_capability(self, run: Run, turn: int) -> None:
         """安全点比对能力名册 generation：变化则发一条 live-only ``tools_changed``（ADR-0046）。
