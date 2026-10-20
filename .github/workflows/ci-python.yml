@@ -11,9 +11,13 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # 夜间全量兜底：PR 按路径分 lane 后，用每日全量跑防“从未命中的 lane 长期未验证”。
+  schedule:
+    - cron: "23 3 * * *"
 
 permissions:
   contents: read
+  pull-requests: read
 
 # 同一分支上新提交自动取消仍在跑的旧 run。不加这段时，连续 push 的 run 都会各自
 # 跑到结束（卡死时即 6 小时默认上限），旧 run 堆积且白烧免费额度。
@@ -32,13 +36,17 @@ env:
   LITELLM_LOCAL_MODEL_COST_MAP: "True"
 
 jobs:
+  # 路径分类器（可复用，fail-open）：只决定重 lane 跑不跑；boundaries 永不受它约束。
+  changes:
+    uses: ./.github/workflows/_changes.yml
+
   # Independent, always-blocking (C15): does NOT depend on any change classifier,
   # so a language-only PR can never skip the layering/contract guards.
   #
   # checkout@v7 / setup-uv@v7: v7 是上游 node20→node24 那次切换（托管 runner 直接可用），
   # 消掉“actions 仍标 node20 却被强跑 node24”的弃用告警（supersedes Dependabot PR #16/#17）。
   boundaries:
-    # 钉住镜像（DeepCode 同样做法）：ubuntu-latest 将于 2026-10-19 静默迁移到 Ubuntu 26，
+    # 钉住镜像：ubuntu-latest 将于 2026-10-19 静默迁移到 Ubuntu 26，
     # 不能让 CI 环境在我们未主动升级时被改掉（本次故障就是“本地绿、runner 卡死”的环境差异型）。
     runs-on: ubuntu-24.04
     # 兜底：任何一步卡住都在 10 分钟内判红，而不是挂到 6 小时默认超时。
@@ -47,7 +55,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
-          # 按依赖清单缓存 ~/.cache/uv（hermes 做法）：uv sync 仍旧每次都跑，但从热缓存
+          # 按依赖清单缓存 ~/.cache/uv：uv sync 仍旧每次都跑，但从热缓存
           # 解析/构建，不重复下载与重建 wheel。v7 把 enable-cache 默认从 true 改成了 auto，
           # 这里显式写死 true 以保持与 v4 行为一致。
           enable-cache: true
@@ -158,7 +166,8 @@ jobs:
   # job 级 `if` 表达式里 **matrix 上下文不可用**（引用会使整个 workflow 文件注册失败，
   # 一条 run 都不会创建）。拆成两个 job 后，条件只用 `github.*`，受支持且 check 名固定。
   tests-posix:
-    needs: boundaries
+    needs: [boundaries, changes]
+    if: github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.python == 'true' || needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-24.04
     # 兜底：曾经因 aiosqlite 非守护线程泄漏使 pytest step 永不结束，这里限时自停。
     timeout-minutes: 15
@@ -172,7 +181,7 @@ jobs:
             uv.lock
       - run: uv sync --locked --all-groups
       # -v + 禁用 cache provider：卡死时日志能直接看出停在哪个测试（-q 下什么都不刷）。
-      # --timeout 由 pyproject 的 addopts 提供（单测卡死限时）；junitxml 供事后定位（DeepCode 做法）。
+      # --timeout 由 pyproject 的 addopts 提供（单测卡死限时）；junitxml 供事后定位。
       # P2 起产 coverage baseline：只观测、不设 fail-under，避免把基线阶段变成虚假门槛。
       # 单行写法：同一个 run step 要在 ubuntu(bash) 与 windows(powershell) 都能跑，不用行连接符。
       - name: pytest with coverage baseline
@@ -198,8 +207,8 @@ jobs:
   # 这行 if 同时是防御：若将来有人把 push 触发扩回全分支，Windows leg 也不会被白白烧掉。
   # 两个 job 的 steps 故意保持一致，改一个要同步改另一个。
   tests-windows:
-    needs: boundaries
-    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    needs: [boundaries, changes]
+    if: (github.event_name != 'push' || github.ref == 'refs/heads/main') && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.python == 'true' || needs.changes.outputs.workflows == 'true')
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
@@ -233,8 +242,8 @@ jobs:
   # 未标 required 前不阻断 merge。承 pitfalls 确定性纪律：真 LLM 端到端不在此列（UNVERIFIED）。
   # 阈值钉定：eval 失败即回归信号；稳定后再议是否升为阻塞 required check。
   evals:
-    needs: boundaries
-    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    needs: [boundaries, changes]
+    if: (github.event_name != 'push' || github.ref == 'refs/heads/main') && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.python == 'true' || needs.changes.outputs.workflows == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     continue-on-error: true

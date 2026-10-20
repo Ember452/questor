@@ -1,0 +1,69 @@
+name: changes
+
+# 可复用变更分类器（workflow_call）。
+#
+# 为什么用 job 级分类器而不是 on.pull_request.paths：
+#   1) workflow 级 paths 过滤会让整个 workflow 在 docs-only PR 上“不注册”，若该
+#      workflow 是 required check，PR 会卡在 "Expected — waiting"；且改 workflow
+#      自身时也可能不被验证。
+#   2) job 级 if 让 workflow 始终注册，调用方可用 `needs.changes.result != 'success'`
+#      实现 fail-open：分类器自身失败时跑全量，绝不静默跳过护栏。
+#
+# 分类器只决定“哪些 lane 值得跑”；`boundaries` 永远不受它约束（HARD C15）。
+on:
+  workflow_call:
+    outputs:
+      python:
+        description: "Python 内核/测试/契约/依赖或 workflow 自身发生变更"
+        value: ${{ jobs.changes.outputs.python }}
+      desktop:
+        description: "桌面/前端/Rust/契约或 workflow 自身发生变更"
+        value: ${{ jobs.changes.outputs.desktop }}
+      workflows:
+        description: "CI workflow 自身发生变更（强制全 lane 自验）"
+        value: ${{ jobs.changes.outputs.workflows }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    # 只在 PR 上跑：pull_request 走 GitHub files API（无需历史），结果可靠。
+    # push / schedule / workflow_dispatch 由调用方显式全量（见各 workflow 的 if），
+    # 既避开 push 需要完整 git 历史的坑，也让 main 合并后与夜间得到全量验证。
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      desktop: ${{ steps.filter.outputs.desktop }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v7
+      # v4.0.3，按 SHA 钉住（上游 tag 可移动；供应链卫生）。
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            python:
+              - 'src/**'
+              - 'tests/**'
+              - 'scripts/**'
+              - 'protocol/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.python-version'
+              - '.importlinter'
+              - 'ruff.toml'
+              - 'setup.py'
+            desktop:
+              - 'desktop/**'
+              - 'protocol/**'
+              - 'src/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'rust-toolchain.toml'
+              - '.node-version'
+            workflows:
+              - '.github/workflows/**'

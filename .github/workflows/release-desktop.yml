@@ -1,6 +1,6 @@
 name: release-desktop
 
-# 发布/打包 CI（参考 DeepCode release-desktop + tauri-apps/tauri-action）：
+# 发布/打包 CI（tauri-apps/tauri-action）：
 # 三段式的 step③ 自动化——冻结 sidecar → stage 进 bundle.resources → tauri build 出安装包 → 传 GitHub Release。
 # 精简起步：仅 Windows（questor 桌面主平台，WebView2/MSVC 就绪），不签名、draft release。
 # 诚实边界：runner 上真实 tauri build（含 WiX 下载）属 UNVERIFIED，需打 tag 或 workflow_dispatch 才触发验证；

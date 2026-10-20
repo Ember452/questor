@@ -1,6 +1,6 @@
 name: pr-lint
 
-# PR 标题规范（参考 crewAI pr-title）：项目已强制 Conventional Commits，这里在 CI 侧兜住。
+# PR 标题规范：项目已强制 Conventional Commits，这里在 CI 侧兜住。
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
