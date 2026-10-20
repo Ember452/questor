@@ -110,6 +110,13 @@ jobs:
         run: |
           uv run python scripts/check_replay_determinism.py --self-test
           uv run python scripts/check_replay_determinism.py
+      # v3 §4.1 / B0：状态迁移只能经 state/transition.py 的 apply()（幂等 → reduce → 事件），
+      # 且 event_log.append 的载荷只能来自 durable_form()。--self-test 在 loop.py 直调 reduce
+      # 与 inline 拼载荷时都必须判红；fail-on-empty 防扫描面静默缩小。
+      - name: Reduce chokepoint guard (single apply()/durable_form(); self-test proves red)
+        run: |
+          uv run python scripts/check_reduce_chokepoint.py --self-test
+          uv run python scripts/check_reduce_chokepoint.py
       # ADR-0038 (C2/C16): cross-run state change goes only via Command→inbox→reduce. Foreign
       # `.run =` rebinds (a second writer / bypass) are banned outside loop.py's own-controller
       # single-writer rebind and RunController construction. --self-test proves it can go red; fail-on-empty.

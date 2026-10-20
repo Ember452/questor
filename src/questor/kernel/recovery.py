@@ -17,8 +17,8 @@ from questor.contracts.ports import StorePort
 from questor.contracts.state_schema import ApprovalStatus, Message
 from questor.kernel.compaction import covered_hash
 from questor.state.domain_state import Run
-from questor.state.reduce import reduce
 from questor.state.snapshot import from_snapshot
+from questor.state.transition import apply
 
 
 class NoIntactCheckpointError(RuntimeError):
@@ -32,11 +32,20 @@ class AnchorIntegrityError(RuntimeError):
 
 
 def _expire_due_approvals(run: Run, *, now: datetime) -> Run:
-    """把恢复出来仍 pending 但已过期的审批，经 reduce 走 ExpireApproval 闭合（不静默丢弃）。"""
+    """把恢复出来仍 pending 但已过期的审批，经 reduce 走 ExpireApproval 闭合（不静默丢弃）。
+
+    迁移经唯一咽喉 ``state.transition.apply()``（幂等判定 → reduce）；恢复路径不持租约，
+    因此 store 传 ``None``——apply 不做 IO，租约只影响 append 栅栏，不影响重建。"""
     due = [a for a in run.permission_ctx.approvals if a.status is ApprovalStatus.PENDING and a.expires_at <= now]
     for approval in due:
         # ExpireApproval 只翻转仍 open 的 tool_call；重复调用幂等。
-        run, _events = reduce(run, ExpireApproval(run_id=run.run_id, request_id=approval.request_id))
+        run, _events = apply(
+            None,
+            run,
+            ExpireApproval(run_id=run.run_id, request_id=approval.request_id),
+            source="recovery",
+            idempotency_key=f"recovery:expire:{approval.request_id}",
+        )
     return run
 
 

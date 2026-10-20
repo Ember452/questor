@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — B0.5 + B0：状态迁移咽喉（`apply()` + `durable_form()` + `append` epoch 栅栏 + 守卫）
+- **B0.5（test-only）**：`scripts/check_replay_determinism.py` 的 `_canonical` 从“手工白名单”改为**反射全字段**——新增 `schema` 投影，递归 `Run` 及内嵌 dataclass（`Context`/`Budget`/`TaskLedger`/`PermissionCtx`/`ApprovalRequest`/`TaskNode`/`Checkpoint`/`ErrorEntry`/`PolicyRef`…），**139 个字段路径**逐条断言必须出现在比对集；缺失即以字段路径判红（如 `Run.context.flags`）。`--self-test` 新增“删字段→红 / 恢复→绿”判据。既有手工键与 7 个 fixture 全部保持不变。
+- **B0（重构 + 栅栏）**：
+  - 新增 `src/questor/state/transition.py`：`apply(store, run, command, *, source, idempotency_key, now)` = **幂等判定 → reduce → 返回 `(Run, 事件元组)`**。幂等作用域是 run 血统（`run_id`+`created_at`，跨 reduce/快照稳定）：同 key 同 digest 且状态已含该次应用 → no-op；同 key 异 digest 且状态未推进 → `IdempotencyConflictError`。**不做 IO**（store 仅注入；耐久 command window 属 B6/B7）。
+  - `kernel/loop.py` 16 处 + `kernel/recovery.py` 1 处 `reduce(` **全部改走 `apply`**，kernel 直调数 **17 → 0**；`check_reduce_chokepoint` 机守（AST）。
+  - 新增 `src/questor/state/persist_form.py`：`LIVE_ONLY`/`TERMINAL` 与 `durable_form(env, budget)` 收敛为一处判定；`kernel/events.py` 只调用（`LIVE_ONLY`/`TERMINAL` 仍从 kernel re-export，旧调用方无感）。`EventType` 取值域**未新增/未改名**（属 P4）。
+  - `providers/store_sqlite.py`：`append(run_id, events, *, holder=None, epoch=None)` 在 `BEGIN IMMEDIATE` 事务内比对 `run_leases`，不匹配抛 **`StaleWriterError`**；写者身份由同一 store 实例的 `acquire_lease`/`renew_lease` 记录（`writer_identity`），bus 落库时携带。无租约行（内存测试/只读回放）保持既有行为——**不是校验开关**，而是“没人持租约时无竞争”。
+  - 新增 `scripts/check_reduce_chokepoint.py`（复用 `_guard_kit`）：① `reduce(` 只许出现在 `state/transition.py`（调用）与 `state/reduce.py`（定义），连 `import ... as _r` 的别名绕法一并判红；② `event_log.append` 的载荷只许来自 `durable_form()`；`--self-test` 用 loop 直调 / inline 拼载荷两个反例判红，fail-on-empty 防扫描面缩小。
+  - **计数联动（同一 PR）**：CI `boundaries` blocking 门步 **17 → 18**；`check_doc_cross_refs` 的 EXPECTED：`gate_scripts` 15→16、`ci_gate_steps` 17→18、`reduce_calls` 17→0、`src_py` 121→123、`test_files` 182→183、`test_unit` 107→108；设计文档 §2-1/§21（及 §19 保留段）与 PLAN SCAN-1/SCAN-2 同步。
+  - `.gitignore` 增 `!scripts/_guard_kit.py`：共用 kit 不再靠 `git add -f` 入库。
+- **判据**：17 处调用点消失（`loop.py`/`recovery.py` 的 `reduce(` = 0）；同 idem_key 二次应用不重产事件、异 digest 被拒；陈旧 epoch → `StaleWriterError`、正确 holder+epoch 通过；`check_replay_determinism --self-test` / `check_reduce_chokepoint --self-test` / `check_layering_ast --self-test` / `check_cross_run_no_bypass` / `check_projection_whitelist` / `check_doc_cross_refs` 全绿；`ruff check .` 与 `lint-imports`（5 kept）全绿；全量 pytest **920 passed / 6 skipped**（= 既有 913 全绿 + 新增 7；既有断言零改动）。
+- **ADR 判定**：纯重构 + 护栏，**不新增 ADR**。理由：没有外部行为/线协议/存表结构变化（`event_log` DDL 未动，`run_leases` 仅被读取校验），`EventType`/`Command` 未变；栅栏是 ADR-0047 已授权机制的**执行点下推**，B0 之前它只是 surfaces 层约定。
+- **UNVERIFIED/边界**：进程内幂等窗口（耐久 `command_window` 属 B6/B7）；跨进程“租约被夺后旧驱动者”只在写点被拒（已被本守卫/测试覆盖），未做真双进程长跑压测；`durable_form(budget)` 的有界形态已实现但**默认不启用**（无人传 budget = 逐字节等价）；`StorePort` 协议签名未加 `holder/epoch`（B0 范围锁），栅栏目前只在 `SQLiteStore` 落地，协议同步留给后续刀。
+
 ### Added — 守卫基础设施：共用 kit + 文档一致性守卫（advisory；v3 §21 G2 / §15.6 / §20.3）
 - **`scripts/_guard_kit.py`（新）**：§21 G2 要求的「共 walker 引擎」落地——`walk_py`（`Path.rglob` + 剪枝 `__pycache__/.venv/.ruff_cache/build`、排序）/ `read_text`+`count_lines`（UTF-8-sig + `splitlines()`，与 §15.6 口径声明同一口径）/ `run_self_test`（统一 `[PASS]/[FAIL]` + `self-test: PASS|FAIL`）/ `fail_on_empty`（空集合退 **2**，不是通过）/ `EXIT_OK|EXIT_RED|EXIT_CONFIG`。顶层 docstring 写死「新守卫必须复用本 kit，否则不得入 CI」。
 - **`scripts/check_doc_cross_refs.py`（新，advisory）**：只读设计文档，四项检查——**A** 9 条 EXPECTED（取舍 19 / 刀 17 / 点位 12+5 / `src/**/*.py` 121 / 门脚本 15 / boundaries 门步 17 / `reduce()` 17 / 测试 182=107+69+3+2+1；基线 913/6 只注释不断言）且**标题声明数必须等于表行数**；**B** §n·附录X·B刀·C条引用必须在文内有定义（外部文档引用按限定词/显式理由豁免）；**C** §15.6/§20.3 每行必须同时有「原写」侧与「已改」侧；**D** PLAN §3 否决词出现必须同句带 `C-\d|已改|不建|不拆|仅借`。缺省 `SKIP: doc not present` 退 0（文档在仓外一层）。

@@ -26,14 +26,14 @@ from questor.contracts.events import (
 )
 from questor.contracts.ports import StorePort
 
+# 形态判定已下沉到 L1（v3 §4.1 咽喉）：bus 只调用，不再自己持有 LIVE_ONLY/TERMINAL 名单。
+# LIVE_ONLY/TERMINAL 仍从这里 re-export（显式别名）：既有调用方（tests/unit/test_tools_changed_lockstep.py 等）不受影响。
+from questor.state.persist_form import LIVE_ONLY as LIVE_ONLY
+from questor.state.persist_form import TERMINAL as TERMINAL
+from questor.state.persist_form import durable_form, is_live_only, is_terminal
+
 _log = logging.getLogger("questor.bus")
 
-#: live-only 事件：只转发给订阅者、永不持久化（design/01 I3）。
-LIVE_ONLY: frozenset[str] = frozenset(
-    {EventType.TEXT_DELTA, EventType.REASONING_DELTA, EventType.TOOL_PROGRESS, EventType.HEARTBEAT, EventType.USAGE_DELTA, EventType.TOOLS_CHANGED}
-)
-# 终态事件：一轮至多一个（C13）。
-TERMINAL: frozenset[str] = frozenset({EventType.RUN_CANCELLED, EventType.RUN_FAILED, EventType.RUN_COMPLETED})
 #: 仅内部、不在对外契约的事件（私有、可演进；投影时会滤掉，design/02 §2）。
 INTERNAL_ONLY: frozenset[str] = frozenset({"checkpoint_recorded", "reduce_rejected", "ledger_entry"})
 
@@ -140,20 +140,27 @@ class InProcessEventBus(EventBus):
                 del self._subs[run_id]
 
     async def emit(self, env: Envelope) -> None:
-        """落库（非 live-only）→投影后向订阅者转发；终态至多一条。"""
-        if env.type in TERMINAL:
+        """落库（非 live-only）→投影后向订阅者转发；终态至多一条。
+
+        持久化形态只由 ``state.persist_form.durable_form`` 决定（本模块不得另造判断）；
+        ``append`` 的 holder/epoch 取自 store 记录的**本次驱动身份**（持租约的 surfaces 在
+        acquire_lease 时盖章），store 在事务内校验 run_leases——陈旧 epoch → StaleWriterError。
+        """
+        if is_terminal(env):
             if env.run_id in self._closed:  # first-writer-wins：已终态则丢弃后续
                 return
             self._closed.add(env.run_id)
 
-        if env.type not in LIVE_ONLY and self._store is not None:
+        durable = durable_form(env)
+        if durable is not None and self._store is not None:
             try:
                 await self._store.append(
-                    env.run_id,
-                    ({"seq": env.seq, "type": env.type, "turn": env.turn, "data": dict(env.data), "ts": env.ts.isoformat()},),
+                    durable.run_id,
+                    ({"seq": durable.seq, "type": durable.type, "turn": durable.turn, "data": dict(durable.data), "ts": durable.ts.isoformat()},),
+                    **self._lease_kwargs(durable.run_id),
                 )
             except Exception as exc:  # noqa: BLE001 - 持久化失败出声后上冒：数据丢失不可静默吞，保持既有致命语义
-                _log.warning("bus persist failed run=%s seq=%s: %s", env.run_id, env.seq, exc)
+                _log.warning("bus persist failed run=%s seq=%s: %s", durable.run_id, durable.seq, exc)
                 raise
 
         projected = project(env)
@@ -167,9 +174,20 @@ class InProcessEventBus(EventBus):
                 queue.put_nowait(projected)
             except asyncio.QueueFull:  # 背压丢帧：慢消费者可 resync，出声但不拖垮 loop（DoD A②）
                 _log.warning("bus subscriber queue full, dropped frame run=%s seq=%s", env.run_id, env.seq)
-        if env.type in TERMINAL:
+        if is_terminal(env):
             self._subs.pop(env.run_id, None)  # run 已结束：释放订阅队列（防泄漏）。
             # 保留 _closed：它是“抑制本 run 后续任何终态”的记忆（C13），只存短 run id。
+
+    def _lease_kwargs(self, run_id: str) -> dict[str, object]:
+        """本 store 实例记录的写者身份（holder/epoch）；无记录则不传，交由 store 的栅栏判定。"""
+        identity = getattr(self._store, "writer_identity", None)
+        if not callable(identity):
+            return {}
+        held = identity(run_id)
+        if held is None:
+            return {}
+        holder, epoch = held
+        return {"holder": holder, "epoch": epoch}
 
     async def subscribe(
         self, run_id: str, after_seq: int = 0, *, expected_version: int | None = None
@@ -199,17 +217,17 @@ class InProcessEventBus(EventBus):
                     if replayed is None:  # 仅内部：持久了但不外发
                         continue
                     yield replayed
-                    if replayed.type in TERMINAL:  # run 已结束，无需再跟实时
+                    if is_terminal(replayed):  # run 已结束，无需再跟实时
                         return
 
             while True:
                 env = await queue.get()
-                if env.type in LIVE_ONLY:
+                if is_live_only(env):
                     yield env  # 瞬态 delta：总是转发、不做 seq 去重
                 elif env.seq > seen:
                     seen = env.seq
                     yield env
-                if env.type in TERMINAL:
+                if is_terminal(env):
                     break
         finally:
             # 无论重放到终态 return、正常 break、还是客户端断连（GeneratorExit/取消），
