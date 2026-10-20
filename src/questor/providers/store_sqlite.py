@@ -89,6 +89,13 @@ class StoreSchemaVersionError(ValueError):
     """store DDL 版本比本仓可解的更新；连接必须显式失败，绝不半重建（ADR-0022 fail-closed）。"""
 
 
+class StaleWriterError(RuntimeError):
+    """写者不在当前 run 租约上（陈旧 epoch / 无租约却有他人持有）：拒绝落库，绝不双写。
+
+    B0 把 ADR-0047 的"单写者"从 surfaces 约定下推成 store 栅栏：``append`` 在
+    ``BEGIN IMMEDIATE`` 事务内比对 ``run_leases``，不匹配即抛本错（fail-closed）。"""
+
+
 def _dumps(obj: object) -> str:
     """序列化为 JSON：先 thaw 不可变叶，禁 NaN/Inf、紧凑分隔符。"""
     return json.dumps(thaw(obj), allow_nan=False, separators=(",", ":"), ensure_ascii=False)
@@ -105,6 +112,9 @@ class SQLiteStore(StorePort):
         # 又撕掉对方事务（track4 BLK-1 实测）。此锁在 asyncio 层串行化全部 DB 操作；单连接本就
         # 无法真并发，锁不损吞吐（aiosqlite worker 线程已串行化实际 SQL）。
         self._lock = asyncio.Lock()
+        # 本实例**取得/续到**的 run 租约身份（run_id -> (holder, epoch)）：写者出处的唯一来源。
+        # 只记录“我拿到的”，不记录“库里当前是谁”——后者在 append 时现查，才能发现陈旧 epoch。
+        self._held_leases: dict[str, tuple[str, int]] = {}
 
     async def connect(self) -> SQLiteStore:
         # isolation_level=None -> 自动提交，好让我们自己驱动 BEGIN IMMEDIATE。
@@ -149,17 +159,32 @@ class SQLiteStore(StorePort):
             raise RuntimeError("SQLiteStore.connect() must be awaited before use")
         return self._db
 
-    async def append(self, run_id: str, events: tuple[JsonObject, ...]) -> int:
+    async def append(
+        self,
+        run_id: str,
+        events: tuple[JsonObject, ...],
+        *,
+        holder: str | None = None,
+        epoch: int | None = None,
+    ) -> int:
         """事务内批量追加，返回最后一个 per-run seq。
 
         seq 权威在 reduce：事件带 ``seq`` 就沿用之，否则接在当前 head 之后（ADR-0011）。
         每条事件同时取一个全局单调 ``gseq``（跨 run watermark）；``BEGIN IMMEDIATE`` 串行化单写者，
         确保 per-run seq 与全局 gseq 都不重（ADR-0020 append-before-snapshot 的前半）。
+
+        **epoch 栅栏（B0）**：``holder``/``epoch`` 是本写者的租约身份；不给则回落到本实例
+        ``acquire_lease`` 记录的身份。只要 ``run_leases`` 中存在该 run 的租约行，写者就必须匹配，
+        否则抛 :class:`StaleWriterError`——陈旧驱动者在事务内被拒，绝不静默双写（C2/ADR-0047）。
+        无租约行（内存测试/只读回放）保持既有行为；这不是“校验开关”，而是“没人持租约时无竞争”。
         """
+        if (holder is None) != (epoch is None):
+            raise ValueError("append() requires holder and epoch together")
         async with self._lock:
             db = self._dbp()
             await db.execute("BEGIN IMMEDIATE")
             try:
+                await self._check_writer_fence(db, run_id, holder, epoch)
                 cur = await db.execute("SELECT COALESCE(MAX(seq), 0) FROM event_log WHERE run_id = ?", (run_id,))
                 seq = (await cur.fetchone())[0]
                 for ev in events:
@@ -187,6 +212,28 @@ class SQLiteStore(StorePort):
                 await db.execute("ROLLBACK")
                 raise
             return seq
+
+    def writer_identity(self, run_id: str) -> tuple[str, int] | None:
+        """本实例在 ``acquire_lease``/``renew_lease`` 时拿到的写者身份；未持租约返回 None。"""
+        return self._held_leases.get(run_id)
+
+    async def _check_writer_fence(self, db: aiosqlite.Connection, run_id: str, holder: str | None, epoch: int | None) -> None:
+        """事务内校验：有租约行则写者必须匹配（无身份=直接拒），无租约行则放行。"""
+        cur = await db.execute("SELECT holder, epoch FROM run_leases WHERE run_id = ?", (run_id,))
+        row = await cur.fetchone()
+        identity = (holder, epoch) if holder is not None else self._held_leases.get(run_id)
+        if identity is None:
+            if row is not None:
+                raise StaleWriterError(
+                    f"run {run_id} is leased to {row[0]!r} (epoch {row[1]}); refusing an unfenced append"
+                )
+            return
+        if row is None or row[0] != identity[0] or row[1] != identity[1]:
+            current = None if row is None else (row[0], row[1])
+            raise StaleWriterError(
+                f"stale writer for run {run_id}: writer holds {identity[0]!r} epoch {identity[1]}, "
+                f"lease row is {current!r}; refusing to append"
+            )
 
     async def replay(self, run_id: str, after_seq: int, limit: int | None = None) -> list[JsonObject]:
         """重放 ``seq > after_seq`` 的事件、按 seq 升序——即 after_seq 续传的机制核心。"""
@@ -317,6 +364,7 @@ class SQLiteStore(StorePort):
                     if held_by == holder and held_epoch == epoch:
                         await db.execute("UPDATE run_leases SET expires_at = ?, ttl_seconds = ? WHERE run_id = ?", (now + ttl_seconds, ttl_seconds, run_id))
                         await db.commit()
+                        self._held_leases[run_id] = (holder, epoch)
                         return True
                     if now < expires:
                         await db.commit()
@@ -327,6 +375,7 @@ class SQLiteStore(StorePort):
                     (run_id, holder, epoch, now + ttl_seconds, ttl_seconds),
                 )
                 await db.commit()
+                self._held_leases[run_id] = (holder, epoch)
                 return True
             except BaseException:
                 await db.execute("ROLLBACK")
@@ -345,6 +394,7 @@ class SQLiteStore(StorePort):
                     return False
                 await db.execute("UPDATE run_leases SET expires_at = ? WHERE run_id = ?", (max(row[3], time.time() + row[2]), run_id))
                 await db.commit()
+                self._held_leases[run_id] = (holder, epoch)
                 return True
             except BaseException:
                 await db.execute("ROLLBACK")
@@ -363,6 +413,7 @@ class SQLiteStore(StorePort):
                     return False
                 await db.execute("DELETE FROM run_leases WHERE run_id = ?", (run_id,))
                 await db.commit()
+                self._held_leases.pop(run_id, None)
                 return True
             except BaseException:
                 await db.execute("ROLLBACK")

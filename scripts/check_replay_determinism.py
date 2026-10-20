@@ -23,9 +23,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import copy
 import sys
-from collections.abc import Callable
+import types
+import typing
+from collections.abc import Callable, Mapping
+from dataclasses import fields, is_dataclass
 from datetime import UTC, datetime
+from enum import Enum
 
 from questor.contracts.events import (
     AdvanceTurn,
@@ -208,8 +213,127 @@ def _replay_snapshot_tail(run: Run, cmds: list[Command], split: int) -> Run:
     return run
 
 
+def _unwrap_annotation(tp: object) -> tuple[object, bool]:
+    """拆 ``X | None`` / ``tuple[X, ...]``：返回 (内层类型, 是否序列)。
+
+    ``Optional[X]`` 只去 Optional、**不**标成序列（否则 ``summary: str | None`` 会被误写成
+    ``Run.context.summary[]``，于是删字段自测报错路径与实际字段名不一致）。"""
+    origin = typing.get_origin(tp)
+    if origin in (typing.Union, types.UnionType):
+        args = [a for a in typing.get_args(tp) if a is not type(None)]
+        return _unwrap_annotation(args[0]) if len(args) == 1 else (tp, False)
+    if origin in (tuple, list, set, frozenset):
+        args = typing.get_args(tp)
+        return (args[0], True) if args else (tp, True)
+    return tp, False
+
+
+def _schema_paths(cls: type, prefix: str, seen: set[type]) -> list[str]:
+    """反射 ``Run`` 及内嵌 dataclass 的**声明字段**，产出 ``Run.context.summary`` 形式的路径。
+
+    B0.5（OPT-1）：重放比对集不能再靠手工白名单——本函数是"每个字段都必须进比对集"的
+    真值来源；新增字段而未进 ``_canonical`` 时，``_coverage_missing`` 会以字段路径判红
+    （历史上 summary/covered_hash/floor 漂移曾全绿假判，见本模块 L238 注释）。"""
+    out: list[str] = []
+    hints = typing.get_type_hints(cls)
+    for f in fields(cls):
+        inner, is_seq = _unwrap_annotation(hints.get(f.name, f.type))
+        out.append(f"{prefix}.{f.name}" + ("[]" if is_seq else ""))
+        if is_dataclass(inner) and inner not in seen:
+            seen.add(inner)  # type: ignore[arg-type]
+            # 序列内的 dataclass：前缀带 ``[]``，使路径与 ``_has_path`` 的下钻语义一致。
+            child_prefix = f"{prefix}.{f.name}[]" if is_seq else f"{prefix}.{f.name}"
+            out.extend(_schema_paths(inner, child_prefix, seen))  # type: ignore[arg-type]
+    return out
+
+
+def _leaf(value: object) -> object:
+    """把叶子值归一成**可跨两次重放比较**的形状。
+
+    时间戳是墙上时钟：两次重放各取一次 ``utc_now``，值必然不同——故只保留"有/无"的
+    存在性（``"<ts>"``），不比较具体值；集合/mapping 排序后比较，消除哈希序噪声。"""
+    if isinstance(value, datetime):
+        return "<ts>"
+    if isinstance(value, Enum):
+        return f"{type(value).__name__}.{value.value}"
+    if isinstance(value, Mapping):
+        return tuple(sorted((str(k), repr(v)) for k, v in value.items()))
+    if isinstance(value, (set, frozenset)):
+        return tuple(sorted(repr(v) for v in value))
+    if isinstance(value, (tuple, list)):
+        return tuple(_leaf(v) for v in value)
+    return value
+
+
+def _project_value(tp: object, value: object, path: str) -> object:
+    """按**声明类型**（而非仅实例）投影：空 tuple 也保留字段形状，覆盖率检查才不会误判。"""
+    if value is None:
+        return None
+    inner, is_seq = _unwrap_annotation(tp)
+    if is_dataclass(inner) and is_dataclass(value):
+        return _project(inner, value, path)  # type: ignore[arg-type]
+    if is_seq and isinstance(value, (tuple, list, set, frozenset)):
+        return tuple(_project_value(inner, item, path) for item in value)
+    return _leaf(value)
+
+
+def _project(cls: type, value: object, path: str) -> dict:
+    """把一个 dataclass 实例投影成 ``{字段名: 归一值}``（字段名逐字取 ``dataclasses.fields``）。"""
+    hints = typing.get_type_hints(cls)
+    return {
+        f.name: _project_value(hints.get(f.name, f.type), getattr(value, f.name), f"{path}.{f.name}")
+        for f in fields(cls)
+    }
+
+
+#: 反射得到的字段路径（模块加载时算一次）：新增字段自动出现在这里 = 必须进比对集。
+_SCHEMA_PATHS: list[str] = _schema_paths(Run, "Run", {Run})
+
+#: fail-on-empty 锚点：反射若静默失效（例如 ``Run`` 换实现），覆盖率检查会假绿。
+_SCHEMA_ANCHORS: tuple[str, ...] = (
+    "Run.run_id",
+    "Run.context.items[].role",
+    "Run.tool_ledger.calls[].status",
+    "Run.permission_ctx.approvals[].status",
+    "Run.task_tree.nodes[].deps[]",
+)
+
+
+def _has_path(projection: object, path: str) -> bool:
+    """按 ``Run.context.summary`` / ``Run.context.items[].role`` 逐段查投影键。
+
+    空集合视为"形状已覆盖"（深层键在无元素时无从比对；fixture 一旦填充即由正常比对捕获）。"""
+    node = projection
+    for part in path.split("."):
+        is_seq = part.endswith("[]")
+        name = part[:-2] if is_seq else part
+        if not isinstance(node, dict) or name not in node:
+            return False
+        node = node[name]
+        if node is None:
+            return True  # 可选子对象为 None："有/无"已由父字段比较，深层键无从存在
+        if is_seq:
+            if node is None or not isinstance(node, tuple):
+                return True
+            if not node:
+                return True
+            node = node[0]
+    return True
+
+
+def _coverage_missing(canonical: dict) -> list[str]:
+    """比对集覆盖率：每个反射字段路径必须在 ``_canonical`` 的 ``schema`` 投影里出现。"""
+    schema = canonical.get("schema")
+    if not isinstance(schema, dict):
+        return ["Run (schema projection missing from _canonical)"]
+    return [path for path in _SCHEMA_PATHS if not _has_path(schema, path)]
+
+
 def _canonical(run: Run) -> dict:
-    """权威骨架：忽略随机 message id / 时间戳，只对状态漂移敏感。"""
+    """权威骨架：忽略随机 message id / 时间戳，只对状态漂移敏感。
+
+    ``schema`` 键（B0.5）是**全字段**投影：上面手工条目仍在（既有断言不变），但它只覆盖
+    手工挑出的骨架；漏字段的缺口由反射投影补上，缺一个字段即由 :func:`_coverage_missing` 判红。"""
     items = tuple(
         (m.role.value, tuple(b.type for b in m.content), tuple(b.tool_use_id or "" for b in m.content), tuple((b.text or "") for b in m.content))
         for m in run.context.items
@@ -239,6 +363,8 @@ def _canonical(run: Run) -> dict:
         "summary": run.context.summary,
         "compaction_floor": run.context.compaction_floor,
         "recovery_pointers": tuple((p.seq_from, p.seq_to, p.covered_hash) for p in run.context.recovery_pointers),
+        # B0.5（OPT-1）：Run 及内嵌 dataclass 的全字段反射投影。新增字段若不在投影里 = 缺字段判红。
+        "schema": {"Run": _project(Run, run, "Run")},
     }
 
 
@@ -250,6 +376,10 @@ def _check_one(name: str, factory: Callable[[], tuple[Run, list[Command], int]])
     if full != tail:
         diff_keys = sorted(k for k in full if full[k] != tail[k])
         problems.append(f"{name}: snapshot+tail diverges from continuous replay in {diff_keys}")
+    # B0.5：比对集本身必须覆盖 Run 的每个字段（否则"全绿"只是没比到）。
+    missing = _coverage_missing(full)
+    if missing:
+        problems.append(f"{name}: _canonical misses reflected field(s): {', '.join(missing)}")
     return problems
 
 
@@ -277,11 +407,36 @@ def _self_test_red() -> bool:
     return _canonical(snap_only) != _canonical(_replay_full(run, cmds))
 
 
+def _self_test_field_coverage() -> tuple[bool, str]:
+    """B0.5 判红证明：从 ``_canonical`` 删一个字段 → 覆盖率必须报出该字段路径；恢复 → 绿。"""
+    healthy = not _coverage_missing(_canonical(Run(run_id="r_cov")))
+    broken = copy.deepcopy(_canonical(Run(run_id="r_cov")))
+    del broken["schema"]["Run"]["context"]["summary"]
+    caught_paths = _coverage_missing(broken)
+    caught = "Run.context.summary" in caught_paths
+    restored = copy.deepcopy(broken)
+    restored["schema"]["Run"]["context"]["summary"] = None
+    green_again = not _coverage_missing(restored)
+    detail = (
+        f"healthy-green={healthy} deleted-field→red={caught} (hit={caught_paths[:1]}) "
+        f"restored→green={green_again} fields={len(_SCHEMA_PATHS)}"
+    )
+    return healthy and caught and green_again, detail
+
+
+def _self_test_anchors() -> bool:
+    """fail-on-empty：反射必须真的枚举出字段，且锚点路径都在（否则覆盖率检查假绿）。"""
+    return bool(_SCHEMA_PATHS) and all(anchor in _SCHEMA_PATHS for anchor in _SCHEMA_ANCHORS)
+
+
 def self_test() -> int:
     green = _self_test_green()
     red = _self_test_red()
-    ok = green and red
-    print(f"self-test: healthy-green={green} truncated-caught={red}")
+    coverage_ok, coverage_detail = _self_test_field_coverage()
+    anchors_ok = _self_test_anchors()
+    ok = green and red and coverage_ok and anchors_ok
+    print(f"self-test: healthy-green={green} truncated-caught={red} schema-anchors={anchors_ok}")
+    print(f"self-test: {coverage_detail}")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 
