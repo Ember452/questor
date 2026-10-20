@@ -13,10 +13,12 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
+from questor.capabilities.skills.catalog import build_skill_catalog
+from questor.config.model import load_config
 from questor.contracts.policy import CompactionConfig
 from questor.observability.configure import configure_logging, logging_status
 from questor.observability.entry import LogLevel
@@ -26,25 +28,77 @@ _LOG = logging.getLogger("questor.assembly")
 
 
 def console_level_from_env() -> LogLevel:
-    """console 级别取自 ``QUESTOR_LOG_LEVEL``（默认 INFO）。"""
-    return getattr(LogLevel, os.environ.get("QUESTOR_LOG_LEVEL", "INFO").upper(), LogLevel.INFO)
+    """console 级别取自 ``QUESTOR_LOG_LEVEL``（默认 INFO；未知名字回落 INFO）。
+
+    读在 ``config``（OPT-3 c2），解析在本文件：``LogLevel`` 属 observability，config 不得 import 它。"""
+    return getattr(LogLevel, load_config().logging.console_level.upper(), LogLevel.INFO)
 
 
 def log_dir_from_env() -> str:
     """日志目录取自 ``QUESTOR_LOG_DIR``（默认 ``<cwd>/.questor/logs``）。"""
-    return os.environ.get("QUESTOR_LOG_DIR", str(Path.cwd() / ".questor" / "logs"))
+    return load_config().logging.log_dir
 
 
 def keep_days_from_env() -> int:
     """保留天数取自 ``QUESTOR_LOG_KEEP_DAYS``（默认 14）；解析失败回落默认，绝不在装配期崩。"""
-    try:
-        return int(os.environ.get("QUESTOR_LOG_KEEP_DAYS", "14"))
-    except ValueError:
-        return 14
+    return load_config().logging.keep_days
 
 
 #: preview 截断上限（有界，防超大 preview 把 llm 通道撑爆；承 C18/DESIGN §12）。
 _PAYLOAD_MAX_CHARS = 8192
+
+
+def assemble_system_prompt(system: str | None, skills_dir: Path | None) -> str | None:
+    """把 skills catalog 并入 system prompt（DoD①「丢一个 SKILL.md 即生效」）。
+
+    这是从 ``CliSurface.__init__`` 逐字节搬出来的既有拼接（OPT-12a）：
+    - 无技能（``skills_dir=None`` / 目录不存在 / 无有效 SKILL.md）→ 返回**入参原样**（``None`` 仍 ``None``）；
+    - 有技能 → ``f"{system}\\n\\n{catalog}".strip()``，与历史表达式一字不差。
+
+    注意：``system=None`` 且有技能时，f-string 会把字面 ``"None"`` 拼进 prompt。这是**现存行为**，
+    本刀只搬家不改行为（修它是 OPT-12b/B7）；golden 用例钉住它，防止搬家时被“顺手修好”。
+    """
+    catalog = build_skill_catalog(skills_dir)
+    return f"{system}\n\n{catalog}".strip() if catalog else system
+
+
+#: 记忆块供给器：返回要追加到 system 末尾的文本（空串/None = 本轮不注入）。
+MemoryBlockProvider = Callable[[], str | None]
+
+
+class DefaultContextAssembler:
+    """``ContextAssemblerPort`` 的现路径实现：system + skills catalog（+ 可选记忆块）。
+
+    **记忆注入位默认关**（OPT-12a b3）：``memory_block_provider=None`` 时只做历史拼接，
+    ``ProviderRequest.system`` 一个字节都不变；接上供给器也只是在末尾追加一块文本，
+    不参与权限/排序/压缩判定（那些属 kernel，不在本接缝）。
+    """
+
+    def __init__(self, memory_block_provider: MemoryBlockProvider | None = None) -> None:
+        self._memory_block_provider = memory_block_provider
+
+    def assemble(self, system: str | None, skills_dir: Path | None) -> str | None:
+        """= 历史内联拼接（逐字节）+ 记忆块（默认无）；无技能目录时 system 原样。"""
+        return inject_memory_block(assemble_system_prompt(system, skills_dir), self._memory_block_provider)
+
+
+def inject_memory_block(prompt: str | None, provider: MemoryBlockProvider | None) -> str | None:
+    """记忆注入位（OPT-12a b3）：**默认关**，关时逐字节返回入参。
+
+    开时把供给器返回的非空块以 ``"\\n\\n"`` 接到 prompt 末尾（无 prompt 时就是该块本身）；
+    供给器返回空/None 视为“本轮无记忆”，仍原样返回——不凭空造空串/分隔符。
+    失败语义：供给器自身抛异常则上冒（调用方决定降级；此处不静默吞）。
+    """
+    if provider is None:
+        return prompt
+    block = (provider() or "").strip()
+    if not block:
+        return prompt
+    return f"{prompt}\n\n{block}" if prompt else block
+
+
+#: 默认装配器单例（记忆注入默认关，无状态、可安全共享）。
+DEFAULT_CONTEXT_ASSEMBLER = DefaultContextAssembler()
 
 
 def compaction_from_env() -> CompactionConfig | None:
@@ -56,7 +110,7 @@ def compaction_from_env() -> CompactionConfig | None:
     - ``items:N`` → 自定义条数阈值（max_items=N，N>24 才合理但尊重调用方）。
     触发用 ``max_items``（context 体量）而非 ``trigger_tokens``（累计花费）——修正我先前标注的“用错信号”隐患。
     """
-    raw = os.environ.get("QUESTOR_COMPACTION", "off").strip().lower()
+    raw = load_config().logging.compaction.strip().lower()
     if raw in {"", "off"}:
         return None
     if raw == "on":
@@ -78,7 +132,7 @@ def payload_preview_from_env() -> int | None:
 
     为什么宁可不启动也不静默忽略：用户设了非法值却以为日志里有载荷，排障时才发现没有——
     比拒绝启动更坏（保持与旧 `reject_unimplemented_payload` 同口径的 fail-closed）。"""
-    raw = os.environ.get("QUESTOR_LOG_PAYLOAD", "off").strip().lower()
+    raw = load_config().logging.payload_preview.strip().lower()
     if raw in {"", "off"}:
         return None
     prefix = "truncate:"

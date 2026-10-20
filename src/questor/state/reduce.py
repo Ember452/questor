@@ -45,6 +45,7 @@ from questor.contracts.events import (
     WriteMemory,
 )
 from questor.contracts.memory import source_for_write
+from questor.contracts.profile import PERMISSION_MODE_SET
 from questor.contracts.state_schema import (
     OPEN_TOOL_CALL_STATUSES,
     ApprovalRequest,
@@ -359,7 +360,9 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
         return _resolve_approval(run, command, decision="deny", decided_by="timeout", status=ApprovalStatus.EXPIRED, expired=True, now=ts)
 
     if isinstance(command, SetPermissionMode):
-        if command.mode not in {"default", "plan", "full_auto"}:
+        # 合法 mode 集合的唯一 Python 真源在 L0 ``contracts.profile``（wire 真源仍是
+        # ``protocol/event.schema.json``）；此处不再写第二份字面集（OPT-3 c4）。
+        if command.mode not in PERMISSION_MODE_SET:
             return _reject(run, f"invalid permission mode {command.mode}")
         if run.permission_ctx.mode == command.mode:
             return run, []

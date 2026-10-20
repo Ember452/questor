@@ -25,6 +25,7 @@ from questor.contracts.common import new_id, thaw
 from questor.contracts.events import Cancel, Envelope, EventType, ResolveApproval, SetPermissionMode, SubmitMessage
 from questor.contracts.inbox import InboxReceipt
 from questor.contracts.ports import StorePort
+from questor.contracts.profile import PERMISSION_MODE_SET
 from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, Message, Role
 from questor.contracts.tool import RunToolSurface
 from questor.kernel.events import InProcessEventBus
@@ -188,8 +189,8 @@ class EventServer:
         )
 
     async def set_permission_mode(self, run_id: str, mode: str, changed_by: str = "http_client") -> InboxReceipt:
-        """改未来调用的权限模式；同样只经 inbox。"""
-        if mode not in {"default", "plan", "full_auto"}:
+        """改未来调用的权限模式；同样只经 inbox（合法集取自 L0 ``contracts.profile``，OPT-3 c4）。"""
+        if mode not in PERMISSION_MODE_SET:
             raise HTTPException(status_code=400, detail="invalid permission mode")
         return self._checked(
             await self.registry.submit(

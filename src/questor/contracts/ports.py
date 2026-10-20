@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from questor.contracts.common import JsonObject
@@ -146,6 +147,53 @@ class Clock(Protocol):
     def monotonic(self) -> float: ...
 
 
+class SurfacePort(Protocol):
+    """传输面的**装配接缝**（OPT-2a）：组合根产出的 ``App.surface`` 只承诺调用方实际用到的方法。
+
+    消费面（grep ``app.surface`` / ``EventServer(surface`` 的真实调用点）：
+    ``interactive()`` → :meth:`run_once`；``__main__ --resume`` → :meth:`resume`；
+    ``EventServer`` / ``SubagentOrchestrator`` → :meth:`_loop` / :meth:`_discover_mcp` /
+    :meth:`_freeze_surface` / :meth:`_resolve_for_run`，并读写 :attr:`store`。
+
+    为什么返回类型写 ``object``：contracts 是最内层（C1/C14），不得 import kernel/surfaces；
+    ``_loop`` 实返 ``DefaultTurnLoop``、``_freeze_surface`` 实返 ``RunToolSurface``，具体类型由 L6
+    实现提供，调用方按实现类型消费。
+
+    为什么带下划线：这些方法本就是 surfaces 内部的装配件；本协议只把**既有调用面**显式化，
+    不改名、不改签名（零行为变更）。刻意不加 ``@runtime_checkable``：协议含数据成员 ``store``，
+    isinstance 校验既无需求也会退化成 hasattr 探测。
+    """
+
+    store: object
+
+    async def run_once(self, text: str, *, on_delta: object | None = None) -> object: ...
+
+    async def resume(self, run_id: str) -> object | None: ...
+
+    def _resolve_for_run(self, run_id: str) -> tuple[object, object]: ...
+
+    def _loop(
+        self, bus: object, cancel: object, surface: object, subagent_spawner: object | None = None, *, run_id: str = ""
+    ) -> object: ...
+
+    async def _discover_mcp(self, run_id: str) -> tuple[list[object], object]: ...
+
+    def _freeze_surface(self, run_id: str, extra_tools: list[object]) -> object: ...
+
+
+class ContextAssemblerPort(Protocol):
+    """上下文装配接缝（OPT-12a）：把 system prompt、skills catalog（及将来的记忆块）拼成一次请求的 system。
+
+    契约：
+    - 纯函数式、无 IO 副作用（只读目录）；**不得**在这里改任何权限/排序语义；
+    - 默认实现（``surfaces._assembly.DefaultContextAssembler``）逐字节等于历史 surface 内联拼接，
+      包括 ``system=None`` 时字面 ``"None"`` 进入 prompt 的现状——修它是 B7（OPT-12b），不在本刀；
+    - 无技能目录时返回**入参原样**（``None`` 仍是 ``None``，不凭空造空串）。
+    """
+
+    def assemble(self, system: str | None, skills_dir: Path | None) -> str | None: ...
+
+
 @runtime_checkable
 class IdGenerator(Protocol):
     """id 生成端口（默认实现见 ``common.new_id``；测试可注入定序实现）。"""
@@ -162,4 +210,6 @@ __all__ = [
     "IdGenerator",
     "SandboxDescriptor",
     "SandboxPort",
+    "SurfacePort",
+    "ContextAssemblerPort",
 ]

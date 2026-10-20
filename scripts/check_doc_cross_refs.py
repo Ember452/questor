@@ -55,13 +55,13 @@ EXPECTED: dict[str, int] = {
     "blades": 17,  # §13「17 刀（T16）」+ T16；数 `^| **B` 行（B0.5 算一刀）
     "points_live": 12,  # §5.1 表内 12 行生效点位
     "points_reserved": 5,  # §5.1「预留 5 位」句里的 5 个名字（Stop/Notification/Elicitation/TaskUpdated/PlanStep）
-    "src_py": 123,  # §21 前提判断「123 个 src/ 下 .py」（B0 新增 state/transition.py + state/persist_form.py）
+    "src_py": 125,  # §21 前提判断「125 个 src/ 下 .py」（B0 新增 state/transition.py + state/persist_form.py；OPT-3/OPT-4 新增 config/model.py + contracts/profile.py）
     "gate_scripts": 16,  # §21：14 个 check_*.py + 2 个 verify_*.py（不含 _diag_threads.py；B0 新增 check_reduce_chokepoint.py）
     "ci_gate_steps": 18,  # §21 / PLAN SCAN-1：boundaries 恒阻塞 job 的「门步」数（B0 新增 1 步）
     "reduce_calls": 0,  # §2-1：B0 后 loop.py/recovery.py 不再直调 reduce（17 处全改走 apply()）
-    "test_files": 184,  # PLAN SCAN-2：tests/ 下 .py 合计 184（B0 新增 test_transition_chokepoint.py；B1 新增 test_user_message_fact.py）
-    "test_unit": 109,  # PLAN SCAN-2：unit 109（含 capabilities/observability 子目录；B1 +1）
-    "test_integration": 69,  # PLAN SCAN-2：integration 69
+    "test_files": 188,  # PLAN SCAN-2：tests/ 下 .py 合计 188（B0 +1；B1 +1；OPT-2a +1 integration；OPT-12a/OPT-3 共 +3 unit）
+    "test_unit": 112,  # PLAN SCAN-2：unit 112（含 capabilities/observability 子目录；B1 +1；OPT-12a +1、OPT-3 +2）
+    "test_integration": 70,  # PLAN SCAN-2：integration 70（OPT-2a +1）
     "test_support": 3,  # PLAN SCAN-2：support 3（fixture 基建，非 test_* 命名）
     "test_evals": 2,  # PLAN SCAN-2：evals 2
     "test_root": 1,  # tests/ 顶层 conftest.py

@@ -17,6 +17,7 @@ from typing import Any
 
 from questor.contracts.common import JsonObject, thaw
 from questor.contracts.permission import PermissionDecision, PermissionOutcome
+from questor.contracts.profile import MODE_DEFAULT, MODE_FULL_AUTO, MODE_PLAN
 from questor.contracts.sandbox import SandboxDescriptor
 from questor.contracts.shell_analysis import ShellAnalysis
 from questor.contracts.state_schema import ToolArgsStatus
@@ -28,11 +29,11 @@ from questor.state.domain_state import PermissionCtx
 
 
 class PermissionMode(StrEnum):
-    """历史兼容枚举；新代码应直接传 PermissionCtx.mode 字符串。"""
+    """历史兼容枚举；新代码应直接传 PermissionCtx.mode 字符串（规范值域见 ``contracts.profile``）。"""
 
-    DEFAULT = "default"
-    PLAN = "plan"
-    FULL_AUTO = "full_auto"
+    DEFAULT = MODE_DEFAULT
+    PLAN = MODE_PLAN
+    FULL_AUTO = MODE_FULL_AUTO
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,7 +289,7 @@ def evaluate_permission(evaluation: PermissionEvaluation) -> PermissionOutcome:
         return _never_downgrade(_apply_approval_mode(outcome, evaluation.tool_spec, evaluation.permission), evaluation.permission)
 
     mode = evaluation.permission.mode
-    if mode == "plan" and not evaluation.tool_spec.read_only:
+    if mode == MODE_PLAN and not evaluation.tool_spec.read_only:
         outcome = PermissionOutcome(
             decision=PermissionDecision.DENY,
             reason="plan mode: mutating tools are denied until the plan is approved",
@@ -296,7 +297,7 @@ def evaluate_permission(evaluation: PermissionEvaluation) -> PermissionOutcome:
             floor_applied="plan-mode",
             candidate_paths=paths,
         )
-    elif mode == "full_auto" or evaluation.tool_spec.read_only:
+    elif mode == MODE_FULL_AUTO or evaluation.tool_spec.read_only:
         outcome = PermissionOutcome(
             decision=PermissionDecision.ALLOW,
             reason=f"{mode} mode: {evaluation.tool_name} allowed",

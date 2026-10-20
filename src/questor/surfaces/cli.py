@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 
 from questor.capabilities._host import PluginHost
-from questor.capabilities.skills.catalog import build_skill_catalog
 from questor.capabilities.subagent.delegate import DelegateTool
 from questor.capabilities.tools.apply_patch import ApplyPatchTool
 from questor.capabilities.tools.bash import BashTool
@@ -28,11 +27,12 @@ from questor.capabilities.tools.powershell import PowerShellTool
 from questor.capabilities.tools.read import ReadTool
 from questor.capabilities.tools.registry import ToolRegistry
 from questor.capabilities.tools.write import WriteTool
+from questor.config.model import load_config
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
 from questor.contracts.memory import MemoryStorePort
 from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyRef, PolicyTrust
-from questor.contracts.ports import ProviderPort, StorePort
+from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort
 from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role, RunStatus
 from questor.contracts.subagent import SubagentSpawnerPort
 from questor.contracts.tool import RunToolSurface, Tool
@@ -49,7 +49,13 @@ from questor.policy.registry import PolicyEntry, PolicyRegistry
 from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.state.domain_state import Run
-from questor.surfaces._assembly import assemble_logging, compaction_from_env, payload_preview_from_env, reconfigure_output_streams
+from questor.surfaces._assembly import (
+    DEFAULT_CONTEXT_ASSEMBLER,
+    assemble_logging,
+    compaction_from_env,
+    payload_preview_from_env,
+    reconfigure_output_streams,
+)
 from questor.surfaces.approval import prompt_approval
 from questor.surfaces.mcp_bootstrap import Teardown, discover_mcp_tools
 from questor.surfaces.run_registry import RunRegistry
@@ -81,11 +87,15 @@ def _final_answer_text(run: Run) -> str:
 
 
 def provider_from_env() -> ProviderPort:
-    """根据环境变量选 provider：有 model+key 走 LiteLLM，否则离线 Echo。"""
-    model = os.environ.get("QUESTOR_MODEL")
-    if model and os.environ.get("LITELLM_API_KEY"):
+    """根据环境变量选 provider：有 model+key 走 LiteLLM，否则离线 Echo。
+
+    env 读取与判定口径收口在 ``config``（OPT-3 c2）：``model`` 保留原样（未设 = None）、
+    密钥只判存在；无 model 或无 key 一律 Echo（与历史逐字等价）。
+    """
+    cfg = load_config()
+    if cfg.llm.model and cfg.llm.has_litellm_key:
         # P10/ADR-0049：preview 预算由组合根解析注入（None=零原文默认）；非空才落独立 llm 通道。
-        return LiteLLMProvider(model, payload_preview=payload_preview_from_env())
+        return LiteLLMProvider(cfg.llm.model, payload_preview=payload_preview_from_env())
     return EchoProvider()
 
 
@@ -135,6 +145,7 @@ class CliSurface:
         process_runner: object | None = None,
         artifact_store: object | None = None,
         sandbox: object | None = None,
+        context_assembler: ContextAssemblerPort | None = None,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
@@ -158,10 +169,11 @@ class CliSurface:
         self.compaction = compaction if compaction is not None else compaction_from_env()
         # P9/ADR-0046：能力热插拔宿主（统一 init/teardown + 熔断隔离）；generation 与工具注册表共构探针。
         self.plugin_host = PluginHost()
-        # 技能生效（DoD①）：把发现的 SKILL.md 目录并入 system prompt。skills_dir=None（默认）
-        # 时 catalog 为空、system 不变——不影既有 run。描述已在 catalog 内过 `bound_description` 有界。
-        catalog = build_skill_catalog(skills_dir)
-        self.system = f"{system}\n\n{catalog}".strip() if catalog else system
+        # 技能生效（DoD①）：system prompt 的「system + skills catalog」拼接已外提为 context_assembler
+        # 接缝（OPT-12a）：默认实现逐字节等于历史在本类的内联拼接；skills_dir=None 时 catalog 为空、
+        # system 原样（None 仍 None）——不影既有 run。描述已在 catalog 内过 `bound_description` 有界。
+        assembler = context_assembler if context_assembler is not None else DEFAULT_CONTEXT_ASSEMBLER
+        self.system = assembler.assemble(system, skills_dir)
 
     def _resolve_for_run(self, run_id: str) -> tuple[PolicyPort, PolicyRef]:
         """按 run 解析策略（fail-open 回落默认）→ (PolicyPort, 冻结 PolicyRef)。"""

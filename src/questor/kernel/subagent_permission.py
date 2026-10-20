@@ -9,11 +9,13 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from questor.contracts.profile import MODE_DEFAULT
+from questor.contracts.profile import PERMISSION_MODE_RANK as _MODE_RANK
 from questor.state.domain_state import PermissionCtx
 
-#: mode 宽松度序（越大越宽）。子档位夹到 ≤ 父（永不放大）；默认取保守的 ``default``。
-_MODE_RANK: dict[str, int] = {"plan": 0, "default": 1, "full_auto": 2}
-_DEFAULT_CHILD_MODE = "default"
+#: mode 宽松度序（越大越宽）的真源在 L0 ``contracts.profile``；本文件只夹取（子 ⊆ 父），
+#: 默认取保守的 ``default``。
+_DEFAULT_CHILD_MODE = MODE_DEFAULT
 
 
 def project_parent_permission(

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from questor.contracts.profile import PERMISSION_MODES
 from questor.contracts.tool import Capability, Risk, Tool, ToolResult, ToolSpec
 
 if TYPE_CHECKING:
@@ -29,7 +30,13 @@ class DelegateTool(Tool):
                 "type": "object",
                 "properties": {
                     "objective": {"type": "string", "description": "Short, self-contained sub-task goal."},
-                    "mode": {"type": "string", "enum": ["default", "plan", "full_auto"], "description": "Requested child permission mode (clamped to ≤ parent)."},
+                    "mode": {
+                        "type": "string",
+                        # 枚举取自 L0 ``contracts.profile.PERMISSION_MODES``（OPT-3 c4）：顺序即协议顺序，
+                        # 参与 ProviderRequest.tools 的字节形态，不得重排。
+                        "enum": list(PERMISSION_MODES),
+                        "description": "Requested child permission mode (clamped to ≤ parent).",
+                    },
                     "wait": {"type": "boolean", "description": "true (default): block until the child reaches a terminal state and return its result; false: fire-and-forget and return immediately."},
                 },
                 "required": ["objective"],

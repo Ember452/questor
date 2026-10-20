@@ -8,15 +8,21 @@ surfaces 层自身只持 ``StorePort``/``MemoryStorePort`` 抽象（C4/C14）。
 `python -m questor`（``__main__``）与 `python -m questor.surfaces.cli`（``cli.main``）都经
 :func:`build_app`，杜绝历史上"第二入口装配显著弱于第一入口"（model 落回 echo、无 store/memory/exec）
 的漂移（#161）。exec/写围栏/归档三件套在此真装配（#154），生产入口下 bash/powershell/write 可达。
+
+装配的**输入形状**由 :class:`AssembleSpec` 声明（OPT-2a）：它是 frozen 纯数据，不是服务定位器，
+未给的字段一律保持历史自建路径（零行为变更）。
 """
 
 from __future__ import annotations
 
 import logging
-import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from questor.config.model import load_config
+from questor.contracts.memory import MemoryStorePort
+from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort, SurfacePort
 from questor.providers.artifact_store import FileSystemArtifactStore
 from questor.providers.process_runner import SandboxedProcessRunner
 from questor.providers.sandbox import detect_sandbox
@@ -30,49 +36,74 @@ _LOG = logging.getLogger("questor.composition")
 
 
 # ---- env 读取（组合根独占；默认 <cwd>/.questor 布局）---------------------
+# 具体读取已收口到 ``questor.config.model.load_config()``（OPT-3 c2）：本模块只做"取子块"。
+# 每个函数仍**现读现用**（无缓存）——与历史逐字等价。
 def store_path() -> str:
-    return os.environ.get("QUESTOR_STORE_PATH", str(Path.cwd() / ".questor" / "state.db"))
+    return load_config().paths.store_path
 
 
 def memory_db_path() -> str:
-    return os.environ.get("QUESTOR_MEMORY_DB", str(Path.cwd() / ".questor" / "memory.db"))
+    return load_config().paths.memory_db
 
 
 def memory_root() -> str:
-    return os.environ.get("QUESTOR_MEMORY_ROOT", str(Path.cwd() / ".questor" / "memory_store"))
+    return load_config().paths.memory_root
 
 
 def skills_dir_from_env() -> str:
-    return os.environ.get("QUESTOR_SKILLS_DIR", str(Path.cwd() / ".questor" / "skills"))
+    return load_config().paths.skills_dir
 
 
 def mcp_json_from_env() -> str:
-    return os.environ.get("QUESTOR_MCP_JSON", str(Path.cwd() / "mcp.json"))
+    return load_config().paths.mcp_json
 
 
 def model_from_env() -> str:
     """模型名取自 ``QUESTOR_MODEL``（缺省回落离线 "echo"）。必须透传给 CliSurface.model，
     否则 surface 缺省 "echo" 会在 litellm 的 ``request.model or self.model`` 里覆盖真供应商模型。"""
-    return os.environ.get("QUESTOR_MODEL") or "echo"
+    return load_config().llm.model_name
 
 
 def sidecar_generation_from_env() -> int:
-    try:
-        return int(os.environ.get("QUESTOR_SIDECAR_GENERATION", "1"))
-    except ValueError:
-        return 1
+    return load_config().sidecar.generation
 
 
 def sidecar_bootstrap_from_env() -> str:
-    return os.environ.get("QUESTOR_SIDECAR_BOOTSTRAP", str(Path.cwd() / ".questor" / "sidecar-bootstrap.json"))
+    return load_config().sidecar.bootstrap_path
 
 
 def web_dist_from_env() -> Path | None:
-    dist = os.environ.get("QUESTOR_WEB_DIST")
-    if not dist:
-        return None
-    path = Path(dist)
-    return path if path.is_dir() else None
+    return load_config().sidecar.web_dist
+
+
+@dataclass(frozen=True, slots=True)
+class AssembleSpec:
+    """一次装配的**输入规格**（OPT-2a）：纯数据，字段默认 ``None`` = 走现路径自建。
+
+    红线（刻意不做的三件事）：
+    - **不是服务定位器**：没有 ``get(name)``/动态解析/按名注入，也不持有 registry 或容器；
+    - **不管生命周期**：没有 init/teardown/scope，句柄的连接与关闭仍归 :func:`build_app` /
+      :func:`close_app`；
+    - **不改构造顺序**：未给的字段按历史顺序与默认值自建（``store → memory → artifact → sandbox →
+      process_runner → surface``），因此默认 spec 与无 spec 逐字段等价。
+
+    字段状态：``surface``/``provider_factory``/``store``/``memory``/``artifact``/``sandbox``/
+    ``context_assembler`` 已接线（OPT-2a / OPT-12a）；``loop``/``policy_factory``/``summarizer``/
+    ``memory_strategy``/``profile`` 是已定形、待后续刀接线的接缝——**本轮不改任何装配行为**。
+    """
+
+    surface: object | None = None
+    provider_factory: Callable[[], ProviderPort] | None = None
+    store: StorePort | None = None
+    memory: MemoryStorePort | None = None
+    artifact: object | None = None
+    sandbox: object | None = None
+    loop: object | None = None
+    policy_factory: Callable[[], object] | None = None
+    summarizer: object | None = None
+    context_assembler: ContextAssemblerPort | None = None
+    memory_strategy: object | None = None
+    profile: str | None = None
 
 
 @dataclass
@@ -84,24 +115,35 @@ class App:
     artifact_store: FileSystemArtifactStore
     sandbox: object
     process_runner: object
-    surface: CliSurface
+    surface: SurfacePort
 
 
-async def build_app() -> App:
-    """连接持久层 + 装配 exec/写围栏/归档 + 构造 CliSurface。**唯一装配口径**。"""
+async def build_app(spec: AssembleSpec | None = None) -> App:
+    """连接持久层 + 装配 exec/写围栏/归档 + 构造 surface。**唯一装配口径**。
+
+    ``spec is None`` 时逐字走历史路径；给了 spec 则按字段取用，**未给的字段仍按历史顺序自建**
+    （OPT-2a：默认 spec 与无 spec 逐字段等价）。注入语义：
+    - ``store``/``memory``/``artifact``/``sandbox``：直接采用，不再 connect（句柄生命周期归调用方，
+      仍由 :func:`close_app` 统一回收）；
+    - ``provider_factory``：只在构造 surface 时调用一次；None → surface 自己按 env 选 provider（现路径）；
+    - ``surface``：采用给定实例，不再构造 CliSurface（其余句柄仍装配，供 App 字段/关闭与自述日志）。
+    """
+    spec = spec or AssembleSpec()
     path = store_path()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    store = await SQLiteStore(path).connect()
-    memory = await SQLiteMemoryStore(db_path=memory_db_path(), memory_root=memory_root()).connect()
+    store = spec.store if spec.store is not None else await SQLiteStore(path).connect()
+    memory = spec.memory if spec.memory is not None else await SQLiteMemoryStore(db_path=memory_db_path(), memory_root=memory_root()).connect()
     # exec 三件套：内容寻址归档 + 平台 sandbox 探测 + 受控进程执行器（#154）。
     data_root = Path(store_path()).parent
-    artifact_store = FileSystemArtifactStore(data_root / "artifacts")
-    await artifact_store.connect()
-    sandbox = detect_sandbox()
+    artifact_store = spec.artifact if spec.artifact is not None else FileSystemArtifactStore(data_root / "artifacts")
+    if spec.artifact is None:
+        await artifact_store.connect()
+    sandbox = spec.sandbox if spec.sandbox is not None else detect_sandbox()
     process_runner = SandboxedProcessRunner(sandbox, artifact_store=artifact_store, data_root=data_root)
-    surface = CliSurface(
+    surface = spec.surface if spec.surface is not None else CliSurface(
         store=store,
         memory_store=memory,
+        provider=spec.provider_factory() if spec.provider_factory is not None else None,
         model=model_from_env(),
         skills_dir=Path(skills_dir_from_env()),
         mcp_json_path=Path(mcp_json_from_env()),
@@ -109,6 +151,7 @@ async def build_app() -> App:
         process_runner=process_runner,
         artifact_store=artifact_store,
         sandbox=sandbox,
+        context_assembler=spec.context_assembler,
     )
     _LOG.info(
         "composition root ready store=%s memory_db=%s sandbox=%s",
