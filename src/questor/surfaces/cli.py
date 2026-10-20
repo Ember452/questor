@@ -15,18 +15,9 @@ import sys
 from pathlib import Path
 
 from questor.capabilities._host import PluginHost
-from questor.capabilities.subagent.delegate import DelegateTool
-from questor.capabilities.tools.apply_patch import ApplyPatchTool
-from questor.capabilities.tools.bash import BashTool
-from questor.capabilities.tools.edit import EditTool
-from questor.capabilities.tools.glob import GlobTool
-from questor.capabilities.tools.grep import GrepTool
-from questor.capabilities.tools.ls import LsTool
-from questor.capabilities.tools.memory_search import MemorySearchTool
-from questor.capabilities.tools.powershell import PowerShellTool
 from questor.capabilities.tools.read import ReadTool
 from questor.capabilities.tools.registry import ToolRegistry
-from questor.capabilities.tools.write import WriteTool
+from questor.capabilities.toolset import build_tools
 from questor.config.model import load_config
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
@@ -113,10 +104,10 @@ def sys_stdin_tty() -> bool:
     return sys.stdin.isatty()
 
 
-def _default_registry() -> ToolRegistry:
-    """P2 默认内置工具集（注册表只收 available() 为真的，缺 bash 的平台自动隐藏）。"""
+def _default_registry(profile: str | None = None) -> ToolRegistry:
+    """默认内置工具集（OPT-5：profile→tool_id 数据表；注册表只收 available() 为真的）。"""
     registry = ToolRegistry()
-    for tool in (ReadTool(), WriteTool(), EditTool(), ApplyPatchTool(), LsTool(), GlobTool(), GrepTool(), BashTool(), PowerShellTool(), MemorySearchTool(), DelegateTool()):
+    for tool in build_tools(profile):
         registry.register(tool)
     return registry
 
