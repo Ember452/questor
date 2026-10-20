@@ -41,8 +41,9 @@ TERMINAL: frozenset[str] = frozenset({EventType.RUN_CANCELLED, EventType.RUN_FAI
 #: 带内注入标记（B1/c4）：在用户正文里界定「系统/工具注入段」的起止符。
 #: 生产者（B4 SeedContext / B7 记忆注入等）**必须成对**书写；落库前由 :func:`strip_scaffolding` 剥除，
 #: 使事实流里的 ``user_message.text`` 只留「用户原话」（仿 hermes 的 ephemeral-scaffolding 语义）。
-#: **不做** hermes ``_DB_PERSISTED_MARKER`` 那种「标记 = 已落库」去重：去重只能靠 ``apply`` 的
-#: 幂等键（B0 咽喉），标记只用于内容剥离（R5：不造第二套去重）。
+#: **不做** hermes 上游那种「标记 = 已落库」式的去重——它的行标记是**别仓私有符号**，
+#: 不属本仓符号域（本注释刻意不引其名：`check_comment_refs` 只认本仓标识符，外部符号名会被判悬空）；
+#: 去重只能靠 ``apply`` 的幂等键（B0 咽喉），标记只用于内容剥离（R5：不造第二套去重）。
 SCAFFOLDING_OPEN = "<<questor:injected>>"
 SCAFFOLDING_CLOSE = "<<questor:end-injected>>"
 
