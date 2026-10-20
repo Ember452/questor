@@ -84,9 +84,12 @@ def _receipt_response(receipt: InboxReceipt) -> JSONResponse:
 class EventServer:
     """持有端点共享的 store + bus + active run 的 Command Inbox 注册表。"""
 
-    def __init__(self, surface: CliSurface, store: StorePort) -> None:
+    def __init__(self, surface: CliSurface, store: StorePort, *, ledger_enabled: bool = True, scheduler_enabled: bool = False) -> None:
         self.surface = surface
         self.store = store
+        self.ledger_enabled = ledger_enabled
+        self.scheduler_enabled = scheduler_enabled
+        self.scheduler = None
         # 让 EventServer 构造的 turn loop 也持久化 checkpoint（P3 resume 前置）；surface 仍只持 StorePort 抽象。
         if surface.store is None:
             surface.store = store
@@ -97,7 +100,7 @@ class EventServer:
         self.registry = RunRegistry()
         # P8 子 agent 编排：把 SubagentSpawnerPort 实现接到本服务共享的 bus/store/registry 上。
         # 仅当 run 调 `delegate` 时才起子；不调则行为与 P7 逐字一致。
-        self.orchestrator = SubagentOrchestrator(surface=surface, store=self.store, bus=self.bus, registry=self.registry)
+        self.orchestrator = SubagentOrchestrator(surface=surface, store=self.store, bus=self.bus, registry=self.registry, ledger_enabled=ledger_enabled)
         # 优雅关闭信号：`/shutdown` 置位，serve 面的看门狗据此让 uvicorn 应声停机（不等 grace 超时硬杀）。
         self.shutdown_event = asyncio.Event()
 

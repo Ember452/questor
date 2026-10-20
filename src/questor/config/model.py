@@ -38,6 +38,16 @@ def _int_or(raw: str, fallback: int) -> int:
         return fallback
 
 
+def _bool_or(raw: str, fallback: bool) -> bool:
+    """``on/off`` 开关：off/0/false/no 为 False；坏值回落。"""
+    value = (raw or "").strip().lower()
+    if value in {"on", "1", "true", "yes"}:
+        return True
+    if value in {"off", "0", "false", "no"}:
+        return False
+    return fallback
+
+
 @dataclass(frozen=True, slots=True)
 class PathsConfig:
     """持久层与能力目录（组合根独占读取；内核 env-free）。"""
@@ -108,6 +118,15 @@ class OpenAIConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class DeliveryConfig:
+    """交付账本开关与上限（B11；账本失败绝不阻塞发送）。"""
+
+    enabled: bool
+    max_rows: int
+    retry_base_seconds: float
+
+
+@dataclass(frozen=True, slots=True)
 class Config:
     """一次配置快照（frozen）：``load_config()`` 的返回，调用方按需取子块。"""
 
@@ -116,6 +135,7 @@ class Config:
     logging: LoggingConfig
     sidecar: SidecarConfig
     openai: OpenAIConfig
+    delivery: DeliveryConfig
     dream_lookback_raw: str
 
     @property
@@ -160,16 +180,28 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
             host=source.get("QUESTOR_OPENAI_HOST", "127.0.0.1"),
             port_raw=source.get("QUESTOR_OPENAI_PORT", "8000"),
         ),
+        delivery=DeliveryConfig(
+            enabled=_bool_or(source.get("QUESTOR_DELIVERY_LEDGER", "on"), True),
+            max_rows=500,
+            retry_base_seconds=5.0,
+        ),
         dream_lookback_raw=source.get("QUESTOR_DREAM_LOOKBACK", "7"),
     )
 
 
+def ledger_enabled(config: Config) -> bool:
+    """交付账本开关（唯一读取点；失败/关闭不得阻塞发送）。"""
+    return config.delivery.enabled
+
+
 __all__ = [
     "Config",
+    "DeliveryConfig",
     "LlmConfig",
     "LoggingConfig",
     "OpenAIConfig",
     "PathsConfig",
     "SidecarConfig",
+    "ledger_enabled",
     "load_config",
 ]

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 
 import aiosqlite
@@ -44,6 +45,11 @@ _TERMINAL_TYPES = ("run_completed", "run_cancelled", "run_failed")
 
 #: B11：v3 实装的四平台；其余为开放词表但义务行置 undeliverable（sweep 不投）。
 _DELIVERABLE_PLATFORMS: frozenset[str] = frozenset({"desktop", "http", "openai", "cli"})
+
+#: 五态 + 两个合法终态；``claimed`` 是 attempting 的 legacy 别名（旧 claim_delivery 兼容）。
+DELIVERY_STATES: frozenset[str] = frozenset({"pending", "attempting", "acked", "failed", "abandoned", "discarded", "undeliverable"})
+_MAX_DELIVERY_ROWS = 500
+_PROCESS_START = time.time()
 
 # 单一 schema authority、幂等 DDL（IF NOT EXISTS）。
 # event_log：per-run 逻辑 seq 复合主键保证不重，全局 gseq 单调物理序供跨 run watermark。
@@ -161,6 +167,13 @@ class StaleWriterError(RuntimeError):
 def _dumps(obj: object) -> str:
     """序列化为 JSON：先 thaw 不可变叶，禁 NaN/Inf、紧凑分隔符。"""
     return json.dumps(thaw(obj), allow_nan=False, separators=(",", ":"), ensure_ascii=False)
+
+
+def delivery_retry_not_before(error_class: str | None, attempts: int, now: float, base: float = 5.0) -> float:
+    """错误分类驱动的重试时刻：洪泛/限流/重连走指数退避，其余固定 base。"""
+    if error_class in {"flood", "rate_limit", "reconnect", "timeout"}:
+        return now + base * (2 ** min(max(0, attempts), 6))
+    return now + base
 
 
 class SQLiteStore(StorePort):
@@ -525,6 +538,166 @@ class SQLiteStore(StorePort):
                     await db.execute("UPDATE deliveries SET state = 'acked' WHERE delivery_id = ?", (delivery_id,))
                 await db.commit()
                 return True
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    # ---- B11：五态机 + 三 sweep + 上限裁剪（账本失败绝不阻塞发送）----
+    async def claim_obligation(
+        self,
+        *,
+        now: float | None = None,
+        owner_pid: int | None = None,
+        owner_start: float | None = None,
+        platforms: frozenset[str] | None = None,
+    ) -> list[JsonObject]:
+        """claim 可投义务：pending/failed-due 首次投；attempting/claimed 崩溃重投置 recovered=1。"""
+        stamp = time.time() if now is None else now
+        pid = os.getpid() if owner_pid is None else owner_pid
+        start = _PROCESS_START if owner_start is None else owner_start
+        claimed: list[JsonObject] = []
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute(
+                    "SELECT delivery_id, state, claimed_at, ttl_seconds, attempts, platform, not_before FROM deliveries "
+                    "WHERE state IN ('pending','claimed','attempting','failed') "
+                    "AND (not_before IS NULL OR not_before <= ?) ORDER BY claimed_at",
+                    (stamp,),
+                )
+                for delivery_id, state, claimed_at, ttl, attempts, platform, _not_before in await cur.fetchall():
+                    if platforms is not None and platform not in platforms:
+                        continue
+                    if platform == "undeliverable":
+                        continue
+                    recovering = state in {"claimed", "attempting"} and (claimed_at + ttl) <= stamp
+                    if state in {"claimed", "attempting"} and not recovering:
+                        continue  # 他人持有未过期 claim
+                    recovered = 1 if recovering else 0
+                    await db.execute(
+                        "UPDATE deliveries SET state = 'attempting', claimed_at = ?, ttl_seconds = ?, attempts = attempts + 1, "
+                        "owner_pid = ?, owner_start = ?, recovered = MAX(recovered, ?), not_before = NULL WHERE delivery_id = ?",
+                        (stamp, 30.0, pid, start, recovered, delivery_id),
+                    )
+                    claimed.append(
+                        {
+                            "delivery_id": delivery_id,
+                            "attempts": int(attempts) + 1,
+                            "recovered": bool(recovered),
+                            "platform": platform,
+                        }
+                    )
+                await db.commit()
+                return claimed
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    async def finish_delivery(
+        self,
+        delivery_id: str,
+        state: str,
+        *,
+        error_class: str | None = None,
+        not_before: float | None = None,
+    ) -> bool:
+        """校验五态转移后落终态/失败；abandoned 为不可复活终态。"""
+        if state not in DELIVERY_STATES:
+            raise ValueError(f"unknown delivery state {state!r}")
+        allowed = {
+            "pending": {"attempting", "acked", "failed", "abandoned", "discarded", "undeliverable"},
+            "claimed": {"attempting", "acked", "failed", "abandoned", "discarded"},
+            "attempting": {"attempting", "acked", "failed", "abandoned", "discarded", "undeliverable"},
+            "failed": {"pending", "attempting", "abandoned", "discarded"},
+            "acked": {"acked"},
+            "abandoned": {"abandoned"},
+            "discarded": {"discarded"},
+            "undeliverable": {"undeliverable"},
+        }
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT state FROM deliveries WHERE delivery_id = ?", (delivery_id,))
+                row = await cur.fetchone()
+                if row is None or state not in allowed.get(row[0], set()):
+                    await db.commit()
+                    return False
+                await db.execute(
+                    "UPDATE deliveries SET state = ?, last_error_class = ?, not_before = ? WHERE delivery_id = ?",
+                    (state, error_class, not_before, delivery_id),
+                )
+                await db.commit()
+                return True
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    async def sweep_recoverable(self, platforms: frozenset[str], now: float | None = None) -> list[JsonObject]:
+        """只对当前可投平台：返回超 TTL 的 in-flight 义务（供重投并带 recovered）。"""
+        stamp = time.time() if now is None else now
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT delivery_id, platform, attempts, owner_pid, owner_start FROM deliveries "
+                "WHERE state IN ('claimed','attempting') AND claimed_at + ttl_seconds <= ?",
+                (stamp,),
+            )
+            rows = await cur.fetchall()
+            return [
+                {"delivery_id": r[0], "platform": r[1], "attempts": r[2], "owner_pid": r[3], "owner_start": r[4]}
+                for r in rows
+                if r[1] in platforms
+            ]
+
+    async def sweep_failed_for_runtime(self, now: float | None = None) -> int:
+        """把到期的 failed 退回 pending（运行时 sweep；比固定 TTL 更细）。"""
+        stamp = time.time() if now is None else now
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute(
+                    "UPDATE deliveries SET state = 'pending', not_before = NULL WHERE state = 'failed' AND not_before IS NOT NULL AND not_before <= ?",
+                    (stamp,),
+                )
+                await db.commit()
+                return cur.rowcount or 0
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    async def pending_retries(self, now: float | None = None) -> int:
+        """到期可重试的 failed 条数。"""
+        stamp = time.time() if now is None else now
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT COUNT(*) FROM deliveries WHERE state = 'failed' AND not_before IS NOT NULL AND not_before <= ?",
+                (stamp,),
+            )
+            return int((await cur.fetchone())[0])
+
+    async def prune_deliveries(self, max_rows: int = _MAX_DELIVERY_ROWS) -> int:
+        """只裁 acked/abandoned/discarded 的旧行；pending/attempting/failed 绝不删。"""
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT COUNT(*) FROM deliveries")
+                total = int((await cur.fetchone())[0])
+                excess = max(0, total - max_rows)
+                if excess == 0:
+                    await db.commit()
+                    return 0
+                cur = await db.execute(
+                    "SELECT delivery_id FROM deliveries WHERE state IN ('acked','abandoned','discarded') ORDER BY claimed_at LIMIT ?",
+                    (excess,),
+                )
+                ids = [row[0] for row in await cur.fetchall()]
+                if ids:
+                    await db.executemany("DELETE FROM deliveries WHERE delivery_id = ?", [(item,) for item in ids])
+                await db.commit()
+                return len(ids)
             except BaseException:
                 await db.execute("ROLLBACK")
                 raise

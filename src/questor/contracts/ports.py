@@ -126,6 +126,39 @@ class StorePort(Protocol):
         """查询投递状态：None=未投、``"claimed"``=进行中、``"acked"``=已确认。"""
         ...
 
+    async def claim_obligation(
+        self,
+        *,
+        now: float | None = None,
+        owner_pid: int | None = None,
+        owner_start: float | None = None,
+        platforms: frozenset[str] | None = None,
+    ) -> list[JsonObject]:
+        """claim 可投义务；崩溃重投带 recovered=True/attempts 递增。"""
+        ...
+
+    async def finish_delivery(
+        self, delivery_id: str, state: str, *, error_class: str | None = None, not_before: float | None = None
+    ) -> bool:
+        """按五态转移规则落终态/失败；abandoned 不可复活。"""
+        ...
+
+    async def sweep_recoverable(self, platforms: frozenset[str], now: float | None = None) -> list[JsonObject]:
+        """只对当前可投平台返回超 TTL in-flight 义务。"""
+        ...
+
+    async def sweep_failed_for_runtime(self, now: float | None = None) -> int:
+        """到期 failed 退回 pending；返回条数。"""
+        ...
+
+    async def pending_retries(self, now: float | None = None) -> int:
+        """到期可重试 failed 条数。"""
+        ...
+
+    async def prune_deliveries(self, max_rows: int = 500) -> int:
+        """只裁 acked/abandoned/discarded 的旧行；返回删除数。"""
+        ...
+
     async def ack_delivery(self, delivery_id: str) -> bool:
         """投递完成确认：置 acked（幂等；对未知/已 acked 返回当前是否处于 acked）。"""
         ...
