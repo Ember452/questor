@@ -19,12 +19,12 @@
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 
 from questor.contracts.events import Command, Envelope
 from questor.contracts.ports import StorePort
+from questor.contracts.submissions import command_digest, is_rejection
 from questor.state.domain_state import Run
 from questor.state.reduce import reduce
 
@@ -34,6 +34,23 @@ _WINDOW_MAX = 4096
 
 class IdempotencyConflictError(ValueError):
     """同一个 ``idempotency_key`` 在同一状态上指向了不同命令：拒绝，绝不静默覆盖。"""
+
+
+@dataclass(frozen=True, slots=True)
+class Applied:
+    """一次 apply 的结果：新 Run + 事件 + 是否被受理（B2 命令窗口记录判据）。
+
+    ``__iter__`` 让既有 ``run, events = apply(...)`` 解包保持兼容（不改既有断言）。
+    """
+
+    run: Run
+    events: tuple[Envelope, ...]
+    accepted: bool = True
+    reject_reason: str | None = None
+
+    def __iter__(self):
+        yield self.run
+        yield self.events
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,8 +78,8 @@ def _lineage(run: Run) -> str:
 
 
 def _digest(command: Command) -> str:
-    """命令内容指纹：同 key 是否指向同一意图（与 RunController 的 ``repr`` 口径一致）。"""
-    return hashlib.sha256(repr(command).encode("utf-8")).hexdigest()
+    """命令内容指纹：canonical JSON + schema version（不再用 repr）。"""
+    return command_digest(command)
 
 
 def apply(
@@ -73,7 +90,7 @@ def apply(
     source: str,
     idempotency_key: str,
     now: datetime | None = None,
-) -> tuple[Run, tuple[Envelope, ...]]:
+) -> Applied:
     """唯一 reduce 入口：幂等判定 → reduce → 返回 ``(Run, 事件元组)``。
 
     ``source`` 只用于审计/冲突报错（谁提的）；``now`` 透传给 reduce 保证确定性。
@@ -97,13 +114,14 @@ def apply(
             # 状态已前进/已被快照重建：同 key 在新状态上指向新意图，如实记录（不误判为重复）。
         elif entry.seq_after == run.seq:
             # 同 key 同 digest 且状态已含这次应用 → 幂等 no-op：不重复产事件。
-            return run, ()
+            return Applied(run, (), False, "duplicate")
 
     new_run, events = reduce(run, command, now=now)
     _remember(key, digest, new_run.seq, source)
     if new_run.status.is_terminal:
         _evict_lineage(lineage, keep=key)
-    return new_run, tuple(events)
+    accepted = not is_rejection(command, events)
+    return Applied(new_run, tuple(events), accepted, None if accepted else "rejected")
 
 
 def _remember(key: tuple[str, str], digest: str, seq_after: int, source: str) -> None:
@@ -119,4 +137,4 @@ def _evict_lineage(lineage: str, *, keep: tuple[str, str]) -> None:
         del _WINDOW[stale]
 
 
-__all__ = ["IdempotencyConflictError", "apply", "reset_idempotency_window"]
+__all__ = ["Applied", "IdempotencyConflictError", "apply", "reset_idempotency_window"]

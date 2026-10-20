@@ -22,7 +22,16 @@ from enum import Enum
 from typing import Any
 
 from questor.contracts.common import JsonObject, thaw
-from questor.contracts.events import Cancel, Command, ExpireApproval, ResolveApproval, SetPermissionMode, SubmitMessage
+from questor.contracts.events import (
+    Cancel,
+    Command,
+    EventType,
+    ExpireApproval,
+    RecordWarning,
+    ResolveApproval,
+    SetPermissionMode,
+    SubmitMessage,
+)
 
 #: digest 语义版本：字段顺序/默认值变化不改摘要；语义变化才 bump。
 DIGEST_SCHEMA_VERSION = 1
@@ -161,6 +170,11 @@ def kind_for_command(command: Command) -> str:
     raise ValueError(f"command type {command.type!r} is not a queueable submission")
 
 
+def is_rejection(command: Command, events: tuple) -> bool:
+    """reduce 的拒绝形状：恰好一条 WARNING，且不是合法的 RecordWarning。"""
+    return len(events) == 1 and events[0].type == EventType.WARNING and not isinstance(command, RecordWarning)
+
+
 __all__ = [
     "DIGEST_SCHEMA_VERSION",
     "KNOWN_SOURCES",
@@ -176,5 +190,6 @@ __all__ = [
     "command_identity_payload",
     "command_payload",
     "kind_for_command",
+    "is_rejection",
     "normalize_source",
 ]

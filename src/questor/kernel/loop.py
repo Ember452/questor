@@ -67,7 +67,9 @@ from questor.contracts.state_schema import (
     ToolCallStatus,
 )
 from questor.contracts.subagent import SpawnRequest, SpawnResult, SubagentSpawnerPort
+from questor.contracts.submissions import command_digest
 from questor.contracts.tool import RunToolSurface, Tool, ToolResult, ToolSpec
+from questor.kernel.command_window import window_payload
 from questor.kernel.compaction import plan_compaction
 from questor.kernel.events import EventBus
 from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
@@ -81,7 +83,7 @@ from questor.observability.scope import bind
 from questor.state.checkpoint import open_tool_use_ids
 from questor.state.domain_state import Run
 from questor.state.snapshot import to_snapshot
-from questor.state.transition import apply
+from questor.state.transition import Applied, apply
 
 
 class _ToolCtx:
@@ -394,7 +396,7 @@ class DefaultTurnLoop:
                             RecordTurnCompleted(run_id=run.run_id, turn=turn, usage={}, interrupted=True),
                         )
                         await self._settle_turn(run, turn, turn_assistant, {}, interrupted=True)
-                    run, events = self._transition(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
+                    run, events = await self._transition(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
                     controller.run = run
                     await self._emit(events)
                     return run
@@ -410,7 +412,7 @@ class DefaultTurnLoop:
                     return await self._fail(run, turn, ErrorKind.TIMEOUT, f"max_turns {run.budget.max_turns} exhausted", "budget_exhausted")
 
                 turn_start = run  # C10/X4 回滚点：本 turn 起始时的状态
-                run, events = self._transition(run, AdvanceTurn(run_id=run.run_id, turn=turn))
+                run, events = await self._transition(run, AdvanceTurn(run_id=run.run_id, turn=turn))
                 controller.run = run
                 await self._emit(events)
 
@@ -423,7 +425,7 @@ class DefaultTurnLoop:
                         return run
                     continue
                 total_tokens += _token_total(usage)
-                run, events = self._transition(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
+                run, events = await self._transition(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
                 controller.run = run
                 await self._emit(events)
                 if not any(env.type == EventType.MESSAGE_COMPLETED for env in events):
@@ -464,7 +466,7 @@ class DefaultTurnLoop:
                 if faulted:
                     faults += 1
                     # durable 告警必须经 reduce 取号（否则复用已占 seq 撞 UNIQUE，track5-backbone BLK-1 path A）。
-                    run, wev = self._transition(run, RecordWarning(run_id=run.run_id, turn=turn, message="policy raised; rolling back turn (C10)"))
+                    run, wev = await self._transition(run, RecordWarning(run_id=run.run_id, turn=turn, message="policy raised; rolling back turn (C10)"))
                     await self._emit(wev)
                     # 回滚 Domain_State 到 turn 起点，但**保住单调 seq 游标**（已落库的事件号不得重用）。
                     run = replace(turn_start, seq=run.seq)
@@ -484,7 +486,7 @@ class DefaultTurnLoop:
                         RecordTurnCompleted(run_id=run.run_id, turn=turn, usage=usage, interrupted=False),
                     )
                     await self._settle_turn(run, turn, final, usage, interrupted=False)
-                    run, events = self._transition(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
+                    run, events = await self._transition(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
                     controller.run = run
                     await self._emit(events)
                     return run
@@ -503,7 +505,7 @@ class DefaultTurnLoop:
         batch = await controller.next_batch()
         try:
             for command in batch:
-                run, events = self._transition(run, command, source="inbox")
+                run, events = await self._transition(run, command, source="inbox")
                 applied.append(command)
                 controller.run = run
                 await self._emit(events)
@@ -567,7 +569,7 @@ class DefaultTurnLoop:
         if plan is None:
             return run
         await self._checkpoint(run, "pre_compact")  # 压缩前全量快照，保证可确定性还原压缩前态
-        run, events = self._transition(
+        run, events = await self._transition(
             run,
             CompactContext(
                 run_id=run.run_id,
@@ -593,7 +595,7 @@ class DefaultTurnLoop:
                 covered_to=p.seq_to,
                 covered_hash=p.covered_hash,
             )
-            run, mev = self._transition(run, WriteMemory(run_id=run.run_id, payload=payload))
+            run, mev = await self._transition(run, WriteMemory(run_id=run.run_id, payload=payload))
             controller.run = run
             await self._emit(mev)
             ack = next((e for e in mev if e.type == EventType.MEMORY_WRITTEN), None)
@@ -721,7 +723,7 @@ class DefaultTurnLoop:
         也必须原样带到 ``run_failed``，否则客户端与 P10 的重试编排无从决策。
         配对：``FinalizeRun`` 分支自带未闭合调用回填，failed 路径同样不破 I1/C7。
         """
-        run, events = self._transition(run, FinalizeRun(run_id=run.run_id, status="failed", error=err, exit_reason=exit_reason))
+        run, events = await self._transition(run, FinalizeRun(run_id=run.run_id, status="failed", error=err, exit_reason=exit_reason))
         await self._emit(events)
         return run
 
@@ -759,27 +761,27 @@ class DefaultTurnLoop:
         """工具路由：args→schema→validated→permission→sandbox→execute。"""
         call = next((c for c in run.tool_ledger.calls if c.tool_call_id == intent.tool_call_id), None)
         if call is None:
-            run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result="missing tool_use ledger entry"))
+            run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result="missing tool_use ledger entry"))
             controller.run = run
             await self._emit(events)
             return run
         if call.args_status is not ToolArgsStatus.VALID:
             reason = call.permission_reason or "invalid or missing tool arguments"
-            run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=f"invalid json arguments: {reason}"))
+            run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=f"invalid json arguments: {reason}"))
             controller.run = run
             await self._emit(events)
             return run
 
         tool = self._tool(intent.name)
         if tool is None:
-            run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=_unknown_tool_message(intent.name, self._specs(), self.surface)))
+            run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=_unknown_tool_message(intent.name, self._specs(), self.surface)))
             controller.run = run
             await self._emit(events)
             return run
 
         error = _schema_error(tool.spec.params, intent.args)
         if error is not None:
-            run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=error))
+            run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=error))
             controller.run = run
             await self._emit(events)
             return run
@@ -882,7 +884,7 @@ class DefaultTurnLoop:
                 result=f"tool '{name}' raised {type(exc).__name__}: {exc}",
                 display=f"{name} crashed",
             )
-        run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=tool_call_id, status=result.status, result=result.result, display=result.display))
+        run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=tool_call_id, status=result.status, result=result.result, display=result.display))
         controller.run = run
         await self._emit(events)
         await self._checkpoint(run, "post_tool")  # 工具结果已落库 → 快照收窄在途窗口（ADR-0020）
@@ -890,16 +892,32 @@ class DefaultTurnLoop:
 
     async def _apply_command(self, controller: RunController, run: Run, command: Command) -> Run:
         """内部 helper：所有 lifecycle transition 都先落 authority，再 emit。"""
-        run, events = self._transition(run, command)
+        run, events = await self._transition(run, command)
         controller.run = run
         await self._emit(events)
         return run
 
-    def _transition(self, run: Run, command: Command, *, source: str = "loop") -> tuple[Run, tuple[Envelope, ...]]:
+    async def _transition(self, run: Run, command: Command, *, source: str = "loop") -> Applied:
         """经唯一咽喉 ``state.transition.apply()`` 落一次迁移：幂等判定 → reduce → 事件。
 
-        loop 不再直接 call ``reduce``：store 仅注入（apply 不做 IO），事件由调用点 emit。"""
-        return apply(self.store, run, command, source=source, idempotency_key=_transition_key(command, run))
+        B2：受理的命令再写 ``command_window``（canonical digest + 有界 payload）；被拒命令
+        （``accepted=False``）不入窗。窗口写失败只告警——队列边缘已做同键异 digest 拒绝。"""
+        idem = _transition_key(command, run)
+        applied = apply(self.store, run, command, source=source, idempotency_key=idem)
+        if applied.accepted and self.store is not None and callable(getattr(self.store, "record_command", None)):
+            try:
+                await self.store.record_command(
+                    applied.run.run_id,
+                    applied.run.seq,
+                    command.type,
+                    window_payload(command),
+                    source=source,
+                    idem_key=idem,
+                    digest=command_digest(command),
+                )
+            except Exception:  # noqa: BLE001 - 窗口是优化层，失败不得打断单写者循环
+                _log.warning("command window record failed run=%s type=%s", applied.run.run_id, command.type, exc_info=True)
+        return applied
 
     async def _handle_ask(self, controller: RunController, run: Run, tool: Tool, intent: ProposeToolCall, outcome: object) -> Run:
         """ask → durable approval request → inbox/timeout；绝不阻塞回调。"""
@@ -1010,7 +1028,7 @@ class DefaultTurnLoop:
         """补执行一个已批准（ready）或曾在跑（running）的调用；仅在未 running 时补 MarkToolRunning。"""
         tool = self._tool(call.name)
         if tool is None:
-            run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=call.tool_call_id, status="error", result=f"unknown tool '{call.name}' on resume"))
+            run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=call.tool_call_id, status="error", result=f"unknown tool '{call.name}' on resume"))
             controller.run = run
             await self._emit(events)
             return run
