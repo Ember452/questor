@@ -6,6 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — w2-final · B5 扩展面（w2-final，6 commit，c1–c6 各自可 revert）
+- **c1 声明期词表（§5.1/§5.2）**：新增 `contracts/extension.py`：`ExtensionKind`（transform/decision/observe）、`HookOutcomeKind` 三值、13 个生效点位封闭集 + 4 个预留名（Notification/Elicitation/TaskUpdated/PlanStep，上限 17）、`ExtensionDescriptor` **6 字段**（id/kind/at/matcher/version/priority；无 `failure_semantics`，matcher 深冻结并按封闭键名校验）、`ObserveChain`（priority 降序、异常与 `FAILED_ABORT` 一律归一为 `FAILED_CONTINUE`）。判据：`tests/unit/test_extension_descriptor.py`（11 条）。
+
 ### Changed — OPT-2a / OPT-12a / OPT-3 / OPT-4：组合根接缝 + 上下文装配器 + 配置/profile 词汇（分支 `opt-seams`；12 commit，a1–a3 / b1–b3 / c1–c6 各自可 revert；**零行为变更**）
 - **OPT-2a 组合根接缝（a1–a3）**：新增 `composition.AssembleSpec`（frozen 纯数据，12 字段全默认 `None` = 走现路径自建；不是服务定位器）+ `build_app(spec=None)`（未给字段仍按历史顺序自建）+ `App.surface` 放宽为最小 `contracts.ports.SurfacePort`（只声明调用方实际用到的 `run_once`/`resume`/`_loop`/`_discover_mcp`/`_freeze_surface`/`_resolve_for_run` 与 `store`）。判据：`tests/integration/test_assemble_spec_default.py`——默认 spec 与 `build_app()` **逐字段等价**、注入字段真被使用（未给的仍自建）、`--help` stdout/exit-code **逐字节快照**。
 - **OPT-12a 上下文装配器（b1–b3）**：`CliSurface.__init__` 里的 `f"{system}\n\n{catalog}".strip() if catalog else system` 原样搬到 `surfaces/_assembly.py::assemble_system_prompt`，经新增 `ContextAssemblerPort` 接缝（`AssembleSpec.context_assembler` 已接线）；**逐字节等价，包括 `system=None` 时那个字面 `"None"`**（修它是 OPT-12b/B7，不在本刀）。新增 `tests/golden/prompt_system{,_none}.txt`（由**当前实现**生成一次并入库、LF-only）+ 逐字节单测；记忆注入位 `memory_block_provider` **默认关**，默认路径 `ProviderRequest.system` 一个字节不变。
