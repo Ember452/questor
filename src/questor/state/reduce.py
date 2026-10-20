@@ -44,6 +44,7 @@ from questor.contracts.events import (
     SpawnSubagent,
     SubmitMessage,
     UpdateTaskTree,
+    WarnCompaction,
     WriteMemory,
 )
 from questor.contracts.memory import MemoryCitation, source_for_write
@@ -442,6 +443,27 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
             )
         ]
 
+    if isinstance(command, WarnCompaction):
+        # B10/§7.3：压缩预警/熔断跳闸——**不改状态**，只占一个 durable seq（与 RecordWarning 同族）。
+        # 只带阈值/用量/计数，零正文（C18/C20）：“快满了”必须可回放，否则用户只看到一次莫名失败。
+        new = replace(run, seq=run.seq + 1)
+        return new, [
+            _event(
+                new.seq,
+                new,
+                command.turn,
+                EventType.COMPACT_WARNING,
+                {
+                    "reason": command.reason,
+                    "trigger": command.trigger,
+                    "used_tokens": command.used_tokens,
+                    "threshold": command.threshold,
+                    "window_number": command.window_number,
+                    "failures": command.failures,
+                },
+            )
+        ]
+
     if isinstance(command, CompactContext):
         # P10/ADR-0048：压缩应用——reduce **纯校验 + 纯应用**（对抗评审 MAJ-8）：摘要/锚/floor 均
         # 由 loop 侧算好随命令携带，reduce 绝不计算摘要/哈希。三道 fail-closed：
@@ -466,7 +488,20 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
         # 为本次两条事件连续取号（不复用同一 seq，ADR-0011）；baseline_seq = compact_applied 的 seq。
         seq = run.seq
         seq += 1
-        started = _event(seq, run, run.turn, EventType.COMPACT_STARTED, {"reason": "kernel_token_pressure"})
+        started = _event(
+            seq,
+            run,
+            run.turn,
+            EventType.COMPACT_STARTED,
+            {
+                "reason": "kernel_token_pressure",
+                "trigger": command.trigger,
+                "source": command.source,
+                "window_id": command.window_id,
+                "previous_window_id": command.previous_window_id,
+                "window_number": command.window_number,
+            },
+        )
         seq += 1
         covered_from = command.new_pointers[0].seq_from
         covered_to = command.new_pointers[-1].seq_to
@@ -475,7 +510,20 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
             run,
             run.turn,
             EventType.COMPACT_APPLIED,
-            {"baseline_seq": seq, "covered_from": covered_from, "covered_to": covered_to, "summary_bytes": len(command.summary_text.encode("utf-8"))},
+            {
+                "baseline_seq": seq,
+                "covered_from": covered_from,
+                "covered_to": covered_to,
+                "summary_bytes": len(command.summary_text.encode("utf-8")),
+                "trigger": command.trigger,
+                "source": command.source,
+                "window_id": command.window_id,
+                "previous_window_id": command.previous_window_id,
+                "window_number": command.window_number,
+                "evicted_count": command.evict_end - command.evict_start,
+                "before_tokens": command.before_tokens,
+                "after_tokens": command.after_tokens,
+            },
         )
         new = replace(run, context=ctx, seq=seq)
         return new, [started, applied]

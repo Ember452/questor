@@ -78,8 +78,26 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.TOOLS_CHANGED: frozenset({"domain"}),
     # compact_started/compact_applied（P10/ADR-0048，design/02 §10）：只带栅栏/有界量、无正文（C18/C20）。
     # baseline_seq 供渲染侧重折上下文视图；不进 projection._DATA_KEYS（摘要文本属载荷、日得不复制，C20）。
-    EventType.COMPACT_STARTED: frozenset({"reason"}),
-    EventType.COMPACT_APPLIED: frozenset({"baseline_seq", "covered_from", "covered_to", "summary_bytes"}),
+    EventType.COMPACT_STARTED: frozenset({"reason", "trigger", "source", "window_id", "previous_window_id", "window_number"}),
+    EventType.COMPACT_APPLIED: frozenset(
+        {
+            "baseline_seq",
+            "covered_from",
+            "covered_to",
+            "summary_bytes",
+            "trigger",
+            "source",
+            "window_id",
+            "previous_window_id",
+            "window_number",
+            "evicted_count",
+            "before_tokens",
+            "after_tokens",
+        }
+    ),
+    # compact_warning（B10/§7.1/§7.3）：durable 预警。只带阈值/用量/连续失败计数，零正文；
+    # reason 闭集：pressure（快满了）/ breaker_tripped（熔断跳闸）。
+    EventType.COMPACT_WARNING: frozenset({"reason", "trigger", "used_tokens", "threshold", "window_number", "failures"}),
     # user_message（B1；设计文档 §4.2）：用户原话进外部投影（重连可见 + 可重放）。
     # text 由 reduce 侧按 OutputBudget 有界、落库前剥掉注入脚手架；只进事件协议，
     # 绝不进带外投影白名单（projection._DATA_KEYS 不含 text，C20 零明文）。

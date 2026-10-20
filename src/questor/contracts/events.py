@@ -177,6 +177,39 @@ class RecordWarning:
     type: ClassVar[str] = "record_warning"
 
 
+#: `WarnCompaction.reason` 闭集（§7.1/§7.3）：预警阈值越过了，或连续失败熔断已跳闸。
+COMPACT_WARNING_REASONS: frozenset[str] = frozenset({"pressure", "breaker_tripped"})
+#: 触发来路闭集，与 `CompactionConfig.threshold()` 与事件 `trigger` 字段同源。
+COMPACT_TRIGGERS: frozenset[str] = frozenset({"auto", "manual", "legacy"})
+
+
+@dataclass(frozen=True, slots=True)
+class WarnCompaction:
+    """内核落一条 durable `compact_warning` 的唯一入口（B10/§7.3；与 `RecordWarning` 同族）。
+
+    为什么不能走总线：本事件是 **durable**——“快满了”与“熔断已跳闸”必须可回放，否则用户只会
+    看到一次莫名其妙的失败而查不到原因。durable 事件只能由 reduce 产，所以需要一个命令占 seq。
+    只带阈值/用量/计数，**零正文**（C18/C20）；不改任何状态。"""
+
+    run_id: str
+    turn: int | None
+    reason: str
+    trigger: str = "auto"
+    used_tokens: int | None = None
+    threshold: int | None = None
+    window_number: int = 0
+    failures: int = 0
+    type: ClassVar[str] = "warn_compaction"
+
+    def __post_init__(self) -> None:
+        if self.reason not in COMPACT_WARNING_REASONS:
+            raise ValueError(f"WarnCompaction.reason must be one of {sorted(COMPACT_WARNING_REASONS)}")
+        if self.trigger not in COMPACT_TRIGGERS:
+            raise ValueError(f"WarnCompaction.trigger must be one of {sorted(COMPACT_TRIGGERS)}")
+        if self.window_number < 0 or self.failures < 0:
+            raise ValueError("WarnCompaction.window_number/failures must be >= 0")
+
+
 @dataclass(frozen=True, slots=True)
 class RecordTurnCompleted:
     """内核在 Stop 点落一条 durable ``turn_completed``（B6；与 ``settle_turn`` 同批启用）。
@@ -209,11 +242,25 @@ class CompactContext:
     summary_text: str
     new_floor: int
     new_pointers: tuple[RecoveryPointer, ...] = ()
+    # ---- B10/§7.1–7.2 additive：触发来路与窗口身份（身份由 loop 从 store 派生，reduce 不计）----
+    #: 触发来路：``auto``（阈值）/ ``manual``（用户 `/compact`）/ ``legacy``（未配绝对阈值）。
+    trigger: str = "auto"
+    #: 信号源：``server_observed``（优先）或 ``estimated``（resume/重算基线）。
+    source: str = "estimated"
+    #: 本次压缩所属窗口（代际身份）；无 store 能力时为 ``None``（单窗口）。
+    window_id: str | None = None
+    previous_window_id: str | None = None
+    window_number: int = 0
+    #: 逐出前后的累计 token（仅计量、无正文）；未知道时 ``None``，不编造。
+    before_tokens: int | None = None
+    after_tokens: int | None = None
     type: ClassVar[str] = "compact_context"
 
     def __post_init__(self) -> None:
         if self.evict_start < 0 or self.evict_end < self.evict_start:
             raise ValueError("CompactContext requires 0 <= evict_start <= evict_end")
+        if self.window_number < 0:
+            raise ValueError("CompactContext.window_number must be >= 0")
 
 
 # ---- 内核内部 Command（仍是 Command，仍经 reduce 单写；C2）----
@@ -340,6 +387,7 @@ Command = (
     | Cancel
     | WriteMemory
     | DeleteMemory
+    | WarnCompaction
     | CompactContext
     | AppendAssistantMessage
     | AdvanceTurn
@@ -403,6 +451,9 @@ class EventType:
     TOOLS_CHANGED = "tools_changed"  # 能力名册变更 live-only 告警（P9；ADR-0046，design/02 §7）
     COMPACT_STARTED = "compact_started"  # 压缩开始（P10；ADR-0048，design/02 §10）
     COMPACT_APPLIED = "compact_applied"  # 压缩应用 + baseline_seq 栅栏（P10；ADR-0048，design/02 §10）
+    # 压缩预警（B10/§7.1/§7.3）：durable——“快满了”与“熔断已跳闸”必须可回放，不静默。
+    # 只带阈值/用量计量与 reason，零正文（C18/C20）；可被上游抑制（一次窗口只发一次）。
+    COMPACT_WARNING = "compact_warning"
     # 用户原话 durable（B1；设计文档 §4.2 事实流补齐）：非 idle 提交把有界正文写进事实流，
     # 使「重放 = 生产」与 --resume 的可见转录不依赖第二真相（idle 首条仍由 run_started + 快照承载，
     # 既有冻结断言 test_reduce.py:51 / test_transition_chokepoint.py:45 不改）。
@@ -440,6 +491,9 @@ __all__ = [
     "Cancel",
     "WriteMemory",
     "DeleteMemory",
+    "WarnCompaction",
+    "COMPACT_TRIGGERS",
+    "COMPACT_WARNING_REASONS",
     "CompactContext",
     "AppendAssistantMessage",
     "AdvanceTurn",

@@ -7,6 +7,7 @@ import 实现（C1/C14）。P0 固定签名，实现体自 P1 起。
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -92,6 +93,16 @@ class StorePort(Protocol):
 
     async def list_unfinished_runs(self) -> tuple[str, ...]:
         """从 log 派生非终态 run id（有事件但无终态事件）；供 ``--resume`` 枚举。"""
+        ...
+
+    # ---- B10/§7.1：压缩窗口身份（纯增量；派生自 command_window，**不建第二张窗口表**）----
+    async def window_identity(self, run_id: str) -> JsonObject | None:
+        """本 run 的压缩窗口身份：``window_number`` / ``window_id`` / ``previous_window_id``。
+
+        从 **既有 `command_window` 行** 派生：数已受理的 `compact_context` 命令次数即代际，
+        首条命令的 seq 作身份锚（§20 零新表）。无 `command_window` 能力的 store 返回
+        ``None`` = 单窗口（number 从 0 起），压缩照旧工作、只是事件不带身份。
+        """
         ...
 
     # ---- P9/ADR-0047：跨进程 exactly-once 的投递账本 + 单机多进程 run 租约（纯增量）----
@@ -428,6 +439,20 @@ class IdGenerator(Protocol):
     def new(self, prefix: str) -> str: ...
 
 
+@runtime_checkable
+class SummarizerPort(Protocol):
+    """压缩摘要器端口（B10/§7.4）：把被逐出的中段消息浓缩成**有界**摘要文本。
+
+    `summarize()` 从 L2 `kernel/compaction.py` 移出到此定性：providers 给 LLM 实现，
+    `providers/fake.py` 给确定性 fake（保 `check_replay_determinism` 与评测可复现）；
+    模型角色走 modelroles 便宜档、side-query 不开 cache（§6.1-2）。
+    契约：**只产文本、不做状态决策**——逐出区间、锚与阈值全由内核算定，摘要器无权改写；
+    返回必须已截到 ``max_chars`` 内（C18/C20：正文只进 prompt，绝不进事件）。
+    """
+
+    async def summarize(self, evicted: Sequence[Message], *, max_chars: int) -> str: ...
+
+
 __all__ = [
     "ProviderRequest",
     "StreamChunk",
@@ -439,4 +464,5 @@ __all__ = [
     "SandboxPort",
     "SurfacePort",
     "ContextAssemblerPort",
+    "SummarizerPort",
 ]

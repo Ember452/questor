@@ -28,6 +28,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+from questor.contracts.artifacts import OutputBudget
 from questor.contracts.common import JsonObject, new_id, thaw, utc_now
 from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints, classify_provider_error
 from questor.contracts.events import (
@@ -51,6 +52,7 @@ from questor.contracts.events import (
     ResolveApproval,
     SpawnSubagent,
     SubmitMessage,
+    WarnCompaction,
     WriteMemory,
 )
 from questor.contracts.extension import (
@@ -75,7 +77,7 @@ from questor.contracts.memory import (
     recall_skipped_by_flags,
 )
 from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
-from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort
+from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort, SummarizerPort
 from questor.contracts.sandbox import Confinement, SandboxBackend, SandboxDescriptor
 from questor.contracts.shell_analysis import ShellAnalysis, ShellDialect, ShellParseStatus
 from questor.contracts.state_schema import (
@@ -91,7 +93,13 @@ from questor.contracts.subagent import SpawnRequest, SpawnResult, SubagentSpawne
 from questor.contracts.submissions import command_digest
 from questor.contracts.tool import RunToolSurface, Tool, ToolResult, ToolSpec
 from questor.kernel.command_window import window_payload
-from questor.kernel.compaction import plan_compaction
+from questor.kernel.compaction import (
+    MAX_CONSECUTIVE_COMPACT_FAILURES,
+    SUMMARY_MAX_CHARS,
+    EvictWindow,
+    evict_window,
+    plan_compaction,
+)
 from questor.kernel.events import EventBus
 from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
 from questor.kernel.run_control import RunController
@@ -344,6 +352,8 @@ class DefaultTurnLoop:
         query_source: str = "main",
         recall: RecallPort | None = None,
         memory_root: Path | None = None,
+        summarizer: SummarizerPort | None = None,
+        output_envelope: object | None = None,
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -365,6 +375,16 @@ class DefaultTurnLoop:
         self.subagent_spawner = subagent_spawner
         # P10/ADR-0048：可恢复压缩旋钮；None = 不压缩（向后兼容，等价旧 disable_compaction=True）。
         self.compaction = compaction
+        # B10/§7.3–7.4：可注入摘要器（未给则用 L2 确定性启发式）；熔断只数**连续**失败，
+        # 预警按窗口去重（一个窗口一次“快满了”，不静默也不刷屏）。两者都是 run 内状态。
+        self.summarizer = summarizer
+        self._compact_failures = 0
+        self._warned_windows: set[int] = set()
+        self._usage_source = "estimated"
+        # §7.2 C-1（BLK-10 收口）：大工具输出归档的信封工厂，由 **surface 注入**（形状取
+        # `capabilities.tools._output.envelope_for_text`）——kernel 不 import L3，所以递的是 callable。
+        # 未注入（直接拼 loop 的旧路径）则工具结果逐字不变，既有行为不破。
+        self.output_envelope = output_envelope
         # B6/B5：Stop 点是 settle 的唯一入口。``stop`` 是装配好的 OBSERVE 链；
         # ``settle=`` 是 R3 兼容薄糖（既有测试直接传 callable），内部包成单条 Stop 链，
         # **不存在第二套回调字段**。
@@ -495,6 +515,10 @@ class DefaultTurnLoop:
                         return run
                     continue
                 total_tokens += _token_total(usage)
+                if usage:
+                    # §7.1 信号源：模型报回来的 usage 是 **server-observed**，比任何本地估算都可信；
+                    # 没报（假 provider / 只产文本）就仍是 estimated，摘要与阈值都按它标来源，不冒充观测值。
+                    self._usage_source = "server_observed"
                 citations, self._turn_citations = self._turn_citations, None
                 run, events = await self._transition(
                     run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg, citations=citations)
@@ -521,8 +545,8 @@ class DefaultTurnLoop:
 
                 # P10/ADR-0048：turn 边界安全点（快照已落、全部 tool_use 已闭合）尝试可恢复压缩。
                 # I2：压缩由内核决定（策略只能发 advisory hint）；未配 compaction 则逐字不变。
+                await self._maybe_warn_pressure(controller, run, turn, total_tokens)
                 run = await self._maybe_compact(controller, run, turn, total_tokens)
-
                 if run.budget.max_tokens is not None and total_tokens > run.budget.max_tokens:
                     return await self._fail(run, turn, ErrorKind.INTERNAL, f"token budget {run.budget.max_tokens} exceeded (used {total_tokens})", "budget_exhausted")
 
@@ -641,7 +665,97 @@ class DefaultTurnLoop:
                     outcome.reason,
                 )
 
-    async def _maybe_compact(self, controller: RunController, run: Run, turn: int, total_tokens: int) -> Run:
+    async def _window_identity(self, run: Run) -> JsonObject:
+        """从 **现有 `command_window` 行** 派生本 run 的压缩窗口身份（B10/§7.1，零新表）。
+
+        store 不支持时返回单窗口默认（number=0、身份 None），压缩照旧工作、只是事件不带身份。"""
+        window_identity = getattr(self.store, "window_identity", None)
+        if not callable(window_identity):
+            return {"window_number": 0, "window_id": None, "previous_window_id": None}
+        try:
+            row = await window_identity(run.run_id)
+        except Exception:  # noqa: BLE001 - 身份是观测面，拿不到就降级为无身份，绝不拖垮压缩
+            _log.warning("window identity lookup failed run=%s", run.run_id, exc_info=True)
+            return {"window_number": 0, "window_id": None, "previous_window_id": None}
+        if not row:
+            return {"window_number": 0, "window_id": None, "previous_window_id": None}
+        return {
+            "window_number": int(row.get("window_number", 0)),
+            "window_id": row.get("window_id"),
+            "previous_window_id": row.get("previous_window_id"),
+        }
+
+    async def _emit_compact_warning(
+        self,
+        controller: RunController,
+        run: Run,
+        turn: int,
+        *,
+        reason: str,
+        trigger: str,
+        used_tokens: int | None,
+        threshold: int | None,
+        window_number: int,
+        failures: int,
+    ) -> Run:
+        """落一条 durable `compact_warning`（同 `RecordWarning`：经 reduce 取号，保 seq 单调）。"""
+        run, events = await self._transition(
+            run,
+            WarnCompaction(
+                run_id=run.run_id,
+                turn=turn,
+                reason=reason,
+                trigger=trigger,
+                used_tokens=used_tokens,
+                threshold=threshold,
+                window_number=window_number,
+                failures=failures,
+            ),
+        )
+        controller.run = run
+        await self._emit(events)
+        return run
+
+    async def _maybe_warn_pressure(self, controller: RunController, run: Run, turn: int, total_tokens: int) -> None:
+        """§7.1 预警：累计用量越过 `EW - warning_buffer` 就发一次“快满了”（每个窗口只发一次）。
+
+        未配 `context_window`（算不出绝对阈值）时完全不动作，行为逐字同 P10。"""
+        if self.compaction is None:
+            return
+        threshold = self.compaction.warning_threshold()
+        if threshold is None or total_tokens < threshold:
+            return
+        identity = await self._window_identity(run)
+        number = int(identity["window_number"])
+        if number in self._warned_windows:
+            return  # 一次窗口一次告警：不静默，也不刷屏
+        self._warned_windows.add(number)
+        await self._emit_compact_warning(
+            controller,
+            run,
+            turn,
+            reason="pressure",
+            trigger="auto",
+            used_tokens=total_tokens,
+            threshold=threshold,
+            window_number=number,
+            failures=self._compact_failures,
+        )
+
+    async def _summary_for(self, window: EvictWindow) -> str | None:
+        """有 `SummarizerPort` 就问它（异步 IO 不得进 L2 纯决策），否则返回 None 用内置启发式。
+
+        摘要器报错不冒泡：压缩失败是合法结果（熔断会计它），但绝不能把回复带崩。"""
+        if self.summarizer is None:
+            return None
+        try:
+            return await self.summarizer.summarize(window.evicted, max_chars=SUMMARY_MAX_CHARS)
+        except Exception:  # noqa: BLE001 - 摘要器故障计入熔断，不击穿回复（C10 同向）
+            _log.warning("summarizer raised; falling back to deterministic summary", exc_info=True)
+            self._compact_failures += 1
+            return None
+
+    async def _maybe_compact(self, controller: RunController, run: Run, turn: int, total_tokens: int, *, trigger: str = "auto") -> Run:
         """P10/ADR-0048：在 turn 边界安全点尝试一次**可恢复压缩**。
 
         步骤（全部经 Command→reduce→durable，绝不上 out-of-band）：
@@ -653,9 +767,18 @@ class DefaultTurnLoop:
         """
         if self.compaction is None:
             return run
-        plan = plan_compaction(run, self.compaction, total_tokens)
+        if trigger == "auto" and self._compact_failures >= MAX_CONSECUTIVE_COMPACT_FAILURES:
+            # §7.3 熔断：跳闸后**不再自动压**（没有它的代价写在 Claude-Code 注释里：1,279 个会话、
+            # 最高 3,272 次连续失败）。溢出则走既有 budget/失败归一路径，不静默重试烧钱。
+            return run
+        window = evict_window(run, self.compaction, total_tokens, trigger=trigger)
+        if window is None:
+            return run
+        summary_text = await self._summary_for(window)
+        plan = plan_compaction(run, self.compaction, total_tokens, trigger=trigger, summary_text=summary_text)
         if plan is None:
             return run
+        identity = await self._window_identity(run)
         await self._checkpoint(run, "pre_compact")  # 压缩前全量快照，保证可确定性还原压缩前态
         run, events = await self._transition(
             run,
@@ -666,12 +789,34 @@ class DefaultTurnLoop:
                 summary_text=plan.summary_text,
                 new_floor=plan.new_floor,
                 new_pointers=plan.new_pointers,
+                trigger=plan.trigger,
+                source=self._usage_source,
+                window_id=identity["window_id"],
+                previous_window_id=identity["previous_window_id"],
+                window_number=int(identity["window_number"]),
+                before_tokens=total_tokens,
+                after_tokens=None,  # 逐出后的累计用量本轮未知：不编造（None 不进事件字段假数）
             ),
         )
         controller.run = run
         await self._emit(events)
         if not any(e.type == EventType.COMPACT_APPLIED for e in events):
-            return run  # reduce 拒了（如越 closed_prefix）→不进蒸馏写
+            # reduce 拒了（如越 closed_prefix）→不进蒸馏写，并计入连续失败（§7.3 熔断）。
+            self._compact_failures += 1
+            if trigger == "auto" and self._compact_failures >= MAX_CONSECUTIVE_COMPACT_FAILURES:
+                run = await self._emit_compact_warning(
+                    controller,
+                    run,
+                    turn,
+                    reason="breaker_tripped",
+                    trigger="auto",
+                    used_tokens=total_tokens,
+                    threshold=self.compaction.auto_threshold(),
+                    window_number=int(identity["window_number"]),
+                    failures=self._compact_failures,
+                )
+            return run
+        self._compact_failures = 0  # 一次成功就清零：熔断只数**连续**失败
         # L2' 蒸馏桥：被压区浓缩写 daily（正文只放浓缩、绝不放 delta/原文，I3）。
         if self.memory_store is not None:
             p = plan.new_pointers[0]
@@ -944,6 +1089,26 @@ class DefaultTurnLoop:
         # 统一交给 _execute_tool（普通 turn 与 resume 重派共用，design/03 §8 deadline 对所有工具生效）。
         return await self._execute_tool(controller, run, tool, intent.tool_call_id or "", intent.args, intent.name)
 
+    async def _archive_output(self, run: Run, tool_call_id: str, result: ToolResult) -> ToolResult:
+        """§7.2 C-1：超预算的工具全文进内容寻址 artifact，prompt 只留有界信封（BLK-10 接线）。"""
+        envelope_for = self.output_envelope
+        if not callable(envelope_for) or self.artifact_store is None or not isinstance(result.result, str):
+            return result  # 未注入就逐字同 P10：不新建第二套归档路径，也不强行归档
+        try:
+            envelope, _ref, archived = await envelope_for(  # type: ignore[misc]
+                result.result,
+                store=self.artifact_store,
+                run_id=run.run_id,
+                tool_call_id=tool_call_id,
+                budget=OutputBudget(),
+            )
+        except Exception:  # noqa: BLE001 - 归档失败降级为有界原样，绝不把全文塑回 prompt（ADR-0019）
+            _log.warning("tool output archiving failed; keeping bounded result run=%s call=%s", run.run_id, tool_call_id, exc_info=True)
+            return result
+        if not archived or not isinstance(envelope, dict):
+            return result
+        return replace(result, result=envelope)
+
     async def _execute_tool(self, controller: RunController, run: Run, tool: Tool, tool_call_id: str, args: object, name: str) -> Run:
         """执行工具并 settle 一条耐久结果（Harness 兜 panic/deadline，design/03 §8/C10）。
 
@@ -979,6 +1144,7 @@ class DefaultTurnLoop:
                 result=f"tool '{name}' raised {type(exc).__name__}: {exc}",
                 display=f"{name} crashed",
             )
+        result = await self._archive_output(run, tool_call_id, result)
         run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=tool_call_id, status=result.status, result=result.result, display=result.display))
         controller.run = run
         await self._emit(events)

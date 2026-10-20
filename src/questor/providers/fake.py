@@ -14,7 +14,8 @@ from collections.abc import AsyncIterator, Sequence
 from typing import ClassVar
 
 from questor.contracts.memory import EmbeddingPort
-from questor.contracts.ports import ProviderPort, ProviderRequest, StreamChunk
+from questor.contracts.ports import ProviderPort, ProviderRequest, StreamChunk, SummarizerPort
+from questor.contracts.state_schema import Message
 
 
 class ScriptedProvider(ProviderPort):
@@ -65,4 +66,28 @@ class FakeEmbedder(EmbeddingPort):
         return tuple(round(value / magnitude, 6) for value in digits)
 
 
-__all__ = ["EchoProvider", "FakeEmbedder", "ScriptedProvider"]
+class FakeSummarizer(SummarizerPort):
+    """确定性摘要器（B10/§7.4）：按源序拼可见文本，末尾给可见占位符。
+
+    存在理由不是"模拟 LLM 摘要质量"（那永远 UNVERIFIED），而是让**带摘要器的压缩路径**
+    在 CI 与回放里真实跑通：`check_replay_determinism` 要求同输入同输出，本实现不读时钟、
+    不发网络、不依赖模型。返回严格截到 ``max_chars``（C18 有界）。占位符文本与
+    ``kernel.compaction.CLEARED_PLACEHOLDER`` 同源（两边各写一份是为了不破分层，由测试钉住）。
+    """
+
+    async def summarize(self, evicted: Sequence[Message], *, max_chars: int) -> str:
+        parts: list[str] = []
+        cleared = False
+        for message in evicted:
+            text = " ".join(block.text for block in message.content if block.type == "text" and block.text)
+            cleared = cleared or any(block.type == "tool_result" for block in message.content)
+            if text:
+                parts.append(f"{message.role.value}: {text}")
+        if not parts:
+            parts.append(f"[compacted {len(evicted)} turn(s): tool activity only]")
+        if cleared:
+            parts.append("[Old tool result content cleared]")
+        return "\n".join(parts).strip()[: max(0, max_chars)]
+
+
+__all__ = ["EchoProvider", "FakeEmbedder", "FakeSummarizer", "ScriptedProvider"]

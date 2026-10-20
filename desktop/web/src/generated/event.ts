@@ -46,6 +46,7 @@ export type QuestorExternalEventProjectionV1 = {
     | "tools_changed"
     | "compact_started"
     | "compact_applied"
+    | "compact_warning"
     | "user_message"
     | "turn_completed"
     | "memory_injected"
@@ -580,19 +581,43 @@ export interface ToolsChangedData {
   domain: "tools" | "skills" | "mcp" | "plugins" | "settings";
 }
 /**
- * Kernel began recoverable context compaction at a turn boundary (P10/ADR-0048, design/02 §10). reason is a short kernel label; no payload, never the summary text (C18/C20).
+ * Kernel began recoverable context compaction at a turn boundary (P10/ADR-0048, design/02 §10). reason is a short kernel label; no payload, never the summary text (C18/C20). B10 adds the window identity (design/07 §7.1): compaction is a generational event, not an in-place trim, so trigger/source/window_id/previous_window_id/window_number tell a renderer which window this fold belongs to. All optional — frames persisted before B10 legitimately lack them.
  */
 export interface CompactStartedData {
   reason: string;
+  trigger?: "auto" | "manual" | "legacy";
+  source?: "server_observed" | "estimated";
+  window_id?: string | null;
+  previous_window_id?: string | null;
+  window_number?: number;
 }
 /**
- * Compaction applied; baseline_seq is the durable seq that rewrote context so renderers re-fold their view (design/02 §10). covered_from/covered_to are the evicted durable event seq range (originals read back from append-only event_log); summary_bytes is the summary size only, never its text (C20).
+ * Compaction applied; baseline_seq is the durable seq that rewrote context so renderers re-fold their view (design/02 §10). covered_from/covered_to are the evicted durable event seq range (originals read back from append-only event_log); summary_bytes is the summary size only, never its text (C20). B10 adds the window identity plus bounded counters (evicted_count/before_tokens/after_tokens) so the overflow path is measurable without copying any body text.
  */
 export interface CompactAppliedData {
   baseline_seq: number;
   covered_from: number;
   covered_to: number;
   summary_bytes: number;
+  trigger?: "auto" | "manual" | "legacy";
+  source?: "server_observed" | "estimated";
+  window_id?: string | null;
+  previous_window_id?: string | null;
+  window_number?: number;
+  evicted_count?: number;
+  before_tokens?: number | null;
+  after_tokens?: number | null;
+}
+/**
+ * B10/ADR-0057 (design/07 §7.1/§7.3): a durable, plaintext-free compaction advisory — either the absolute warning threshold was crossed (reason=pressure) or the consecutive-failure breaker tripped (reason=breaker_tripped, after which automatic compaction stops for the run). Carries only thresholds, observed usage and the failure count; the body text never enters the event (C18/C20). Durable because a silent near-overflow is exactly what users experience as an unexplained failure.
+ */
+export interface CompactWarningData {
+  reason: "pressure" | "breaker_tripped";
+  trigger: "auto" | "manual" | "legacy";
+  used_tokens?: number | null;
+  threshold?: number | null;
+  window_number?: number;
+  failures?: number;
 }
 /**
  * User-originated message body persisted into the fact stream (B1; design §4.2). text is the bounded user-originated text (maxLength = OutputBudget.model_result_bytes; injected scaffolding stripped before persisting); truncated=true when the stored body was cut. Full body stays authoritative in the checkpoint. Not logged (C20).
@@ -676,6 +701,7 @@ export const EVENT_TYPE_NAMES = [
   "tools_changed",
   "compact_started",
   "compact_applied",
+  "compact_warning",
   "user_message",
   "turn_completed",
   "memory_injected",

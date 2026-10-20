@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from questor.capabilities._host import PluginHost
+from questor.capabilities.tools._output import envelope_for_text
 from questor.capabilities.tools.read import ReadTool
 from questor.capabilities.tools.registry import ToolRegistry
 from questor.capabilities.toolset import build_tools
@@ -29,7 +30,7 @@ from questor.contracts.extension import (
 )
 from questor.contracts.memory import MemoryStorePort, RecallPort
 from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyRef, PolicyTrust
-from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort
+from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort, SummarizerPort
 from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role, RunStatus
 from questor.contracts.subagent import SubagentSpawnerPort
 from questor.contracts.tool import RunToolSurface, Tool
@@ -179,6 +180,7 @@ class CliSurface:
         context_assembler: ContextAssemblerPort | None = None,
         memory_index_enabled: bool = False,
         recall: RecallPort | None = None,
+        summarizer: SummarizerPort | None = None,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
@@ -200,6 +202,9 @@ class CliSurface:
         # P10/Major-1：可恢复压缩旋钮由组合根注入（显式传参优先，否则读 QUESTOR_COMPACTION env）。
         # None=默认不压缩（向后兼容）；非 None 则 _loop 透传给 DefaultTurnLoop，生产 run 达阈会真压缩。
         self.compaction = compaction if compaction is not None else compaction_from_env()
+        # B10/§7.4：摘要器由组合根注入（None = 用 L2 确定性启发式）。与 `compaction` 同理：
+        # 直接拼 CliSurface 的既有路径逐字不变，只有生产组合根会递一个进来。
+        self.summarizer = summarizer
         # P9/ADR-0046：能力热插拔宿主（统一 init/teardown + 熔断隔离）；generation 与工具注册表共构探针。
         self.plugin_host = PluginHost()
         # 技能生效（DoD①）：system prompt 的「system + skills catalog」拼接已外提为 context_assembler
@@ -290,6 +295,11 @@ class CliSurface:
             stop=stop,
             memory_injection=block.event_data() if block is not None else None,
             recall=self.recall,
+            # B10/§7.4：真 LLM 摘要器或确定性 fake（未给则 L2 启发式，回放仍确定）。
+            summarizer=self.summarizer,
+            # B10/§7.2 C-1：大工具输出归档的信封工厂。**kernel 不 import L3**，故由 surface 递
+            # 函数而非具体实现；artifact_store 未装时 loop 自己跳过归档（既有测试路径不变）。
+            output_envelope=envelope_for_text,
             # 只用于“这次 Read 读的是不是记忆文件”的判定（不传句柄、不代工具读写）。
             memory_root=memory_root_of(self.memory_store),
         )

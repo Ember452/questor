@@ -40,6 +40,7 @@
         "tools_changed",
         "compact_started",
         "compact_applied",
+        "compact_warning",
         "user_message",
         "turn_completed",
         "memory_injected",
@@ -76,6 +77,7 @@
     { "if": { "properties": { "type": { "const": "tools_changed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/tools_changed" } } } },
     { "if": { "properties": { "type": { "const": "compact_started" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/compact_started" } } } },
     { "if": { "properties": { "type": { "const": "compact_applied" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/compact_applied" } } } },
+    { "if": { "properties": { "type": { "const": "compact_warning" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/compact_warning" } } } },
     { "if": { "properties": { "type": { "const": "user_message" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/user_message" } } } },
     { "if": { "properties": { "type": { "const": "turn_completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/turn_completed" } } } },
     { "if": { "properties": { "type": { "const": "memory_injected" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_injected" } } } },
@@ -345,19 +347,48 @@
       "type": "object",
       "required": ["reason"],
       "additionalProperties": false,
-      "description": "Kernel began recoverable context compaction at a turn boundary (P10/ADR-0048, design/02 §10). reason is a short kernel label; no payload, never the summary text (C18/C20).",
-      "properties": { "reason": { "type": "string", "maxLength": 128 } }
+      "description": "Kernel began recoverable context compaction at a turn boundary (P10/ADR-0048, design/02 §10). reason is a short kernel label; no payload, never the summary text (C18/C20). B10 adds the window identity (design/07 §7.1): compaction is a generational event, not an in-place trim, so trigger/source/window_id/previous_window_id/window_number tell a renderer which window this fold belongs to. All optional — frames persisted before B10 legitimately lack them.",
+      "properties": {
+        "reason": { "type": "string", "maxLength": 128 },
+        "trigger": { "type": "string", "enum": ["auto", "manual", "legacy"] },
+        "source": { "type": "string", "enum": ["server_observed", "estimated"] },
+        "window_id": { "type": ["string", "null"], "maxLength": 80 },
+        "previous_window_id": { "type": ["string", "null"], "maxLength": 80 },
+        "window_number": { "type": "integer", "minimum": 0 }
+      }
     },
     "compact_applied": {
       "type": "object",
       "required": ["baseline_seq", "covered_from", "covered_to", "summary_bytes"],
       "additionalProperties": false,
-      "description": "Compaction applied; baseline_seq is the durable seq that rewrote context so renderers re-fold their view (design/02 §10). covered_from/covered_to are the evicted durable event seq range (originals read back from append-only event_log); summary_bytes is the summary size only, never its text (C20).",
+      "description": "Compaction applied; baseline_seq is the durable seq that rewrote context so renderers re-fold their view (design/02 §10). covered_from/covered_to are the evicted durable event seq range (originals read back from append-only event_log); summary_bytes is the summary size only, never its text (C20). B10 adds the window identity plus bounded counters (evicted_count/before_tokens/after_tokens) so the overflow path is measurable without copying any body text.",
       "properties": {
         "baseline_seq": { "type": "integer", "minimum": 0 },
         "covered_from": { "type": "integer", "minimum": 0 },
         "covered_to": { "type": "integer", "minimum": 0 },
-        "summary_bytes": { "type": "integer", "minimum": 0 }
+        "summary_bytes": { "type": "integer", "minimum": 0 },
+        "trigger": { "type": "string", "enum": ["auto", "manual", "legacy"] },
+        "source": { "type": "string", "enum": ["server_observed", "estimated"] },
+        "window_id": { "type": ["string", "null"], "maxLength": 80 },
+        "previous_window_id": { "type": ["string", "null"], "maxLength": 80 },
+        "window_number": { "type": "integer", "minimum": 0 },
+        "evicted_count": { "type": "integer", "minimum": 0 },
+        "before_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "after_tokens": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "compact_warning": {
+      "type": "object",
+      "required": ["reason", "trigger"],
+      "additionalProperties": false,
+      "description": "B10/ADR-0057 (design/07 §7.1/§7.3): a durable, plaintext-free compaction advisory — either the absolute warning threshold was crossed (reason=pressure) or the consecutive-failure breaker tripped (reason=breaker_tripped, after which automatic compaction stops for the run). Carries only thresholds, observed usage and the failure count; the body text never enters the event (C18/C20). Durable because a silent near-overflow is exactly what users experience as an unexplained failure.",
+      "properties": {
+        "reason": { "type": "string", "enum": ["pressure", "breaker_tripped"] },
+        "trigger": { "type": "string", "enum": ["auto", "manual", "legacy"] },
+        "used_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "threshold": { "type": ["integer", "null"], "minimum": 0 },
+        "window_number": { "type": "integer", "minimum": 0 },
+        "failures": { "type": "integer", "minimum": 0 }
       }
     },
     "user_message": {

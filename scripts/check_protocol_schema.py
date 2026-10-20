@@ -257,6 +257,11 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         # P10 additive（ADR-0048）：compact_started 单 reason；compact_applied 只栅栏/有界量、无正文。
         "compact_started": _envelope("compact_started", {"reason": "kernel_token_pressure"}),
         "compact_applied": _envelope("compact_applied", {"baseline_seq": 7, "covered_from": 1, "covered_to": 3, "summary_bytes": 42}),
+        # B10/ADR-0057：预警与跳闸是 durable 的，只带阈值/用量/计数（零正文）；窗口身份可为 null。
+        "compact_warning": _envelope(
+            "compact_warning",
+            {"reason": "pressure", "trigger": "auto", "used_tokens": 120000, "threshold": 100000, "window_number": 1, "failures": 0},
+        ),
         # B7 additive：memory_injected（live-only 审计条目，只条目 id + 计量）与 cache_break（三段 hash + 原因）。
         "memory_injected": _envelope("memory_injected", {"kind": "index", "entry_ids": ["MEMORY.md:1-1"], "lines": 3, "bytes": 240, "truncated": False}),
         "cache_break": _envelope("cache_break", {"system_hash": "sha256:aaa", "tools_hash": None, "history_hash": None, "reason": "cold", "breakpoints": 1}),
@@ -285,6 +290,8 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     policy_over_field = _envelope("run_started", {"run_id": "run_x", "policy_ref": {"id": "r", "fingerprint": "f", "leak": 1}})
     # P10 compact_*（ADR-0048）：compact_applied 额外携 summary_text 正文必须被 additionalProperties:false 拒（C20）。
     compact_over_field = _envelope("compact_applied", {"baseline_seq": 7, "covered_from": 1, "covered_to": 3, "summary_bytes": 42, "summary_text": "leaked body"})
+    # B10 compact_warning：reason 是闭集（pressure/breaker_tripped），不接受自由文本（不泄正文）。
+    compact_warning_bad_reason = _envelope("compact_warning", {"reason": "nearly out of context", "trigger": "auto"})
     # B6：turn_completed 不得携正文/额外字段（additionalProperties:false）。
     turn_completed_over_field = _envelope("turn_completed", {"usage": {}, "interrupted": False, "text": "leak"})
     # B7：memory_injected 不得携索引正文；cache_break 的 reason 必在枚举内、断点数不超 4 个预算。
@@ -313,6 +320,7 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
         "tools_bad_domain": tools_bad_domain,
         "policy_over_field": policy_over_field,
         "compact_over_field": compact_over_field,
+        "compact_warning_bad_reason": compact_warning_bad_reason,
         "turn_completed_over_field": turn_completed_over_field,
         "memory_injected_over_field": memory_injected_over_field,
         "memory_injected_bad_kind": memory_injected_bad_kind,
