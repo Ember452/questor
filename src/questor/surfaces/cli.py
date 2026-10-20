@@ -247,7 +247,7 @@ class CliSurface:
         mcp_tools, mcp_teardown = await self._discover_mcp(run.run_id)
         surface = self._freeze_surface(run.run_id, mcp_tools)
         loop = self._loop(bus, cancel, surface, run_id=run.run_id)
-        controller = RunController(run)
+        controller = RunController(run, queue=self.store, session_id=f"sess:{run.run_id}")
         registry = RunRegistry()
         registry.register(controller)
         # 先同步挂上两个订阅队列（start drive 之前），保证不丢最早的 text_delta/approval_request；
@@ -325,7 +325,7 @@ class CliSurface:
         cancel = asyncio.Event()
         tool_surface = self.registry.freeze_for_run(run.run_id)
         loop = self._loop(bus, cancel, tool_surface, run_id=run.run_id)
-        controller = RunController(run)
+        controller = RunController(run, queue=self.store, session_id=f"sess:{run.run_id}")
         interactive = sys_stdin_tty()
         printer_queue = bus.add_subscriber(run.run_id)
         printer = asyncio.create_task(self._stream(printer_queue, None))

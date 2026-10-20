@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from questor.contracts.events import Cancel, SubmitMessage
+from questor.contracts.events import Cancel, ResolveApproval, SubmitMessage
+from questor.contracts.inbox import InboxStatus
 from questor.contracts.state_schema import CancelReason, ContentBlock, Message, Role
 from questor.contracts.submissions import (
     MAX_QUEUE_ITEMS,
@@ -13,7 +14,9 @@ from questor.contracts.submissions import (
     command_digest,
     command_payload,
 )
+from questor.kernel.run_control import RunController
 from questor.providers.store_sqlite import SQLiteStore
+from questor.state.domain_state import Run
 
 
 def _user(text: str) -> Message:
@@ -114,5 +117,65 @@ async def test_cancel_payload_roundtrips_through_canonical_json() -> None:
         claimed = await store.claim_submissions("s1")
         assert claimed[0]["payload"]["fields"]["reason"] == "user"
         assert claimed[0]["source"] == "desktop"
+    finally:
+        await store.close()
+
+
+async def test_controller_durable_submit_claim_ack() -> None:
+    store = await SQLiteStore(":memory:").connect()
+    try:
+        run = Run(run_id="run-1")
+        controller = RunController(run, queue=store, session_id="s1")
+        receipt = await controller.submit(SubmitMessage(run_id="run-1", content=_user("hello")), source="cli", idempotency_key="k1")
+        assert receipt.status is InboxStatus.ACCEPTED
+        duplicate = await controller.submit(SubmitMessage(run_id="run-1", content=_user("hello")), source="cli", idempotency_key="k1")
+        assert duplicate.status is InboxStatus.DUPLICATE
+        batch = await controller.next_batch()
+        assert len(batch) == 1 and isinstance(batch[0], SubmitMessage)
+        assert batch[0].content.content[0].text == "hello"
+        await controller.ack(batch)
+        assert [row["state"] for row in await store.submissions_since("s1", 0)] == ["consumed"]
+        controller.close()
+        assert (await controller.submit(Cancel(run_id="run-1", reason=CancelReason.USER), source="cli", idempotency_key="late")).status is InboxStatus.REJECTED_TERMINAL
+    finally:
+        await store.close()
+
+
+async def test_durable_queue_survives_controller_restart() -> None:
+    store = await SQLiteStore(":memory:").connect()
+    try:
+        first = RunController(Run(run_id="run-1"), queue=store, session_id="s1")
+        await first.submit(SubmitMessage(run_id="run-1", content=_user("before kill")), source="cli", idempotency_key="k1")
+        # 模拟进程 kill：不 ack、不 drain，换一个 controller 从表里重新 claim。
+        second = RunController(Run(run_id="run-1"), queue=store, session_id="s1")
+        batch = await second.next_batch()
+        assert len(batch) == 1 and batch[0].content.content[0].text == "before kill"
+    finally:
+        await store.close()
+
+
+async def test_wait_for_releases_unmatched_and_returns_match() -> None:
+    store = await SQLiteStore(":memory:").connect()
+    try:
+        controller = RunController(Run(run_id="run-1"), queue=store, session_id="s1")
+        await controller.submit(Cancel(run_id="run-1", reason=CancelReason.USER), source="http", idempotency_key="k-cancel")
+        approval = ResolveApproval(run_id="run-1", request_id="apr-1", decision="allow", decided_by="http_client")
+
+        async def submit_later() -> None:
+            import asyncio
+
+            await asyncio.sleep(0.05)
+            await controller.submit(approval, source="http", idempotency_key="apr-1")
+
+        import asyncio
+
+        task = asyncio.create_task(submit_later())
+        received = await controller.wait_for(lambda command: isinstance(command, ResolveApproval), timeout=2)
+        await task
+        assert received == approval
+        await controller.ack_one(received)
+        # 不匹配的 Cancel 已 release 回 pending，仍可被下一次 next_batch 取到。
+        batch = await controller.next_batch()
+        assert len(batch) == 1 and isinstance(batch[0], Cancel)
     finally:
         await store.close()

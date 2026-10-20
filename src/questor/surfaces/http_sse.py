@@ -166,7 +166,7 @@ class EventServer:
             raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
         # P9/ADR-0045：创建 run 时按 run 解析策略、冻结 policy_ref（reduce 会在 run_started 带出）。
         run = Run(run_id=run_id, budget=Budget(), policy_ref=self.surface._resolve_for_run(run_id)[1])
-        controller = RunController(run)
+        controller = RunController(run, queue=self.store, session_id=f"sess:{run_id}")
         self.registry.register(controller)
         msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
         await self.registry.submit(run_id, SubmitMessage(run_id=run_id, content=msg), source="http", idempotency_key=f"submit:{run_id}")
@@ -226,7 +226,7 @@ class EventServer:
         holder = f"http-resume:{new_id('drv')}"
         if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
             raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
-        controller = RunController(run)
+        controller = RunController(run, queue=self.store, session_id=f"sess:{run_id}")
         self.registry.register(controller)
         task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约
         task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）

@@ -478,25 +478,32 @@ class DefaultTurnLoop:
 
     async def _consume_commands(self, controller: RunController, run: Run) -> Run:
         """按 FIFO 应用 inbox 中已到达的 Command；迁移一律经 ``apply`` 单入口。"""
-        for command in await controller.next_batch():
-            run, events = self._transition(run, command, source="inbox")
-            controller.run = run
-            await self._emit(events)
-            # 记忆写副作用：reduce 已受理（产 memory_written）后，由 kernel 在消费点经注入的
-            # MemoryStorePort 落库——写唯一入口仍是 Command（C4/C16），幂等键取已占的 durable seq。
-            if isinstance(command, WriteMemory) and self.memory_store is not None:
-                ack = next((e for e in events if e.type == EventType.MEMORY_WRITTEN), None)
-                if ack is not None:
-                    await self.memory_store.write(command.payload, idempotency_key=f"mem:{command.run_id}:{ack.seq}")
-            # P8（ADR-0038/§4.1）：reduce 受理 SpawnSubagent（产出 peer_started = 已绑 node）后，
-            # 才由端口实体化子 run——对齐 WriteMemory 的"reduce 发事件、消费点做 IO"。reduce 若判重/拒
-            # （无 peer_started）则不建子，避免重投/回放留下孤儿子。
-            if isinstance(command, SpawnSubagent) and self.subagent_spawner is not None:
-                if any(e.type == EventType.PEER_STARTED for e in events):
-                    await self.subagent_spawner.materialize_child(command.run_id, command.node_id, command.child_run_id)
-            if run.status.is_terminal:
-                return run
-        return run
+        applied: list[Command] = []
+        batch = await controller.next_batch()
+        try:
+            for command in batch:
+                run, events = self._transition(run, command, source="inbox")
+                applied.append(command)
+                controller.run = run
+                await self._emit(events)
+                # 记忆写副作用：reduce 已受理（产 memory_written）后，由 kernel 在消费点经注入的
+                # MemoryStorePort 落库——写唯一入口仍是 Command（C4/C16），幂等键取已占的 durable seq。
+                if isinstance(command, WriteMemory) and self.memory_store is not None:
+                    ack = next((e for e in events if e.type == EventType.MEMORY_WRITTEN), None)
+                    if ack is not None:
+                        await self.memory_store.write(command.payload, idempotency_key=f"mem:{command.run_id}:{ack.seq}")
+                # P8（ADR-0038/§4.1）：reduce 受理 SpawnSubagent（产出 peer_started = 已绑 node）后，
+                # 才由端口实体化子 run——对齐 WriteMemory 的"reduce 发事件、消费点做 IO"。reduce 若判重/拒
+                # （无 peer_started）则不建子，避免重投/回放留下孤儿子。
+                if isinstance(command, SpawnSubagent) and self.subagent_spawner is not None:
+                    if any(e.type == EventType.PEER_STARTED for e in events):
+                        await self.subagent_spawner.materialize_child(command.run_id, command.node_id, command.child_run_id)
+                if run.status.is_terminal:
+                    return run
+            return run
+        finally:
+            # 耐久队列：只 ack 已成功应用的命令；异常/早退时未应用的行保持 deferred，重启可重取。
+            await controller.ack(tuple(applied))
 
     async def _maybe_compact(self, controller: RunController, run: Run, turn: int, total_tokens: int) -> Run:
         """P10/ADR-0048：在 turn 边界安全点尝试一次**可恢复压缩**。
@@ -881,8 +888,11 @@ class DefaultTurnLoop:
             if command is None:
                 return await self._apply_command(controller, run, ExpireApproval(run_id=run.run_id, request_id=request_id))
             if isinstance(command, Cancel):
-                return await self._apply_command(controller, run, command)
+                result = await self._apply_command(controller, run, command)
+                await controller.ack_one(command)
+                return result
             run = await self._apply_command(controller, run, command)
+            await controller.ack_one(command)
             call = next(c for c in run.tool_ledger.calls if c.tool_call_id == (intent.tool_call_id or ""))
             if call.status is ToolCallStatus.READY:
                 return await self._apply_command(
@@ -946,7 +956,9 @@ class DefaultTurnLoop:
         command = await controller.wait_for(relevant, timeout=max(0.001, remaining))
         if command is None:
             return await self._apply_command(controller, run, ExpireApproval(run_id=run.run_id, request_id=request_id))
-        return await self._apply_command(controller, run, command)
+        result = await self._apply_command(controller, run, command)
+        await controller.ack_one(command)
+        return result
 
     async def _resume_execute_call(self, controller: RunController, run: Run, call) -> Run:
         """补执行一个已批准（ready）或曾在跑（running）的调用；仅在未 running 时补 MarkToolRunning。"""
