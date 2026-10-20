@@ -36,12 +36,41 @@ def window_payload(command: Command) -> str:
     return canonical_json({"truncated": True, "bytes": len(encoded), "preview": raw[:MAX_PAYLOAD_BYTES]})
 
 
+def trim_plan(rows: list[dict], last_consolidated: int, *, min_rows: int = WINDOW_MIN_ROWS) -> list[int]:
+    """只清被 ``last_consolidated`` 吸收的段，且保留最近 ``min_rows`` 行；返回待删 cseq。"""
+    absorbed = [row for row in rows if int(row["seq"]) <= last_consolidated]
+    keep = {row["cseq"] for row in absorbed[-max(0, min_rows) :]}
+    return [row["cseq"] for row in absorbed if row["cseq"] not in keep]
+
+
+def global_trim_plan(rows: list[dict], *, max_rows: int = MAX_WINDOW_ROWS) -> list[int]:
+    """全局超限时按最旧 run 整批 drop；返回待删 cseq（绝不拆到半 run）。"""
+    if len(rows) <= max_rows:
+        return []
+    by_run: dict[str, list[int]] = {}
+    first_seen: dict[str, int] = {}
+    for row in rows:
+        run_id = str(row["run_id"])
+        by_run.setdefault(run_id, []).append(int(row["cseq"]))
+        first_seen.setdefault(run_id, int(row["cseq"]))
+    deleted: list[int] = []
+    remaining = len(rows)
+    for run_id in sorted(by_run, key=lambda rid: first_seen[rid]):
+        deleted.extend(by_run[run_id])
+        remaining -= len(by_run[run_id])
+        if remaining <= max_rows:
+            break
+    return deleted
+
+
 __all__ = [
     "DIGEST_SCHEMA_VERSION",
     "MAX_PAYLOAD_BYTES",
     "MAX_WINDOW_ROWS",
     "WINDOW_MIN_ROWS",
     "command_digest",
+    "global_trim_plan",
     "is_rejection",
+    "trim_plan",
     "window_payload",
 ]

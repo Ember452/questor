@@ -88,3 +88,50 @@ async def test_loop_records_accepted_commands_in_window(tmp_path) -> None:
         assert all(row["accepted"] for row in rows)
     finally:
         await store.close()
+
+
+async def _bulk_window(store: SQLiteStore, run_id: str, session_id: str, start: int, count: int) -> None:
+    db = store._dbp()  # noqa: SLF001 - 测试批量造数
+    await db.execute("BEGIN")
+    await db.executemany(
+        "INSERT INTO command_window (run_id, session_id, seq, type, payload, source, idem_key, digest, accepted, ts) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        [
+            (run_id, session_id, start + i, "submit_message", "{}", "loop", f"{run_id}-{start + i}", f"d{start + i}", 1, "2026-01-01T00:00:00+00:00")
+            for i in range(count)
+        ],
+    )
+    await db.commit()
+
+
+async def test_trim_keeps_absorbed_tail_and_respects_global_cap(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "trim.db")).connect()
+    try:
+        await store.create_session("s1")
+        await _bulk_window(store, "run-trim", "s1", 1, 1000)
+        await store.advance_last_consolidated("s1", 1000)
+        await store.trim_command_window("s1")
+        rows = await store.command_window_rows(session_id="s1")
+        assert len(rows) == 512
+        assert all(row["seq"] <= 1000 for row in rows)
+
+        await _bulk_window(store, "run-old", "s1", 1, 10050)
+        await _bulk_window(store, "run-new", "s1", 1, 10000)
+        await store.trim_command_window("s1")
+        remaining = await store.command_window_rows()
+        assert len(remaining) <= 20000
+        assert not any(row["run_id"] == "run-old" for row in remaining)  # 最旧 run 整批 drop
+    finally:
+        await store.close()
+
+
+async def test_fold_mode_default_and_validation(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "fold.db")).connect()
+    try:
+        assert await store.fold_mode("s1") == "v1"
+        assert await store.set_fold_mode("s1", "legacy") == "legacy"
+        assert await store.fold_mode("s1") == "legacy"
+        with pytest.raises(ValueError):
+            await store.set_fold_mode("s1", "v9")
+    finally:
+        await store.close()

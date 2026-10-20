@@ -34,6 +34,7 @@ from questor.contracts.submissions import (
     canonical_json,
     normalize_source,
 )
+from questor.kernel.command_window import MAX_WINDOW_ROWS, WINDOW_MIN_ROWS, global_trim_plan, trim_plan
 
 #: 本仓 store DDL 的版本；读到更高版本即 fail-closed（不猜测半升级表形）。
 STORE_SCHEMA_VERSION = 3
@@ -953,6 +954,52 @@ class SQLiteStore(StorePort):
                 }
                 for row in rows
             ]
+
+    async def trim_command_window(self, session_id: str) -> int:
+        """裁剪窗口：只清 ``last_consolidated`` 之前的段（保最近 MIN 行），再执行全局 MAX 整批 drop。"""
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT last_consolidated FROM sessions WHERE session_id = ?", (session_id,))
+                row = await cur.fetchone()
+                last = int(row[0]) if row is not None else 0
+                cur = await db.execute(
+                    "SELECT cseq, run_id, seq FROM command_window WHERE session_id = ? ORDER BY cseq", (session_id,)
+                )
+                session_rows = [{"cseq": r[0], "run_id": r[1], "seq": r[2]} for r in await cur.fetchall()]
+                cur = await db.execute("SELECT cseq, run_id FROM command_window ORDER BY cseq")
+                all_rows = [{"cseq": r[0], "run_id": r[1]} for r in await cur.fetchall()]
+                doomed = set(trim_plan(session_rows, last, min_rows=WINDOW_MIN_ROWS))
+                doomed |= set(global_trim_plan(all_rows, max_rows=MAX_WINDOW_ROWS))
+                if doomed:
+                    await db.executemany("DELETE FROM command_window WHERE cseq = ?", [(cseq,) for cseq in sorted(doomed)])
+                await db.commit()
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+        await self.trim_consumed_submissions(session_id)
+        return len(doomed)
+
+    async def set_fold_mode(self, session_id: str, mode: str) -> str:
+        """代际位：``v1|legacy``（默认 v1）；非法值 fail-closed。"""
+        if mode not in {"v1", "legacy"}:
+            raise ValueError("fold_mode must be 'v1' or 'legacy'")
+        async with self._lock:
+            await self._dbp().execute(
+                "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (f"command_window_fold_mode:{session_id}", mode),
+            )
+        return mode
+
+    async def fold_mode(self, session_id: str) -> str:
+        """读取代际位；未设置 → ``v1``。"""
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT value FROM meta WHERE key = ?", (f"command_window_fold_mode:{session_id}",)
+            )
+            row = await cur.fetchone()
+            return row[0] if row is not None else "v1"
 
     async def save_checkpoint(self, checkpoint: JsonObject) -> None:
         """写入/覆盖一个 checkpoint（幂等：cp_id 主键 + OR REPLACE）。

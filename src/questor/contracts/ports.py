@@ -244,6 +244,18 @@ class StorePort(Protocol):
         """命令窗口行（cseq 升序；测试/诊断用）。"""
         ...
 
+    async def trim_command_window(self, session_id: str) -> int:
+        """只清 ``last_consolidated`` 前段（保最近 MIN 行），再按全局 MAX 整批 drop；返回删除数。"""
+        ...
+
+    async def set_fold_mode(self, session_id: str, mode: str) -> str:
+        """代际位 ``v1|legacy``（默认 v1）；非法值拒绝。"""
+        ...
+
+    async def fold_mode(self, session_id: str) -> str:
+        """读取代际位；未设置返回 ``v1``。"""
+        ...
+
 
 @runtime_checkable
 class Clock(Protocol):
