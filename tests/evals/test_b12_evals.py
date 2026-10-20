@@ -10,10 +10,20 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
 import pytest
+from metrics import (
+    Metric,
+    duplicate_reminder_rate,
+    forgetting_rate,
+    per_task_cost,
+    recall_hit_rate,
+    revoke_rate,
+    write_noise_rate,
+)
 from tasks import TASKS, EvalTask, TaskEvidence, grade
 
 from questor.capabilities.tools._output import envelope_for_text
@@ -252,3 +262,70 @@ async def test_same_input_same_trace_twice(tmp_path: Path, task: EvalTask) -> No
     async with _Harness(tmp_path / "r2") as second:
         evidence_b = await second.run(task)
     assert [env["type"] for env in evidence_a.events] == [env["type"] for env in evidence_b.events]
+
+
+async def test_six_metrics_are_computable_from_run_evidence(tmp_path: Path) -> None:
+    """六指标能出数（§13 B12 验收），且成本那条诚实停在 token 级（§17-9）。"""
+    evidence: list[TaskEvidence] = []
+    async with _Harness(tmp_path / "metrics") as harness:
+        for task in (TASKS[4], TASKS[5], TASKS[6], TASKS[9]):
+            evidence.append(await harness.run(task))
+        store = harness.store
+        assert store is not None
+        # 重复提醒率的真实数据源：一条义务投两次（attempting 重投 bump attempts）
+        await store.create_obligation("del-1", "obl-1", "cli", session_id="sess-1")
+        await store.create_obligation("del-2", "obl-2", "cli", session_id="sess-1")
+        for _ in range(2):
+            claimed = await store.claim_obligation(now=time.time())
+            for row in claimed:
+                await store.finish_delivery(str(row["delivery_id"]), "failed", error_class="flood")
+        rows = [row for delivery_id in ("del-1", "del-2") if (row := await store.delivery_row(delivery_id)) is not None]
+
+    cited = [entry_id for item in evidence for entry_id in item.cited_ids]
+    written = [entry_id for item in evidence for entry_id in item.written_ids]
+    consumed = ["memory/eval-note.md:1-2"]  # 人工标的"被消费"集（条目级，与 §6.3 同形状）
+    expected_facts = {f"fact-{index}": needle for index, needle in enumerate([TASKS[4].prompt])}
+    memory_text = "\n".join(item.memory_text for item in evidence)
+    deleted = sum(item.deleted_count for item in evidence)
+
+    metrics: tuple[Metric, ...] = (
+        recall_hit_rate(cited, ["memory/eval-note.md:1-2"]),
+        forgetting_rate(expected_facts, memory_text),
+        write_noise_rate([(identifier, time.time() - 40 * 86_400) for identifier in written], consumed, now=time.time()),
+        duplicate_reminder_rate(rows),
+        revoke_rate(len(written), deleted),
+        per_task_cost(sum(item.tokens for item in evidence), sum(1 for item in evidence if item.status.endswith("COMPLETED"))),
+    )
+    by_name = {metric.name: metric for metric in metrics}
+    assert set(by_name) == {
+        "recall_hit_rate",
+        "forgetting_rate",
+        "write_noise_rate",
+        "duplicate_reminder_rate",
+        "revoke_rate",
+        "cost_per_succeeded_task",
+    }
+    # 出数判据：citation 真被解析、任务真跑成了、义务真投了两次
+    assert by_name["recall_hit_rate"].value == 1.0, by_name["recall_hit_rate"]
+    assert by_name["forgetting_rate"].value == 0.0, by_name["forgetting_rate"]
+    assert by_name["duplicate_reminder_rate"].denominator == 2
+    assert by_name["duplicate_reminder_rate"].value == 1.0, by_name["duplicate_reminder_rate"]
+    assert by_name["revoke_rate"].value == 1.0, by_name["revoke_rate"]
+    assert by_name["write_noise_rate"].denominator == len(written)
+    # 成本：没有价目表就没有美元数（verified=False 是判据，不是免责声明）
+    cost = by_name["cost_per_succeeded_task"]
+    assert cost.verified is False and "UNVERIFIED" in cost.note or "price table" in cost.note
+    assert cost.value is not None and cost.value > 0
+
+    priced = per_task_cost(1_000_000, 10, {"input": 1.0, "output": 2.0})
+    assert priced.verified is True and priced.value == 100_000.0 and "cost_usd=" in priced.note
+
+
+def test_metrics_refuse_to_invent_zeroes() -> None:
+    """分母为 0 → `value=None`，不是 0.0：「没有样本」与「样本全过」是两件事。"""
+    assert recall_hit_rate([], []).value is None
+    assert forgetting_rate({}, "whatever").value is None
+    assert write_noise_rate([], [], now=time.time()).value is None
+    assert duplicate_reminder_rate([]).value is None
+    assert revoke_rate(0, 0).value is None
+    assert per_task_cost(1200, 0).value is None
