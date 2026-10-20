@@ -24,6 +24,7 @@ from questor.contracts.events import Envelope, EventType, FinalizeRun, SubmitMes
 from questor.contracts.state_schema import ContentBlock, Message, Role, RunStatus
 from questor.kernel.loop import _transition_key
 from questor.state.domain_state import Run
+from questor.state.persist_form import SCAFFOLDING_CLOSE, SCAFFOLDING_OPEN, durable_form, strip_scaffolding
 from questor.state.reduce import _USER_MESSAGE_TEXT_BYTES, reduce
 from questor.state.transition import apply, reset_idempotency_window
 
@@ -162,3 +163,62 @@ def test_terminal_run_rejects_submit_with_warning_and_never_appends() -> None:
     assert new.context.items == before_items  # 绝不追加
     assert new.seq == done.seq + 1  # 警告仍占一个 durable seq（C2）
     assert _VALIDATOR.is_valid(_as_wire(events[0]))
+
+
+# --------------------------------------------------------------------------- #
+# c4：落库前剥注入脚手架（带内标记）——只剥内容，不做第二套去重
+# --------------------------------------------------------------------------- #
+def _user_message_env(text: str) -> Envelope:
+    return Envelope(v=1, seq=7, run_id="r_strip", type=EventType.USER_MESSAGE, turn=1, data={"text": text, "truncated": False})
+
+
+def test_marked_scaffolding_is_stripped_before_persisting() -> None:
+    """c4 验收：带标记输入 → 持久正文不含标记（只留用户原话）；context（模型输入）不受影响。
+
+    注入段是模型的合法输入（context 不动），但不是事实流里的「用户原话」——
+    故只在 durable_form（落库唯一形态判定点）剥。
+    """
+    marked = f"real user words {SCAFFOLDING_OPEN}system injected preamble{SCAFFOLDING_CLOSE} and a closing line"
+    env = _user_message_env(marked)
+    durable = durable_form(env)
+    assert durable is not None
+    assert durable.data["text"] == "real user words  and a closing line"
+    assert SCAFFOLDING_OPEN not in durable.data["text"] and SCAFFOLDING_CLOSE not in durable.data["text"]
+    # 原信封（= context 侧消息的投影）与非 user_message 事件一律不动。
+    assert env.data["text"] == marked
+    assert durable_form(_user_message_env("plain words")).data["text"] == "plain words"
+    assert _VALIDATOR.is_valid(_as_wire(durable))
+
+
+def test_strip_scaffolding_shapes() -> None:
+    """多段 / 未闭合（fail-closed 截到文末）/ 孤儿 CLOSE（只剥记号）/ 无标记（逐字节等价）。"""
+    assert strip_scaffolding("a") == "a"
+    assert strip_scaffolding("") == ""
+    pair = f"x{SCAFFOLDING_OPEN}inj{SCAFFOLDING_CLOSE}y{SCAFFOLDING_OPEN}inj2{SCAFFOLDING_CLOSE}z"
+    assert strip_scaffolding(pair) == "xyz"
+    # 未闭合：边界未知，注入段其后全部剔除（绝不把注入文本当用户原话）。
+    assert strip_scaffolding(f"keep{SCAFFOLDING_OPEN}inj keeps going") == "keep"
+    # 孤儿 CLOSE：只剥记号本身，两侧文本保留。
+    assert strip_scaffolding(f"left{SCAFFOLDING_CLOSE}right") == "leftright"
+
+
+def test_same_content_repeated_apply_does_not_append_twice() -> None:
+    """c4 验收：同内容重复 apply → 不重复追加；去重只靠 apply 幂等键，不靠标记扫描。"""
+    run = _busy_run("r_dup")
+    msg = _user("same words", mid="dup")
+    command = SubmitMessage(run_id=run.run_id, content=msg)
+    key = _transition_key(command, run)
+
+    first, events = apply(None, run, command, source="test", idempotency_key=key)
+    assert [e.type for e in events] == [EventType.USER_MESSAGE]
+
+    second, again = apply(None, first, command, source="test", idempotency_key=key)
+    assert again == ()  # 幂等 no-op：不重复产事件
+    assert second == first  # 也不重复追加 context
+    assert sum(1 for m in second.context.items if m is msg) == 1
+
+    # 不同内容（同 state 游标不同也会不同键）→ 各自落一条，不互相误判。
+    other = SubmitMessage(run_id=first.run_id, content=_user("different words", mid="dup2"))
+    third, events3 = apply(None, first, other, source="test", idempotency_key=_transition_key(other, first))
+    assert [e.type for e in events3] == [EventType.USER_MESSAGE]
+    assert third.context.items[-1].content[0].text == "different words"
