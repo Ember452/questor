@@ -25,10 +25,11 @@ from questor.contracts.memory import MemoryStorePort
 from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort, SurfacePort
 from questor.providers.artifact_store import FileSystemArtifactStore
 from questor.providers.process_runner import SandboxedProcessRunner
+from questor.providers.provider_factory import provider_from_env
 from questor.providers.sandbox import detect_sandbox
 from questor.providers.store_memory_sqlite import SQLiteMemoryStore
 from questor.providers.store_sqlite import SQLiteStore
-from questor.surfaces._assembly import log_dir_from_env
+from questor.surfaces._assembly import log_dir_from_env, payload_preview_from_env
 from questor.surfaces.cli import CliSurface
 
 #: 组合根自述行 logger（一方 inline 记录；DoD A① "起手即有日志"由装配点兑现，两个入口共用）。
@@ -125,7 +126,7 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
     （OPT-2a：默认 spec 与无 spec 逐字段等价）。注入语义：
     - ``store``/``memory``/``artifact``/``sandbox``：直接采用，不再 connect（句柄生命周期归调用方，
       仍由 :func:`close_app` 统一回收）；
-    - ``provider_factory``：只在构造 surface 时调用一次；None → surface 自己按 env 选 provider（现路径）；
+    - ``provider_factory``：只在装配时调用一次；None → 组合根按 env 选 provider（现路径）；
     - ``surface``：采用给定实例，不再构造 CliSurface（其余句柄仍装配，供 App 字段/关闭与自述日志）。
     """
     spec = spec or AssembleSpec()
@@ -140,19 +141,27 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
         await artifact_store.connect()
     sandbox = spec.sandbox if spec.sandbox is not None else detect_sandbox()
     process_runner = SandboxedProcessRunner(sandbox, artifact_store=artifact_store, data_root=data_root)
-    surface = spec.surface if spec.surface is not None else CliSurface(
-        store=store,
-        memory_store=memory,
-        provider=spec.provider_factory() if spec.provider_factory is not None else None,
-        model=model_from_env(),
-        skills_dir=Path(skills_dir_from_env()),
-        mcp_json_path=Path(mcp_json_from_env()),
-        log_dir=Path(log_dir_from_env()),
-        process_runner=process_runner,
-        artifact_store=artifact_store,
-        sandbox=sandbox,
-        context_assembler=spec.context_assembler,
-    )
+    if spec.surface is None:
+        provider = (
+            spec.provider_factory()
+            if spec.provider_factory is not None
+            else provider_from_env(payload_preview=payload_preview_from_env())
+        )
+        surface = CliSurface(
+            store=store,
+            memory_store=memory,
+            provider=provider,
+            model=model_from_env(),
+            skills_dir=Path(skills_dir_from_env()),
+            mcp_json_path=Path(mcp_json_from_env()),
+            log_dir=Path(log_dir_from_env()),
+            process_runner=process_runner,
+            artifact_store=artifact_store,
+            sandbox=sandbox,
+            context_assembler=spec.context_assembler,
+        )
+    else:
+        surface = spec.surface
     _LOG.info(
         "composition root ready store=%s memory_db=%s sandbox=%s",
         path,

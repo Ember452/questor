@@ -2,7 +2,7 @@
 
 零业务逻辑：它只装配注入的 Port，并把用户/审批意图**转成 Command 提交进 RunController**，
 绝不直接 reduce。所有状态变更仍由 loop → ``reduce`` 完成（C2）。
-Provider 由配置选：无密钥时 ``EchoProvider`` 离线演示，有密钥时 ``LiteLLMProvider`` 走真模型。
+Provider 由组合根选择（OPT-6）：无密钥时离线 ``EchoProvider``，有密钥时 ``LiteLLMProvider``。
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from questor.capabilities._host import PluginHost
 from questor.capabilities.tools.read import ReadTool
 from questor.capabilities.tools.registry import ToolRegistry
 from questor.capabilities.toolset import build_tools
-from questor.config.model import load_config
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
 from questor.contracts.extension import (
@@ -46,8 +45,6 @@ from questor.observability.projection import log_envelope
 from questor.policy.null_policy import NullPolicy
 from questor.policy.react_policy import ReActPolicy
 from questor.policy.registry import ExtensionEntry, ExtensionRegistry, PolicyEntry, PolicyRegistry
-from questor.providers.fake import EchoProvider
-from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.state.domain_state import Run
 from questor.surfaces._assembly import (
     DEFAULT_CONTEXT_ASSEMBLER,
@@ -87,16 +84,13 @@ def _final_answer_text(run: Run) -> str:
 
 
 def provider_from_env() -> ProviderPort:
-    """根据环境变量选 provider：有 model+key 走 LiteLLM，否则离线 Echo。
+    """兼容薄壳：provider 选择已上移组合根（OPT-6），这里只委托 providers 层。
 
-    env 读取与判定口径收口在 ``config``（OPT-3 c2）：``model`` 保留原样（未设 = None）、
-    密钥只判存在；无 model 或无 key 一律 Echo（与历史逐字等价）。
+    surface 不再自己读 provider env；直接构造 ``CliSurface``（测试/嵌入）仍可用此入口。
     """
-    cfg = load_config()
-    if cfg.llm.model and cfg.llm.has_litellm_key:
-        # P10/ADR-0049：preview 预算由组合根解析注入（None=零原文默认）；非空才落独立 llm 通道。
-        return LiteLLMProvider(cfg.llm.model, payload_preview=payload_preview_from_env())
-    return EchoProvider()
+    from questor.providers.provider_factory import provider_from_env as _provider_from_env
+
+    return _provider_from_env(payload_preview=payload_preview_from_env())
 
 
 def sys_stdin_tty() -> bool:
