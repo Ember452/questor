@@ -22,8 +22,18 @@ from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 from questor.contracts.common import new_id, thaw
-from questor.contracts.events import Cancel, Envelope, EventType, ResolveApproval, SetPermissionMode, SubmitMessage
+from questor.contracts.events import (
+    Cancel,
+    DeleteMemory,
+    Envelope,
+    EventType,
+    ResolveApproval,
+    SetPermissionMode,
+    SubmitMessage,
+    UpdateMemory,
+)
 from questor.contracts.inbox import InboxReceipt
+from questor.contracts.memory import MemoryScope, MemoryWrite, MemoryWriteKind
 from questor.contracts.ports import StorePort
 from questor.contracts.profile import PERMISSION_MODE_SET
 from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, Message, Role
@@ -33,7 +43,15 @@ from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.kernel.seed import SeedRef, SeedRejected, build_seed_context, coerce_seed_refs
-from questor.kernel.session_ops import apply_fork, apply_session_update, make_rewind, prefix_seed_refs, session_stream_id
+from questor.kernel.session_ops import (
+    apply_fork,
+    apply_on_stream,
+    apply_session_update,
+    make_rewind,
+    prefix_seed_refs,
+    session_stream_id,
+)
+from questor.memory.consolidate import supersede
 from questor.observability.projection import log_envelope
 from questor.state.domain_state import Run
 from questor.state.transition import apply
@@ -241,6 +259,77 @@ class EventServer:
     async def list_sessions(self, *, include_archived: bool = False, limit: int | None = None) -> list[dict]:
         """会话列表（B13）：只读投影，不取号、不写任何东西。"""
         return await self.store.list_sessions(include_archived=include_archived, limit=limit)
+
+    def _memory_store(self) -> object | None:
+        """取 surface 上的记忆端口（未装记忆库时 None → 路由 501，不编一个空的）。"""
+        memory = getattr(self.surface, "memory_store", None)
+        return memory if memory is not None and callable(getattr(memory, "list_entries", None)) else None
+
+    async def list_memory(self, *, limit: int = 200, include_deleted: bool = False) -> dict:
+        """B14：列记忆条目（路径/条目 id/行区间/软删位/归因/有界 snippet）。"""
+        memory = self._memory_store()
+        if memory is None:
+            raise HTTPException(status_code=501, detail="no memory store wired into this server")
+        return {"items": await memory.list_entries(limit=limit, include_deleted=include_deleted)}  # type: ignore[union-attr]
+
+    async def patch_memory(
+        self,
+        *,
+        entry_id: str,
+        text: str | None = None,
+        delete: bool = False,
+        session_id: str | None = None,
+        reason: str | None = None,
+    ) -> dict:
+        """B14：改或删一条记忆——**先落 durable 事实，再做派生索引的退役/重写**。
+
+        为什么不补一条 `memory_written`：一次编辑对用户是一个事实（`memory_updated`），
+        “退役旧行 + 写新行”是它的实现细节；多记一条写入会把 B12 的写入噪声率虚增。
+        真源 md **不删不改**（事实流与文件仍是真相）；改写走 `supersede`，顺序固定先退后写
+        （ADR-0056 决策 4：反了会在两步之间把矛盾事实同时召回）。
+        """
+        memory = self._memory_store()
+        if memory is None:
+            raise HTTPException(status_code=501, detail="no memory store wired into this server")
+        stream = session_stream_id(session_id or f"mem:{entry_id}")
+        if delete:
+            _run, events = await apply_on_stream(
+                self.store,
+                self.bus,
+                stream_run_id=stream,
+                command=DeleteMemory(run_id=stream, entry_id=entry_id, reason=reason),
+                source="memory-admin",
+                idempotency_key=f"memdel:{stream}:{entry_id}",
+            )
+            receipt = await memory.soft_delete(entry_id, idempotency_key=f"ui:{stream}:{entry_id}")  # type: ignore[union-attr]
+            return {"entry_id": entry_id, "action": "deleted", "events": [env.type for env in events], "receipt": dict(receipt or {})}
+        if not text or not text.strip():
+            raise HTTPException(status_code=400, detail="text must be non-blank unless delete=true")
+        _run, events = await apply_on_stream(
+            self.store,
+            self.bus,
+            stream_run_id=stream,
+            command=UpdateMemory(run_id=stream, entry_id=entry_id, text=text, reason=reason),
+            source="memory-admin",
+            idempotency_key=f"memupd:{stream}:{entry_id}",
+        )
+        if not events:
+            raise HTTPException(status_code=409, detail="memory update rejected by state")
+        outcome = await supersede(
+            memory,  # type: ignore[arg-type]
+            entry_id=entry_id,
+            replacement=MemoryWrite(
+                kind=MemoryWriteKind.DAILY, scope=MemoryScope.USER, text=text.strip(), attributed_to="user"
+            ),
+            idempotency_key=f"ui-edit:{stream}:{entry_id}",
+        )
+        return {
+            "entry_id": entry_id,
+            "action": "updated",
+            "events": [env.type for env in events],
+            "superseded": outcome.superseded,
+            "wrote": outcome.wrote,
+        }
 
     async def update_session(
         self,
@@ -516,6 +605,42 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
                 title=payload.get("title"),
                 archived=payload.get("archived"),
                 pinned=payload.get("pinned"),
+            )
+        )
+
+    # ---- B14（可见可改）：记忆管理面。只读列表 + “先事实后重写”的 PATCH，无 DELETE 路由 ----
+    @app.get("/memory", dependencies=[Depends(require_token)])
+    async def memory_items(limit: int = 200, include_deleted: bool = False) -> dict:
+        """列记忆条目（默认不列已撤回）；limit 有界，不给一次拉穿索引。"""
+        if limit < 1 or limit > 500:
+            raise HTTPException(status_code=400, detail="limit must be between 1 and 500")
+        return await server.list_memory(limit=limit, include_deleted=include_deleted)
+
+    @app.patch("/memory", dependencies=[Depends(require_token)])
+    async def patch_memory_item(payload: dict) -> JSONResponse:
+        """改一条记忆（`entry_id` + `text`）或撤回它（`entry_id` + `delete: true`）。
+
+        只认这四个键：记忆面不能变成“递什么改什么”的万能接口（那会把派生索引写成第二个真相）。
+        """
+        unknown = set(payload) - {"entry_id", "text", "delete", "session_id", "reason"}
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"unsupported memory fields: {sorted(unknown)}")
+        entry_id = payload.get("entry_id")
+        if not isinstance(entry_id, str) or not entry_id.strip() or ":" not in entry_id:
+            raise HTTPException(status_code=400, detail="entry_id must be a non-empty 'path:start-end' id")
+        delete = payload.get("delete", False)
+        if not isinstance(delete, bool):
+            raise HTTPException(status_code=400, detail="delete must be a boolean")
+        text = payload.get("text")
+        if text is not None and not isinstance(text, str):
+            raise HTTPException(status_code=400, detail="text must be a string")
+        return JSONResponse(
+            await server.patch_memory(
+                entry_id=entry_id.strip(),
+                text=text,
+                delete=delete,
+                session_id=payload.get("session_id"),
+                reason=payload.get("reason"),
             )
         )
 

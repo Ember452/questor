@@ -626,6 +626,47 @@ class SQLiteMemoryStore(MemoryStorePort):
     async def list_memory_paths(self) -> tuple[str, ...]:
         return tuple(sorted(self._scan_source_files()))
 
+    async def list_entries(self, *, limit: int = 200, include_deleted: bool = False) -> list[JsonObject]:
+        """列派生索引里的条目（B14 记忆管理面用）：**有界、零正文不截不猜**。
+
+        只给面板渲染需要的字段：条目 id、路径/行区间、软删位、过期时刻、归因位与一段
+        有界 snippet（复用 `_bound_snippet` + `config.snippet_max_bytes`，与检索侧同一口径）。
+        默认不列已撤回项——
+        用户删过的东西不该在“你的记忆”里重现，但 `include_deleted=True` 要能审计到（它仍在索引里）。
+        本方法是**读投影**：真源本身是 md 文件，索引只是它的缓存。
+        """
+        sql = (
+            "SELECT id, path, start_line, end_line, text, is_deleted, expires_at, attributed_to, source, scope "
+            "FROM memory_chunks"
+        )
+        if not include_deleted:
+            sql += " WHERE is_deleted = 0"
+        sql += " ORDER BY path, start_line LIMIT ?"
+        cur = await self._dbp().execute(sql, (max(0, int(limit)),))
+        rows = await cur.fetchall()
+        out: list[JsonObject] = []
+        for row in rows:
+            text = row[4] or ""
+            out.append(
+                {
+                    # 对外一律用**条目级 id**（`path:start-end`）——与 citation / 消费打点 /
+                    # `DeleteMemory` / `UpdateMemory` 同一形状；内部哈希主键另列一个键供调试。
+                    "entry_id": f"{row[1]}:{row[2]}-{row[3]}",
+                    "chunk_id": row[0],
+                    "path": row[1],
+                    "start_line": row[2],
+                    "end_line": row[3],
+                    "snippet": _bound_snippet(text, max_bytes=self.config.snippet_max_bytes),
+                    "truncated": len(text.encode("utf-8")) > self.config.snippet_max_bytes,
+                    "is_deleted": bool(row[5]),
+                    "expires_at": row[6],
+                    "attributed_to": row[7],
+                    "source": row[8],
+                    "scope": row[9],
+                }
+            )
+        return out
+
     async def write_memory_text(self, rel_path: str, content: str, *, idempotency_key: str) -> JsonObject:
         """原子全量重写真源 md（Deep Dream 重写 core）；``idempotency_key`` 命中则 no-op。
 

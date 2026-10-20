@@ -1,6 +1,7 @@
 // P7 T4/T5/T6/T7：桌面薄客户端 UI。仅消费事件协议 + 投 Command，绝不做业务/权限/状态计算（S6/C14/C17）。
 // 连接 same-origin 的 sidecar（webview 指向本服务，ADR-0007）；EventSource 原生带 Last-Event-ID 重连。
 import { CommandClient } from "./api/commandClient";
+import { formatCitations } from "./api/citations";
 import { ThreadEventStream } from "./api/eventStream";
 import { statusBanner } from "./api/status";
 import { EVENT_TYPE_NAMES } from "./generated/event";
@@ -36,6 +37,14 @@ function appendText(target: HTMLElement, text: string): void {
   target.appendChild(document.createTextNode(text));
 }
 
+// B14：把“你为什么知道这个”的条目级归因挂在定稿消息下方。**只读事件 data**，
+// 不反查记忆库、不推断引用（那会变成前端的第二份业务逻辑，S6）。
+function renderCitations(data: unknown): void {
+  const line = formatCitations(data);
+  if (!line) return; // 无引用就不画节点（不画“来源：（无）”）
+  log.appendChild(el("div", "citations", line));
+}
+
 // live 文本增量：起/续一个 assistant 气泡并追加（流式上屏）。
 function renderDelta(_itemId: string | null, text: string): void {
   if (!assistantBubble) assistantBubble = el("div", "msg assistant");
@@ -59,6 +68,7 @@ function renderEvent(env: Event): void {
       }
       assistantBubble = null; // 下一条消息另起气泡
       liveDeltaSeen = false;
+      renderCitations(env.data); // 定稿消息之后：条目级来源
       break;
     }
     case "tool_started": {
