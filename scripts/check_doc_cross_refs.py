@@ -53,8 +53,8 @@ DEFAULT_DOC = ROOT.parent / "questor目标形态设计.md"
 EXPECTED: dict[str, int] = {
     "takeaways": 19,  # §0 标题「本版定夺的 19 条取舍」；数 `^| T\d+ |` 行
     "blades": 17,  # §13「17 刀（T16）」+ T16；数 `^| **B` 行（B0.5 算一刀）
-    "points_live": 12,  # §5.1 表内 12 行生效点位
-    "points_reserved": 5,  # §5.1「预留 5 位」句里的 5 个名字（Stop/Notification/Elicitation/TaskUpdated/PlanStep）
+    "points_live": 13,  # §5.1 表内 13 行生效点位（B6 启用 Stop）
+    "points_reserved": 4,  # §5.1「预留 4 位」句里的 4 个名字（Notification/Elicitation/TaskUpdated/PlanStep）
     "src_py": 127,  # §21 前提判断「127 个 src/ 下 .py」（B3 contracts/submissions.py；B4 kernel/seed.py）
     "gate_scripts": 16,  # §21：14 个 check_*.py + 2 个 verify_*.py（不含 _diag_threads.py；B0 新增 check_reduce_chokepoint.py）
     "ci_gate_steps": 18,  # §21 / PLAN SCAN-1：boundaries 恒阻塞 job 的「门步」数（B0 新增 1 步）

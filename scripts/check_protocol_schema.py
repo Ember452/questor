@@ -205,6 +205,8 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         "message_completed": _envelope("message_completed", {"message_id": "msg_1"}),
         # B1 additive：user_message（用户原话进事实流；text 有界 + truncated）。
         "user_message": _envelope("user_message", {"text": "hello", "truncated": False}),
+        # B6 additive：turn_completed（Stop 点；只带 usage/interrupted）。
+        "turn_completed": _envelope("turn_completed", {"usage": {"total_tokens": 3}, "interrupted": False}),
         "tool_started": _envelope(
             "tool_started",
             {"tool_call_id": "tc1", "name": "read", "capability": "readonly", "risk": "low", "args_summary": "a.txt"},
@@ -276,6 +278,8 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     policy_over_field = _envelope("run_started", {"run_id": "run_x", "policy_ref": {"id": "r", "fingerprint": "f", "leak": 1}})
     # P10 compact_*（ADR-0048）：compact_applied 额外携 summary_text 正文必须被 additionalProperties:false 拒（C20）。
     compact_over_field = _envelope("compact_applied", {"baseline_seq": 7, "covered_from": 1, "covered_to": 3, "summary_bytes": 42, "summary_text": "leaked body"})
+    # B6：turn_completed 不得携正文/额外字段（additionalProperties:false）。
+    turn_completed_over_field = _envelope("turn_completed", {"usage": {}, "interrupted": False, "text": "leak"})
     return {
         "over_field": over_field,
         "missing_required": missing_required,
@@ -286,6 +290,7 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
         "tools_bad_domain": tools_bad_domain,
         "policy_over_field": policy_over_field,
         "compact_over_field": compact_over_field,
+        "turn_completed_over_field": turn_completed_over_field,
     }
 
 

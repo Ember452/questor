@@ -46,7 +46,8 @@ export type QuestorExternalEventProjectionV1 = {
     | "tools_changed"
     | "compact_started"
     | "compact_applied"
-    | "user_message";
+    | "user_message"
+    | "turn_completed";
   data: {
     [k: string]: unknown;
   };
@@ -223,4 +224,13 @@ export interface CompactAppliedData {
 export interface UserMessageData {
   text: string;
   truncated?: boolean;
+}
+/**
+ * Turn boundary (B6; design §5.1 Stop point). usage is the base token usage object; interrupted is the Interrupt point's verdict. No message body is carried (C18/C20).
+ */
+export interface TurnCompletedData {
+  usage?: {
+    [k: string]: unknown;
+  };
+  interrupted?: boolean;
 }

@@ -148,6 +148,21 @@ class RecordWarning:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordTurnCompleted:
+    """内核在 Stop 点落一条 durable ``turn_completed``（B6；与 ``settle_turn`` 同批启用）。
+
+    ``usage`` 只放 base 用量字段（有界对象），``interrupted`` 由 Interrupt 点给出；
+    本命令不改变 context/status，只占一个 durable seq 并产出可回放的成本/中断事实。
+    """
+
+    run_id: str
+    turn: int
+    usage: JsonObject | None = None
+    interrupted: bool = False
+    type: ClassVar[str] = "record_turn_completed"
+
+
+@dataclass(frozen=True, slots=True)
 class CompactContext:
     """P10/ADR-0048：内核在 turn 边界安全点发出的**压缩应用**命令（design/01 I2；HARD C2/C16）。
 
@@ -298,6 +313,7 @@ Command = (
     | ReportChildTerminal
     | UpdateTaskTree
     | RecordWarning
+    | RecordTurnCompleted
 )
 
 
@@ -354,6 +370,9 @@ class EventType:
     # 使「重放 = 生产」与 --resume 的可见转录不依赖第二真相（idle 首条仍由 run_started + 快照承载，
     # 既有冻结断言 test_reduce.py:51 / test_transition_chokepoint.py:45 不改）。
     USER_MESSAGE = "user_message"
+    # turn 边界（B6；设计文档 §5.1 的 Stop 点）：durable 成本/中断事实，供 settle_turn 与
+    # 桌面“这轮花了多少”消费；只带 usage/interrupted，无正文（C18/C20）。
+    TURN_COMPLETED = "turn_completed"
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。
@@ -383,4 +402,5 @@ __all__ = [
     "ReportChildTerminal",
     "UpdateTaskTree",
     "RecordWarning",
+    "RecordTurnCompleted",
 ]

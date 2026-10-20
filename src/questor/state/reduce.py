@@ -34,6 +34,7 @@ from questor.contracts.events import (
     MarkToolRunning,
     MarkToolValidated,
     RecordToolResult,
+    RecordTurnCompleted,
     RecordWarning,
     ReportChildTerminal,
     RequestApproval,
@@ -232,6 +233,20 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
         # 内核 out-of-band 告警的唯一 seq 分配入口（C2）：占一个 durable seq、不改状态。
         seq = run.seq + 1
         return replace(run, seq=seq), [_event(seq, run, command.turn, EventType.WARNING, {"message": command.message})]
+
+    if isinstance(command, RecordTurnCompleted):
+        # B6：Stop 点的 durable 成本/中断事实；不改 context/status，只占一个新 seq。
+        seq = run.seq + 1
+        new = replace(run, seq=seq)
+        return new, [
+            _event(
+                seq,
+                new,
+                command.turn,
+                EventType.TURN_COMPLETED,
+                {"usage": dict(command.usage or {}), "interrupted": bool(command.interrupted)},
+            )
+        ]
 
     if isinstance(command, SubmitMessage):
         was_idle = run.status is RunStatus.IDLE
