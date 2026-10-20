@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import time
+
+import aiosqlite
 import pytest
 
 from questor.contracts.events import RecordToolResult, SubmitMessage
 from questor.contracts.ports import StreamChunk
 from questor.contracts.state_schema import Budget, ContentBlock, Message, Role
-from questor.contracts.submissions import CommandDigestConflict
+from questor.contracts.submissions import CommandDigestConflict, command_digest
+from questor.kernel.command_window import MAX_PAYLOAD_BYTES, window_payload
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.permissions import DefaultPermissionEngine
@@ -133,5 +137,53 @@ async def test_fold_mode_default_and_validation(tmp_path) -> None:
         assert await store.fold_mode("s1") == "legacy"
         with pytest.raises(ValueError):
             await store.set_fold_mode("s1", "v9")
+    finally:
+        await store.close()
+
+
+def _command_payload(text: str) -> tuple[str, str]:
+    command = SubmitMessage(run_id="run-bench", content=Message(id=f"m-{text}", role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0))
+    return window_payload(command), command_digest(command)
+
+
+async def test_kill_does_not_reuse_cseq(tmp_path) -> None:
+    path = str(tmp_path / "kill.db")
+    store = await SQLiteStore(path).connect()
+    payload, digest = _command_payload("x")
+    try:
+        for index in range(3):
+            await store.record_command("run-kill", index + 1, "submit_message", payload, source="loop", idem_key=f"k{index}", digest=f"d{index}")
+        before = [row["cseq"] for row in await store.command_window_rows(run_id="run-kill")]
+        assert before == [1, 2, 3]
+    finally:
+        await store.close()
+
+    async with aiosqlite.connect(path) as db:
+        await db.execute("DELETE FROM command_window")
+        await db.commit()
+    reopened = await SQLiteStore(path).connect()
+    try:
+        row = await reopened.record_command("run-kill", 4, "submit_message", payload, source="loop", idem_key="k9", digest=digest)
+        assert row["cseq"] > 3  # AUTOINCREMENT：kill/删表行后不重占 seq
+    finally:
+        await reopened.close()
+
+
+async def test_write_amplification_benchmark_100_and_1000(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "bench.db")).connect()
+    try:
+        payload, _ = _command_payload("bench")
+        for count in (100, 1000):
+            started = time.perf_counter()
+            for index in range(count):
+                digest = f"d{count}-{index}"
+                await store.record_command("run-bench", index + 1, "submit_message", payload, source="loop", idem_key=f"{count}-{index}", digest=digest)
+            elapsed = time.perf_counter() - started
+            rows = await store.command_window_rows(run_id="run-bench")
+            total_bytes = sum(len(row["payload"].encode("utf-8")) for row in rows)
+            per_row = total_bytes / max(1, len(rows))
+            per_ms = (elapsed * 1000) / count
+            print(f"window benchmark n={count}: rows={len(rows)} bytes/row={per_row:.1f} insert_ms/row={per_ms:.3f}")
+            assert per_row <= MAX_PAYLOAD_BYTES and per_ms <= 5.0
     finally:
         await store.close()
