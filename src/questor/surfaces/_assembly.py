@@ -17,6 +17,7 @@ import os
 import sys
 from pathlib import Path
 
+from questor.capabilities.skills.catalog import build_skill_catalog
 from questor.contracts.policy import CompactionConfig
 from questor.observability.configure import configure_logging, logging_status
 from questor.observability.entry import LogLevel
@@ -45,6 +46,32 @@ def keep_days_from_env() -> int:
 
 #: preview 截断上限（有界，防超大 preview 把 llm 通道撑爆；承 C18/DESIGN §12）。
 _PAYLOAD_MAX_CHARS = 8192
+
+
+def assemble_system_prompt(system: str | None, skills_dir: Path | None) -> str | None:
+    """把 skills catalog 并入 system prompt（DoD①「丢一个 SKILL.md 即生效」）。
+
+    这是从 ``CliSurface.__init__`` 逐字节搬出来的既有拼接（OPT-12a）：
+    - 无技能（``skills_dir=None`` / 目录不存在 / 无有效 SKILL.md）→ 返回**入参原样**（``None`` 仍 ``None``）；
+    - 有技能 → ``f"{system}\\n\\n{catalog}".strip()``，与历史表达式一字不差。
+
+    注意：``system=None`` 且有技能时，f-string 会把字面 ``"None"`` 拼进 prompt。这是**现存行为**，
+    本刀只搬家不改行为（修它是 OPT-12b/B7）；golden 用例钉住它，防止搬家时被“顺手修好”。
+    """
+    catalog = build_skill_catalog(skills_dir)
+    return f"{system}\n\n{catalog}".strip() if catalog else system
+
+
+class DefaultContextAssembler:
+    """``ContextAssemblerPort`` 的现路径实现：system + skills catalog，无记忆注入。"""
+
+    def assemble(self, system: str | None, skills_dir: Path | None) -> str | None:
+        """等价于历史 surface 内联拼接（逐字节）；无技能目录时原样返回。"""
+        return assemble_system_prompt(system, skills_dir)
+
+
+#: 默认装配器单例（无状态，可直接共享）。
+DEFAULT_CONTEXT_ASSEMBLER = DefaultContextAssembler()
 
 
 def compaction_from_env() -> CompactionConfig | None:

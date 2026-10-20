@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from questor.contracts.memory import MemoryStorePort
-from questor.contracts.ports import ProviderPort, StorePort, SurfacePort
+from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort, SurfacePort
 from questor.providers.artifact_store import FileSystemArtifactStore
 from questor.providers.process_runner import SandboxedProcessRunner
 from questor.providers.sandbox import detect_sandbox
@@ -92,8 +92,8 @@ class AssembleSpec:
     - **不改构造顺序**：未给的字段按历史顺序与默认值自建（``store → memory → artifact → sandbox →
       process_runner → surface``），因此默认 spec 与无 spec 逐字段等价。
 
-    字段状态：``surface``/``provider_factory``/``store``/``memory``/``artifact``/``sandbox`` 由本刀
-    （OPT-2a）接线；``context_assembler`` 由 OPT-12a 接线；``loop``/``policy_factory``/``summarizer``/
+    字段状态：``surface``/``provider_factory``/``store``/``memory``/``artifact``/``sandbox``/
+    ``context_assembler`` 已接线（OPT-2a / OPT-12a）；``loop``/``policy_factory``/``summarizer``/
     ``memory_strategy``/``profile`` 是已定形、待后续刀接线的接缝——**本轮不改任何装配行为**。
     """
 
@@ -106,7 +106,7 @@ class AssembleSpec:
     loop: object | None = None
     policy_factory: Callable[[], object] | None = None
     summarizer: object | None = None
-    context_assembler: object | None = None
+    context_assembler: ContextAssemblerPort | None = None
     memory_strategy: object | None = None
     profile: str | None = None
 
@@ -156,6 +156,7 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
         process_runner=process_runner,
         artifact_store=artifact_store,
         sandbox=sandbox,
+        context_assembler=spec.context_assembler,
     )
     _LOG.info(
         "composition root ready store=%s memory_db=%s sandbox=%s",

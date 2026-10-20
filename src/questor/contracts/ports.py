@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from questor.contracts.common import JsonObject
@@ -180,6 +181,19 @@ class SurfacePort(Protocol):
     def _freeze_surface(self, run_id: str, extra_tools: list[object]) -> object: ...
 
 
+class ContextAssemblerPort(Protocol):
+    """上下文装配接缝（OPT-12a）：把 system prompt、skills catalog（及将来的记忆块）拼成一次请求的 system。
+
+    契约：
+    - 纯函数式、无 IO 副作用（只读目录）；**不得**在这里改任何权限/排序语义；
+    - 默认实现（``surfaces._assembly.DefaultContextAssembler``）逐字节等于历史 surface 内联拼接，
+      包括 ``system=None`` 时字面 ``"None"`` 进入 prompt 的现状——修它是 B7（OPT-12b），不在本刀；
+    - 无技能目录时返回**入参原样**（``None`` 仍是 ``None``，不凭空造空串）。
+    """
+
+    def assemble(self, system: str | None, skills_dir: Path | None) -> str | None: ...
+
+
 @runtime_checkable
 class IdGenerator(Protocol):
     """id 生成端口（默认实现见 ``common.new_id``；测试可注入定序实现）。"""
@@ -197,4 +211,5 @@ __all__ = [
     "SandboxDescriptor",
     "SandboxPort",
     "SurfacePort",
+    "ContextAssemblerPort",
 ]
