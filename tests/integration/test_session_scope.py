@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import aiosqlite
+import pytest
 
+from questor.contracts.state_schema import RunStatus
+from questor.kernel.seed import SeedRef, SeedRejected, build_seed_context
 from questor.providers.store_sqlite import SQLiteStore
 
 
@@ -83,5 +86,39 @@ async def test_list_unfinished_runs_excludes_session_stream(tmp_path) -> None:
         await store.append("run-open", ({"type": "run_started", "data": {}},))
         await store.append("sess:s1", ({"type": "memory_written", "data": {}},))
         assert await store.list_unfinished_runs() == ("run-open",)  # 会话流不混入 --list
+    finally:
+        await store.close()
+
+
+async def test_seed_context_marker_and_original_text(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "seed.db")).connect()
+    try:
+        sid = await store.create_session("s1")
+        await store.bind_run_session("run-1", sid)
+        await store.append("run-1", ({"type": "user_message", "data": {"text": "remember ZEPHYR-9"}},))
+        await store.append("run-1", ({"type": "message_completed", "data": {"final_text": "noted ZEPHYR-9"}},))
+        message = await build_seed_context(store, sid)
+        marker = message.content[0]
+        assert marker.type == "system_marker" and marker.payload["origin"] == "seed"
+        assert "ZEPHYR-9" in message.content[1].text
+        assert "remember" in message.content[1].text
+    finally:
+        await store.close()
+
+
+async def test_seed_three_rejections(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "seed-reject.db")).connect()
+    try:
+        with pytest.raises(SeedRejected) as busy:
+            await build_seed_context(store, "s1", status=RunStatus.RUNNING)
+        assert busy.value.reason == "idle_only"
+
+        with pytest.raises(SeedRejected) as cross:
+            await build_seed_context(store, "s1", refs=(SeedRef("other", 1),))
+        assert cross.value.reason == "cross_session"
+
+        with pytest.raises(SeedRejected) as oversize:
+            await build_seed_context(store, "s1", refs=tuple(SeedRef("s1", i) for i in range(33)))
+        assert oversize.value.reason == "oversize"
     finally:
         await store.close()
