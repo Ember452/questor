@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from questor.contracts.memory import MemoryStorePort
-from questor.contracts.ports import ProviderPort, StorePort
+from questor.contracts.ports import ProviderPort, StorePort, SurfacePort
 from questor.providers.artifact_store import FileSystemArtifactStore
 from questor.providers.process_runner import SandboxedProcessRunner
 from questor.providers.sandbox import detect_sandbox
@@ -120,24 +120,35 @@ class App:
     artifact_store: FileSystemArtifactStore
     sandbox: object
     process_runner: object
-    surface: CliSurface
+    surface: SurfacePort
 
 
-async def build_app() -> App:
-    """连接持久层 + 装配 exec/写围栏/归档 + 构造 CliSurface。**唯一装配口径**。"""
+async def build_app(spec: AssembleSpec | None = None) -> App:
+    """连接持久层 + 装配 exec/写围栏/归档 + 构造 surface。**唯一装配口径**。
+
+    ``spec is None`` 时逐字走历史路径；给了 spec 则按字段取用，**未给的字段仍按历史顺序自建**
+    （OPT-2a：默认 spec 与无 spec 逐字段等价）。注入语义：
+    - ``store``/``memory``/``artifact``/``sandbox``：直接采用，不再 connect（句柄生命周期归调用方，
+      仍由 :func:`close_app` 统一回收）；
+    - ``provider_factory``：只在构造 surface 时调用一次；None → surface 自己按 env 选 provider（现路径）；
+    - ``surface``：采用给定实例，不再构造 CliSurface（其余句柄仍装配，供 App 字段/关闭与自述日志）。
+    """
+    spec = spec or AssembleSpec()
     path = store_path()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    store = await SQLiteStore(path).connect()
-    memory = await SQLiteMemoryStore(db_path=memory_db_path(), memory_root=memory_root()).connect()
+    store = spec.store if spec.store is not None else await SQLiteStore(path).connect()
+    memory = spec.memory if spec.memory is not None else await SQLiteMemoryStore(db_path=memory_db_path(), memory_root=memory_root()).connect()
     # exec 三件套：内容寻址归档 + 平台 sandbox 探测 + 受控进程执行器（#154）。
     data_root = Path(store_path()).parent
-    artifact_store = FileSystemArtifactStore(data_root / "artifacts")
-    await artifact_store.connect()
-    sandbox = detect_sandbox()
+    artifact_store = spec.artifact if spec.artifact is not None else FileSystemArtifactStore(data_root / "artifacts")
+    if spec.artifact is None:
+        await artifact_store.connect()
+    sandbox = spec.sandbox if spec.sandbox is not None else detect_sandbox()
     process_runner = SandboxedProcessRunner(sandbox, artifact_store=artifact_store, data_root=data_root)
-    surface = CliSurface(
+    surface = spec.surface if spec.surface is not None else CliSurface(
         store=store,
         memory_store=memory,
+        provider=spec.provider_factory() if spec.provider_factory is not None else None,
         model=model_from_env(),
         skills_dir=Path(skills_dir_from_env()),
         mcp_json_path=Path(mcp_json_from_env()),

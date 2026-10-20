@@ -146,6 +146,40 @@ class Clock(Protocol):
     def monotonic(self) -> float: ...
 
 
+class SurfacePort(Protocol):
+    """传输面的**装配接缝**（OPT-2a）：组合根产出的 ``App.surface`` 只承诺调用方实际用到的方法。
+
+    消费面（grep ``app.surface`` / ``EventServer(surface`` 的真实调用点）：
+    ``interactive()`` → :meth:`run_once`；``__main__ --resume`` → :meth:`resume`；
+    ``EventServer`` / ``SubagentOrchestrator`` → :meth:`_loop` / :meth:`_discover_mcp` /
+    :meth:`_freeze_surface` / :meth:`_resolve_for_run`，并读写 :attr:`store`。
+
+    为什么返回类型写 ``object``：contracts 是最内层（C1/C14），不得 import kernel/surfaces；
+    ``_loop`` 实返 ``DefaultTurnLoop``、``_freeze_surface`` 实返 ``RunToolSurface``，具体类型由 L6
+    实现提供，调用方按实现类型消费。
+
+    为什么带下划线：这些方法本就是 surfaces 内部的装配件；本协议只把**既有调用面**显式化，
+    不改名、不改签名（零行为变更）。刻意不加 ``@runtime_checkable``：协议含数据成员 ``store``，
+    isinstance 校验既无需求也会退化成 hasattr 探测。
+    """
+
+    store: object
+
+    async def run_once(self, text: str, *, on_delta: object | None = None) -> object: ...
+
+    async def resume(self, run_id: str) -> object | None: ...
+
+    def _resolve_for_run(self, run_id: str) -> tuple[object, object]: ...
+
+    def _loop(
+        self, bus: object, cancel: object, surface: object, subagent_spawner: object | None = None, *, run_id: str = ""
+    ) -> object: ...
+
+    async def _discover_mcp(self, run_id: str) -> tuple[list[object], object]: ...
+
+    def _freeze_surface(self, run_id: str, extra_tools: list[object]) -> object: ...
+
+
 @runtime_checkable
 class IdGenerator(Protocol):
     """id 生成端口（默认实现见 ``common.new_id``；测试可注入定序实现）。"""
@@ -162,4 +196,5 @@ __all__ = [
     "IdGenerator",
     "SandboxDescriptor",
     "SandboxPort",
+    "SurfacePort",
 ]
