@@ -23,6 +23,7 @@ import json
 import os
 import tempfile
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any
 
 import aiosqlite
@@ -65,7 +66,10 @@ CREATE TABLE IF NOT EXISTS memory_chunks (
     text       TEXT    NOT NULL,
     hash       TEXT    NOT NULL,
     embedding  TEXT,
-    metadata   TEXT
+    metadata   TEXT,
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT,
+    attributed_to TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_mc_source ON memory_chunks (source, scope);
 CREATE VIRTUAL TABLE IF NOT EXISTS memory_chunks_fts USING fts5(
@@ -181,6 +185,7 @@ class SQLiteMemoryStore(MemoryStorePort):
             await self._db.execute("PRAGMA busy_timeout=30000")  # 跨进程瞬时争用下等锁而非立即抛错（#182）；不开 WAL（单写者由租约保证，避免 -wal 文件）。
             await self._db.executescript(_SCHEMA)
             await self._enforce_schema_version()
+            await self._migrate_columns()
             self.vector = SQLiteVectorBackend(self._db)
         except BaseException:
             # schema 版本 fail-closed 等抛出时先关掉刚建的连接，避免 aiosqlite 非守护线程泄漏（#172）。
@@ -203,6 +208,19 @@ class SQLiteMemoryStore(MemoryStorePort):
             raise MemorySchemaVersionError(
                 f"memory schema version {stored} is newer than this build can decode ({MEMORY_SCHEMA_VERSION}); refusing to half-read"
             )
+
+    async def _migrate_columns(self) -> None:
+        """幂等补列（B9）：旧库没有软删/过期/归因三列时补上，不重建库。
+
+        这三列都在**派生索引**上（`memory.db` 可全量重建），真源始终是 md 文件；
+        刻意**不建 `memory_history` 表**（§20 C-7：变更史 = 事件流）。
+        """
+        assert self._db is not None
+        cur = await self._db.execute("PRAGMA table_info(memory_chunks)")
+        existing = {row[1] for row in await cur.fetchall()}
+        for column, ddl in (("is_deleted", "INTEGER NOT NULL DEFAULT 0"), ("expires_at", "TEXT"), ("attributed_to", "TEXT")):
+            if column not in existing:
+                await self._db.execute(f"ALTER TABLE memory_chunks ADD COLUMN {column} {ddl}")
 
     def _dbp(self) -> aiosqlite.Connection:
         if self._db is None:
@@ -274,6 +292,8 @@ class SQLiteMemoryStore(MemoryStorePort):
                 end_line=end,
                 text=write.text.strip(),
                 hash=hashlib.sha256(write.text.strip().encode()).hexdigest(),
+                attributed_to=write.attributed_to,
+                expires_at=write.expires_at,
             )
 
         marker = f"<!-- idem:{idempotency_key} -->"
@@ -321,8 +341,8 @@ class SQLiteMemoryStore(MemoryStorePort):
     async def _index_chunk(self, chunk: MemoryChunk, *, embedding: tuple[float, ...] | None) -> None:
         db = self._dbp()
         await db.execute(
-            "INSERT OR REPLACE INTO memory_chunks (id, scope, source, path, start_line, end_line, text, hash, embedding, metadata) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO memory_chunks (id, scope, source, path, start_line, end_line, text, hash, embedding, metadata,"
+            " is_deleted, expires_at, attributed_to) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 chunk.id,
                 chunk.scope.value,
@@ -334,6 +354,9 @@ class SQLiteMemoryStore(MemoryStorePort):
                 chunk.hash,
                 _dumps(list(embedding)) if embedding is not None else None,
                 _dumps(chunk.metadata) if chunk.metadata is not None else None,
+                1 if chunk.is_deleted else 0,
+                chunk.expires_at.isoformat() if chunk.expires_at is not None else None,
+                chunk.attributed_to,
             ),
         )
         # FTS5 独立内容表：先删同 id 旧行再加，保持与 memory_chunks 一致（sync 亦重建）。
@@ -386,6 +409,7 @@ class SQLiteMemoryStore(MemoryStorePort):
                 snippet=_bound_snippet(by_id[cid]["text"], max_bytes=cfg.snippet_max_bytes),
                 source=MemorySource(by_id[cid]["source"]),
                 scope=MemoryScope(by_id[cid]["scope"]),
+                attributed_to=by_id[cid].get("attributed_to"),
             )
             for cid in fused
         ]
@@ -393,15 +417,21 @@ class SQLiteMemoryStore(MemoryStorePort):
         return tuple(results[:k])
 
     async def _keyword_candidates(self, query: str, *, scope: MemoryScope | None, limit: int) -> tuple[list[str], dict[str, dict]]:
-        """FTS5 unicode61 命中（best-first），空结果回退 LIKE；返回 (有序 id, id→行)。"""
+        """FTS5 unicode61 命中（best-first），空结果回退 LIKE；返回 (有序 id, id→行)。
+
+        检索面永远只取未删未过期行（B9 纪律⑥/⑦）：软删位与硬过期都是行内事实，
+        不靠“筛掉已返回结果”的下游补丁。
+        """
         db = self._dbp()
         scope_sql = "AND mc.scope = ?" if scope is not None else ""
-        params: tuple[Any, ...] = (query, *([scope.value] if scope is not None else []), limit)
+        # 绑定顺必须与 SQL 里的 ? 顺一致：query → expires → scope? → limit。
+        params: tuple[Any, ...] = (query, utc_now().isoformat(), *([scope.value] if scope is not None else []), limit)
         try:
             cur = await db.execute(
-                f"SELECT mc.id, mc.source, mc.scope, mc.path, mc.start_line, mc.end_line, mc.text "
+                f"SELECT mc.id, mc.source, mc.scope, mc.path, mc.start_line, mc.end_line, mc.text, mc.attributed_to "
                 f"FROM memory_chunks_fts f JOIN memory_chunks mc ON mc.id = f.id "
-                f"WHERE memory_chunks_fts MATCH ? {scope_sql} ORDER BY bm25(memory_chunks_fts) LIMIT ?",
+                f"WHERE memory_chunks_fts MATCH ? AND mc.is_deleted = 0 "
+                f"AND (mc.expires_at IS NULL OR mc.expires_at > ?) {scope_sql} ORDER BY bm25(memory_chunks_fts) LIMIT ?",
                 params,
             )
             rows = await cur.fetchall()
@@ -412,28 +442,51 @@ class SQLiteMemoryStore(MemoryStorePort):
         by_id: dict[str, dict] = {}
         ids: list[str] = []
         for r in rows:
-            by_id[r[0]] = {"id": r[0], "source": r[1], "scope": r[2], "path": r[3], "start_line": r[4], "end_line": r[5], "text": r[6]}
+            by_id[r[0]] = {
+                "id": r[0],
+                "source": r[1],
+                "scope": r[2],
+                "path": r[3],
+                "start_line": r[4],
+                "end_line": r[5],
+                "text": r[6],
+                "attributed_to": r[7] if len(r) > 7 else None,
+            }
             ids.append(r[0])
         return ids, by_id
 
     async def _like_rows(self, query: str, *, scope: MemoryScope | None, limit: int) -> list:
         db = self._dbp()
         scope_sql = "AND scope = ?" if scope is not None else ""
-        params: tuple[Any, ...] = (f"%{query}%", *([scope.value] if scope is not None else []), limit)
+        params: tuple[Any, ...] = (f"%{query}%", utc_now().isoformat(), *([scope.value] if scope is not None else []), limit)
         cur = await db.execute(
-            f"SELECT id, source, scope, path, start_line, end_line, text FROM memory_chunks WHERE text LIKE ? {scope_sql} LIMIT ?",
+            f"SELECT id, source, scope, path, start_line, end_line, text, attributed_to FROM memory_chunks "
+            f"WHERE text LIKE ? AND is_deleted = 0 AND (expires_at IS NULL OR expires_at > ?) {scope_sql} LIMIT ?",
             params,
         )
         return list(await cur.fetchall())
 
     async def _fetch_chunk(self, chunk_id: str) -> dict | None:
         cur = await self._dbp().execute(
-            "SELECT id, source, scope, path, start_line, end_line, text FROM memory_chunks WHERE id = ?", (chunk_id,)
+            "SELECT id, source, scope, path, start_line, end_line, text, attributed_to, is_deleted, expires_at "
+            "FROM memory_chunks WHERE id = ?",
+            (chunk_id,),
         )
         r = await cur.fetchone()
-        if r is None:
+        if r is None or r[8]:
             return None
-        return {"id": r[0], "source": r[1], "scope": r[2], "path": r[3], "start_line": r[4], "end_line": r[5], "text": r[6]}
+        if r[9] is not None and str(r[9]) <= utc_now().isoformat():
+            return None  # 硬过期不参与检索/排序（B9 纪律⑦）
+        return {
+            "id": r[0],
+            "source": r[1],
+            "scope": r[2],
+            "path": r[3],
+            "start_line": r[4],
+            "end_line": r[5],
+            "text": r[6],
+            "attributed_to": r[7],
+        }
 
     def _scan_source_files(self) -> dict[str, str]:
         """扫 memory root 下的 md 真源→ ``{相对path: 文本}``；跳过隐藏/临时文件（如 ``.memtmp_``）。"""
@@ -454,6 +507,14 @@ class SQLiteMemoryStore(MemoryStorePort):
         索引损坏或 ``CHUNKER_VERSION`` 变更都可由本函数自愈——文件永远权威；dreams 按映射排除不索。"""
         files = self._scan_source_files()
         chunks = build_chunks(files)
+        # 全量 wipe+rebuild 不能把已撤回的记忆“滚回来”：先存住现有软删位，重建后重新标记。
+        # 匹配用**行区间重叠**而不是精确等值：write 时的区间算的是“插入点”，chunker 重建时算的是
+        # “markdown 节边界”（含节头行），两者本质上不会逐字相等；只比 hash 也会因节头入正文而失配。
+        # 事件流仍是唯一权威（本集只是它的缓存），**不建第二表**。
+        cur = await self._dbp().execute("SELECT path, start_line, end_line FROM memory_chunks WHERE is_deleted = 1")
+        tombstones: dict[str, list[tuple[int, int]]] = {}
+        for row in await cur.fetchall():
+            tombstones.setdefault(str(row[0]), []).append((int(row[1]), int(row[2])))
         # 重建索引时只用**一次** embedding 调用处理 N 条（CrewAI EncodingFlow 的形状；
         # 逐条往返在千条级上就是时长炸弹）。
         embeddings = await self._embed_many([chunk.text for chunk in chunks])
@@ -463,13 +524,28 @@ class SQLiteMemoryStore(MemoryStorePort):
             try:
                 await db.execute("DELETE FROM memory_chunks_fts")
                 await db.execute("DELETE FROM memory_chunks")
+                restored = 0
                 for chunk, embedding in zip(chunks, embeddings, strict=True):
+                    revoked = any(
+                        chunk.start_line <= deleted_end and deleted_start <= chunk.end_line
+                        for deleted_start, deleted_end in tombstones.get(chunk.path, ())
+                    )
+                    if revoked:
+                        chunk = replace(chunk, is_deleted=True, embedding=None)
+                        embedding = None
+                        restored += 1
                     await self._index_chunk(chunk, embedding=embedding)
                 await db.execute("COMMIT")
             except BaseException:
                 await db.execute("ROLLBACK")
                 raise
-        return {"reindexed": len(chunks), "files": len(files), "chunker_version": CHUNKER_VERSION}
+        return {
+            "reindexed": len(chunks),
+            "files": len(files),
+            "chunker_version": CHUNKER_VERSION,
+            "revived": 0,
+            "kept_deleted": restored,
+        }
 
     async def delete(self, chunk_ids: tuple[str, ...]) -> None:
         db = self._dbp()
@@ -484,6 +560,50 @@ class SQLiteMemoryStore(MemoryStorePort):
             except BaseException:
                 await db.execute("ROLLBACK")
                 raise
+
+    async def soft_delete(self, entry_id: str, *, idempotency_key: str) -> JsonObject:
+        """按条目级 id 软删（B9 纪律⑥）：置 `is_deleted` + 从 FTS 摸掉，**不删真源、不建历史表**。
+
+        幂等：同一 ``idempotency_key`` 命中 `write_ledger` 直接返回原 receipt；重复对同一
+        条目软删也只会得到“命中 0 条”的如实结果，不会抛、不会回滚真源。
+        """
+        path, _, span = entry_id.partition(":")
+        if not path or "-" not in span:
+            raise ValueError(f"soft_delete needs a path:start-end entry_id, got {entry_id!r}")
+        start_text, _, end_text = span.partition("-")
+        try:
+            start, end = int(start_text), int(end_text)
+        except ValueError as exc:
+            raise ValueError(f"soft_delete needs integer line bounds in {entry_id!r}") from exc
+        db = self._dbp()
+        async with self._lock:
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute(
+                    "SELECT path, start_line, end_line, chunk_count FROM write_ledger WHERE idempotency_key = ?",
+                    (idempotency_key,),
+                )
+                row = await cur.fetchone()
+                if row is not None:
+                    await db.execute("COMMIT")
+                    return {"entry_id": entry_id, "removed": 0, "idempotent": True}
+                cur = await db.execute(
+                    "SELECT id FROM memory_chunks WHERE path = ? AND start_line = ? AND end_line = ? AND is_deleted = 0",
+                    (path, start, end),
+                )
+                doomed = [item[0] for item in await cur.fetchall()]
+                for cid in doomed:
+                    await db.execute("UPDATE memory_chunks SET is_deleted = 1, embedding = NULL WHERE id = ?", (cid,))
+                    await db.execute("DELETE FROM memory_chunks_fts WHERE id = ?", (cid,))
+                await db.execute(
+                    "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,?,?,?,?)",
+                    (idempotency_key, path, start, end, len(doomed), utc_now().isoformat()),
+                )
+                await db.execute("COMMIT")
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+        return {"entry_id": entry_id, "removed": len(doomed), "idempotent": False}
 
     def _abs(self, rel_path: str) -> str:
         """将相对 memory root 的路径解为绝对；**拒绝越界**（path traversal / 符号链逃逸 fail-closed）。"""
