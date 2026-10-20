@@ -1,6 +1,6 @@
 # ADR-0043: OpenAI 兼容 = 投影适配器（wire 单一真源 + 断连即取消 + 独立鉴权外部 API lane）
 
-- 状态：✅（2026-10-18，P9 已实现并验证；实现见 [`../plan/09-p9-openai-plugin-host.md`](../plan/09-p9-openai-plugin-host.md) T2/T6/T9）
+- 状态：✅（2026-10-18，P9 已实现并验证；实现见 [`../plan-archive/09-p9-openai-plugin-host.md`](../plan-archive/09-p9-openai-plugin-host.md) T2/T6/T9）
 - 背景：ROADMAP §1 P9 行 DoD"外部 OpenAI 客户端能调"；[`ADR-0007`](./0007-transport.md) 已定"OpenAI 兼容 = 同一股流的另一投影"；[`02-event-protocol`](../design/02-event-protocol.md) §9 **X5** 写死"OpenAI 兼容=投影适配器，**内核状态/权限/账本不为它简化**"、§10 写死映射纪律（标准字段走 OpenAI 语义、专有收进扩展位 `x_questor`、**无原生续传=断连即取消、`[DONE]` 终结、错误编进 `finish_reason`、内核三终态不因兼容面简化**）。现状：`surfaces/http_sse.py` 已有 `EventServer`/`create_app`，且模块 docstring 注明 SSE 帧风格改形自 CowAgent `channel/web/api/openai_compat.py`——OpenAI 端点应在此挂载。三处真矛盾需钉死：① 兼容面不得成第二写者/第二事件真相（C2/C13/C15/C16/C20、[`ADR-0033`](./0033-p7-bus-level-out-of-band-projection.md)/pitfalls #5）；② OpenAI wire 契约放哪、如何漂移门、且不 bump questor 事件 `v`；③ 用户 2026-10-18 拍板要**加鉴权、可网络暴露**，可违 [`ADR-0032`](./0032-p7-sidecar-serve-and-process-boundary.md)"绝不 bind `0.0.0.0`"的旧口径。
 - 决策：
   1. **入站只经 Command Inbox**：`POST /v1/chat/completions` 解析 body → 取末条 user 文本 → 造 `Message(role=USER)` → **`SubmitMessage` 经该 run 的 Command Inbox** 提交（C16/[`ADR-0013`](./0013-run-command-inbox.md)）；**绝不在 surfaces 直接 `reduce`/写态**。出站**只读** `bus.subscribe(run_id)` 投影，不改状态、不入库。

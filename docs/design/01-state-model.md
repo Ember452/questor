@@ -50,7 +50,7 @@ Run            一次执行（断点/回放/续传的单位）
 
 - **Message 项**：`id, role, content_blocks[], created_at, seq`；`content_blocks` 支持 `text / reasoning / tool_use / tool_result / image / file`。
 - **不变式**：`tool_use` 必有配对 `tool_result`（否则下游 provider 400）——§6。
-- **压缩**：只压中段、**user/assistant 文本不删**，删的进 `summary`+`recovery_pointers`（可恢复，对齐 hermes）。
+- **压缩**：只压中段、**user/assistant 文本不删**，删的进 `summary`+`recovery_pointers`（可恢复）。
 
 ## 3. 任务树 TaskTree（森林，决策①④）
 计划进状态，不是接口。策略每步可增删节点（经 `UpdateTaskTree` 命令归约，**P8 起 `deps` 在 reduce 内强校验**）；一个节点可 kind=subagent（**P8 启用**：subagent 节点 = 独立 Run，见 [ADR-0038](../adr/0038-subagent-as-independent-run.md)）。

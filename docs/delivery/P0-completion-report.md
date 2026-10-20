@@ -1,7 +1,7 @@
 # P0 交付报告 · 设计与可编译接口骨架
 
 > 目的：让你读完后能一句话讲清"P0 到底做了什么、架构怎么切、为什么这么取舍"。
-> 口径：以**仓库当下代码**为准，非设计稿愿景。判据来自 [`docs/plan/00-design-skeleton.md`](../plan/00-design-skeleton.md)、[`docs/ROADMAP.md`](../ROADMAP.md) §1。
+> 口径：以**仓库当下代码**为准，非设计稿愿景。判据来自 [`docs/plan/00-design-skeleton.md`](../plan-archive/00-design-skeleton.md)、[`docs/ROADMAP.md`](../ROADMAP.md) §1。
 
 ---
 
@@ -92,4 +92,4 @@ P0 收尾时记录的实际做法与 `plan/00` 原计划的差异（均为合理
 
 **价值**：P0 把"返工代价最高"的东西——分层纪律、接缝形状、机器守卫——一次性立到位。此后 P1–P10 无论怎么加功能，都被这三道防线约束着**不塌回一坨**。这也正好触发**发布里程碑节点 A**：可先只开源这套架构文档（design/adr/roadmap/plan + 骨架），面向硬核开发者。
 
-**下一步 = P1**：在这副骨架上"填肉跑出行为"——写 `reduce`、接 ProviderPort 流式、实装 `read` 工具与权限引擎、把 turn 循环驱动起来。交接契约见 [`plan/00`](../plan/00-design-skeleton.md) §9。→ 读 [P1 交付报告](./P1-completion-report.md)。
+**下一步 = P1**：在这副骨架上"填肉跑出行为"——写 `reduce`、接 ProviderPort 流式、实装 `read` 工具与权限引擎、把 turn 循环驱动起来。交接契约见 [`plan/00`](../plan-archive/00-design-skeleton.md) §9。→ 读 [P1 交付报告](./P1-completion-report.md)。

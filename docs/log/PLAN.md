@@ -1,11 +1,11 @@
 # Questor 日志系统实施计划（刀 1 + 刀 2）· 基于 docs/log/DESIGN.md
 
-> 起手必读：[`docs/log/DESIGN.md`](./DESIGN.md)（本计划的**规格真源**，D1–D13 决策与 §3–§15 全部条目按它执行）· [`AGENTS.md §4.5`](../../AGENTS.md) · [`docs/ROADMAP.md §1.5`](../ROADMAP.md) · [`docs/design/HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md) · [`docs/plan/_TEMPLATE.md`](../plan/_TEMPLATE.md)（分节遵循）。
+> 起手必读：[`docs/log/DESIGN.md`](./DESIGN.md)（本计划的**规格真源**，D1–D13 决策与 §3–§15 全部条目按它执行）· [`docs/ROADMAP.md §1.5`](../ROADMAP.md) · [`docs/design/HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md) · [`docs/plan/_TEMPLATE.md`](../plan/_TEMPLATE.md)（分节遵循）。
 > **性质**：非 Phase 计划——横切补债 + P5 前置。**不占 `docs/plan/NN` 编号**（`plan/05` 已由 ROADMAP P5 行预留）；本文与 DESIGN.md 同住 `docs/log/`，通过 §9 与现有计划挂钩。
 > **READ-ONLY 规划**：本文只落文档不改代码；实现需用户逐轮明确许可（AGENTS §6）。设计规格实现前必须过一次对抗评审（DESIGN §16 + §0 表行号重验）。
 > 分支策略见 §10：PR-A（刀 1）→ 合并 → PR-B（刀 2）从新 main 切。
 
-## 0. Peer-Repo 扫描（AGENTS §4.5 硬门禁；证据在设计阶段实 Grep/Read 核过）
+## 0. 设计期实现调研记录（历史；非开工门禁）
 
 **重列 `project-main/` 目录**：12 个业务/参考目录（hermes-agent-main / wuu-main / DeepCode-main / CowAgent-master / MetaGPT-main / crewAI-main / OpenManus-main / GenericAgent-main / autogen-main / Agent-S-main / EvoFlow-main / cordis-main）。**本表在 PR-B 开工当天（T2.0）逐行重验 `file:line` 仍有效**（防 P3 审计 F 类 stale 引用），并核对各仓 LICENSE。
 

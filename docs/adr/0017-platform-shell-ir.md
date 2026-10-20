@@ -13,4 +13,4 @@
   1. 只实现 `bash`，Windows 跳过 DoD：与项目 Windows 主开发环境矛盾 → 否。
   2. 用 WSL 透明执行：文件权限、路径、进程树和 sandbox backend 均不一致 → 否。
   3. 用 cmd.exe：引号、命令替换与权限语义更弱，不能提供可靠审批摘要 → 否。
-- 关联：ADR-0015、ADR-0018；[`../design/03-tool-interface.md`](../design/03-tool-interface.md) §6/§11；[`../plan/02-p2-tools-permission.md`](../plan/02-p2-tools-permission.md)。
+- 关联：ADR-0015、ADR-0018；[`../design/03-tool-interface.md`](../design/03-tool-interface.md) §6/§11；[`../plan-archive/02-p2-tools-permission.md`](../plan-archive/02-p2-tools-permission.md)。

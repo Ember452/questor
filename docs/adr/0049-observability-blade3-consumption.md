@@ -1,6 +1,6 @@
 # ADR-0049: observability 刀 3 落地边界（`questor logs` 消费命令 + `--log-payload` preview 三闸 + usage 读侧聚合 + 投影 bus 级收口）
 
-- 状态：✅（2026-10-19，P10 开工前置门；实现见 [`../plan/10-p10-hardening.md`](../plan/10-p10-hardening.md) Lane B，T0 先此 ADR）
+- 状态：✅（2026-10-19，P10 开工前置门；实现见 [`../plan-archive/10-p10-hardening.md`](../plan-archive/10-p10-hardening.md) Lane B，T0 先此 ADR）
 - 背景：[`ADR-0027`](./0027-observability-logging-foundation.md) 落刀 1/刀 2（双通道 + `LogEntry` 中间表示 + 零原文 D4 + 按日切 D7 + 来源门 C20）；[`../docs/log/DESIGN.md`](../log/DESIGN.md) §14（消费面后置）、§12（`--log-payload` preview）、§18 刀 3 三件（消费命令 / OTel-metrics / preview 实装）。[`../docs/log/PLAN.md`](../log/PLAN.md) §7 偏差 #4：刀 2 把带外投影仍挂 `cli._stream` **逐消费者**、HTTP 侧未覆盖——[`../docs/pitfalls.md`](../pitfalls.md) #5 明令"收口只能 bus 级一处只读订阅"。[`ADR-0041`](./0041-fanout-budget-and-runaway-control.md):8 定"usage 归 per-run、聚合归 P10 观测面、基于全局 gseq watermark 不改内核不新增第二真相"。现场核：`surfaces/_assembly.py:43-51 reject_unimplemented_payload()` 对非 `off` 的 `QUESTOR_LOG_PAYLOAD` **拒绝启动**（preview 归本 ADR）；`observability/sink_file.py:111` `llm_file` 通道结构就位默认关；`usage_delta ∈ LIVE_ONLY`（kernel/events.py:31-33）**不入库且生产路径从不发射**、`run_completed.usage` 才是 durable（state/reduce.py:399）。
 - 决策：
   1. **追踪/消费面全部基于 `event_log` 权威 + 旁路只读、零第二真相（C13/C20）**：新增 `python -m questor logs` 消费命令——主干查询走 `event_log`，按日 JSONL 作"账本外信息"旁路，二者按 `run_id+seq` 合并成时间线；`--timeline` 出 markdown+json 双份供贴 issue/交付报告；损坏行跳过并计 `malformed_lines`；**命令全程只读**（开 store 不取写锁、不触发 GC、不改状态；DESIGN §14）。GUI/Tauri 追踪面板 = 对同一事件协议的瘦客户端渲染（C14），本 ADR 只定**数据契约/命令**、真开窗口渲染标 UNVERIFIED。

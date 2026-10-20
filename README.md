@@ -4,10 +4,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.13-blue)
-![Status](https://img.shields.io/badge/status-pre--alpha-orange)
+![Status](https://img.shields.io/badge/status-alpha-orange)
 <!-- CI 徽章等 .github/workflows 落地后再接 -->
 
-**状态：设计/骨架阶段（pre-alpha）**——架构文档已完备，正在进入实现（见 ROADMAP 的 P0）。暂无可运行版本。
+**状态：alpha**——核心能力栈（分层/事件溯源/工具+权限/断点续传/记忆/Skills+MCP/桌面壳）已自研落地；面向个人 Agent 的形态演进持续进行中（见 [ROADMAP](docs/ROADMAP.md)）。
 
 ## 这是什么
 
@@ -17,14 +17,14 @@ Questor 是一个从零构建的 **Agent Harness**（运行时底座）+ 其上*
 - **Agent 层**：规划/ReAct、反思、记忆策略、提示词——可注册/热替换/A·B，换算法不动内核。
 - **模型**：经 LiteLLM 多供应商（BYOM）；**桌面**：Tauri v2 + Web 前端，后端为 Python sidecar。
 
-## 特性（路线图）
+## 特性
 
 - 🧠 分层解耦的 Agent Harness（harness ↔ policy ↔ provider/shell）
 - 🧩 工具 + Skills + MCP，统一权限/账本
 - 💾 事件溯源 + 断点续传 + 可恢复上下文压缩
 - 🗂 三层长期记忆 + Deep Dream 蒸馏
 - 🖥 桌面（Tauri）+ CLI + **OpenAI 兼容 API**（鉴权外部 lane；**仅文本模态**——非文本/语音请求归一化拒绝而非静默降级，[ADR-0036](docs/adr/0036-p6-dropped-from-roadmap.md)/[ADR-0044](docs/adr/0044-non-text-content-normalize-reject.md)），多端共享同一事件协议
-- 🔌 策略/工具/技能/MCP 可热插拔（薄插件宿主 + 故障熔断、cordis 式注册形状而非通用 DI；策略 registry 支持热替换/A-B），换能力不动内核（[ADR-0045](docs/adr/0045-policy-registry-and-run-policy-ref.md)/[ADR-0046](docs/adr/0046-capability-hot-plug-host.md)）
+- 🔌 策略/工具/技能/MCP 可热插拔（薄插件宿主 + 故障熔断、注册形状而非通用 DI；策略 registry 支持热替换/A-B），换能力不动内核（[ADR-0045](docs/adr/0045-policy-registry-and-run-policy-ref.md)/[ADR-0046](docs/adr/0046-capability-hot-plug-host.md)）
 
 ## 文档
 
@@ -36,7 +36,7 @@ Questor 是一个从零构建的 **Agent Harness**（运行时底座）+ 其上*
 
 ## 快速开始
 
-> 尚无可运行版本。P1（最小可跑循环）落地后此处会更新为 `uv sync && uv run questor`。
+> 本地跑起来：`uv sync` 后 `uv run python -m questor --help`（交互 REPL：`uv run python -m questor`）。需真模型时配好 `LITELLM_API_KEY`；无 key 时回落到 echo 演示 provider。
 
 ## 贡献
 
@@ -46,9 +46,9 @@ Questor 是一个从零构建的 **Agent Harness**（运行时底座）+ 其上*
 
 见 [SECURITY.md](SECURITY.md)。
 
-## 鸣谢（设计参考）
+## 鸣谢
 
-Questor 为独立自研实现，架构设计在研究以下优秀开源项目的机制后完成：hermes-agent、wuu、DeepCode、CowAgent、MetaGPT、cordis 等。它们仅作**设计参照**，代码不来自它们。
+Questor 为从零独立自研的实现，分层与机制的设计均定于本仓 `docs/design/` 与 `docs/adr/`，代码不来自任何第三方项目。
 
 ## 许可证
 

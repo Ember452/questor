@@ -37,7 +37,7 @@ src/questor/
 ├── surfaces/        # L6 传输/接入：HTTP+SSE 事件服务 · /run·/cancel·/resume · OpenAI兼容 · IM · CLI
 ├── config/          # 配置加载（含 secrets 边界）
 ├── observability/   # 日志 · 事件溯源查询 · trace（横切）
-├── version.py  __main__.py / app.py     # 入口（sidecar 启动点）
+├── __main__.py · composition.py         # 组合根 + CLI/serve 入口（sidecar 启动点）
 ```
 - **依赖方向**：外层 → 内层；`kernel` 只依赖 `contracts/state/providers 端口`，**不 import `policy`/`surfaces` 具体实现**（用端口注入）。策略/MCP 通过注册表挂进内核。
 - **P2 新增接缝（ADR-0013-0019）**：`contracts/{inbox,process,sandbox,shell_analysis,artifacts}.py` 与扩展后的 `state_schema/events/tool.py` 只放数据/Port；`kernel/{run_control,permission_policy,capability_floor,shell_parse_posix,shell_parse_powershell}.py` 放机制；`providers/{process_runner,artifact_store,env_safety}.py` 放适配器；`capabilities/tools/{read,write,edit,apply_patch,ls,glob,grep,bash,powershell}.py` 只经 ToolContext 请求进程/artifact；surfaces 只提交 Command。
@@ -91,7 +91,7 @@ desktop/
 ## 7. 落地边界补充（评审采纳 S1–S7）
 > 共同落点：**目录只是提示，真正防错靠 `.importlinter` 契约 + Port 抽象**——见 [HARD-CONSTRAINTS](./design/HARD-CONSTRAINTS.md) C14。
 - **S1 providers 命名**：`providers/` 含 LLM+存储+时钟/ID 的**适配器**，易被误读为"模型提供商列表"。保留名 + 放目录 `README.md` 说明"所有底层基础设施 Port 的实现"即可（不改名）。
-- **S2 capabilities 膨胀**：P2 只实现内置 tools；P5 起 `mcp/`（官方 SDK 连接、远程工具→`ToolSpec`、per-run stderr+run_id 关联）与 `skills/`（`SKILL.md` 发现/加载/目录注入）落**实体**（`docs/plan/05`）；`subagent/` 仍为 stub 至 P8。
+- **S2 capabilities 膨胀**：P2 只实现内置 tools；P5 起 `mcp/`（官方 SDK 连接、远程工具→`ToolSpec`、per-run stderr+run_id 关联）与 `skills/`（`SKILL.md` 发现/加载/目录注入）落**实体**（`docs/plan-archive/05`）；`subagent/` 仍为 stub 至 P8。
 - **S3 注册/注入必须落地**：policy/MCP 经注册表+端口挂进 kernel；**禁止 kernel 直接 import policy 具体实现**，由 import-linter 强制（非口头约定）。
 - **S4 抽象 vs 实现分家**：`contracts/` 只放**抽象 Port 协议 + 数据模型**；`providers/capabilities/policy` 放具体实现。实现写进 contracts 会让"最稳定层"持续膨胀、破 C11。
 - **S5 进程边界（Tauri）**：Python Harness 是**独立 sidecar 进程**，Rust 壳与它**只经 HTTP+SSE 事件协议通信**，**严禁进程内直调 Python 函数**（否则破"Shell 只消费事件"铁律）。
@@ -102,7 +102,7 @@ desktop/
 > 以上目录/命名是**便于阅读、可维护的常见大型开源布局**，不是必须照抄的硬约束。实际实现时按需要长什么样就长什么样；
 > **要守的只有那几条分层依赖与接缝契约**。改结构 → 不必改设计文档；改分层/契约 → 才需要走 ADR。
 
-## 9. 工程拓扑与守卫增补（R09/R07 取优；仍为参考、非硬约束）
+## 9. 工程拓扑与守卫增补（仍为参考、非硬约束）
 - **分层强制三道防线**（非单一 import-linter）：声明式 `.importlinter` + ruff `flake8-tidy-imports.banned-api` 点名禁跨层 import（附"改走哪个 Port"）+ `ban-relative-imports=all` + 自研 AST 检查器；**以包边界为主、lint 为兜底**（HARD C15）。
 - **跨语言 wire 契约单一真源**：顶层 `protocol/*.schema.json`（外部事件投影的唯一 JSON Schema）→ codegen 生 TS 类型 → CI `--check` 防漂移（呼应 02/C6）。
 - **sidecar 构建三段式**（Python→桌面）：`desktop/sidecar-requirements.{in,lock}`（**比根依赖更窄**）→ PyInstaller **onedir** 冻结（非 onefile）→ tauri `bundle.resources` 打进包 → 发布前 `verify-release-bundle`（导入探针 + initialize/shutdown RPC smoke）。**dev 与打包依赖分两份锁**。
@@ -154,4 +154,4 @@ questor/
 └── .gitignore
 ```
 
-**README 标配（开源项门面）**：顶部徽章(CI/license/release/ stars)、一句话定位、一张截图/gif、特性表、快速安装/运行、指向 `docs/` 的链接、贡献指引、许可证、鸣谢（含"参考了 hermes/wuu/… 设计"）。
+**README 标配（开源项门面）**：顶部徽章(CI/license/release/ stars)、一句话定位、一张截图/gif、特性表、快速安装/运行、指向 `docs/` 的链接、贡献指引、许可证。

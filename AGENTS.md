@@ -48,44 +48,23 @@ alone** (they evolve). Priority: user instruction → §0 + [HARD-CONSTRAINTS](.
   "Refactor X" → tests pass before and after.
 - Multi-step: state `step → verify: check`. Strong DoDs let you loop independently.
 
-## 4.5 Reuse proven implementations — scan the sibling repos before you build
-When writing or executing any phase plan (`docs/plan/NN-*.md`), **before implementing a capability, scan
-the **actual set of sibling repos currently under `project-main/`** — this is the source of truth, new
-additions auto-join, don't work off a hard-coded list. As of last refresh (2026-10-15) this covers 12
-repos: hermes-agent, wuu, DeepCode, CowAgent, MetaGPT, cordis, EvoFlow, autogen, crewAI, OpenManus,
-GenericAgent, Agent-S. **Re-list `project-main/` at plan time** (new repos appear over time):
-- **Scan thoroughly — all relevant repos, not a cursory few** (§0 applies). A feature often already exists,
-  battle-tested, in one of them.
-- **If a peer has a proven / better implementation, adapt and reuse it** rather than writing fresh — lower
-  bug risk. **Do not trim scope or cut corners to save code volume** (volume is explicitly not a concern).
-- Guardrails: keep it behind the correct layer / port (HARD-CONSTRAINTS C1/C14). **All sibling-repo
-  authors have authorized reuse and waive attribution** — adapted/ported code is merged in as our own and
-  carries **no in-file source / license / attribution markers**; prefer adapting to our contracts over verbatim copy.
-- Record it in the plan, per capability: which repos scanned, `file:line`, verdict (reuse / adapt / write-fresh + why).
-- **Frontend especially:** for the desktop/web UI (React/Svelte + TS, Tauri), strongly prefer **adapting
-  existing UI code from the reference repos** over writing fresh — chat/streaming render, SSE event-subscribe
-  client, settings/permission panels, code highlight/diff, sidecar-lifecycle UI mostly already exist and are
-  battle-tested. **Same-stack first choices: DeepCode (`desktop/web` React + `src-tauri` Rust Tauri v2) and
-  EvoFlow (`evopanel` Tauri + pnpm)**; GenericAgent desktop (tauri); Cow/wuu/hermes Electron frontends adaptable
-  to Tauri; hermes `web/`/`ui-tui/` and wuu `clients/` for reference. Re-check the repo list at plan time —
-  new UI-bearing repos may appear. Still keep the iron rule:
-  **UI is a thin client that only consumes the event protocol — never sink business/state/validation into the
-  shell** (C14/ADR-0007).
+## 4.5 Self-reliance — build on our own contracts
+Questor is built from scratch on its own layered contracts. Implement a capability by designing it
+against **our** `contracts/` Ports and layer boundaries (HARD-CONSTRAINTS C1/C14) — do not gate or
+steer implementation on external/reference projects. If you consult an outside implementation for
+inspiration, it stays inspiration: the merged code carries no external source/license/attribution
+marker, and the plan records only *our* design decision and where it lives.
 
 ## 5. Quality Bar (Definition of Done) — never "looks done", only "verifiably works"
 A change is done only when, as applicable: it **compiles + passes tests + lints clean + cold-imports
 (`uv run python -c "import <mod>")` + violates no HARD-CONSTRAINT boundary**, and the relevant
-**Phase DoD in [ROADMAP](./docs/ROADMAP.md)** is met (a manually reproducible behavior, not a vague claim).
-- Respect the phase's **prototype scope** (ROADMAP §2.5): e.g. P1 is serial, no parallel/MCP/subagent.
+**DoD in [ROADMAP](./docs/ROADMAP.md) or the active plan** is met (a manually reproducible behavior, not a vague claim).
 - Follow the design contracts in `docs/design/`; any deviation → update the doc + (order/scope changes)
   file an ADR (ROADMAP §5). New fields/params: additive only (HARD-CONSTRAINTS C6/C11).
 - Enforce the red lines with *mechanism*, not discipline: single-writer, read-only state view (COW),
   only `Command` mutates, events append-only & internal-not-stored-as-external, permission/sandbox
   live in the Harness (C1–C20).
 - **A change is not done until its implied doc updates are made** (see §5.5).
-- **Peer-scan gate** (§4.5): before implementing any capability, the corresponding row in the phase's
-  `docs/plan/NN-*.md` §0 table must be filled (repos scanned + `file:line` + verdict). Unfilled = not ready
-to code. Template: `docs/plan/_TEMPLATE.md`.
 
 ## 5.5 Living Docs — maintain `docs/` as you code, don't defer
 Docs are the source of truth the *next* session reads; stale docs cause wrong work. Update or add
@@ -99,10 +78,10 @@ Docs are the source of truth the *next* session reads; stale docs cause wrong wo
   为什么容易复发 / 纪律 / 关联. **Ordinary bugs do NOT go here** — they go to a GitHub Issue labelled
   `bug`, fixed by a commit whose body says `Fixes #N` (auto-closed on merge to `main`). If a pitfall has
   a one-line enforceable rule, that rule belongs in `HARD-CONSTRAINTS.md` (a `C…` entry), not in pitfalls.
-- **Reality diverges from plan** → follow VISION §0.4 (reality wins) and **write the deviation back**;
-  update the active `docs/plan/NN-*.md`.
-- **Phase order/scope added/removed/moved or cross-phase shift** → record an **ADR first**, then edit
-  `ROADMAP.md` (ROADMAP §5); implementation-detail-only changes go to the phase's `plan/*`, not ROADMAP.
+- **Reality diverges from plan** → follow the reality-wins principle and **write the deviation back**;
+  update the active `docs/plan/NN-*.md` (archived phase plans in `docs/plan-archive/` are history — don't edit them back).
+- **Structural/irreversible change** (contract, layering, phase order) → record an **ADR first**, then edit
+  `ROADMAP.md` (ROADMAP §5); implementation-detail-only changes go to the active plan, not ROADMAP.
 - `CLAUDE.md` stays a thin pointer — only touch it when the doc *map* changes.
 > "Code merged, docs stale" = not done.
 
@@ -113,11 +92,11 @@ Chinese**. Detailed conventions live in [`CONTRIBUTING.md`](./CONTRIBUTING.md)�
 - **Docstring (Chinese) on every public class / Port / function**: what it does, how to use it, dependencies,
   invariants / pre-post conditions, and **failure semantics**.
 - **Explain *why*, not *what*** at non-obvious decisions. Cite **our own** artifacts inline: `ADR-0005`,
-  `HARD C2`, `docs/design/02-event-protocol.md §10` (do NOT cite reference-repo sources — see §4.5).
+  `HARD C2`, `docs/design/02-event-protocol.md §10`.
 - **Mandatory comments** at: permission checks, fail-closed branches, cancel/rollback paths, event-persistence
   boundaries, and concurrency/gate/lease code.
-- **No bare `TODO`**: every TODO/FIXME carries context + owning Phase/ADR; `NotImplementedError` states which
-  phase implements it.
+- **No bare `TODO`**: every TODO/FIXME carries context + owning plan/ADR/Issue; `NotImplementedError` states what
+  implements it (plan/ADR/issue).
 - Don't comment self-evident lines (§2); **when behavior changes, update its comment** — a stale comment is a
   doc defect (§5.5).
 Non-compliant comments = the change is **not done** (§5).

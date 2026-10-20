@@ -1,7 +1,7 @@
 # P2 交付报告 · 工具 + 权限
 
 > 目的：读完后能讲清"P2 到底交付了什么能力、权限/审批/沙箱/进程/投影的真实接缝长什么样、和 plan/02 有哪些偏差、还剩哪些诚实边界"。
-> 口径：以**仓库当下代码 + 实测命令输出**为准。判据来自 [`docs/plan/02-p2-tools-permission.md`](../plan/02-p2-tools-permission.md) §5 DoD、[`docs/ROADMAP.md`](../ROADMAP.md)、ADR-0013…0019。
+> 口径：以**仓库当下代码 + 实测命令输出**为准。判据来自 [`docs/plan/02-p2-tools-permission.md`](../plan-archive/02-p2-tools-permission.md) §5 DoD、[`docs/ROADMAP.md`](../ROADMAP.md)、ADR-0013…0019。
 > 落地状态：**已合入 main**（PR #19，merge commit `1f5c171`，2026-10-16）——ADR-0012 B 案首次全流程走通：功能分支 → PR → required checks 绿 → merge commit。
 
 ---

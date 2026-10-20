@@ -11,4 +11,4 @@
   1. 保留"标 provenance + 保留声明"要求 → 否（违全体原作者明确要求）。
   2. 回头删改已合入源码 / 历史文档里的 provenance → 否（篡改已完成工作的记录，违 §5.5；且属代码改动，越界）。
   3. 只改本 Phase 计划、不动 rulebook → 否（规则书与现实长期不一致，正是 ADR-0012 当初否掉的"挂着规则却一直绕过"）。
-- 关联：`AGENTS.md §4.5/§5.6`、`CONTRIBUTING.md`（注释规范）、HARD-CONSTRAINTS C1/C14、[`ADR-0012`](./0012-branch-policy.md)（同类"口径切换、追加记录不改原文"范式）、[`../plan/07-p7-desktop-shell.md`](../plan/07-p7-desktop-shell.md) §0.1 署名口径注。
+- 关联：`AGENTS.md §4.5/§5.6`、`CONTRIBUTING.md`（注释规范）、HARD-CONSTRAINTS C1/C14、[`ADR-0012`](./0012-branch-policy.md)（同类"口径切换、追加记录不改原文"范式）、[`../plan-archive/07-p7-desktop-shell.md`](../plan-archive/07-p7-desktop-shell.md) §0.1 署名口径注。

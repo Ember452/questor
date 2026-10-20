@@ -1,6 +1,6 @@
 # ADR-0026: 混合检索栈（rank-normalize 融合 + 时间衰减 + 降级）与有界投影
 
-- 状态：✅（2026-10-16，决策定；实现见 [`../plan/04-memory-soul.md`](../plan/04-memory-soul.md) T10、T12）
+- 状态：✅（2026-10-16，决策定；实现见 [`../plan-archive/04-memory-soul.md`](../plan-archive/04-memory-soul.md) T10、T12）
 - 背景：[`../design/06-memory.md`](../design/06-memory.md) §2 已定检索栈 = `向量(cosine) + 关键词(FTS5 unicode61 / trigram-CJK / LIKE 兜底) → rank-normalize 加权融合 → 时间衰减 → 可选 rerank → 命中热度 boost(默认关)`，且明确"**融合用 rank 归一(0,1] 加权，不是 RRF**；向量失败静默降级关键词，不抛"。检索命中原文将进入 prompt/下一轮上下文，受 HARD C18/ADR-0019"载荷有界 + 字段级白名单投影"约束。实扒：CowAgent `agent/memory/manager.py:742-799`（`_merge_results`）/`:722-740`（`_rank_normalize`）/`:657-697`（`_compute_temporal_decay` half_life 30d、core 常绿）/`:181-201`（无 embedding 静默降级）、`storage.py:898-1010`（三档关键词降级 + BM25）。
 - 决策：
   - **融合算法 = rank-normalize 到 (0,1]、仅对命中通道加权平均**，**非 RRF**（承 design/06 §2、Cow `manager.py:742`）；权重归一防 NaN/负值（`manager.py:699-720`）。

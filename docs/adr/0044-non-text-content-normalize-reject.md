@@ -1,6 +1,6 @@
 # ADR-0044: 非文本/语音 content part 归一化拒绝（P9 硬判据）
 
-- 状态：✅（2026-10-18，P9 已实现并验证；实现见 [`../plan/09-p9-openai-plugin-host.md`](../plan/09-p9-openai-plugin-host.md) T7）
+- 状态：✅（2026-10-18，P9 已实现并验证；实现见 [`../plan-archive/09-p9-openai-plugin-host.md`](../plan-archive/09-p9-openai-plugin-host.md) T7）
 - 背景：[`ADR-0036`](./0036-p6-dropped-from-roadmap.md) 整阶段移除 P6（多模态/语音），并**决策 5 给 P9 新增一条硬判据**：OpenAI 兼容面收到 `image_url`/`input_audio` 等非文本 content part 或语音类请求时，必须**归一化拒绝**——明确的"provider 能力不支持"错误 + 经 [`ADR-0028`](./0028-pairing-gate-and-provider-fault-normalization.md) 的故障归一终态；**绝不崩、绝不静默降级成纯文本继续跑**。ROADMAP §1.5 P9 备注同步钉死。现状事实：本仓 `contracts/state_schema.py` 的 `ContentBlock` 仅 `text`/`tool_use`/`tool_result`，全 `src/` 对 `voice|audio|tts|asr|vision|modalit` 零命中（`ADR-0036`:11 核实）——即 questor 根本无能力表示多模态块。
 - 决策：
   1. **surface 层 fail-fast（主路径）**：OpenAI 面解析入站 `messages[].content` 的每一 part，若 `type ∉ {"text"}`（如 `image_url`/`input_audio`/`file`/语音类），**不起 run、不建 Command**，直接返回 HTTP 400 的 OpenAI error object：`{"error":{"type":"invalid_request_error","code":"unsupported_modality","message":"provider capability not supported: <part-type>"}}`。这是**协议级输入校验**（在适配器边界、非状态写），不违 C16/C14。

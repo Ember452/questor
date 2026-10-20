@@ -1,20 +1,18 @@
 # Phase NN 详细计划 — <标题>
 
-> 起手**必读**：[`AGENTS.md §4.5`](../../AGENTS.md) · [`docs/ROADMAP.md §3`](../ROADMAP.md) · [`docs/design/HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md)
-> **§0 未填完 = 本 Phase 计划未就绪、不能开工**（ROADMAP §0 硬门槛）。
+> 起手**必读**：[`AGENTS.md`](../../AGENTS.md) · [`docs/ROADMAP.md §3`](../ROADMAP.md) · [`docs/design/HARD-CONSTRAINTS.md`](../design/HARD-CONSTRAINTS.md)
+> 目标：把本 Phase 的**可验证判据（DoD）· 子任务 · 契约/红线自检** 写清楚即可开工。
 
-## 0. Peer-Repo 扫描（**必填**，AGENTS §4.5 · 综合取优）
+## 0. 既有依据与接缝（本项目自身）
 
-**先重列 `project-main/` 目录**（新增自动纳入，非固定清单；上次刷新 2026-10-15 含 12 仓：
-`hermes-agent / wuu / DeepCode / CowAgent / MetaGPT / cordis / EvoFlow / autogen / crewAI / OpenManus / GenericAgent / Agent-S`）。
-再逐个能力填表；**"自写"必须有原因**（无参考实现 / 与本项目契约不兼容 / 参考实现质量不足）。
+列出本 Phase 要复用/扩展的**本仓已有**契约与设计：相关 `docs/design/*`、`docs/adr/*`、已有 Port/模块（`file:line`）· 本 Phase 在其上**只加不改**还是**需新 ADR**。
 
-| 能力 | 扫描仓（`file:line`） | 结论（复用/改造/自写） | 复用/改造说明 · 许可/署名注意 |
-|---|---|---|---|
-| <能力 A> | <repo:path:line>; <repo:path:line> | 改造 | |
-| <能力 B> | … | 自写（<原因>） | |
+| 能力 | 既有依据（本仓 design/adr/Port） | 结论（复用既有接缝 / 新增 · 需否 ADR） |
+|---|---|---|
+| <能力 A> | <design/0X §y; ADR-00N; contracts/…> | 复用既有接缝 |
+| <能力 B> | … | 新增（先记 ADR） |
 
-> 前端能力另注：**同栈优先源 = DeepCode Tauri v2 / EvoFlow evopanel**；改造后仍守"UI 只消费事件协议、零业务下沉"（C14 / ADR-0007）。
+> 前端能力另注：UI 只当**瘦客户端**、仅消费事件协议、零业务下沉（C14 / ADR-0007）。
 
 ## 1. 目标与可验证判据（DoD）
 - **进入条件**：对齐 ROADMAP §1 表。

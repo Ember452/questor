@@ -1,6 +1,6 @@
 # ADR-0024: 记忆契约演进（typed WriteMemory + memory_written 事件 + recovery_pointers covered_hash + 快照 v3）
 
-- 状态：✅（2026-10-16，决策定；实现见 [`../plan/04-memory-soul.md`](../plan/04-memory-soul.md) T5–T7、T11）
+- 状态：✅（2026-10-16，决策定；实现见 [`../plan-archive/04-memory-soul.md`](../plan-archive/04-memory-soul.md) T5–T7、T11）
 - 背景：`WriteMemory` 命令已在 [`../../src/questor/contracts/events.py`](../../src/questor/contracts/events.py) 定义但 `payload: JsonObject`（裸 JSON、且 `state/reduce.py` 无处理分支=死 stub）；`recovery_pointers` 现为 `tuple[tuple[int,int], ...]` 且源码注记"NOT filled until P4/P10（压缩）"、**缺 CoveredHash 锚**——P3 对抗审计（[`../audit/P3-review-2026-10-16.md`](../audit/P3-review-2026-10-16.md)）A2/E1 明确警告：若在 P4 不定形、待 P10 压缩落地再补，将**破坏性修改已落库的快照 schema**（违 HARD C11"接缝早锁、字段 v0 后锁"）。快照已有 P3 的 `contract_version` fail-closed 闸门（commits `e4f81dc`）。[`../design/06-memory.md`](../design/06-memory.md) I3 要求"只写浓缩文本、绝不写 delta"。
 - 决策：
   - **`WriteMemory.payload` 从裸 `JsonObject` 收敛为 typed `MemoryWrite`**：`kind ∈ {core, daily, distill}`、`scope ∈ {shared, user, session}`、`text`（有界浓缩文本）、可选覆盖区引用；`Command` 联合类型与 `type="write_memory"` 名保持不变（不破信封）。字段 v0 锁（HARD C11）。

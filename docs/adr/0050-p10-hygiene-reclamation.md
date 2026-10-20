@@ -1,6 +1,6 @@
 # ADR-0050: 卫生面回收边界（lease/TTL 账本回收 + artifact 孤儿 GC；event_log 主干裁剪与 acked-delivery 回收绑定后置）
 
-- 状态：✅（2026-10-19，P10 开工前置门；实现见 [`../plan/10-p10-hardening.md`](../plan/10-p10-hardening.md) Lane D，T0 先此 ADR）
+- 状态：✅（2026-10-19，P10 开工前置门；实现见 [`../plan-archive/10-p10-hardening.md`](../plan-archive/10-p10-hardening.md) Lane D，T0 先此 ADR）
 - 背景：三处显式后置 P10 的卫生账本——[`ADR-0019`](./0019-bounded-artifact-projection.md):12 "需要独立 artifact GC/session cleanup，后续可归 P10"；[`ADR-0022`](./0022-dual-cursor-watermark.md):12 "watermark 永不回收（防 ABA），裁剪策略后置 P10"；[`ADR-0047`](./0047-cross-process-claim-delivery-run-lease.md) P9 加了 `claim_delivery/delivery_state/acquire_lease/renew_lease/release_lease`（contracts/ports.py:96-123）但**只增不回收**、账本无界增长。现场核（`cfc3004`）：`contracts/ports.py` 无 `prune/gc/reclaim/delete` 方法；`providers/artifact_store.py::FileSystemArtifactStore` 仅 `put_text/put_bytes`、**无 read/GC**，且**内容寻址、落盘路径 = `root/{sha256}{suffix}`、run_id 未进路径**（docstring 称"按 run 隔离"与实现不符，登记）。[`ADR-0024`](./0024-memory-contract-evolution.md)/[`ADR-0048`](./0048-recoverable-context-compaction.md) 令压缩 `recovery_pointers` 指向 **durable `event_log`** 区间——故 event_log 不可裁，否则压缩恢复与回放权威（[`ADR-0020`](./0020-durable-write-gate-and-log-authority.md)）崩塌。
 - 决策：
   1. **`event_log` 主干裁剪显式后置、不在本 Phase**：`event_log` 是 [`ADR-0020`](./0020-durable-write-gate-and-log-authority.md) 唯一耐久权威、[`ADR-0048`](./0048-recoverable-context-compaction.md) 的 `recovery_pointers(seq_from,seq_to)` 与 `--resume`/`replay_global` 全依赖其完整 append-only；裁剪三者同时失效。**登记理由**（防"字段存在≠已做"）。
