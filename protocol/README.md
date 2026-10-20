@@ -23,7 +23,7 @@ It asserts this schema's `type` enum equals `questor.contracts.events.EventType`
 the JSON Schema, the Python contract and the codegen'd TS can never silently diverge.
 
 Current counts (mechanically synced; `check_protocol_schema --check` stays the authority, this line is
-documentation only): **27** `EventType` values and **20** `Command` union members
+documentation only): **29** `EventType` values and **20** `Command` union members
 (`src/questor/contracts/events.py`). Both grow additively only — new values never rename or renumber
 an existing one, and `v` bumps only on a breaking change.
 

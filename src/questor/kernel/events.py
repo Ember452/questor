@@ -85,6 +85,11 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.USER_MESSAGE: frozenset({"text", "truncated"}),
     # turn_completed（B6；设计文档 §5.1 Stop 点）：只带 base 用量与中断位，无正文（C18/C20）。
     EventType.TURN_COMPLETED: frozenset({"usage", "interrupted"}),
+    # memory_injected（B7；设计文档 §6.1 第④约）：live-only 观测条目。kind 区分索引段/召回正文，
+    # entry_ids 有界（≤上限条数）、只到条目粒度（path:start-end），无任一段正文（C18/C20）。
+    EventType.MEMORY_INJECTED: frozenset({"kind", "entry_ids", "lines", "bytes", "truncated"}),
+    # cache_break（B7；§6.1 cache 三条款）：三段 sha256 + 原因 + 断点数；hash 不可逆，零明文（C18/C20）。
+    EventType.CACHE_BREAK: frozenset({"system_hash", "tools_hash", "history_hash", "reason", "breakpoints"}),
 }
 
 

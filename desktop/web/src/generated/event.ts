@@ -47,7 +47,9 @@ export type QuestorExternalEventProjectionV1 = {
     | "compact_started"
     | "compact_applied"
     | "user_message"
-    | "turn_completed";
+    | "turn_completed"
+    | "memory_injected"
+    | "cache_break";
   data: {
     [k: string]: unknown;
   };
@@ -234,6 +236,29 @@ export interface TurnCompletedData {
   };
   interrupted?: boolean;
 }
+/**
+ * Memory section actually injected into this turn's request (B7; design §6.1 constraint 4). entry_ids are entry-granular pointers (path:start-end) and bounded; no section body is ever carried here or in logs (C18/C20).
+ */
+export interface MemoryInjectedData {
+  kind: "index" | "recall";
+  /**
+   * @maxItems 40
+   */
+  entry_ids?: string[];
+  lines?: number;
+  bytes?: number;
+  truncated?: boolean;
+}
+/**
+ * Prompt-cache break detection (B7; design §6.1 cache clause 3). Three one-way segment hashes plus the reason bit plus the granted breakpoint count; hashes are irreversible, zero plaintext (C18/C20).
+ */
+export interface CacheBreakData {
+  system_hash?: string | null;
+  tools_hash?: string | null;
+  history_hash?: string | null;
+  reason: "cold" | "system" | "tools" | "history" | "ttl" | "budget";
+  breakpoints?: number;
+}
 
 // Derived from the schema's `type` enum (OPT-10c): consumers must not hand-write the event list.
 export const EVENT_TYPE_NAMES = [
@@ -264,4 +289,6 @@ export const EVENT_TYPE_NAMES = [
   "compact_applied",
   "user_message",
   "turn_completed",
+  "memory_injected",
+  "cache_break",
 ] as const;

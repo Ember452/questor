@@ -41,7 +41,9 @@
         "compact_started",
         "compact_applied",
         "user_message",
-        "turn_completed"
+        "turn_completed",
+        "memory_injected",
+        "cache_break"
       ]
     },
     "data": { "type": "object" }
@@ -73,7 +75,9 @@
     { "if": { "properties": { "type": { "const": "compact_started" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/compact_started" } } } },
     { "if": { "properties": { "type": { "const": "compact_applied" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/compact_applied" } } } },
     { "if": { "properties": { "type": { "const": "user_message" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/user_message" } } } },
-    { "if": { "properties": { "type": { "const": "turn_completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/turn_completed" } } } }
+    { "if": { "properties": { "type": { "const": "turn_completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/turn_completed" } } } },
+    { "if": { "properties": { "type": { "const": "memory_injected" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_injected" } } } },
+    { "if": { "properties": { "type": { "const": "cache_break" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/cache_break" } } } }
   ],
   "$defs": {
     "run_started": {
@@ -346,6 +350,32 @@
       "properties": {
         "usage": { "type": "object" },
         "interrupted": { "type": "boolean" }
+      }
+    },
+    "memory_injected": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "description": "Memory section actually injected into this turn's request (B7; design §6.1 constraint 4). entry_ids are entry-granular pointers (path:start-end) and bounded; no section body is ever carried here or in logs (C18/C20).",
+      "properties": {
+        "kind": { "type": "string", "enum": ["index", "recall"] },
+        "entry_ids": { "type": "array", "items": { "type": "string", "maxLength": 128 }, "maxItems": 40 },
+        "lines": { "type": "integer", "minimum": 0 },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    "cache_break": {
+      "type": "object",
+      "required": ["reason"],
+      "additionalProperties": false,
+      "description": "Prompt-cache break detection (B7; design §6.1 cache clause 3). Three one-way segment hashes plus the reason bit plus the granted breakpoint count; hashes are irreversible, zero plaintext (C18/C20).",
+      "properties": {
+        "system_hash": { "type": ["string", "null"], "maxLength": 80 },
+        "tools_hash": { "type": ["string", "null"], "maxLength": 80 },
+        "history_hash": { "type": ["string", "null"], "maxLength": 80 },
+        "reason": { "type": "string", "enum": ["cold", "system", "tools", "history", "ttl", "budget"] },
+        "breakpoints": { "type": "integer", "minimum": 0, "maximum": 4 }
       }
     }
   }

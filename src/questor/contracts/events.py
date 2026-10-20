@@ -373,6 +373,13 @@ class EventType:
     # turn 边界（B6；设计文档 §5.1 的 Stop 点）：durable 成本/中断事实，供 settle_turn 与
     # 桌面“这轮花了多少”消费；只带 usage/interrupted，无正文（C18/C20）。
     TURN_COMPLETED = "turn_completed"
+    # 记忆索引段已注入本轮请求（B7；设计文档 §6.1 四道约束的第④条）：live-only 观测条目，
+    # 只带条目 id 与有界计量（行数/字节数），**无索引正文**——“注入了什么”可审计，“内容是什么”
+    # 永不进日志/wire（C18/C20）。
+    MEMORY_INJECTED = "memory_injected"
+    # prompt cache 断裂（B7；设计文档 §6.1 cache 三条款之第 3 条）：live-only，只带三段 hash
+    # （system 块 / 工具面 / 历史起点）+ 断裂原因位 + 断点数，零明文（C18/C20）。
+    CACHE_BREAK = "cache_break"
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。

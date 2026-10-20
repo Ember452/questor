@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -114,3 +115,28 @@ def edit_distance(a: str, b: str) -> int:
             current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (ca != cb)))
         previous = current
     return previous[-1]
+
+
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_WHITESPACE = re.compile(r"\s+")
+_DESCRIPTION_MIN = 20
+_DESCRIPTION_MAX = 2000
+
+
+def bound_description(text: str, *, name: str, max_chars: int | None) -> str:
+    """共享描述/正文净化（C08 单一真源）：内置工具、skills 目录、MCP 远程描述、记忆索引段。
+
+    去控制字符 → 折叠空白 → 过短退化（含名字、继不空）→ 超界截断加省略号。
+    从 ``capabilities/tools/registry.py`` 逐字下沉到 L0：否则任何非 capability 层要用同一套
+    净化规则都得反向 import L3（分层次要违反 C1/C14）；行为与原实现逐字一致。
+    """
+    cleaned = _WHITESPACE.sub(" ", _CONTROL_CHARS.sub("", text)).strip()
+    limit = max(_DESCRIPTION_MIN, min(max_chars or _DESCRIPTION_MAX, _DESCRIPTION_MAX))
+    if len(cleaned) < _DESCRIPTION_MIN:
+        # 退化：保证消费方永远看到含条目名、达下限的说明，而不是空/过短文本。
+        cleaned = f"{name} tool: {cleaned}".strip()
+        if len(cleaned) < _DESCRIPTION_MIN:
+            cleaned = f"{cleaned} - minimal tool description".strip()
+    if len(cleaned) > limit:
+        cleaned = cleaned[: limit - 1].rstrip() + "…"
+    return cleaned

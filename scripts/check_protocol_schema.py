@@ -257,6 +257,9 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         # P10 additive（ADR-0048）：compact_started 单 reason；compact_applied 只栅栏/有界量、无正文。
         "compact_started": _envelope("compact_started", {"reason": "kernel_token_pressure"}),
         "compact_applied": _envelope("compact_applied", {"baseline_seq": 7, "covered_from": 1, "covered_to": 3, "summary_bytes": 42}),
+        # B7 additive：memory_injected（live-only 审计条目，只条目 id + 计量）与 cache_break（三段 hash + 原因）。
+        "memory_injected": _envelope("memory_injected", {"kind": "index", "entry_ids": ["MEMORY.md:1-1"], "lines": 3, "bytes": 240, "truncated": False}),
+        "cache_break": _envelope("cache_break", {"system_hash": "sha256:aaa", "tools_hash": None, "history_hash": None, "reason": "cold", "breakpoints": 1}),
     }
 
 
@@ -280,6 +283,11 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     compact_over_field = _envelope("compact_applied", {"baseline_seq": 7, "covered_from": 1, "covered_to": 3, "summary_bytes": 42, "summary_text": "leaked body"})
     # B6：turn_completed 不得携正文/额外字段（additionalProperties:false）。
     turn_completed_over_field = _envelope("turn_completed", {"usage": {}, "interrupted": False, "text": "leak"})
+    # B7：memory_injected 不得携索引正文；cache_break 的 reason 必在枚举内、断点数不超 4 个预算。
+    memory_injected_over_field = _envelope("memory_injected", {"kind": "index", "text": "leaked index body"})
+    memory_injected_bad_kind = _envelope("memory_injected", {"kind": "bogus"})
+    cache_break_bad_reason = _envelope("cache_break", {"reason": "magic", "breakpoints": 1})
+    cache_break_over_budget = _envelope("cache_break", {"reason": "budget", "breakpoints": 9})
     return {
         "over_field": over_field,
         "missing_required": missing_required,
@@ -291,6 +299,10 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
         "policy_over_field": policy_over_field,
         "compact_over_field": compact_over_field,
         "turn_completed_over_field": turn_completed_over_field,
+        "memory_injected_over_field": memory_injected_over_field,
+        "memory_injected_bad_kind": memory_injected_bad_kind,
+        "cache_break_bad_reason": cache_break_bad_reason,
+        "cache_break_over_budget": cache_break_over_budget,
     }
 
 
