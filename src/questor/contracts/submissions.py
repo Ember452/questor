@@ -91,36 +91,48 @@ def canonical_json(value: object) -> str:
     )
 
 
-def _encode(value: object) -> Any:
-    """把 Command 及其嵌套 dataclass/冻结容器编码为可 canonical 的普通结构。"""
+def _encode(value: object, *, identity: bool = False) -> Any:
+    """把 Command 及其嵌套 dataclass/冻结容器编码为可 canonical 的普通结构。
+
+    ``identity=True`` 时丢掉 Message 的易变叶（id/seq/created_at）：同一用户原话经重投/
+    重建后仍应得到同一 digest（幂等的身份是内容，不是进程内对象元数据）。
+    """
     if is_dataclass(value) and not isinstance(value, type):
         encoded: dict[str, Any] = {"__type__": type(value).__name__}
+        volatile = {"id", "seq", "created_at"} if identity and type(value).__name__ == "Message" else set()
         for field in fields(value):
-            encoded[field.name] = _encode(getattr(value, field.name))
+            if field.name in volatile:
+                continue
+            encoded[field.name] = _encode(getattr(value, field.name), identity=identity)
         return encoded
     if isinstance(value, Enum):
         return value.value
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, dict):
-        return {str(k): _encode(v) for k, v in value.items()}
+        return {str(k): _encode(v, identity=identity) for k, v in value.items()}
     if isinstance(value, (tuple, list)):
-        return [_encode(v) for v in value]
+        return [_encode(v, identity=identity) for v in value]
     if isinstance(value, (set, frozenset)):
-        return sorted(_encode(v) for v in value)
+        return sorted(_encode(v, identity=identity) for v in value)
     if hasattr(value, "items"):  # immutables.Map 等只读映射
-        return {str(k): _encode(v) for k, v in value.items()}  # type: ignore[union-attr]
+        return {str(k): _encode(v, identity=identity) for k, v in value.items()}  # type: ignore[union-attr]
     return value
 
 
 def command_payload(command: Command) -> JsonObject:
-    """Command → 可 canonical 的普通 dict（``type`` 判别 + ``fields`` 载荷）。"""
+    """Command → 可 canonical 的普通 dict（``type`` 判别 + ``fields`` 载荷；含完整元数据）。"""
     return {"type": command.type, "fields": _encode(command)}
+
+
+def command_identity_payload(command: Command) -> JsonObject:
+    """Command 的身份投影：丢弃 Message 的 id/seq/created_at，供 digest 跨重投稳定。"""
+    return {"type": command.type, "fields": _encode(command, identity=True)}
 
 
 def command_digest(command: Command) -> str:
     """命令内容指纹：sha256(canonical_json + "|" + DIGEST_SCHEMA_VERSION)，不用 repr。"""
-    raw = canonical_json(command_payload(command))
+    raw = canonical_json(command_identity_payload(command))
     return hashlib.sha256(f"{raw}|{DIGEST_SCHEMA_VERSION}".encode()).hexdigest()
 
 
@@ -156,6 +168,7 @@ __all__ = [
     "SubmissionQueueFullError",
     "canonical_json",
     "command_digest",
+    "command_identity_payload",
     "command_payload",
     "kind_for_command",
     "normalize_source",

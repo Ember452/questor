@@ -23,8 +23,16 @@ import time
 
 import aiosqlite
 
-from questor.contracts.common import JsonObject, thaw, utc_now
+from questor.contracts.common import JsonObject, new_id, thaw, utc_now
 from questor.contracts.ports import StorePort
+from questor.contracts.submissions import (
+    MAX_QUEUE_ITEMS,
+    SUBMISSIONS_DDL,
+    SubmissionConflictError,
+    SubmissionQueueFullError,
+    canonical_json,
+    normalize_source,
+)
 
 #: 本仓 store DDL 的版本；读到更高版本即 fail-closed（不猜测半升级表形）。
 STORE_SCHEMA_VERSION = 2
@@ -121,7 +129,7 @@ class SQLiteStore(StorePort):
         self._db = await aiosqlite.connect(self.path, isolation_level=None)
         try:
             await self._db.execute("PRAGMA busy_timeout=30000")  # 跨进程 BEGIN IMMEDIATE 瞬时争用下等锁而非立即抛错（#182）；单写者已由租约保证，不开 WAL（收益低、徒增 -wal 文件）。
-            await self._db.executescript(_SCHEMA)
+            await self._db.executescript(_SCHEMA + SUBMISSIONS_DDL)
             await self._enforce_schema_version()
         except BaseException:
             # schema 版本 fail-closed 等抛出时先关掉刚建的连接，避免 aiosqlite 非守护工作线程泄漏（#172）。
@@ -445,6 +453,196 @@ class SQLiteStore(StorePort):
             try:
                 cur = await db.execute(
                     "DELETE FROM deliveries WHERE state = 'claimed' AND claimed_at + ttl_seconds < ?", (now,)
+                )
+                await db.commit()
+                return cur.rowcount or 0
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    # ---- B3：耐久提交队列（session 作用域；写者只碰本表，event_log 仍只由持租约者 append）----
+    async def enqueue_submission(
+        self,
+        session_id: str,
+        kind: str,
+        payload: JsonObject,
+        *,
+        source: str,
+        idem_key: str,
+        digest: str,
+        run_id: str | None = None,
+    ) -> JsonObject:
+        """入队一条提交：同键同 digest 幂等，同键异 digest 拒，队满背压（BEGIN IMMEDIATE 跨进程串行）。"""
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute(
+                    "SELECT item_id, digest, change_version FROM submissions WHERE session_id = ? AND idem_key = ?",
+                    (session_id, idem_key),
+                )
+                row = await cur.fetchone()
+                if row is not None:
+                    if row[1] != digest:
+                        raise SubmissionConflictError(
+                            f"idempotency key {idem_key!r} in session {session_id!r} is already bound to a different command"
+                        )
+                    await db.commit()
+                    return {"item_id": row[0], "change_version": row[2], "duplicate": True}
+                cur = await db.execute(
+                    "SELECT COUNT(*) FROM submissions WHERE session_id = ? AND state IN ('pending','deferred')",
+                    (session_id,),
+                )
+                if int((await cur.fetchone())[0]) >= MAX_QUEUE_ITEMS:
+                    raise SubmissionQueueFullError(f"session {session_id!r} submission queue is full ({MAX_QUEUE_ITEMS})")
+                cur = await db.execute(
+                    "SELECT COALESCE(MAX(seq_in_session), 0) FROM submissions WHERE session_id = ?", (session_id,)
+                )
+                seq_in_session = int((await cur.fetchone())[0]) + 1
+                cur = await db.execute("SELECT COALESCE(MAX(change_version), 0) FROM submissions")
+                change_version = int((await cur.fetchone())[0]) + 1
+                item_id = new_id("sub")
+                await db.execute(
+                    "INSERT INTO submissions (item_id, session_id, run_id, seq_in_session, kind, payload, source, idem_key, digest, state, change_version, created_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?, 'pending', ?, ?)",
+                    (
+                        item_id,
+                        session_id,
+                        run_id,
+                        seq_in_session,
+                        kind,
+                        canonical_json(thaw(payload)),
+                        normalize_source(source),
+                        idem_key,
+                        digest,
+                        change_version,
+                        utc_now().isoformat(),
+                    ),
+                )
+                await db.commit()
+                return {"item_id": item_id, "change_version": change_version, "duplicate": False}
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    async def claim_submissions(self, session_id: str, *, limit: int = 100, run_id: str | None = None) -> list[JsonObject]:
+        """原子 claim pending/deferred 行（置 deferred + run_id）；按 seq_in_session 升序返回。"""
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute(
+                    "SELECT item_id, session_id, run_id, seq_in_session, kind, payload, source, idem_key, change_version "
+                    "FROM submissions WHERE session_id = ? AND state IN ('pending','deferred') "
+                    "ORDER BY seq_in_session LIMIT ?",
+                    (session_id, max(1, limit)),
+                )
+                rows = await cur.fetchall()
+                if rows:
+                    await db.executemany(
+                        "UPDATE submissions SET state = 'deferred', run_id = COALESCE(?, run_id) WHERE item_id = ?",
+                        [(run_id, row[0]) for row in rows],
+                    )
+                await db.commit()
+                return [
+                    {
+                        "item_id": row[0],
+                        "session_id": row[1],
+                        "run_id": run_id if run_id is not None else row[2],
+                        "seq_in_session": row[3],
+                        "kind": row[4],
+                        "payload": json.loads(row[5]),
+                        "source": row[6],
+                        "idem_key": row[7],
+                        "change_version": row[8],
+                    }
+                    for row in rows
+                ]
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    async def ack_submissions(self, item_ids: tuple[str, ...]) -> int:
+        """已应用命令置 consumed；返回受影响行数。"""
+        if not item_ids:
+            return 0
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                placeholders = ",".join("?" for _ in item_ids)
+                cur = await db.execute(
+                    f"UPDATE submissions SET state = 'consumed' WHERE item_id IN ({placeholders})", item_ids
+                )
+                await db.commit()
+                return cur.rowcount or 0
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    async def release_submissions(self, item_ids: tuple[str, ...]) -> int:
+        """未匹配/未应用的 claim 退回 pending（run_id 清空）；返回受影响行数。"""
+        if not item_ids:
+            return 0
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                placeholders = ",".join("?" for _ in item_ids)
+                cur = await db.execute(
+                    f"UPDATE submissions SET state = 'pending', run_id = NULL WHERE item_id IN ({placeholders})", item_ids
+                )
+                await db.commit()
+                return cur.rowcount or 0
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    async def submissions_since(self, session_id: str, after_version: int, limit: int = 512) -> list[JsonObject]:
+        """``change_version > after_version`` 的队列行（多端观察同一队；升序）。"""
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT item_id, session_id, run_id, seq_in_session, kind, payload, source, idem_key, state, change_version "
+                "FROM submissions WHERE session_id = ? AND change_version > ? ORDER BY change_version LIMIT ?",
+                (session_id, after_version, max(1, limit)),
+            )
+            rows = await cur.fetchall()
+            return [
+                {
+                    "item_id": row[0],
+                    "session_id": row[1],
+                    "run_id": row[2],
+                    "seq_in_session": row[3],
+                    "kind": row[4],
+                    "payload": json.loads(row[5]),
+                    "source": row[6],
+                    "idem_key": row[7],
+                    "state": row[8],
+                    "change_version": row[9],
+                }
+                for row in rows
+            ]
+
+    async def pending_submission_count(self, session_id: str) -> int:
+        """该会话在途（pending + deferred）条数；入队背压判据。"""
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT COUNT(*) FROM submissions WHERE session_id = ? AND state IN ('pending','deferred')",
+                (session_id,),
+            )
+            return int((await cur.fetchone())[0])
+
+    async def trim_consumed_submissions(self, session_id: str, keep: int = 512) -> int:
+        """只回收 consumed 的旧行（保留最近 keep 条）；pending/deferred 绝不删。"""
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute(
+                    "DELETE FROM submissions WHERE session_id = ? AND state = 'consumed' AND item_id NOT IN "
+                    "(SELECT item_id FROM submissions WHERE session_id = ? AND state = 'consumed' "
+                    "ORDER BY change_version DESC LIMIT ?)",
+                    (session_id, session_id, max(0, keep)),
                 )
                 await db.commit()
                 return cur.rowcount or 0
