@@ -52,6 +52,15 @@ from questor.contracts.events import (
     SubmitMessage,
     WriteMemory,
 )
+from questor.contracts.extension import (
+    ExtensionDescriptor,
+    ExtensionKind,
+    HookOutcome,
+    HookOutcomeKind,
+    InterceptionPoint,
+    ObserveChain,
+    ObserveEntry,
+)
 from questor.contracts.memory import MemoryScope, MemoryStorePort, MemoryWrite, MemoryWriteKind
 from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
 from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort
@@ -269,6 +278,28 @@ def _transition_key(command: Command, run: Run) -> str:
     return f"{command.type}:{run.seq}:{run.turn}:{tied}:{status}"
 
 
+def _settle_chain_from_callback(settle: Callable[[TurnBoundary], Awaitable[None]] | None) -> ObserveChain:
+    """R3 兼容：把旧 ``settle=`` callable 包成**单条** Stop OBSERVE 条目。
+
+    这是为了让既有 ``DefaultTurnLoop(settle=...)`` 调用点零改动；内核只持 ``_stop`` 一个字段，
+    ``_settle_turn`` 只有一个调用点——不是两套机制并存（ADR-0053）。
+    """
+    if settle is None:
+        return ObserveChain()
+
+    async def _hook(payload: object) -> HookOutcome:
+        await settle(payload)  # type: ignore[arg-type]
+        return HookOutcome()
+
+    descriptor = ExtensionDescriptor(
+        id="settle-turn",
+        kind=ExtensionKind.OBSERVE,
+        at=InterceptionPoint.STOP.value,
+        priority=100,
+    )
+    return ObserveChain((ObserveEntry(descriptor, _hook),))
+
+
 class DefaultTurnLoop:
     """P1 内核循环：用注入的 provider/policy/permission/tools/bus/store 驱动 phase pipeline。"""
 
@@ -295,6 +326,7 @@ class DefaultTurnLoop:
         capability_probe: Callable[[], int] | None = None,
         compaction: CompactionConfig | None = None,
         settle: Callable[[TurnBoundary], Awaitable[None]] | None = None,
+        stop: ObserveChain | None = None,
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -316,8 +348,10 @@ class DefaultTurnLoop:
         self.subagent_spawner = subagent_spawner
         # P10/ADR-0048：可恢复压缩旋钮；None = 不压缩（向后兼容，等价旧 disable_compaction=True）。
         self.compaction = compaction
-        # B6：Stop/Interrupt 点的 settle 回调（surface 注册；None = 不写记忆，kernel 仍 emit turn_completed）。
-        self.settle = settle
+        # B6/B5：Stop 点是 settle 的唯一入口。``stop`` 是装配好的 OBSERVE 链；
+        # ``settle=`` 是 R3 兼容薄糖（既有测试直接传 callable），内部包成单条 Stop 链，
+        # **不存在第二套回调字段**。
+        self._stop = stop if stop is not None else _settle_chain_from_callback(settle)
         # P9/ADR-0046：能力名册探针（未注入则不发 tools_changed）。loop 每安全点比对、变化即发 live-only。
         self.capability_probe = capability_probe
         self._capability_gen = capability_probe() if capability_probe is not None else 0
@@ -537,8 +571,8 @@ class DefaultTurnLoop:
         *,
         interrupted: bool,
     ) -> None:
-        """Stop/Interrupt 点：把边界事实交给 surface 注册的 settle；失败绝不打断回复。"""
-        if self.settle is None:
+        """Stop/Interrupt 点：把边界事实交给 Stop 点位的观察链；失败绝不打断回复。"""
+        if not self._stop:
             return
         boundary = TurnBoundary(
             run_id=run.run_id,
@@ -548,10 +582,15 @@ class DefaultTurnLoop:
             interrupted=interrupted,
             usage=dict(usage or {}),
         )
-        try:
-            await self.settle(boundary)
-        except Exception:  # noqa: BLE001 - best-effort：settle 故障只留痕，不阻塞回复
-            _log.warning("settle_turn callback failed for run=%s turn=%s", run.run_id, turn, exc_info=True)
+        outcomes = await self._stop.emit(boundary)
+        for outcome in outcomes:
+            if outcome.kind is not HookOutcomeKind.SUCCESS:
+                _log.warning(
+                    "stop hook %s ended %s: %s",
+                    outcome.entry_id,
+                    outcome.kind.value,
+                    outcome.reason,
+                )
 
     async def _maybe_compact(self, controller: RunController, run: Run, turn: int, total_tokens: int) -> Run:
         """P10/ADR-0048：在 turn 边界安全点尝试一次**可恢复压缩**。

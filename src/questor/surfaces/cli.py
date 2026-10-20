@@ -30,6 +30,13 @@ from questor.capabilities.tools.write import WriteTool
 from questor.config.model import load_config
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
+from questor.contracts.extension import (
+    ExtensionDescriptor,
+    ExtensionKind,
+    HookOutcome,
+    InterceptionPoint,
+    ObserveChain,
+)
 from questor.contracts.memory import MemoryStorePort
 from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyRef, PolicyTrust
 from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort
@@ -47,7 +54,7 @@ from questor.memory.distill import flush_run_to_daily
 from questor.observability.projection import log_envelope
 from questor.policy.null_policy import NullPolicy
 from questor.policy.react_policy import ReActPolicy
-from questor.policy.registry import PolicyEntry, PolicyRegistry
+from questor.policy.registry import ExtensionEntry, ExtensionRegistry, PolicyEntry, PolicyRegistry
 from questor.providers.fake import EchoProvider
 from questor.providers.litellm_adapter import LiteLLMProvider
 from questor.state.domain_state import Run
@@ -185,6 +192,38 @@ class CliSurface:
         """能力名册合成版本：工具注册表 + 插件宿主 generation 之和（注入 loop 探测热插拔→发 tools_changed）。"""
         return self.registry.generation + self.plugin_host.generation
 
+    def _settle_entry(self, settler: TurnSettler | None) -> ExtensionEntry:
+        """把 TurnSettler 包装成 **Stop 点位的单条 OBSERVE 条目**（B5；§5.1 第 13 行）。
+
+        ``settler=None`` 用于 inspect：只声明形状，不执行写回。
+        """
+
+        async def _hook(payload: object) -> HookOutcome:
+            if settler is not None:
+                await settler.settle(payload)  # type: ignore[arg-type]
+            return HookOutcome()
+
+        descriptor = ExtensionDescriptor(
+            id="settle-turn",
+            kind=ExtensionKind.OBSERVE,
+            at=InterceptionPoint.STOP.value,
+            priority=100,
+        )
+        return ExtensionEntry(descriptor, lambda: _hook)
+
+    def build_extension_registry(self, settler: TurnSettler | None = None) -> ExtensionRegistry:
+        """本 surface 的装配视图：策略名册 + Stop 观察者（inspect 与 _loop 共用同一形状）。"""
+        registry = ExtensionRegistry()
+        for entry in self.policy_registry.all_entries():
+            registry.register(entry)
+        registry.register(self._settle_entry(settler))
+        return registry
+
+    def inspect_extensions(self) -> str:
+        """稳定 ASCII 装配链（``--inspect-extensions`` 用；不触 store/loop）。"""
+        registry = self.build_extension_registry(None)
+        return registry.render_chain()
+
     def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface, subagent_spawner: SubagentSpawnerPort | None = None, *, run_id: str = "", session_id: str = "") -> DefaultTurnLoop:
         """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。
 
@@ -193,6 +232,8 @@ class CliSurface:
         B6：本入口注册同一 TurnSettler（CLI 的四驱动点共用），记忆写回只经 WriteMemory。"""
         policy, _ref = self._resolve_for_run(run_id)
         settler = TurnSettler(bus, self.store, self.memory_store, session_id or f"sess:{run_id}")
+        registry = self.build_extension_registry(settler)
+        stop: ObserveChain = registry.resolve_observe(InterceptionPoint.STOP.value)
         return DefaultTurnLoop(
             provider=self.provider,
             policy=policy,
@@ -213,7 +254,7 @@ class CliSurface:
             process_runner=self.process_runner,
             artifact_store=self.artifact_store,
             sandbox=self.sandbox,
-            settle=settler.settle,
+            stop=stop,
         )
 
     async def _discover_mcp(self, run_id: str) -> tuple[list[Tool], Teardown]:
