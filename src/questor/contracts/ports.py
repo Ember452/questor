@@ -95,6 +95,26 @@ class StorePort(Protocol):
         ...
 
     # ---- P9/ADR-0047：跨进程 exactly-once 的投递账本 + 单机多进程 run 租约（纯增量）----
+    async def create_obligation(
+        self,
+        delivery_id: str,
+        obligation_id: str,
+        platform: str,
+        *,
+        session_id: str | None = None,
+        run_id: str | None = None,
+        ref_kind: str | None = None,
+        channel_ref: str | None = None,
+        content_sha: str | None = None,
+        now: float | None = None,
+    ) -> bool:
+        """创建内容寻址投递义务（幂等 by delivery_id）；未实装 platform 置 undeliverable。"""
+        ...
+
+    async def delivery_row(self, delivery_id: str) -> JsonObject | None:
+        """完整交付行；无则 None。"""
+        ...
+
     async def claim_delivery(self, delivery_id: str, ttl_seconds: float = 30.0) -> bool:
         """claim-then-deliver：拿到投递所有权返 True（首次 claim，或前次 claim 已过 TTL 的崩溃重取）。
 
@@ -104,6 +124,94 @@ class StorePort(Protocol):
 
     async def delivery_state(self, delivery_id: str) -> str | None:
         """查询投递状态：None=未投、``"claimed"``=进行中、``"acked"``=已确认。"""
+        ...
+
+    async def claim_obligation(
+        self,
+        *,
+        now: float | None = None,
+        owner_pid: int | None = None,
+        owner_start: float | None = None,
+        platforms: frozenset[str] | None = None,
+    ) -> list[JsonObject]:
+        """claim 可投义务；崩溃重投带 recovered=True/attempts 递增。"""
+        ...
+
+    async def finish_delivery(
+        self, delivery_id: str, state: str, *, error_class: str | None = None, not_before: float | None = None
+    ) -> bool:
+        """按五态转移规则落终态/失败；abandoned 不可复活。"""
+        ...
+
+    async def sweep_recoverable(self, platforms: frozenset[str], now: float | None = None) -> list[JsonObject]:
+        """只对当前可投平台返回超 TTL in-flight 义务。"""
+        ...
+
+    async def sweep_failed_for_runtime(self, now: float | None = None) -> int:
+        """到期 failed 退回 pending；返回条数。"""
+        ...
+
+    async def pending_retries(self, now: float | None = None) -> int:
+        """到期可重试 failed 条数。"""
+        ...
+
+    async def prune_deliveries(self, max_rows: int = 500) -> int:
+        """只裁 acked/abandoned/discarded 的旧行；返回删除数。"""
+        ...
+
+    # ---- B11/E 环：调度器账本（occurrences/executions；触发只经 submissions）----
+    async def upsert_schedule(
+        self,
+        schedule_id: str,
+        session_id: str,
+        subject: str,
+        text: str,
+        interval_seconds: float,
+        next_run_at: float,
+        *,
+        enabled: bool = True,
+    ) -> None:
+        ...
+
+    async def due_schedules(self, now: float) -> list[JsonObject]:
+        ...
+
+    async def advance_schedule(self, schedule_id: str, next_run_at: float) -> int:
+        ...
+
+    async def mark_occurrence(
+        self,
+        schedule_id: str,
+        due_at: float,
+        state: str,
+        *,
+        fired_at: float | None = None,
+        execution_id: str | None = None,
+    ) -> None:
+        ...
+
+    async def record_execution(
+        self,
+        execution_id: str,
+        schedule_id: str,
+        due_at: float,
+        session_id: str,
+        subject: str,
+        state: str,
+        started_at: float,
+        *,
+        ended_at: float | None = None,
+        result: str | None = None,
+    ) -> None:
+        ...
+
+    async def count_executions(self, session_id: str, subject: str, since: float) -> int:
+        ...
+
+    async def set_session_quiet(self, session_id: str, date: str) -> int:
+        ...
+
+    async def session_quiet(self, session_id: str) -> str | None:
         ...
 
     async def ack_delivery(self, delivery_id: str) -> bool:
@@ -135,6 +243,125 @@ class StorePort(Protocol):
         只删 ``state='claimed'`` 且 ``claimed_at+ttl < now`` 的行。**绝不删已 acked 的投递行**
         （对抗评审 BLK-2：投递视图从 ``event_log`` 重建，ack 幂等键一删就 rebuild 重 claim→双投，
         破 exactly-once；acked 行的回收与 event_log 裁剪绑定后置）。"""
+        ...
+
+    # ---- B3：耐久提交队列（session 作用域；纯增量，不改既有 append/租约语义）----
+    async def enqueue_submission(
+        self,
+        session_id: str,
+        kind: str,
+        payload: JsonObject,
+        *,
+        source: str,
+        idem_key: str,
+        digest: str,
+        run_id: str | None = None,
+    ) -> JsonObject:
+        """入队一条提交：同 ``(session_id, idem_key)`` 同 digest → duplicate；异 digest → 冲突拒绝。
+
+        返回 ``{item_id, change_version, duplicate}``（bounded）；在途数达 ``MAX_QUEUE_ITEMS`` 抛
+        ``SubmissionQueueFullError``。多进程写者只在此表并发（各自 BEGIN IMMEDIATE + UNIQUE），
+        ``event_log`` 仍只由持租约者 append。"""
+        ...
+
+    async def claim_submissions(self, session_id: str, *, limit: int = 100, run_id: str | None = None) -> list[JsonObject]:
+        """原子 claim 该会话的 pending/deferred 行（置 deferred 并填 run_id）；按 seq_in_session 返回。"""
+        ...
+
+    async def ack_submissions(self, item_ids: tuple[str, ...]) -> int:
+        """已应用命令置 consumed；返回受影响行数。"""
+        ...
+
+    async def release_submissions(self, item_ids: tuple[str, ...]) -> int:
+        """未匹配/未应用的 claim 退回 pending（run_id 清空）；返回受影响行数。"""
+        ...
+
+    async def submissions_since(self, session_id: str, after_version: int, limit: int = 512) -> list[JsonObject]:
+        """``change_version > after_version`` 的队列行（多端观察同一队；按 change_version 升序）。"""
+        ...
+
+    async def pending_submission_count(self, session_id: str) -> int:
+        """该会话在途（pending + deferred）条数；入队背压判据。"""
+        ...
+
+    # ---- B4：会话作用域（sessions 表 + event_log.scope/session_id；不改 Envelope）----
+    async def create_session(
+        self,
+        session_id: str | None = None,
+        *,
+        model: str | None = None,
+        workspace_root: str | None = None,
+        kind: str = "chat",
+    ) -> str:
+        """新建或幂等确保会话行；返回 session_id。"""
+        ...
+
+    async def ensure_session(self, session_id: str) -> JsonObject:
+        """确保会话行存在并返回它。"""
+        ...
+
+    async def bind_run_session(self, run_id: str, session_id: str) -> None:
+        """把 run 路由到 session（在 run_started 前绑定，事件列才不丢）。"""
+        ...
+
+    async def run_session(self, run_id: str) -> str | None:
+        """该 run 的 session_id；未绑定返回 None。"""
+        ...
+
+    async def session_row(self, session_id: str) -> JsonObject | None:
+        """会话行（含双游标/metadata）；无则 None。"""
+        ...
+
+    async def advance_last_consolidated(self, session_id: str, seq: int) -> int:
+        """巩固游标只前进；返回受影响行数。"""
+        ...
+
+    async def set_history_start_seq(self, session_id: str, seq: int) -> int:
+        """喂入起点只前进；返回受影响行数。"""
+        ...
+
+    async def session_events(self, session_id: str, limit: int | None = None) -> list[JsonObject]:
+        """该会话事实流（含 scope/session_id 列）。"""
+        ...
+
+    async def session_transcript(self, session_id: str, limit: int = 8) -> list[JsonObject]:
+        """最近 N 条 user/assistant 事实（新→旧），供 SeedContext 取原文。"""
+        ...
+
+    # ---- B2：有界命令窗口（canonical digest；只记录已接受命令）----
+    async def record_command(
+        self,
+        run_id: str,
+        seq: int,
+        command_type: str,
+        payload: str,
+        *,
+        source: str,
+        idem_key: str,
+        digest: str,
+        accepted: bool = True,
+        session_id: str | None = None,
+        ts: str | None = None,
+    ) -> JsonObject:
+        """同键同 digest 幂等，同键异 digest 拒；返回 {cseq, duplicate}。"""
+        ...
+
+    async def command_window_rows(
+        self, *, run_id: str | None = None, session_id: str | None = None, limit: int | None = None
+    ) -> list[JsonObject]:
+        """命令窗口行（cseq 升序；测试/诊断用）。"""
+        ...
+
+    async def trim_command_window(self, session_id: str) -> int:
+        """只清 ``last_consolidated`` 前段（保最近 MIN 行），再按全局 MAX 整批 drop；返回删除数。"""
+        ...
+
+    async def set_fold_mode(self, session_id: str, mode: str) -> str:
+        """代际位 ``v1|legacy``（默认 v1）；非法值拒绝。"""
+        ...
+
+    async def fold_mode(self, session_id: str) -> str:
+        """读取代际位；未设置返回 ``v1``。"""
         ...
 
 
@@ -173,7 +400,7 @@ class SurfacePort(Protocol):
     def _resolve_for_run(self, run_id: str) -> tuple[object, object]: ...
 
     def _loop(
-        self, bus: object, cancel: object, surface: object, subagent_spawner: object | None = None, *, run_id: str = ""
+        self, bus: object, cancel: object, surface: object, subagent_spawner: object | None = None, *, run_id: str = "", session_id: str = ""
     ) -> object: ...
 
     async def _discover_mcp(self, run_id: str) -> tuple[list[object], object]: ...

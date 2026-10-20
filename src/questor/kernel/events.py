@@ -83,6 +83,8 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     # text 由 reduce 侧按 OutputBudget 有界、落库前剥掉注入脚手架；只进事件协议，
     # 绝不进带外投影白名单（projection._DATA_KEYS 不含 text，C20 零明文）。
     EventType.USER_MESSAGE: frozenset({"text", "truncated"}),
+    # turn_completed（B6；设计文档 §5.1 Stop 点）：只带 base 用量与中断位，无正文（C18/C20）。
+    EventType.TURN_COMPLETED: frozenset({"usage", "interrupted"}),
 }
 
 

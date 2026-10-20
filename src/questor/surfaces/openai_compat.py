@@ -25,6 +25,7 @@ from sse_starlette.sse import EventSourceResponse
 from questor.contracts.common import new_id
 from questor.contracts.events import Envelope, EventType
 from questor.contracts.openai_wire import OpenAIRequestError, error_object, extract_last_user_text, make_chunk
+from questor.kernel.seed import SeedRejected
 
 if TYPE_CHECKING:  # 仅类型：避免与 http_sse 的模块期循环 import（create_app 内延迟调 mount）。
     from questor.surfaces.http_sse import EventServer
@@ -177,7 +178,12 @@ def mount_openai_routes(app: FastAPI, server: EventServer, *, api_keys: list[str
         model = body.get("model", default_model)
         completion_id = new_id("chatcmpl")
         created = int(time.time())
-        run_id = await server.start_run(text)  # SubmitMessage 经 inbox（C16）；起一个独立 run。
+        try:
+            run_id = await server.start_run(
+                text, session_id=body.get("session_id"), seed_refs=body.get("seed_refs")
+            )  # SubmitMessage 经 inbox（C16）；起一个独立 run。
+        except SeedRejected as exc:
+            return JSONResponse(status_code=400, content=error_object("seed_rejected", str(exc), param="seed_refs"))
         if body.get("stream"):
             return EventSourceResponse(_stream_with_cancel(server, run_id, completion_id, model, created))
         content = await _collect_final_text(server, run_id)

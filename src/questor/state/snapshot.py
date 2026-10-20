@@ -116,6 +116,16 @@ def _msg_from(d: dict[str, Any]) -> Message:
     )
 
 
+def message_to_dict(message: Message) -> dict[str, Any]:
+    """公开的 Message 序列化（提交队列载荷/诊断共用；与快照同口径）。"""
+    return _msg_to(message)
+
+
+def message_from_dict(data: dict[str, Any]) -> Message:
+    """公开的 Message 反序列化（忽略载荷里的 ``__type__`` 等附加判别键）。"""
+    return _msg_from(data)
+
+
 def _call_to(c: ToolCall) -> dict[str, Any]:
     return {
         "tool_call_id": c.tool_call_id,

@@ -6,12 +6,13 @@ from dataclasses import replace
 
 import pytest
 
-from questor.contracts.common import new_id
+from questor.contracts.common import new_id, thaw
 from questor.contracts.events import (
     AppendAssistantMessage,
     Cancel,
     FinalizeRun,
     RecordToolResult,
+    RecordTurnCompleted,
     SubmitMessage,
 )
 from questor.contracts.state_schema import (
@@ -49,6 +50,20 @@ def test_submit_starts_run() -> None:
     assert new.status is RunStatus.RUNNING
     assert len(new.context.items) == 1
     assert [e.type for e in events] == ["run_started"]
+
+
+def test_record_turn_completed_occupies_seq_without_state_change() -> None:
+    run = _run()
+    new, events = reduce(run, RecordTurnCompleted(run_id=run.run_id, turn=1, usage={"total_tokens": 7}, interrupted=False))
+    assert new.seq == run.seq + 1 and new.status is run.status
+    assert [e.type for e in events] == ["turn_completed"]
+    assert thaw(events[0].data) == {"usage": {"total_tokens": 7}, "interrupted": False}
+
+    cancelled, cancel_events = reduce(
+        new, RecordTurnCompleted(run_id=run.run_id, turn=1, usage={}, interrupted=True)
+    )
+    assert cancelled.seq == new.seq + 1
+    assert cancel_events[0].data["interrupted"] is True
 
 
 def test_append_tool_use_registers_pending_call() -> None:

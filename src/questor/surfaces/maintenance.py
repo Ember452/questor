@@ -21,4 +21,5 @@ async def run_maintenance_command(store: StorePort) -> str:
     now = time.time()
     leases = await store.reclaim_expired_leases(now)
     claims = await store.reclaim_stale_claims(now)
-    return f"maintenance: reclaimed_leases={leases} reclaimed_stale_claims={claims}"
+    pruned = await store.prune_deliveries()
+    return f"maintenance: reclaimed_leases={leases} reclaimed_stale_claims={claims} pruned_deliveries={pruned}"

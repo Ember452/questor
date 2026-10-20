@@ -15,6 +15,7 @@ name = Questor layered architecture
 type = layers
 layers =
     questor.surfaces
+    questor.schedule
     questor.providers
     questor.policy
     questor.capabilities

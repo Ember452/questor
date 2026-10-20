@@ -26,6 +26,9 @@ from pathlib import Path
 _ASSIGN = re.compile(r"\.run\s*=(?!=)")
 #: 允许 `.run =` 的合法点（自身 controller 单写者 / 构造），按 posix 相对路径后缀匹配。
 _ALLOWED_SUFFIXES = ("kernel/loop.py", "kernel/run_control.py")
+#: 记忆写回只允许在 kernel 的消费点（loop 的 WriteMemory / settle 的 session 写），surface 不得旁路。
+_MEMORY_WRITE = re.compile(r"\.memory_store\.write\(")
+_MEMORY_WRITE_ALLOWED = ("kernel/loop.py", "kernel/settle.py")
 
 
 def scan_source(source: str, rel_path: str) -> list[str]:
@@ -33,10 +36,15 @@ def scan_source(source: str, rel_path: str) -> list[str]:
     violations: list[str] = []
     normalized = rel_path.replace("\\", "/")
     allowed = any(normalized.endswith(suffix) for suffix in _ALLOWED_SUFFIXES)
+    memory_allowed = any(normalized.endswith(suffix) for suffix in _MEMORY_WRITE_ALLOWED)
     for lineno, line in enumerate(source.splitlines(), 1):
         if _ASSIGN.search(line) and not allowed:
             violations.append(
                 f"{rel_path}:{lineno}: cross-run/foreign `.run=` assignment (must go via Command→inbox→reduce): {line.strip()}"
+            )
+        if _MEMORY_WRITE.search(line) and not memory_allowed:
+            violations.append(
+                f"{rel_path}:{lineno}: memory write outside kernel consumption points (surface bypass): {line.strip()}"
             )
     return violations
 
@@ -63,9 +71,11 @@ def self_test() -> int:
     """植入 foreign `.run=` 必判红；合法 loop.py 写点不误伤。"""
     foreign = scan_source("def f(c):\n    c.run = other_run\n", "surfaces/subagent_orchestrator.py")
     legal = scan_source("        controller.run = run\n", "src/questor/kernel/loop.py")
-    ok = bool(foreign) and not legal
-    print(f"self-test: foreign-caught={bool(foreign)} legal-allowed={not legal}")
-    for msg in foreign:
+    memory_bypass = scan_source("        await self.memory_store.write(payload)\n", "surfaces/cli.py")
+    memory_legal = scan_source("        await self.memory_store.write(payload)\n", "src/questor/kernel/settle.py")
+    ok = bool(foreign) and not legal and bool(memory_bypass) and not memory_legal
+    print(f"self-test: foreign-caught={bool(foreign)} legal-allowed={not legal} memory-bypass-caught={bool(memory_bypass)} memory-legal={not memory_legal}")
+    for msg in foreign + memory_bypass:
         print(f"  expected-red -> {msg}")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1

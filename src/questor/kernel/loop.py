@@ -20,7 +20,7 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from contextlib import ExitStack
 from dataclasses import replace
 from datetime import timedelta
@@ -44,6 +44,7 @@ from questor.contracts.events import (
     MarkToolRunning,
     MarkToolValidated,
     RecordToolResult,
+    RecordTurnCompleted,
     RecordWarning,
     RequestApproval,
     ResolveApproval,
@@ -66,11 +67,14 @@ from questor.contracts.state_schema import (
     ToolCallStatus,
 )
 from questor.contracts.subagent import SpawnRequest, SpawnResult, SubagentSpawnerPort
+from questor.contracts.submissions import command_digest
 from questor.contracts.tool import RunToolSurface, Tool, ToolResult, ToolSpec
+from questor.kernel.command_window import window_payload
 from questor.kernel.compaction import plan_compaction
 from questor.kernel.events import EventBus
 from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
 from questor.kernel.run_control import RunController
+from questor.kernel.settle import TurnBoundary
 from questor.kernel.shell_parse_posix import parse_posix_shell
 from questor.kernel.shell_parse_powershell import parse_powershell
 from questor.kernel.tool_arguments import extract_shell_commands
@@ -79,7 +83,7 @@ from questor.observability.scope import bind
 from questor.state.checkpoint import open_tool_use_ids
 from questor.state.domain_state import Run
 from questor.state.snapshot import to_snapshot
-from questor.state.transition import apply
+from questor.state.transition import Applied, apply
 
 
 class _ToolCtx:
@@ -290,6 +294,7 @@ class DefaultTurnLoop:
         subagent_spawner: SubagentSpawnerPort | None = None,
         capability_probe: Callable[[], int] | None = None,
         compaction: CompactionConfig | None = None,
+        settle: Callable[[TurnBoundary], Awaitable[None]] | None = None,
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -311,6 +316,8 @@ class DefaultTurnLoop:
         self.subagent_spawner = subagent_spawner
         # P10/ADR-0048：可恢复压缩旋钮；None = 不压缩（向后兼容，等价旧 disable_compaction=True）。
         self.compaction = compaction
+        # B6：Stop/Interrupt 点的 settle 回调（surface 注册；None = 不写记忆，kernel 仍 emit turn_completed）。
+        self.settle = settle
         # P9/ADR-0046：能力名册探针（未注入则不发 tools_changed）。loop 每安全点比对、变化即发 live-only。
         self.capability_probe = capability_probe
         self._capability_gen = capability_probe() if capability_probe is not None else 0
@@ -371,6 +378,7 @@ class DefaultTurnLoop:
         repeat_sig: tuple | None = None
         repeat_count = 0
         empties = 0
+        turn_assistant: Message | None = None
         # 关联作用域（α′，DESIGN §5；G-L5）：run_id 整轮一次绑定（覆盖新鲜+resume 两条路），
         # turn 每轮从 loop 权威局部变量 ``turn`` 重盖章（同名覆盖→号不漂移）。ExitStack 退出时
         # 统一 reset，绝不把本 run 的关联泄漏进调用方 task（http_sse 并发多 run 靠 task 作用域隔离）。
@@ -381,7 +389,14 @@ class DefaultTurnLoop:
                 if run.status.is_terminal:
                     return run
                 if self.cancel_event.is_set():
-                    run, events = self._transition(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
+                    if turn_assistant is not None:
+                        run = await self._apply_command(
+                            controller,
+                            run,
+                            RecordTurnCompleted(run_id=run.run_id, turn=turn, usage={}, interrupted=True),
+                        )
+                        await self._settle_turn(run, turn, turn_assistant, {}, interrupted=True)
+                    run, events = await self._transition(run, Cancel(run_id=run.run_id, reason=CancelReason.USER))
                     controller.run = run
                     await self._emit(events)
                     return run
@@ -397,7 +412,7 @@ class DefaultTurnLoop:
                     return await self._fail(run, turn, ErrorKind.TIMEOUT, f"max_turns {run.budget.max_turns} exhausted", "budget_exhausted")
 
                 turn_start = run  # C10/X4 回滚点：本 turn 起始时的状态
-                run, events = self._transition(run, AdvanceTurn(run_id=run.run_id, turn=turn))
+                run, events = await self._transition(run, AdvanceTurn(run_id=run.run_id, turn=turn))
                 controller.run = run
                 await self._emit(events)
 
@@ -410,7 +425,7 @@ class DefaultTurnLoop:
                         return run
                     continue
                 total_tokens += _token_total(usage)
-                run, events = self._transition(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
+                run, events = await self._transition(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
                 controller.run = run
                 await self._emit(events)
                 if not any(env.type == EventType.MESSAGE_COMPLETED for env in events):
@@ -429,6 +444,7 @@ class DefaultTurnLoop:
                     )
                     return await self._fail_with_entry(run, turn, entry, "provider_protocol_error")
                 await self._checkpoint(run, "auto")
+                turn_assistant = assistant_msg
 
                 # P10/ADR-0048：turn 边界安全点（快照已落、全部 tool_use 已闭合）尝试可恢复压缩。
                 # I2：压缩由内核决定（策略只能发 advisory hint）；未配 compaction 则逐字不变。
@@ -450,7 +466,7 @@ class DefaultTurnLoop:
                 if faulted:
                     faults += 1
                     # durable 告警必须经 reduce 取号（否则复用已占 seq 撞 UNIQUE，track5-backbone BLK-1 path A）。
-                    run, wev = self._transition(run, RecordWarning(run_id=run.run_id, turn=turn, message="policy raised; rolling back turn (C10)"))
+                    run, wev = await self._transition(run, RecordWarning(run_id=run.run_id, turn=turn, message="policy raised; rolling back turn (C10)"))
                     await self._emit(wev)
                     # 回滚 Domain_State 到 turn 起点，但**保住单调 seq 游标**（已落库的事件号不得重用）。
                     run = replace(turn_start, seq=run.seq)
@@ -463,7 +479,14 @@ class DefaultTurnLoop:
                     if any(c.status in OPEN_TOOL_CALL_STATUSES for c in run.tool_ledger.calls):
                         continue  # stop-gate：尚有未闭合工具调用时拒绝过早 Finish
                     final = assistant_msg if has_text else None
-                    run, events = self._transition(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
+                    # B6 Stop 点：先落 durable turn_completed + settle，再收终态（顺序固定，便于回放）。
+                    run = await self._apply_command(
+                        controller,
+                        run,
+                        RecordTurnCompleted(run_id=run.run_id, turn=turn, usage=usage, interrupted=False),
+                    )
+                    await self._settle_turn(run, turn, final, usage, interrupted=False)
+                    run, events = await self._transition(run, FinalizeRun(run_id=run.run_id, status="completed", final=final, usage=usage, exit_reason="answered"))
                     controller.run = run
                     await self._emit(events)
                     return run
@@ -478,25 +501,57 @@ class DefaultTurnLoop:
 
     async def _consume_commands(self, controller: RunController, run: Run) -> Run:
         """按 FIFO 应用 inbox 中已到达的 Command；迁移一律经 ``apply`` 单入口。"""
-        for command in await controller.next_batch():
-            run, events = self._transition(run, command, source="inbox")
-            controller.run = run
-            await self._emit(events)
-            # 记忆写副作用：reduce 已受理（产 memory_written）后，由 kernel 在消费点经注入的
-            # MemoryStorePort 落库——写唯一入口仍是 Command（C4/C16），幂等键取已占的 durable seq。
-            if isinstance(command, WriteMemory) and self.memory_store is not None:
-                ack = next((e for e in events if e.type == EventType.MEMORY_WRITTEN), None)
-                if ack is not None:
-                    await self.memory_store.write(command.payload, idempotency_key=f"mem:{command.run_id}:{ack.seq}")
-            # P8（ADR-0038/§4.1）：reduce 受理 SpawnSubagent（产出 peer_started = 已绑 node）后，
-            # 才由端口实体化子 run——对齐 WriteMemory 的"reduce 发事件、消费点做 IO"。reduce 若判重/拒
-            # （无 peer_started）则不建子，避免重投/回放留下孤儿子。
-            if isinstance(command, SpawnSubagent) and self.subagent_spawner is not None:
-                if any(e.type == EventType.PEER_STARTED for e in events):
-                    await self.subagent_spawner.materialize_child(command.run_id, command.node_id, command.child_run_id)
-            if run.status.is_terminal:
-                return run
-        return run
+        applied: list[Command] = []
+        batch = await controller.next_batch()
+        try:
+            for command in batch:
+                run, events = await self._transition(run, command, source="inbox")
+                applied.append(command)
+                controller.run = run
+                await self._emit(events)
+                # 记忆写副作用：reduce 已受理（产 memory_written）后，由 kernel 在消费点经注入的
+                # MemoryStorePort 落库——写唯一入口仍是 Command（C4/C16），幂等键取已占的 durable seq。
+                if isinstance(command, WriteMemory) and self.memory_store is not None:
+                    ack = next((e for e in events if e.type == EventType.MEMORY_WRITTEN), None)
+                    if ack is not None:
+                        await self.memory_store.write(command.payload, idempotency_key=f"mem:{command.run_id}:{ack.seq}")
+                # P8（ADR-0038/§4.1）：reduce 受理 SpawnSubagent（产出 peer_started = 已绑 node）后，
+                # 才由端口实体化子 run——对齐 WriteMemory 的"reduce 发事件、消费点做 IO"。reduce 若判重/拒
+                # （无 peer_started）则不建子，避免重投/回放留下孤儿子。
+                if isinstance(command, SpawnSubagent) and self.subagent_spawner is not None:
+                    if any(e.type == EventType.PEER_STARTED for e in events):
+                        await self.subagent_spawner.materialize_child(command.run_id, command.node_id, command.child_run_id)
+                if run.status.is_terminal:
+                    return run
+            return run
+        finally:
+            # 耐久队列：只 ack 已成功应用的命令；异常/早退时未应用的行保持 deferred，重启可重取。
+            await controller.ack(tuple(applied))
+
+    async def _settle_turn(
+        self,
+        run: Run,
+        turn: int,
+        assistant_msg: Message | None,
+        usage: JsonObject,
+        *,
+        interrupted: bool,
+    ) -> None:
+        """Stop/Interrupt 点：把边界事实交给 surface 注册的 settle；失败绝不打断回复。"""
+        if self.settle is None:
+            return
+        boundary = TurnBoundary(
+            run_id=run.run_id,
+            turn=turn,
+            user_text=_last_real_user_text(run),
+            assistant_text=_visible_text(assistant_msg),
+            interrupted=interrupted,
+            usage=dict(usage or {}),
+        )
+        try:
+            await self.settle(boundary)
+        except Exception:  # noqa: BLE001 - best-effort：settle 故障只留痕，不阻塞回复
+            _log.warning("settle_turn callback failed for run=%s turn=%s", run.run_id, turn, exc_info=True)
 
     async def _maybe_compact(self, controller: RunController, run: Run, turn: int, total_tokens: int) -> Run:
         """P10/ADR-0048：在 turn 边界安全点尝试一次**可恢复压缩**。
@@ -514,7 +569,7 @@ class DefaultTurnLoop:
         if plan is None:
             return run
         await self._checkpoint(run, "pre_compact")  # 压缩前全量快照，保证可确定性还原压缩前态
-        run, events = self._transition(
+        run, events = await self._transition(
             run,
             CompactContext(
                 run_id=run.run_id,
@@ -540,7 +595,7 @@ class DefaultTurnLoop:
                 covered_to=p.seq_to,
                 covered_hash=p.covered_hash,
             )
-            run, mev = self._transition(run, WriteMemory(run_id=run.run_id, payload=payload))
+            run, mev = await self._transition(run, WriteMemory(run_id=run.run_id, payload=payload))
             controller.run = run
             await self._emit(mev)
             ack = next((e for e in mev if e.type == EventType.MEMORY_WRITTEN), None)
@@ -668,7 +723,7 @@ class DefaultTurnLoop:
         也必须原样带到 ``run_failed``，否则客户端与 P10 的重试编排无从决策。
         配对：``FinalizeRun`` 分支自带未闭合调用回填，failed 路径同样不破 I1/C7。
         """
-        run, events = self._transition(run, FinalizeRun(run_id=run.run_id, status="failed", error=err, exit_reason=exit_reason))
+        run, events = await self._transition(run, FinalizeRun(run_id=run.run_id, status="failed", error=err, exit_reason=exit_reason))
         await self._emit(events)
         return run
 
@@ -706,27 +761,27 @@ class DefaultTurnLoop:
         """工具路由：args→schema→validated→permission→sandbox→execute。"""
         call = next((c for c in run.tool_ledger.calls if c.tool_call_id == intent.tool_call_id), None)
         if call is None:
-            run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result="missing tool_use ledger entry"))
+            run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result="missing tool_use ledger entry"))
             controller.run = run
             await self._emit(events)
             return run
         if call.args_status is not ToolArgsStatus.VALID:
             reason = call.permission_reason or "invalid or missing tool arguments"
-            run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=f"invalid json arguments: {reason}"))
+            run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=f"invalid json arguments: {reason}"))
             controller.run = run
             await self._emit(events)
             return run
 
         tool = self._tool(intent.name)
         if tool is None:
-            run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=_unknown_tool_message(intent.name, self._specs(), self.surface)))
+            run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=_unknown_tool_message(intent.name, self._specs(), self.surface)))
             controller.run = run
             await self._emit(events)
             return run
 
         error = _schema_error(tool.spec.params, intent.args)
         if error is not None:
-            run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=error))
+            run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=intent.tool_call_id or "", status="error", result=error))
             controller.run = run
             await self._emit(events)
             return run
@@ -829,7 +884,7 @@ class DefaultTurnLoop:
                 result=f"tool '{name}' raised {type(exc).__name__}: {exc}",
                 display=f"{name} crashed",
             )
-        run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=tool_call_id, status=result.status, result=result.result, display=result.display))
+        run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=tool_call_id, status=result.status, result=result.result, display=result.display))
         controller.run = run
         await self._emit(events)
         await self._checkpoint(run, "post_tool")  # 工具结果已落库 → 快照收窄在途窗口（ADR-0020）
@@ -837,16 +892,32 @@ class DefaultTurnLoop:
 
     async def _apply_command(self, controller: RunController, run: Run, command: Command) -> Run:
         """内部 helper：所有 lifecycle transition 都先落 authority，再 emit。"""
-        run, events = self._transition(run, command)
+        run, events = await self._transition(run, command)
         controller.run = run
         await self._emit(events)
         return run
 
-    def _transition(self, run: Run, command: Command, *, source: str = "loop") -> tuple[Run, tuple[Envelope, ...]]:
+    async def _transition(self, run: Run, command: Command, *, source: str = "loop") -> Applied:
         """经唯一咽喉 ``state.transition.apply()`` 落一次迁移：幂等判定 → reduce → 事件。
 
-        loop 不再直接 call ``reduce``：store 仅注入（apply 不做 IO），事件由调用点 emit。"""
-        return apply(self.store, run, command, source=source, idempotency_key=_transition_key(command, run))
+        B2：受理的命令再写 ``command_window``（canonical digest + 有界 payload）；被拒命令
+        （``accepted=False``）不入窗。窗口写失败只告警——队列边缘已做同键异 digest 拒绝。"""
+        idem = _transition_key(command, run)
+        applied = apply(self.store, run, command, source=source, idempotency_key=idem)
+        if applied.accepted and self.store is not None and callable(getattr(self.store, "record_command", None)):
+            try:
+                await self.store.record_command(
+                    applied.run.run_id,
+                    applied.run.seq,
+                    command.type,
+                    window_payload(command),
+                    source=source,
+                    idem_key=idem,
+                    digest=command_digest(command),
+                )
+            except Exception:  # noqa: BLE001 - 窗口是优化层，失败不得打断单写者循环
+                _log.warning("command window record failed run=%s type=%s", applied.run.run_id, command.type, exc_info=True)
+        return applied
 
     async def _handle_ask(self, controller: RunController, run: Run, tool: Tool, intent: ProposeToolCall, outcome: object) -> Run:
         """ask → durable approval request → inbox/timeout；绝不阻塞回调。"""
@@ -881,8 +952,11 @@ class DefaultTurnLoop:
             if command is None:
                 return await self._apply_command(controller, run, ExpireApproval(run_id=run.run_id, request_id=request_id))
             if isinstance(command, Cancel):
-                return await self._apply_command(controller, run, command)
+                result = await self._apply_command(controller, run, command)
+                await controller.ack_one(command)
+                return result
             run = await self._apply_command(controller, run, command)
+            await controller.ack_one(command)
             call = next(c for c in run.tool_ledger.calls if c.tool_call_id == (intent.tool_call_id or ""))
             if call.status is ToolCallStatus.READY:
                 return await self._apply_command(
@@ -946,13 +1020,15 @@ class DefaultTurnLoop:
         command = await controller.wait_for(relevant, timeout=max(0.001, remaining))
         if command is None:
             return await self._apply_command(controller, run, ExpireApproval(run_id=run.run_id, request_id=request_id))
-        return await self._apply_command(controller, run, command)
+        result = await self._apply_command(controller, run, command)
+        await controller.ack_one(command)
+        return result
 
     async def _resume_execute_call(self, controller: RunController, run: Run, call) -> Run:
         """补执行一个已批准（ready）或曾在跑（running）的调用；仅在未 running 时补 MarkToolRunning。"""
         tool = self._tool(call.name)
         if tool is None:
-            run, events = self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=call.tool_call_id, status="error", result=f"unknown tool '{call.name}' on resume"))
+            run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=call.tool_call_id, status="error", result=f"unknown tool '{call.name}' on resume"))
             controller.run = run
             await self._emit(events)
             return run
@@ -1008,6 +1084,32 @@ def _prompt_echo_baseline(run: Run) -> list[str]:
 def _has_text(message: Message) -> bool:
     """消息是否含非空可见文本块。"""
     return any(b.type == "text" and b.text for b in message.content)
+
+
+def _visible_text(message: Message | None) -> str | None:
+    """消息的可见正文（text 块拼接）；空/None 返回 None。"""
+    if message is None:
+        return None
+    text = "".join(b.text or "" for b in message.content if b.type == "text").strip()
+    return text or None
+
+
+def _is_seed_message(message: Message) -> bool:
+    """是否为 SeedContext 注入的种子消息（system_marker origin=seed）。"""
+    return any(
+        b.type == "system_marker" and b.payload and b.payload.get("origin") == "seed" for b in message.content
+    )
+
+
+def _last_real_user_text(run: Run) -> str | None:
+    """最近一条真实 user 原话（跳过 seed 消息）；供 settle 判据①。"""
+    for message in reversed(run.context.items):
+        if message.role is not Role.USER or _is_seed_message(message):
+            continue
+        text = "".join(b.text or "" for b in message.content if b.type == "text").strip()
+        if text:
+            return text
+    return None
 
 
 def _token_total(usage: JsonObject) -> int:

@@ -53,13 +53,14 @@ _TERMINAL_MAP: dict[str, str] = {
 class SubagentOrchestrator:
     """实现 ``SubagentSpawnerPort``：spawn/委派子 run、子树冻结、跨 run 回报（registry 背书的 router）。"""
 
-    def __init__(self, *, surface: object, bus: object, store: object, registry: RunRegistry) -> None:
+    def __init__(self, *, surface: object, bus: object, store: object, registry: RunRegistry, ledger_enabled: bool = True) -> None:
         # surface=CliSurface（提供 _loop/_freeze_surface 组装子 loop）；bus=InProcessEventBus；store=StorePort。
         # 只持这些引用，在 delegate 时按需组装子 run——与 EventServer.start_run 同构。
         self._surface = surface
         self._bus = bus
         self._store = store
         self._registry = registry
+        self._ledger_enabled = ledger_enabled
         self._children: dict[str, set[str]] = {}  # parent_run_id -> live child_run_ids
         self._depth: dict[str, int] = {}  # run_id -> 编排树深度（顶层 run 不在表中，视作 0）
         self._pending: dict[str, asyncio.Future] = {}  # child_run_id -> delegate 等待的终态 future
@@ -184,8 +185,11 @@ class SubagentOrchestrator:
         # 同一子终态只投一次（exactly-once）；claim 不中=已被投/持有，跳过重投但仍解 waiter。
         delivery_id = f"report:{parent_run_id}:{child_run_id}"
         claimed = True
-        if self._store is not None:
-            claimed = await self._store.claim_delivery(delivery_id)
+        if self._store is not None and self._ledger_enabled:
+            try:
+                claimed = await self._store.claim_delivery(delivery_id)
+            except Exception:  # noqa: BLE001 - 账本失败绝不阻塞发送（§8 第 7 条）
+                claimed = True
         if claimed:
             await self._registry.submit(
                 parent_run_id,
@@ -199,8 +203,11 @@ class SubagentOrchestrator:
                 source="subagent",
                 idempotency_key=delivery_id,
             )
-            if self._store is not None:
-                await self._store.ack_delivery(delivery_id)
+            if self._store is not None and self._ledger_enabled:
+                try:
+                    await self._store.ack_delivery(delivery_id)
+                except Exception:  # noqa: BLE001 - ack 失败只影响去重账，不影响已投递归
+                    pass
         fut = self._pending.pop(child_run_id, None)
         if fut is not None and not fut.done():
             fut.set_result((terminal, bounded))

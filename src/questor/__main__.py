@@ -38,6 +38,7 @@ from questor.composition import (
 )
 from questor.config.model import load_config
 from questor.memory.distill import DistillOutcome, deep_dream
+from questor.schedule import Scheduler
 from questor.surfaces._assembly import assemble_logging, log_dir_from_env, reconfigure_output_streams
 from questor.surfaces.cli import interactive
 from questor.surfaces.http_sse import EventServer, create_app
@@ -98,6 +99,19 @@ class _HeuristicDistiller:
         return DistillOutcome(new_core=new_core, dream=f"consolidated {len(facts)} fact(s) into core")
 
 
+def _scheduler_for(store: object, cfg: object) -> Scheduler | None:
+    """按 config 构造 E 环调度器（默认 off；serve/serve-openai 共用）。"""
+    schedule = cfg.schedule  # type: ignore[attr-defined]
+    if not schedule.enabled:
+        return None
+    return Scheduler(
+        store,
+        max_per_hour=schedule.max_per_hour,
+        quota_retry_seconds=schedule.quota_retry_seconds,
+        interval_seconds=schedule.interval_seconds,
+    )
+
+
 async def _amain(argv: list[str]) -> int:
     """组合根主流程：**先判参数、再装配**。`-h/--help` 与未知选项在任何装配之前返回（Issue #148）。
 
@@ -137,7 +151,7 @@ async def _amain(argv: list[str]) -> int:
         if argv and argv[0] == "--serve":
             # sidecar 常驻服务：EventServer 复用已装配的 surface + store（surface 只持 StorePort 抽象，C4），
             # serve 面只 bind loopback 临时口 + 写 bootstrap，不 import 具体 store（ADR-0032 / S6）。
-            server = EventServer(surface, app.store)
+            server = EventServer(surface, app.store, ledger_enabled=cfg.delivery.enabled, scheduler=_scheduler_for(app.store, cfg))
             await serve(
                 server,
                 generation=sidecar_generation_from_env(),
@@ -155,7 +169,7 @@ async def _amain(argv: list[str]) -> int:
             port = cfg.openai.port
             import uvicorn  # 延迟 import：仅服务入口需要。
 
-            server = EventServer(surface, app.store)
+            server = EventServer(surface, app.store, ledger_enabled=cfg.delivery.enabled, scheduler=_scheduler_for(app.store, cfg))
             openai_app = create_app(server, openai_api_keys=keys)
             _LOG.info("openai lane serving host=%s port=%s", host, port)
             await uvicorn.Server(uvicorn.Config(openai_app, host=host, port=port, log_level="warning")).serve()

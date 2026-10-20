@@ -32,6 +32,7 @@ from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
+from questor.kernel.seed import SeedRef, SeedRejected, build_seed_context, coerce_seed_refs
 from questor.observability.projection import log_envelope
 from questor.state.domain_state import Run
 from questor.surfaces.approval import http_status_for_receipt
@@ -83,9 +84,11 @@ def _receipt_response(receipt: InboxReceipt) -> JSONResponse:
 class EventServer:
     """持有端点共享的 store + bus + active run 的 Command Inbox 注册表。"""
 
-    def __init__(self, surface: CliSurface, store: StorePort) -> None:
+    def __init__(self, surface: CliSurface, store: StorePort, *, ledger_enabled: bool = True, scheduler: object | None = None) -> None:
         self.surface = surface
         self.store = store
+        self.ledger_enabled = ledger_enabled
+        self.scheduler = scheduler
         # 让 EventServer 构造的 turn loop 也持久化 checkpoint（P3 resume 前置）；surface 仍只持 StorePort 抽象。
         if surface.store is None:
             surface.store = store
@@ -96,7 +99,7 @@ class EventServer:
         self.registry = RunRegistry()
         # P8 子 agent 编排：把 SubagentSpawnerPort 实现接到本服务共享的 bus/store/registry 上。
         # 仅当 run 调 `delegate` 时才起子；不调则行为与 P7 逐字一致。
-        self.orchestrator = SubagentOrchestrator(surface=surface, store=self.store, bus=self.bus, registry=self.registry)
+        self.orchestrator = SubagentOrchestrator(surface=surface, store=self.store, bus=self.bus, registry=self.registry, ledger_enabled=ledger_enabled)
         # 优雅关闭信号：`/shutdown` 置位，serve 面的看门狗据此让 uvicorn 应声停机（不等 grace 超时硬杀）。
         self.shutdown_event = asyncio.Event()
 
@@ -104,14 +107,21 @@ class EventServer:
         """请求优雅关闭（仅置信号，不硬杀）；serve 看门狗会拾起并让 uvicorn 退出。"""
         self.shutdown_event.set()
 
-    def _loop(self, cancel: asyncio.Event, surface: RunToolSurface, run_id: str = "") -> DefaultTurnLoop:
+    async def run_scheduler(self) -> None:
+        """B11：serve 后台调度循环；未注入 scheduler 时为空操作。"""
+        if self.scheduler is None:
+            return
+        await self.scheduler.run_forever()  # type: ignore[attr-defined]
+
+    def _loop(self, cancel: asyncio.Event, surface: RunToolSurface, run_id: str = "", session_id: str = "") -> DefaultTurnLoop:
         """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。
 
         注入 orchestrator 使本服务驱的 run 可调 `delegate` 起子 run（P8）；不调则无副作用。
-        策略按 run 经 surface 的 PolicyRegistry 解析（P9）：活 run 端口不变、换 registry 只影响新 run。"""
-        return self.surface._loop(self.bus, cancel, surface, subagent_spawner=self.orchestrator, run_id=run_id)
+        策略按 run 经 surface 的 PolicyRegistry 解析（P9）：活 run 端口不变、换 registry 只影响新 run。
+        B6：本入口注册同一 TurnSettler（serve/serve-openai/sidecar 共用）。"""
+        return self.surface._loop(self.bus, cancel, surface, subagent_spawner=self.orchestrator, run_id=run_id, session_id=session_id)
 
-    async def _run_with_mcp(self, controller: RunController, run_id: str, lease_holder: str | None = None) -> None:
+    async def _run_with_mcp(self, controller: RunController, run_id: str, lease_holder: str | None = None, session_id: str = "") -> None:
         """发现 MCP → 冻结工具面 → 驱动到终态 → per-run teardown。四步**必须同任务**。
 
         MCP stdio 会话的 anyio cancel scope 在哪个 task 进入就必须在那个 task 退出；若把 discover 放在
@@ -128,7 +138,7 @@ class EventServer:
             # 长 run 必须周期续租：否则超 TTL 后过期行可被抢→双驱破 C2 单写者。
             if lease_holder is not None:
                 renew_task = asyncio.create_task(self._renew_lease_loop(run_id, lease_holder))
-            await self._loop(asyncio.Event(), tool_surface, run_id=run_id).drive_controller(controller)
+            await self._loop(asyncio.Event(), tool_surface, run_id=run_id, session_id=session_id).drive_controller(controller)
         finally:
             if renew_task is not None:
                 renew_task.cancel()
@@ -153,27 +163,55 @@ class EventServer:
         except asyncio.CancelledError:
             pass
 
-    async def start_run(self, text: str, run_id: str | None = None) -> str:
+    async def start_run(
+        self,
+        text: str,
+        run_id: str | None = None,
+        session_id: str | None = None,
+        seed_refs: object | None = None,
+    ) -> str:
         """后台启动一次 run（用户文本经 SubmitMessage Command 进入 inbox）。
 
         MCP per-run 发现接进桌面路径（审计 §6-7），且与驱动/teardown 同任务（anyio 会话作组作用域）。
+        B4：给 ``session_id`` 时确保会话行 + 绑定 run + 注入 SeedContext；不给时新建 session 行。
         """
         run_id = run_id or new_id("run")
+        sid, seed_requested = await self._prepare_session(run_id, session_id)
+        # P9/ADR-0045：创建 run 时按 run 解析策略、冻结 policy_ref（reduce 会在 run_started 带出）。
+        run = Run(run_id=run_id, budget=Budget(), policy_ref=self.surface._resolve_for_run(run_id)[1])
+        seed_message = await self._seed_message(run, sid, seed_requested, seed_refs)
         # 单写者栅栏（C2/ADR-0047）：start_run 也取租约，防另一进程对同 run_id 的 resume 抢驱。
         # holder 每驱动任务唯一（非 pid），使同进程对同一 run 的二次驱动也会被拒（非静默覆盖）。
         holder = f"http:{new_id('drv')}"
         if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
             raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
-        # P9/ADR-0045：创建 run 时按 run 解析策略、冻结 policy_ref（reduce 会在 run_started 带出）。
-        run = Run(run_id=run_id, budget=Budget(), policy_ref=self.surface._resolve_for_run(run_id)[1])
-        controller = RunController(run)
+        controller = RunController(run, queue=self.store, session_id=sid)
         self.registry.register(controller)
+        if seed_message is not None:
+            await self.registry.submit(
+                run_id, SubmitMessage(run_id=run_id, content=seed_message), source="http", idempotency_key=f"seed:{run_id}"
+            )
         msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
         await self.registry.submit(run_id, SubmitMessage(run_id=run_id, content=msg), source="http", idempotency_key=f"submit:{run_id}")
-        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))
+        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder, session_id=sid))
         task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）
         self.registry.set_task(run_id, task)
         return run_id
+
+    async def _prepare_session(self, run_id: str, session_id: str | None) -> tuple[str, bool]:
+        """确保会话行 + 绑定 run；返回 (session_id, 是否请求 seed)。"""
+        if session_id:
+            sid = (await self.store.ensure_session(session_id))["session_id"]
+        else:
+            sid = await self.store.create_session(model=self.surface.model, workspace_root=str(self.surface.workspace_root))
+        await self.store.bind_run_session(run_id, sid)
+        return str(sid), bool(session_id)
+
+    async def _seed_message(self, run: Run, sid: str, requested: bool, raw_refs: object | None):  # noqa: ANN202
+        if not requested:
+            return None
+        refs: tuple[SeedRef, ...] = coerce_seed_refs(raw_refs, sid)
+        return await build_seed_context(self.store, sid, refs=refs, status=run.status)
 
     async def resolve_approval(self, run_id: str, request_id: str, decision: str) -> InboxReceipt:
         """把审批决策投进该 run 的 inbox；返回 receipt（>=400 的映射码直接抛 HTTPException）。"""
@@ -212,6 +250,12 @@ class EventServer:
             )
         )
 
+    async def list_submissions(self, session_id: str, after_version: int = 0) -> dict:
+        """多端观察同一队列：返回 ``change_version > after_version`` 的行 + 当前 head。"""
+        items = await self.store.submissions_since(session_id, after_version)
+        head = max((item["change_version"] for item in items), default=after_version)
+        return {"session_id": session_id, "items": items, "head": head}
+
     async def resume(self, run_id: str) -> str:
         """从持久态续跑一个被 kill/重启的 run（P3，ADR-0021）。
 
@@ -226,9 +270,10 @@ class EventServer:
         holder = f"http-resume:{new_id('drv')}"
         if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
             raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
-        controller = RunController(run)
+        sid = (await self.store.run_session(run_id)) or f"sess:{run_id}"
+        controller = RunController(run, queue=self.store, session_id=sid)
         self.registry.register(controller)
-        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约
+        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder, session_id=sid))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约
         task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）
         self.registry.set_task(run_id, task)
         return run_id
@@ -296,7 +341,15 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
 
     @app.post("/run", dependencies=[Depends(require_token)])
     async def run(payload: dict) -> dict:
-        run_id = await server.start_run(payload.get("text", ""), payload.get("run_id"))
+        try:
+            run_id = await server.start_run(
+                payload.get("text", ""),
+                payload.get("run_id"),
+                session_id=payload.get("session_id"),
+                seed_refs=payload.get("seed_refs"),
+            )
+        except SeedRejected as exc:
+            raise HTTPException(status_code=400, detail=f"seed rejected: {exc.reason}: {exc}") from exc
         return {"run_id": run_id}
 
     @app.post("/runs/{run_id}/cancel", dependencies=[Depends(require_token)])
@@ -320,6 +373,11 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
     async def resume_run(run_id: str) -> dict:
         """从持久态续跑被 kill/重启的 run（P3）；提交驱动，不直 reduce。"""
         return {"run_id": await server.resume(run_id)}
+
+    @app.get("/sessions/{session_id}/submissions", dependencies=[Depends(require_token)])
+    async def session_submissions(session_id: str, after_version: int = 0) -> dict:
+        """同一会话的待处理队列（多端一致）；只读投影，不触 reduce。"""
+        return await server.list_submissions(session_id, after_version)
 
     @app.get("/events/{run_id}", dependencies=[Depends(require_token)])
     async def events(request: Request, run_id: str, after_seq: int = 0) -> EventSourceResponse:
