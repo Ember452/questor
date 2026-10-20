@@ -41,8 +41,8 @@ jobs:
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - uses: actions/checkout@v7
-      # v3，按 SHA 钉住（上游 tag 可移动；供应链卫生）。
-      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
+      # v4.0.3，按 SHA 钉住（上游 tag 可移动；供应链卫生）。
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: |
