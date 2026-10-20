@@ -59,9 +59,9 @@ EXPECTED: dict[str, int] = {
     "gate_scripts": 17,  # §21：15 个 check_*.py + 2 个 verify_*.py（不含 _diag_threads.py；B5 新增 check_extension_points.py）
     "ci_gate_steps": 19,  # §21 / PLAN SCAN-1：boundaries 恒阻塞 job 的「门步」数（B5 新增 1 步）
     "reduce_calls": 0,  # §2-1：B0 后 loop.py/recovery.py 不再直调 reduce（17 处全改走 apply()）
-    "test_files": 197,  # PLAN SCAN-2：tests/ 下 .py 合计 197（B5 c1–c5：4 unit）
+    "test_files": 198,  # PLAN SCAN-2：tests/ 下 .py 合计 198（B5 +5：4 unit + 1 integration）
     "test_unit": 117,  # PLAN SCAN-2：unit 117（B5 +4）
-    "test_integration": 74,  # PLAN SCAN-2：integration 74（c6 的 inspect 用例落定前）
+    "test_integration": 75,  # PLAN SCAN-2：integration 75（B5 +1 inspect-extensions）
     "test_support": 3,  # PLAN SCAN-2：support 3（fixture 基建，非 test_* 命名）
     "test_evals": 2,  # PLAN SCAN-2：evals 2
     "test_root": 1,  # tests/ 顶层 conftest.py

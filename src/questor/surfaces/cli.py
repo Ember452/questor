@@ -118,6 +118,35 @@ def _default_policy_registry() -> PolicyRegistry:
     return registry
 
 
+def _settle_extension_entry(settler: TurnSettler | None) -> ExtensionEntry:
+    """把 TurnSettler 包装成 **Stop 点位的单条 OBSERVE 条目**（B5；§5.1 第 13 行）。
+
+    ``settler=None`` 用于 inspect：只声明形状，不执行写回。
+    """
+
+    async def _hook(payload: object) -> HookOutcome:
+        if settler is not None:
+            await settler.settle(payload)  # type: ignore[arg-type]
+        return HookOutcome()
+
+    descriptor = ExtensionDescriptor(
+        id="settle-turn",
+        kind=ExtensionKind.OBSERVE,
+        at=InterceptionPoint.STOP.value,
+        priority=100,
+    )
+    return ExtensionEntry(descriptor, lambda: _hook)
+
+
+def inspect_extensions_text() -> str:
+    """无 store/无日志装配的装配链文本（``--inspect-extensions`` 用）。"""
+    registry = ExtensionRegistry()
+    for entry in _default_policy_registry().all_entries():
+        registry.register(entry)
+    registry.register(_settle_extension_entry(None))
+    return registry.render_chain()
+
+
 class CliSurface:
     """把 provider/权限/工具/总线/存储装配成可跑的终端会话。"""
 
@@ -177,37 +206,17 @@ class CliSurface:
         """能力名册合成版本：工具注册表 + 插件宿主 generation 之和（注入 loop 探测热插拔→发 tools_changed）。"""
         return self.registry.generation + self.plugin_host.generation
 
-    def _settle_entry(self, settler: TurnSettler | None) -> ExtensionEntry:
-        """把 TurnSettler 包装成 **Stop 点位的单条 OBSERVE 条目**（B5；§5.1 第 13 行）。
-
-        ``settler=None`` 用于 inspect：只声明形状，不执行写回。
-        """
-
-        async def _hook(payload: object) -> HookOutcome:
-            if settler is not None:
-                await settler.settle(payload)  # type: ignore[arg-type]
-            return HookOutcome()
-
-        descriptor = ExtensionDescriptor(
-            id="settle-turn",
-            kind=ExtensionKind.OBSERVE,
-            at=InterceptionPoint.STOP.value,
-            priority=100,
-        )
-        return ExtensionEntry(descriptor, lambda: _hook)
-
     def build_extension_registry(self, settler: TurnSettler | None = None) -> ExtensionRegistry:
         """本 surface 的装配视图：策略名册 + Stop 观察者（inspect 与 _loop 共用同一形状）。"""
         registry = ExtensionRegistry()
         for entry in self.policy_registry.all_entries():
             registry.register(entry)
-        registry.register(self._settle_entry(settler))
+        registry.register(_settle_extension_entry(settler))
         return registry
 
     def inspect_extensions(self) -> str:
         """稳定 ASCII 装配链（``--inspect-extensions`` 用；不触 store/loop）。"""
-        registry = self.build_extension_registry(None)
-        return registry.render_chain()
+        return inspect_extensions_text()
 
     def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface, subagent_spawner: SubagentSpawnerPort | None = None, *, run_id: str = "", session_id: str = "") -> DefaultTurnLoop:
         """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。
