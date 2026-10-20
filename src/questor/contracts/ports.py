@@ -176,6 +176,50 @@ class StorePort(Protocol):
         """该会话在途（pending + deferred）条数；入队背压判据。"""
         ...
 
+    # ---- B4：会话作用域（sessions 表 + event_log.scope/session_id；不改 Envelope）----
+    async def create_session(
+        self,
+        session_id: str | None = None,
+        *,
+        model: str | None = None,
+        workspace_root: str | None = None,
+        kind: str = "chat",
+    ) -> str:
+        """新建或幂等确保会话行；返回 session_id。"""
+        ...
+
+    async def ensure_session(self, session_id: str) -> JsonObject:
+        """确保会话行存在并返回它。"""
+        ...
+
+    async def bind_run_session(self, run_id: str, session_id: str) -> None:
+        """把 run 路由到 session（在 run_started 前绑定，事件列才不丢）。"""
+        ...
+
+    async def run_session(self, run_id: str) -> str | None:
+        """该 run 的 session_id；未绑定返回 None。"""
+        ...
+
+    async def session_row(self, session_id: str) -> JsonObject | None:
+        """会话行（含双游标/metadata）；无则 None。"""
+        ...
+
+    async def advance_last_consolidated(self, session_id: str, seq: int) -> int:
+        """巩固游标只前进；返回受影响行数。"""
+        ...
+
+    async def set_history_start_seq(self, session_id: str, seq: int) -> int:
+        """喂入起点只前进；返回受影响行数。"""
+        ...
+
+    async def session_events(self, session_id: str, limit: int | None = None) -> list[JsonObject]:
+        """该会话事实流（含 scope/session_id 列）。"""
+        ...
+
+    async def session_transcript(self, session_id: str, limit: int = 8) -> list[JsonObject]:
+        """最近 N 条 user/assistant 事实（新→旧），供 SeedContext 取原文。"""
+        ...
+
 
 @runtime_checkable
 class Clock(Protocol):

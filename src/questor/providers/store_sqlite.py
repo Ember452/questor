@@ -35,7 +35,7 @@ from questor.contracts.submissions import (
 )
 
 #: 本仓 store DDL 的版本；读到更高版本即 fail-closed（不猜测半升级表形）。
-STORE_SCHEMA_VERSION = 2
+STORE_SCHEMA_VERSION = 3
 
 #: 一轮至多一个终态事件（C13）；某 run 若已落其一，则不再视为"可续跑的未完成 run"。
 _TERMINAL_TYPES = ("run_completed", "run_cancelled", "run_failed")
@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS event_log (
     item_id  TEXT,
     payload  TEXT    NOT NULL,
     ts       TEXT    NOT NULL,
+    session_id TEXT,
+    scope    TEXT    NOT NULL DEFAULT 'run',
     UNIQUE (run_id, seq)
 );
 CREATE INDEX IF NOT EXISTS idx_events_replay ON event_log (run_id, seq);
@@ -71,7 +73,8 @@ CREATE INDEX IF NOT EXISTS idx_cp_run ON checkpoints (run_id, seq);
 CREATE TABLE IF NOT EXISTS runs (
     run_id     TEXT    PRIMARY KEY,
     head_seq   INTEGER NOT NULL,
-    updated_at TEXT    NOT NULL
+    updated_at TEXT    NOT NULL,
+    session_id TEXT
 );
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
@@ -89,6 +92,24 @@ CREATE TABLE IF NOT EXISTS run_leases (
     epoch        INTEGER NOT NULL,
     expires_at   REAL    NOT NULL,
     ttl_seconds  REAL    NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id           TEXT    PRIMARY KEY,
+    title                TEXT,
+    kind                 TEXT    NOT NULL DEFAULT 'chat',
+    workspace_root       TEXT,
+    model                TEXT,
+    permission_mode      TEXT,
+    created_at           TEXT    NOT NULL,
+    updated_at           TEXT    NOT NULL,
+    archived             INTEGER NOT NULL DEFAULT 0,
+    pinned               INTEGER NOT NULL DEFAULT 0,
+    head_change_version  INTEGER NOT NULL DEFAULT 0,
+    last_consolidated    INTEGER NOT NULL DEFAULT 0,
+    history_start_seq    INTEGER NOT NULL DEFAULT 0,
+    memory_root_mode     TEXT    NOT NULL DEFAULT 'v1',
+    next_seq             INTEGER NOT NULL DEFAULT 1,
+    metadata_json        TEXT    NOT NULL DEFAULT '{}'
 );
 """
 
@@ -139,7 +160,7 @@ class SQLiteStore(StorePort):
         return self
 
     async def _enforce_schema_version(self) -> None:
-        """单一 schema authority 的版本闸门：读旧/同版本放行，读到更新版本 fail-closed。"""
+        """单一 schema authority 的版本闸门：读旧/同版本放行并幂等迁移，读到更新版本 fail-closed。"""
         assert self._db is not None
         cur = await self._db.execute("SELECT value FROM meta WHERE key = 'store_schema_version'")
         row = await cur.fetchone()
@@ -148,13 +169,33 @@ class SQLiteStore(StorePort):
                 "INSERT INTO meta (key, value) VALUES ('store_schema_version', ?)",
                 (str(STORE_SCHEMA_VERSION),),
             )
+            await self._migrate_columns()
             return
         stored = int(row[0])
         if stored > STORE_SCHEMA_VERSION:
             raise StoreSchemaVersionError(
                 f"store schema version {stored} is newer than this build can decode ({STORE_SCHEMA_VERSION}); refusing to half-read"
             )
-        # stored <= STORE_SCHEMA_VERSION：pre-alpha 不做向前迁移，放行（DDL 幂等 IF NOT EXISTS）。
+        await self._migrate_columns()
+        if stored < STORE_SCHEMA_VERSION:
+            await self._db.execute(
+                "UPDATE meta SET value = ? WHERE key = 'store_schema_version'", (str(STORE_SCHEMA_VERSION),)
+            )
+
+    async def _ensure_column(self, table: str, column: str, ddl: str) -> None:
+        """幂等列迁移：PRAGMA 现查，缺列才 ALTER（不猜测旧表形）。"""
+        assert self._db is not None
+        cur = await self._db.execute(f"PRAGMA table_info({table})")
+        rows = await cur.fetchall()
+        if column not in {row[1] for row in rows}:
+            await self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
+    async def _migrate_columns(self) -> None:
+        """B4：runs/event_log 的会话列；旧库就地补齐（event_log 旧行 scope 默认 'run'）。"""
+        await self._ensure_column("runs", "session_id", "TEXT")
+        await self._ensure_column("event_log", "session_id", "TEXT")
+        await self._ensure_column("event_log", "scope", "TEXT NOT NULL DEFAULT 'run'")
+        await self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_session ON event_log (session_id, gseq)")
 
     async def close(self) -> None:
         if self._db is not None:
@@ -193,12 +234,20 @@ class SQLiteStore(StorePort):
             await db.execute("BEGIN IMMEDIATE")
             try:
                 await self._check_writer_fence(db, run_id, holder, epoch)
+                if run_id.startswith("sess:"):
+                    session_id = run_id[5:]
+                    scope = "session"
+                else:
+                    cur = await db.execute("SELECT session_id FROM runs WHERE run_id = ?", (run_id,))
+                    row = await cur.fetchone()
+                    session_id = row[0] if row is not None else None
+                    scope = "run"
                 cur = await db.execute("SELECT COALESCE(MAX(seq), 0) FROM event_log WHERE run_id = ?", (run_id,))
                 seq = (await cur.fetchone())[0]
                 for ev in events:
                     seq = int(ev["seq"]) if "seq" in ev else seq + 1
                     await db.execute(
-                        "INSERT INTO event_log (run_id, seq, type, turn, item_id, payload, ts) VALUES (?,?,?,?,?,?,?)",
+                        "INSERT INTO event_log (run_id, seq, type, turn, item_id, payload, ts, session_id, scope) VALUES (?,?,?,?,?,?,?,?,?)",
                         (
                             run_id,
                             seq,
@@ -207,13 +256,17 @@ class SQLiteStore(StorePort):
                             ev.get("item_id"),
                             _dumps(ev.get("data", {})),
                             ev.get("ts") or utc_now().isoformat(),
+                            session_id,
+                            scope,
                         ),
                     )
                 # runs 记账表：派生的快速发现缓存（head_seq + updated_at），非权威真相。
+                # session_id 只增不减：先 bind_run_session 再落 run_started 时两处一致。
                 await db.execute(
-                    "INSERT INTO runs (run_id, head_seq, updated_at) VALUES (?,?,?) "
-                    "ON CONFLICT(run_id) DO UPDATE SET head_seq = excluded.head_seq, updated_at = excluded.updated_at",
-                    (run_id, seq, utc_now().isoformat()),
+                    "INSERT INTO runs (run_id, head_seq, updated_at, session_id) VALUES (?,?,?,?) "
+                    "ON CONFLICT(run_id) DO UPDATE SET head_seq = excluded.head_seq, updated_at = excluded.updated_at, "
+                    "session_id = COALESCE(excluded.session_id, runs.session_id)",
+                    (run_id, seq, utc_now().isoformat(), session_id),
                 )
                 await db.commit()
             except BaseException:
@@ -649,6 +702,153 @@ class SQLiteStore(StorePort):
             except BaseException:
                 await db.execute("ROLLBACK")
                 raise
+
+    # ---- B4：会话作用域（sessions + event_log.scope/session_id；不改 Envelope）----
+    async def create_session(
+        self,
+        session_id: str | None = None,
+        *,
+        model: str | None = None,
+        workspace_root: str | None = None,
+        kind: str = "chat",
+    ) -> str:
+        """新建（或幂等确保）一条会话行；返回 session_id。显式 id 必须非空且 ≤128。"""
+        sid = session_id or new_id("sess")
+        if not sid or len(sid) > 128:
+            raise ValueError("session_id must be non-empty and <= 128 chars")
+        now = utc_now().isoformat()
+        async with self._lock:
+            db = self._dbp()
+            await db.execute(
+                "INSERT OR IGNORE INTO sessions (session_id, kind, workspace_root, model, created_at, updated_at) VALUES (?,?,?,?,?,?)",
+                (sid, kind, workspace_root, model, now, now),
+            )
+            await db.execute("UPDATE sessions SET updated_at = ? WHERE session_id = ?", (now, sid))
+        return sid
+
+    async def ensure_session(self, session_id: str) -> JsonObject:
+        """确保会话行存在并返回它（不存在则按默认值新建）。"""
+        await self.create_session(session_id)
+        row = await self.session_row(session_id)
+        assert row is not None
+        return row
+
+    async def bind_run_session(self, run_id: str, session_id: str) -> None:
+        """把 run 路由到会话：先绑定再落 run_started，event_log.session_id 才不丢。"""
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                await db.execute(
+                    "INSERT INTO runs (run_id, head_seq, updated_at, session_id) VALUES (?, 0, ?, ?) "
+                    "ON CONFLICT(run_id) DO UPDATE SET session_id = excluded.session_id, updated_at = excluded.updated_at",
+                    (run_id, utc_now().isoformat(), session_id),
+                )
+                await db.commit()
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    async def run_session(self, run_id: str) -> str | None:
+        """该 run 绑定的 session_id；未绑定返回 None。"""
+        async with self._lock:
+            cur = await self._dbp().execute("SELECT session_id FROM runs WHERE run_id = ?", (run_id,))
+            row = await cur.fetchone()
+            return row[0] if row is not None else None
+
+    async def session_row(self, session_id: str) -> JsonObject | None:
+        """会话行（metadata_json 解析为 dict）；无则 None。"""
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT session_id, title, kind, workspace_root, model, permission_mode, created_at, updated_at, "
+                "archived, pinned, head_change_version, last_consolidated, history_start_seq, memory_root_mode, "
+                "next_seq, metadata_json FROM sessions WHERE session_id = ?",
+                (session_id,),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                return None
+            return {
+                "session_id": row[0],
+                "title": row[1],
+                "kind": row[2],
+                "workspace_root": row[3],
+                "model": row[4],
+                "permission_mode": row[5],
+                "created_at": row[6],
+                "updated_at": row[7],
+                "archived": bool(row[8]),
+                "pinned": bool(row[9]),
+                "head_change_version": row[10],
+                "last_consolidated": row[11],
+                "history_start_seq": row[12],
+                "memory_root_mode": row[13],
+                "next_seq": row[14],
+                "metadata": json.loads(row[15]) if row[15] else {},
+            }
+
+    async def advance_last_consolidated(self, session_id: str, seq: int) -> int:
+        """巩固游标只前进：``last_consolidated = max(old, seq)``；返回受影响行数。"""
+        async with self._lock:
+            db = self._dbp()
+            cur = await db.execute(
+                "UPDATE sessions SET last_consolidated = MAX(last_consolidated, ?), updated_at = ? WHERE session_id = ?",
+                (seq, utc_now().isoformat(), session_id),
+            )
+            return cur.rowcount or 0
+
+    async def set_history_start_seq(self, session_id: str, seq: int) -> int:
+        """喂入起点只前进（与 last_consolidated 分离，§4.5 双游标）。"""
+        async with self._lock:
+            db = self._dbp()
+            cur = await db.execute(
+                "UPDATE sessions SET history_start_seq = MAX(history_start_seq, ?), updated_at = ? WHERE session_id = ?",
+                (seq, utc_now().isoformat(), session_id),
+            )
+            return cur.rowcount or 0
+
+    async def session_events(self, session_id: str, limit: int | None = None) -> list[JsonObject]:
+        """该会话的事实流（含 scope/session_id 列；批量传入专用，非对外 wire）。"""
+        async with self._lock:
+            sql = (
+                "SELECT gseq, run_id, seq, type, turn, item_id, payload, ts, session_id, scope "
+                "FROM event_log WHERE session_id = ? ORDER BY gseq"
+            )
+            params: tuple = (session_id,)
+            if limit is not None:
+                sql += " LIMIT ?"
+                params = (session_id, limit)
+            cur = await self._dbp().execute(sql, params)
+            rows = await cur.fetchall()
+            return [
+                {
+                    "gseq": row[0],
+                    "run_id": row[1],
+                    "seq": row[2],
+                    "type": row[3],
+                    "turn": row[4],
+                    "item_id": row[5],
+                    "data": json.loads(row[6]),
+                    "ts": row[7],
+                    "session_id": row[8],
+                    "scope": row[9],
+                }
+                for row in rows
+            ]
+
+    async def session_transcript(self, session_id: str, limit: int = 8) -> list[JsonObject]:
+        """最近 N 条 user/assistant 事实（新→旧），供 SeedContext 取原文。"""
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT gseq, run_id, seq, type, payload, ts FROM event_log "
+                "WHERE session_id = ? AND type IN ('user_message','message_completed') ORDER BY gseq DESC LIMIT ?",
+                (session_id, max(1, limit)),
+            )
+            rows = await cur.fetchall()
+            return [
+                {"gseq": row[0], "run_id": row[1], "seq": row[2], "type": row[3], "data": json.loads(row[4]), "ts": row[5]}
+                for row in rows
+            ]
 
     async def save_checkpoint(self, checkpoint: JsonObject) -> None:
         """写入/覆盖一个 checkpoint（幂等：cp_id 主键 + OR REPLACE）。
