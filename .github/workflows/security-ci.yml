@@ -1,8 +1,8 @@
 name: security-ci
 
-# 参考 DeepCode security-ci：secret 历史扫描 + PR 依赖差异审查 + 定时深度依赖审计。
+# 安全 CI：secret 历史扫描 + PR 依赖差异审查 + 定时深度依赖审计。
 # 触发设计诚实：深度审计（advisory 数据库天天变）只在 schedule/手动跑并开 issue，
-# 绝不在每次 push 跑——否则上游无关漏洞会把 main 刷红（DeepCode 同一取舍）。
+# 绝不在每次 push 跑——否则上游无关漏洞会把 main 刷红。
 on:
   push:
     branches: [main]
