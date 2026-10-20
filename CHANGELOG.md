@@ -59,6 +59,14 @@ ADR-0056 记录“变更史 = 事实流”的落地与 `memory_history` 表被�
 
 计数：`src_py` 140→141（`providers/model_windows.py`）、`test_files` 210→214、`test_unit` 129→132、`test_evals` 2→3、`EventType` 32、`Command` 22。
 
+### Added — w2-final · B12 评测环（w2-final，3 commit）
+- **c1 任务集 + 确定性判分器**：新增 `tests/evals/tasks.py`（10 个任务：输入 / 允许工具集 / `ScriptedProvider` 脚本 / 判分器 / trace 形状；判据**只读 durable 事实**——事件流、`Domain_State`、记忆库正文，不读模型口气）+ `tests/evals/test_b12_evals.py`（13 条：10 任务逐个过判分器、任务数与 id 唯一、两条任务跑两遍事件类型序列逐字相同的确定性判据）。trace 用**子序列**判据（顺序必对、允许中间有新事件），不是金标快照——否则任何 additive 事件都会把评测打红。三条防自证任务：撤回（真发 `memory_deleted`）、幂等重写（同 `idempotency_key` 返回原 receipt 不重复 append）、大输出归档（C-1 端到端）。命令类场景跑在**未终态伴跑 run** 上并经同一 `loop._transition` 咽喉（终态 run 拒收后续命令是正确行为，不用来造场景）。
+- **c2 六指标（口径即判据）**：新增 `tests/evals/metrics.py`——召回命中率除以**人工标注的应引用集**（不是命中集）、遗忘率用人工标注事实对记忆正文做 diff、写入噪声率只算满 `NOISE_WINDOW_DAYS=30` 且未被**条目级**消费的条目（未到期两头都不进，否则永不红）、重复提醒率看 `attempts ≥ 2` 而 `recovered` 只进 note、撤回率只从事件流数 `memory_deleted/memory_written`、每成功任务成本**停在 token**：无价目表时 `verified=False` + UNVERIFIED（本仓刻意不内置汇率，§17-9）。所有比率分母为 0 → `value=None`，**不返回 0.0**（“没有样本”≠“样本全过”）。`test_six_metrics_are_computable_from_run_evidence` 用 4 个任务 + 两条真义务各投两次（`attempts` 真到 2）把六指标跑出期望值；`test_metrics_refuse_to_invent_zeroes` 钉住六条空分母。
+- **c3 口径入档**：ADR-0058 记录六指标的分子/分母定义、trace 子序列判据、成本 UNVERIFIED 的判据地位与被否备选（含“内置一张模型价目表”）。零 `src/` 变更。
+
+计数：`test_files` 214→217、`test_evals` 3→6（tasks/metrics/test_b12_evals）。
+
+
 
 ### Changed — OPT-2a / OPT-12a / OPT-3 / OPT-4：组合根接缝 + 上下文装配器 + 配置/profile 词汇（分支 `opt-seams`；12 commit，a1–a3 / b1–b3 / c1–c6 各自可 revert；**零行为变更**）
 - **OPT-2a 组合根接缝（a1–a3）**：新增 `composition.AssembleSpec`（frozen 纯数据，12 字段全默认 `None` = 走现路径自建；不是服务定位器）+ `build_app(spec=None)`（未给字段仍按历史顺序自建）+ `App.surface` 放宽为最小 `contracts.ports.SurfacePort`（只声明调用方实际用到的 `run_once`/`resume`/`_loop`/`_discover_mcp`/`_freeze_surface`/`_resolve_for_run` 与 `store`）。判据：`tests/integration/test_assemble_spec_default.py`——默认 spec 与 `build_app()` **逐字段等价**、注入字段真被使用（未给的仍自建）、`--help` stdout/exit-code **逐字节快照**。
