@@ -45,7 +45,8 @@ export type QuestorExternalEventProjectionV1 = {
     | "peer_ended"
     | "tools_changed"
     | "compact_started"
-    | "compact_applied";
+    | "compact_applied"
+    | "user_message";
   data: {
     [k: string]: unknown;
   };
@@ -215,4 +216,11 @@ export interface CompactAppliedData {
   covered_from: number;
   covered_to: number;
   summary_bytes: number;
+}
+/**
+ * User-originated message body persisted into the fact stream (B1; design §4.2). text is the bounded user-originated text (maxLength = OutputBudget.model_result_bytes; injected scaffolding stripped before persisting); truncated=true when the stored body was cut. Full body stays authoritative in the checkpoint. Not logged (C20).
+ */
+export interface UserMessageData {
+  text: string;
+  truncated?: boolean;
 }

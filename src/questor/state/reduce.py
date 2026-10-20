@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime
 
+from questor.contracts.artifacts import OutputBudget
 from questor.contracts.common import utc_now
 from questor.contracts.events import (
     EVENT_SCHEMA_VERSION,
@@ -84,6 +85,23 @@ _MSG_FINAL_TEXT_CHARS = 8192
 #: 进模型的 tool_result 文本上限（#158；承 C18/ADR-0019 的 16 KiB 预算）。超限截断并标注，
 #: 全文归档留待 exec/artifact 接线（#154）经 envelope_for_text 承接——避免单条 bash~2MiB/MCP 无界结果炸上下文与计费。
 _MAX_MODEL_TOOL_RESULT_CHARS = 16 * 1024
+
+#: 进事实流的用户正文上限（B1；设计文档 §4.2 事实流补齐）。与 `protocol/event.schema.json` 的
+#: `$defs.user_message.text.maxLength` **同源**（= :class:`OutputBudget` 的 model 预算），
+#: 由 `check_protocol_schema._max_length_drift` 机守；单位按 UTF-8 字节（OutputBudget 的声明单位）。
+_USER_MESSAGE_TEXT_BYTES = OutputBudget().model_result_bytes
+
+
+def _bounded_user_text(text: str) -> tuple[str, bool]:
+    """把用户正文收进 OutputBudget 预算（按 **UTF-8 字节**截断、不劈开多字节字符）。
+
+    返回 ``(有界正文, 是否截断)``：截断不静默——``truncated=True`` 随事件外发（承 message_completed
+    先例）。完整正文仍以 checkpoint（Domain_State.context.items）为权威，事件帧恒有界。
+    """
+    raw = text.encode("utf-8")
+    if len(raw) <= _USER_MESSAGE_TEXT_BYTES:
+        return text, False
+    return raw[:_USER_MESSAGE_TEXT_BYTES].decode("utf-8", errors="ignore"), True
 
 
 def _message_completed_data(message: Message) -> dict[str, object]:
@@ -217,16 +235,25 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
     if isinstance(command, SubmitMessage):
         was_idle = run.status is RunStatus.IDLE
         ctx = replace(run.context, items=(*run.context.items, command.content))
-        new = replace(run, context=ctx, status=RunStatus.RUNNING if was_idle else run.status)
-        seq = new.seq + 1
         if was_idle:
+            # 首条消息的 durable 事实 = ``run_started``（既有冻结契约：idle 提交恰产 [run_started] 且 seq==1，
+            # 见 test_reduce.py:51 / test_transition_chokepoint.py:45）；正文由 turn 边界快照承载。
+            new = replace(run, context=ctx, status=RunStatus.RUNNING)
+            seq = new.seq + 1
             # run_started additive 带 policy_ref（P9/ADR-0045）：None 则不发该键（optional，不破旧消费者）。
             started_data: dict[str, object] = {"run_id": new.run_id}
             if new.policy_ref is not None:
                 started_data["policy_ref"] = {"id": new.policy_ref.id, "fingerprint": new.policy_ref.fingerprint}
-            events = [_event(seq, new, None, EventType.RUN_STARTED, started_data)]
-            return replace(new, seq=seq), events
-        return new, []
+            new = replace(new, seq=seq)
+            return new, [_event(seq, new, None, EventType.RUN_STARTED, started_data)]
+        # 非 idle（busy / awaiting_approval / cancelled 外的活态）：用户输入同样进事实流——
+        # 有界正文 + bump seq。旧实现只追加内存 context、无事件且不 bump seq（不对称），崩溃后该输入
+        # 不在事实流、``after_seq`` 重放看不到（T1 第①件要修的根）。
+        text = "".join(b.text or "" for b in command.content.content if b.type == "text")
+        bounded, truncated = _bounded_user_text(text)
+        seq = run.seq + 1
+        new = replace(run, context=ctx, seq=seq)
+        return new, [_event(seq, new, run.turn, EventType.USER_MESSAGE, {"text": bounded, "truncated": truncated})]
 
     if isinstance(command, AdvanceTurn):
         new = replace(run, turn=command.turn, seq=run.seq + 1)

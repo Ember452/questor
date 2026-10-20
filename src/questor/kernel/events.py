@@ -79,6 +79,10 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     # baseline_seq 供渲染侧重折上下文视图；不进 projection._DATA_KEYS（摘要文本属载荷、日得不复制，C20）。
     EventType.COMPACT_STARTED: frozenset({"reason"}),
     EventType.COMPACT_APPLIED: frozenset({"baseline_seq", "covered_from", "covered_to", "summary_bytes"}),
+    # user_message（B1；设计文档 §4.2）：用户原话进外部投影（重连可见 + 可重放）。
+    # text 由 reduce 侧按 OutputBudget 有界、落库前剥掉注入脚手架；只进事件协议，
+    # 绝不进带外投影白名单（projection._DATA_KEYS 不含 text，C20 零明文）。
+    EventType.USER_MESSAGE: frozenset({"text", "truncated"}),
 }
 
 
