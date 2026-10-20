@@ -8,7 +8,7 @@
 
 **从零自研一个"超级智能体"的运行时底座（Agent Harness）+ 其上可插拔的 Agent 策略层，做成一个长期的、可超大规模扩展的桌面通用个人 Agent。**
 
-不从任何现成项目复制——**取业界最硬的设计当参照、代码自己写**。
+不从任何现成项目复制——**所有设计与代码均自研、定于本仓 `docs/`**。
 
 ## 2. 已定的关键决策
 
@@ -17,7 +17,7 @@
 | 代码来源 | **从零自研** |
 | 语言/运行时 | **Python**（LiteLLM / MCP 原生生态最肥、单人长期维护快）；Go 仅备选 |
 | 桌面壳 | **已定：Tauri v2 + Web 前端（React/Svelte + TS）+ Python sidecar**；UI 只当瘦客户端经事件协议连后端，一份 UI 复用到 桌面/网页/移动 |
-| 模型接入 | **LiteLLM（SDK/网关）**做多供应商路由 + 熔断/fallback/成本；预留 BYOM（把别的 Agent 当引擎）的口子（wuu 式） |
+| 模型接入 | **LiteLLM（SDK/网关）**做多供应商路由 + 熔断/fallback/成本；预留 BYOM（把别的 Agent 当引擎）的口子 |
 | 提交口径 | commit 用**开发口吻描述真实工程动作**；**不伪造时间戳/作者**（真实增量开发本身就是可信历史） |
 
 ## 3. 架构分层（第一步定死的边界）
@@ -56,27 +56,18 @@
 - **演进铁律**：未知 `type` 静默忽略；`data` 只增不改不删；破坏性变更才 bump `v`。→ 保证"以后随便加、不用协调"。
 - **可扩展验收**：语音/子agent/产物/HITL审批/MCP热增/成本/心跳 等未来扩展都应**只加事件、不改信封**；做不到即协议设计错。
 
-## 5. 每块的设计参照（读它们的设计、避坑，不复制代码）
+## 5. 本仓设计依据
 
-| 决策线 | 主要参照 |
-|---|---|
-| 产品形态 | wuu（桌面 + 自研 harness + BYOM），做通用个人 agent |
-| 主循环 | hermes 阶段流水线（`turn_*` + `_LoopState` + verdict）+ wuu 护栏 |
-| 事件协议 | Cow 的"未知即忽略/可续传" + 对齐 OpenAI 兼容 chunk（借生态） |
-| 工具接口 | Cow BaseTool 钩子 + DeepCode 的 MCP 外置 + wuu 的审批/租约 |
-| 上下文压缩 | hermes 可恢复压缩（recovery pointer）+ wuu compaction/lineage |
-| 记忆 | Cow 三层 + Deep Dream + Letta(MemGPT) 分页召回 |
-| 插件/服务宿主 | cordis 思想（DI + Fiber 生命周期 + 热重载），仅借鉴架构 |
-| 多 agent（后期） | wuu agentcontrol（spawn/lease/mailbox）+ MetaGPT env/role |
+各接缝的设计定于本仓文档：分层 [`design/00`](./design/00-layering.md) · 状态 [`design/01`](./design/01-state-model.md) · 事件 [`design/02`](./design/02-event-protocol.md) · 工具 [`design/03`](./design/03-tool-interface.md) · 循环 [`design/04`](./design/04-turn-loop.md) · 策略 [`design/05`](./design/05-policy.md) · 记忆 [`design/06`](./design/06-memory.md)，以及 [`docs/adr/`](./adr/) 的决策记录。
 
 ## 6. 建造顺序（纵切优先，每块跑通再加）
 
 ```
 心脏① 最小可跑循环(单模型 + 1工具 + 流式 + 取消)
  → 记忆(短期 → 三层+蒸馏) → 能力(工具/skills/MCP/沙箱) → 上下文压缩
- → 多agent/子agent → 桌面壳(Tauri) → BYOM/外挂引擎 → 插件宿主(cordis式DI)
+ → 多agent/子agent → 桌面壳(Tauri) → BYOM/外挂引擎 → 插件宿主(注册+生命周期)
 ```
-每个纵切固定四步：**设计 → 读参照出"失败模式清单"再自研 → 分层验证(单元 + 能力对照 + 任务级回归) → commit**。
+每个纵切固定四步：**设计 → 定“失败模式清单”再自研 → 分层验证(单元 + 能力对照 + 任务级回归) → commit**。
 
 ## 7. 长期护栏
 

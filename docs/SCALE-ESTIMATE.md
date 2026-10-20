@@ -2,17 +2,9 @@
 
 > **工程估算、区间、不是承诺**。用途：给里程碑"大小感"，随范围收敛/扩张调整。
 
-## 1. 参考锚点（同 workspace 兄弟项目，粗估含 tests）
+## 1. 规模定位
 
-| 项目 | 主语言 | LOC | 与 questor 关系 |
-|---|---|---|---|
-| CowAgent | Python | 30k–45k | 更窄（无 Tauri / 无事件溯源 / 无三层记忆深度） |
-| MetaGPT | Python | 50k–80k | 框架类、无桌面壳 |
-| DeepCode | Py+Rust+TS | **120k–250k** | **与 questor 最像**（harness+sidecar+Tauri） |
-| wuu | Go+TS | 200k–400k | 覆盖面最广、70+ 子包 |
-| hermes-agent | Py+TS+Rust | 400k–700k | 极端健壮性，不必对标 |
-
-Questor 落在 **CowAgent 与 DeepCode 之间、向 DeepCode 靠**。
+Questor 是“分层 harness + 事件溯源 + 三层记忆 + Tauri 桌面壳”的中等偏大单体：后端以 Python 为主，桌面为 Rust 壳 + TS 瘦前端。具体量级见 §2 估算，随范围收敛/扩张调整。
 
 ## 2. P10 完成后代码量估算
 
@@ -61,7 +53,7 @@ Questor 落在 **CowAgent 与 DeepCode 之间、向 DeepCode 靠**。
 ## 6. P10 之后仍可做的扩展（架构预留、**加挂新件、不动内核**）
 
 - **新策略（L4，加/换不动内核）**：ToT / LATS / GoT 多算法族；反思/自我进化（Curator 式）；垂直 preset（研究 / 编码 / 运维 / 客服 / 教育等）。
-- **新能力（L3）**：更多内置工具；**GUI / computer-use agent**（参考 Agent-S）；行业 MCP 集；Skills Marketplace / Hub。
+- **新能力（L3）**：更多内置工具；**GUI / computer-use agent**；行业 MCP 集；Skills Marketplace / Hub。
 - **新 Surface（L6，只订阅事件协议）**：Web 版（浏览器连远程 questor）；IDE 插件（VSCode / JetBrains）；移动客户端；浏览器扩展；IM 群机器人；cron/自动化面板。
 - **新 Provider 侧（L5）**：更多模型 / 嵌入 / 语音 / 图像 / 视频（**语音与图像即原 P6，已由 [ADR-0036](./adr/0036-p6-dropped-from-roadmap.md) 从必经阶段降为本条按需扩展**：L5 加端点 + L6 加接收面 + 大载荷复用 ADR-0019，不动内核）；BYOM 私有网关；成本预算治理。
 - **多 agent / 编排深化（P8 起步）**：swarm / crew-like pipeline、supervisor-worker 层级、跨机协同。
@@ -70,7 +62,7 @@ Questor 落在 **CowAgent 与 DeepCode 之间、向 DeepCode 靠**。
 - **部署形态**：单机 → 家用服务器 / NAS → 团队共享 → 云端多租户。
 
 ## 7. 会触天花板、需**新 ADR** 才能启动的深改
-- **跨机 exactly-once / 分布式排序 / 租约**（C12 硬骨头，hermes/wuu 都在啃）。
+- **跨机 exactly-once / 分布式排序 / 租约**（C12 硬骨头，需独立设计）。
 - **多租户 SaaS 化**：鉴权、隔离、成本分摊、并发写模型。
 - **端侧全本地**：去 LiteLLM 或加 llama.cpp / Ollama 本地 provider + 本地嵌入/语音。
 - **强合规/审计**：零上云 + 可验证审计链。

@@ -1,10 +1,10 @@
 # Questor 记忆层（三层 + 检索 + 蒸馏，P4 设计地基）
 
-> 实扒来源 `../references/R06-compaction-memory.md`（Cow/hermes/wuu）；与 [`01-state-model.md`](./01-state-model.md) §2(recovery_pointers)、[`04-turn-loop.md`](./04-turn-loop.md) §7(压缩四档) 交叉。
+> 与 [`01-state-model.md`](./01-state-model.md) §2(recovery_pointers)、[`04-turn-loop.md`](./04-turn-loop.md) §7(压缩四档) 交叉。
 > 定位：**长期记忆是独立子系统，与运行态 L1 分离**；写必经 `Command→StorePort`（C4），模型永不拿裸向量句柄。
 
 ## 0. 铁律
-- 记忆读写全收口 `MemoryStore`（Harness 侧），策略/工具只发 `MemoryWrite` Command、经 `memory_search` 拿回 `(path,start_line,end_line,snippet)`；**绝不直连向量库**（C4，Cow 实证）。
+- 记忆读写全收口 `MemoryStore`（Harness 侧），策略/工具只发 `MemoryWrite` Command、经 `memory_search` 拿回 `(path,start_line,end_line,snippet)`；**绝不直连向量库**（C4）。
 - **文件/记录为真源、索引为派生投影**：`sync()` 扫盘重建、stale 行 reconcile；索引损坏可重建。
 - I3：压缩产出的 `summary` 写记忆时**只写浓缩文本，绝不写 delta**。
 

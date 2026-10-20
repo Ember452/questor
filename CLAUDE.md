@@ -21,8 +21,9 @@ below.** This CLAUDE.md is only a pointer (kept for tools that read `CLAUDE.md` 
 - `04-turn-loop.md` — phase pipeline + `LoopState`（只读视图/verdict）+ guards.
 - `05-policy.md` — L4 策略契约（PolicyPort/注册/热替换/AB；04 的纵深、非第六接缝）.
 - `06-memory.md` — 三层记忆 + 混合检索 + 蒸馏 + 压缩↔记忆桥（P4 地基）.
-- per-phase detailed plans: `docs/plan/NN-*.md` (written just before that phase), always start from
-  [`docs/plan/_TEMPLATE.md`](./docs/plan/_TEMPLATE.md) whose **§0 peer-repo scan table must be filled before coding** (AGENTS §4.5).
+- per-phase detailed plans: a **new** phase writes `docs/plan/NN-*.md` (start from
+  [`docs/plan/_TEMPLATE.md`](./docs/plan/_TEMPLATE.md)); **已完成的历史阶段计划归档于
+  [`docs/plan-archive/`](./docs/plan-archive/)**（仅作历史参照，不再作为当前约束）。
 
 ## Decision history
 - `docs/adr/` — ADR-0001…0028 (why each hard-to-reverse choice was made; **0027** is the logging

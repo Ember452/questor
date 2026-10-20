@@ -1,7 +1,7 @@
 # Questor Agent 策略契约（L4 Policy，04 的姊妹文档）
 
 > 承接 [`04-turn-loop.md`](./04-turn-loop.md) §9、[`00-layering.md`](./00-layering.md) L4、HARD-CONSTRAINTS C1/C2/C4/C8/C10/C12。
-> 定位：**L4 策略契约 + 注册/生命周期/热替换**，是"04=L2 机制"的纵深文档，**不是第六道承重接缝**（五接缝=可开发门槛不变）。实扒来源见 `../references/R05-policy-pluggable.md`。
+> 定位：**L4 策略契约 + 注册/生命周期/热替换**，是"04=L2 机制"的纵深文档，**不是第六道承重接缝**（五接缝=可开发门槛不变）。
 
 ## 0. 边界（策略拥有什么 / 不拥有什么）
 - **拥有**：提示词、能力选择(工具 allowlist)、算法(ReAct/ToT/反思/记忆策略)。
@@ -26,7 +26,7 @@
 ## 4. 与 04 的接缝
 循环每轮只调一次 `propose_action(view)` → intent 映射 Command → 权限/校验/沙箱/reduce（04）。循环只认注入的 `PolicyPort`，**不 import 具体策略**（C1/C14，import-linter 守）。
 
-## 5. 反思/记忆类策略（P4/P10，借 hermes）
+## 5. 反思/记忆类策略（P4/P10）
 后台"只读分支快照重放"，写操作经 `WriteMemory` Command，绝不在活 run 上改权威态（04 X4/C10）。
 
 ## 6. 待定（v0 后锁）

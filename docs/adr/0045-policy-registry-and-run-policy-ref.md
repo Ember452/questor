@@ -1,6 +1,6 @@
 # ADR-0045: PolicyRegistry 落地 + `run_started.policy_ref`（状态/协议 additive + AB 分桶）
 
-- 状态：✅（2026-10-18，P9 已实现并验证；实现见 [`../plan/09-p9-openai-plugin-host.md`](../plan/09-p9-openai-plugin-host.md) T1/T2/T3/T4）
+- 状态：✅（2026-10-18，P9 已实现并验证；实现见 [`../plan-archive/09-p9-openai-plugin-host.md`](../plan-archive/09-p9-openai-plugin-host.md) T1/T2/T3/T4）
 - 背景：[`05-policy`](../design/05-policy.md) §2 定 `PolicyRegistry`（注册/发现/降级）归 P9、§3 定三条语义、§6 留"AB 分桶算法"待定；[`ADR-0009`](./0009-policy-pluggable.md) 已定"热替换=run 内快照冻结、换=新 run、AB 按 fingerprint、`run_started` 带 `policy_ref{id,fingerprint}`（只增字段）"。现状：`contracts/policy.py` 有 `PolicyPort`（`id`/`fingerprint`/`propose_action`/`init`/`dispose`），但**无 `PolicyRegistry`**；策略在 `surfaces/cli.py:133` 硬编码 `ReActPolicy()` 注入 loop；`run_started` 由 `state/reduce.py:191` 发、data 仅 `{run_id}`。既有可注册策略：`ReActPolicy`/`NullPolicy`/`MemoryAwareReActPolicy`。矛盾：registry 落哪层不破 C1、发现边界是否含磁盘扫描（防过度工程）、`policy_ref` 是状态+协议 additive 如何不 bump `v`。
 - 决策：
   1. **`PolicyRegistry` 落 L4 `policy/registry.py`**（`check_layering_ast` rank 4）：只 import `contracts`；**kernel(L2) 绝不 import 它**——loop 仍只认注入的 `PolicyPort`（`loop.py:50/229`）。registry 的**解析发生在 surface/组合根**（`cli.py:133` 现装配点），解析得 `PolicyPort` 再注入 loop（C1 依赖方向不破）。

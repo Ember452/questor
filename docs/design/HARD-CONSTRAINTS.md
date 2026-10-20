@@ -83,7 +83,7 @@
 
 ## C15 外部契约单一真源 + 守卫可信性（评审 R09/R07）
 - **跨语言 wire 契约单一真源**：Python↔Rust↔TS 的事件协议用一个语言中立 `protocol/*.schema.json` 承载，构建期 codegen 生 TS 类型 + CI `--check` 阻断漂移（否则 C6"只增不改"三处各写、悄悄分叉）。
-- **分层强制靠三道防线**（import-linter 在本参考集零采用且拦不住动态 import）：① 声明式 `.importlinter`（人读意图）② ruff `flake8-tidy-imports.banned-api` 点名禁跨层 import + `ban-relative-imports=all` ③ 自研 AST 检查器。**以包/模块边界为主、lint 为兜底**。
+- **分层强制靠三道防线**（单用 import-linter 拦不住动态 import）：① 声明式 `.importlinter`（人读意图）② ruff `flake8-tidy-imports.banned-api` 点名禁跨层 import + `ban-relative-imports=all` ③ 自研 AST 检查器。**以包/模块边界为主、lint 为兜底**。
 - **每条机械守卫必须可信**：`--self-test`/fixture 证其能判红判绿 + **fail-on-empty**（扫不到文件≠通过）+ 分层守卫作为**不依赖 change-classifier 的独立 blocking job**（否则会被语言 lane 意外门控掉）。
 
 ## C16 Command Inbox 是唯一外部写入口（ADR-0013）
@@ -115,7 +115,7 @@
 - **不越界**：本条只管“载荷能不能进观测面”，不管账本本身怎么写（C13/C16）；也不禁止 P7/P10 在**显式授权 + 独立通道 + 有界截断**下开 preview（刀 3）。
 
 ## 天花板（诚实标注，别当免费）
-"扩事件协议就能到分布式"是错觉。**跨机**的**状态排序、租约、exactly-once、部分失败恢复**是独立的硬骨头（hermes `hermes_state_*`、wuu `agentcontrol` 就在啃）。本架构*容许*演进到那，但那一跳要单独设计，别写进"只是加事件"。
+"扩事件协议就能到分布式"是错觉。**跨机**的**状态排序、租约、exactly-once、部分失败恢复**是独立的硬骨头。本架构*容许*演进到那，但那一跳要单独设计，别写进"只是加事件"。
 
 ## 与三份文档的挂点
 - 每条 C 对应到 `00-layering` 的某条边界 / `01-state-model` 的某字段；CI 规则清单待实现阶段落进 `pyproject`（ruff/import-linter/契约快照测试）。

@@ -1,6 +1,6 @@
 # ADR-0025: Deep Dream 离线蒸馏的单写者边界与原子性纪律
 
-- 状态：✅（2026-10-16，决策定；实现见 [`../plan/04-memory-soul.md`](../plan/04-memory-soul.md) T13、T14）
+- 状态：✅（2026-10-16，决策定；实现见 [`../plan-archive/04-memory-soul.md`](../plan-archive/04-memory-soul.md) T13、T14）
 - 背景：[`../design/06-memory.md`](../design/06-memory.md) §1 规定 dreams 蒸馏产物"**原子写、输入哈希去重、只删不编、空哨兵跳过；dreams 不进索引**"，§3 定义压缩丢弃→L2' distill 发 `MemoryWrite`。但 Deep Dream（夜间蒸馏）与 run-完成→daily flush 本质是**离线/后台批处理入口**（CLI `--dream`），**不在活 run 的 Command 队列里、没有 active `Run`/`Domain_State`**。R01-G8 评审已把"不可变/单写者"红线**只强加于 `Domain_State`**。风险点：若把离线蒸馏误读成"第二个改可信状态的写者/旁路 reduce"，就与 HARD C2/C16"唯一写入口 Command→reduce"表述冲突，实现期易纠结或被审计判违规。实扒：CowAgent `agent/memory/summarizer.py:511-648`（`deep_dream(lookback_days)` 原子写+`daily_content_hash` 去重+transient 重试）、`:288-344`（claim-then-commit 失败释放可重试）、hermes `agent/memory_manager.py:747`（`commit_session_boundary_async` 会话边界异步 flush）。
 - 决策：
   - **纪律分层**：HARD C2 单写者**只强加 `Domain_State`**；记忆 store（ADR-0023）是独立持久子系统，其写入原子性由 store 自身保证——**文件（md）为真源、SQLite 索引为派生投影**；蒸馏/flush 走 `write_text_atomic`（临时文件 + `os.replace` 原子替换）+ 输入 `daily_content_hash` 去重（同输入二次为 no-op）+ claim-then-commit（in-flight/flushed 两套标记、失败释放回可重试）。它**不触碰 `Domain_State`**，故不构成"第二个改可信状态的写者"。

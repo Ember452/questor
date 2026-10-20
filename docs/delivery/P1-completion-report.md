@@ -1,7 +1,7 @@
 # P1 交付报告 · 最小可跑循环
 
 > 目的：让你读完后能讲清"P1 到底跑通了什么、真实架构长什么样、审计暴露了什么、修成了什么样、还剩哪些坑"。
-> 口径：以**仓库当下代码 + 实测命令输出**为准。判据来自 [`docs/plan/01-p1-minimal-loop.md`](../plan/01-p1-minimal-loop.md)、[`docs/ROADMAP.md`](../ROADMAP.md) §2.5、[`docs/audit/P0-P1-review-2026-10-15.md`](../audit/P0-P1-review-2026-10-15.md)。
+> 口径：以**仓库当下代码 + 实测命令输出**为准。判据来自 [`docs/plan/01-p1-minimal-loop.md`](../plan-archive/01-p1-minimal-loop.md)、[`docs/ROADMAP.md`](../ROADMAP.md) §2.5、[`docs/audit/P0-P1-review-2026-10-15.md`](../audit/P0-P1-review-2026-10-15.md)。
 
 ---
 
@@ -115,4 +115,4 @@ P1 不是"一次写完就对"。过程是**先交付 → 对抗式审计揪出 B
 
 **价值**：P1 证明了"从分层契约 → 单写者状态 → 事件溯源 → 权限三态 → 可取消循环"这一整套设计**没有逻辑漏洞、能真跑**。承重墙已砌到位，后续加功能主要是"挂新件、不动内核"。触发**发布里程碑节点 B**：可开源"最小可运行原型（终端 Demo）"，拿第一批真实反馈。
 
-**下一步 = P2**（工具 + 权限 lite）：引入文件/shell 核心工具集、把三态权限在真写/exec 上验透、受限沙箱。2026-10-15 对抗审计后的开工 Blocker 已由 ADR-0013-0019 关闭：P2 以 Command Inbox、PermissionCtx 单一真源、capability floor、ApprovalRequest 生命周期、Shell IR、Harness ProcessRunner、有界 Artifact 和字段级投影为硬契约。详规与 T0-T21 任务分解见修订版 [`plan/02`](../plan/02-p2-tools-permission.md)。
+**下一步 = P2**（工具 + 权限 lite）：引入文件/shell 核心工具集、把三态权限在真写/exec 上验透、受限沙箱。2026-10-15 对抗审计后的开工 Blocker 已由 ADR-0013-0019 关闭：P2 以 Command Inbox、PermissionCtx 单一真源、capability floor、ApprovalRequest 生命周期、Shell IR、Harness ProcessRunner、有界 Artifact 和字段级投影为硬契约。详规与 T0-T21 任务分解见修订版 [`plan/02`](../plan-archive/02-p2-tools-permission.md)。

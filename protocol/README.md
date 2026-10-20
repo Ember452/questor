@@ -15,7 +15,7 @@ desktop/web TS client via codegen (P7). HARD C6/C15; see `docs/design/02-event-p
 Drift guard (blocking CI job, independent of change classifiers):
 
 ```
-uv run python scripts/check_protocol_schema.py --check      # 20 event types in lockstep
+uv run python scripts/check_protocol_schema.py --check      # schema/contract/codegen TS stay in lockstep
 uv run python scripts/check_protocol_schema.py --self-test  # proves the guard can go red
 ```
 

@@ -1,7 +1,7 @@
 # Questor Turn 循环骨架（L2 Kernel）
 
 > 承接分层(00)、状态(01)、事件(02)、工具(03)、红线。设计文档，非实现。
-> 参照：**hermes 的阶段流水线 + `_LoopState` 显式状态 + verdict**，配 **wuu 的护栏**（续跑上限/空答分类/工具面冻结）。Harness 是引擎，**只调度不思考**。
+> 设计要点：**阶段流水线 + 显式 `_LoopState` + verdict**，配**护栏**（续跑上限/空答分类/工具面冻结）。Harness 是引擎，**只调度不思考**。
 
 ---
 
@@ -58,7 +58,7 @@ LoopState {
   直接 400（实测曾把 CLI 进程带 traceback 打崩）。关卡副作用：一个 turn 窗口可执行多个工具、`tool_started`
   变密、`repeat_tool_limit` 仅覆盖策略提议路径（关卡路径不经过策略，故不计入重复签名计数）。
 
-## 6. 护栏（loop guards，wuu/Cow 经验）
+## 6. 护栏（loop guards）
 - **重复检测**：同工具同参连续 N 次→中断；空响应→有界重试/兜底文案。
 - **续跑上限**：provider 要求的无工具续跑也封顶（防兼容端点造无限计费循环）。
 - **工具面冻结**：一个 run 内 tools 集不随 MCP 热增中途变（发 `tools_changed` 留下一 run）。
@@ -109,7 +109,7 @@ Provider 错误→ProviderPort/LiteLLM 重试/fallback；耗尽则 `run_failed`�
 - **流式看门狗**：双超时(首 token / chunk 间)；连接池下**代际栅栏+退役即失效**；拿到 finish_reason 后卡住=teardown 不升级 run_failed；mid-stream 取消只留文本不留半 tool_use。
 - **Cancel 归因/传播**：reason 从记录派生、落 exit 标签与事件文案；扇出工具 worker + 递归子 agent、隔离到本执行线程；高并发用代际/claim 栅栏防误吞 abort；错误恢复不擦已接受 steer。
 **压缩（R06）**：§7 由单档升为**四档梯度**（L0 裁剪 / L1 摘要 / **L2 整体归档留指针=默认** / L2' 蒸馏进长期记忆）；recovery_pointer 形态见 01；**压缩时可选发 `MemoryWrite` Command → 06**；只在 turn 边界、策略仅 advisory。
-**契约（R07）**：§9 PolicyPort 用 wuu `loopdriver` 契约具体化（LoopPolicy/Gateway/Create-Resume + **版本门控 checkpoint**），细化见 05。
+**契约（R07）**：§9 PolicyPort 具体化为 LoopPolicy/Gateway/Create-Resume + **版本门控 checkpoint**，细化见 05。
 **X1 取齐**：v1 串行、`parallel_safe` 占位→P5；启用并行时须 gate(reader/writer/饥饿/orchestrator 绕开) + 取消 poll 感知 + ledger 回填 pending（03 §8/02 §10）。
 
 ## 14. P2 Command Inbox / HITL / Process 生命周期（ADR-0013-0018）

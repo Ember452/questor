@@ -1,6 +1,6 @@
 # ADR-0023: 记忆子系统定位与分层裁定（独立子系统包，非新编号层；落库经独立 MemoryStorePort）
 
-- 状态：✅（2026-10-16，决策定；实现见 [`../plan/04-memory-soul.md`](../plan/04-memory-soul.md) T5–T18）
+- 状态：✅（2026-10-16，决策定；实现见 [`../plan-archive/04-memory-soul.md`](../plan-archive/04-memory-soul.md) T5–T18）
 - 背景：P4 要把长期记忆做成独立子系统（[`../design/06-memory.md`](../design/06-memory.md) §0"长期记忆是独立子系统，与运行态 L1 分离"），且 [`../STRUCTURE.md`](../STRUCTURE.md) §9 明确"长期记忆子系统落 `src/questor/memory/`（与 `state/` 分离）"。但出现两处需在实现前钉死的结构性歧义：① 有口径把记忆称作"L7 独立子系统"，而 [`../design/00-layering.md`](../design/00-layering.md) §2 / [`../STRUCTURE.md`](../STRUCTURE.md) §6 定义的 **L7 = Shell/UI（Tauri 桌面）**，八层 L0–L7 已被 `.importlinter` 契约 + ruff `banned-api` + 自研 AST 检查器三道守卫编码（HARD C1/C14/C15），若把"记忆"重编号为 L7 会与 Shell 冲突并撕裂三道守卫；② [`../design/01-state-model.md`](../design/01-state-model.md) §9 的 `StorePort` 自 P3 起承载的是 **event-log（append 事件 + 快照 + 双游标 seq/gseq）**，语义专一，R03 实扒 D-P1（CowAgent `conversation_store.py:85-93`）证明"运行追踪/消息历史分表故障隔离"更稳，把记忆向量/FTS 表塞进同一库会一处损坏拖垮运行态。
 - 决策：
   - **记忆 = 跨层的独立子系统包 `src/questor/memory/`（`state/` 的 peer），不是新的编号层**；它按职责分别落进既有八层，依赖方向仍"外层→内层"、绝不反向：

@@ -1,6 +1,6 @@
 # ADR-0046: 能力热插拔宿主（薄生命周期 + 熔断隔离，非 cordis 容器）
 
-- 状态：✅（2026-10-18，P9 已实现并验证；实现见 [`../plan/09-p9-openai-plugin-host.md`](../plan/09-p9-openai-plugin-host.md) T1/T5/T9）
+- 状态：✅（2026-10-18，P9 已实现并验证；实现见 [`../plan-archive/09-p9-openai-plugin-host.md`](../plan-archive/09-p9-openai-plugin-host.md) T1/T5/T9）
 - 背景：ROADMAP §1 P9 目标含"cordis 式 DI/热插拔"；[`00-layering`](../design/00-layering.md) 把"横向 DI/插件宿主(cordis 式 Fiber 生命周期)"列为横切设施、"能力热插拔=不动 loop"；[`HARD-CONSTRAINTS`](../design/HARD-CONSTRAINTS.md) **C10** 定"策略/能力插件有 init/load/unload/异常隔离；插件 panic→Harness 捕获、回滚 Domain_State、发 error 事件、绝不带崩进程"。peer-scan（§0）：cordis `registry.ts:125-214`（按 callback 键的 `RegistryService` + 可 dispose 的 `Fiber`）是 **TypeScript**（cosmokit/装饰器/proxy），字面移植违 AGENTS §2；DeepCode `core/plugins/host.py:44-49`（inert discovery："发现≠执行"、snapshot+listener+monitor）+ `registry.py`（原子注册、错误三分）是 MIT 可借形状。**关键现状**：本仓已有可热插的注册点——`capabilities/tools/registry.py`（`register/unregister` 只影响**下一次 `freeze_for_run`**、活 run 面不变、first-writer-wins 冲突守卫）、`capabilities/skills/catalog.py`、`capabilities/mcp/manager.py`；`kernel/loop.py:389-395` 已隔离 policy 抛错。**矛盾**：P9 要真做通用 DI 容器，还是薄宿主？"能力可热插拔不崩内核"的可证伪判据是什么？
 - 决策：
   1. **不移植 cordis 容器**（不做通用 Fiber/Reflect/`@Inject` DI 框架）：questor 现有**手动构造注入 + 组合根**（`__main__.py`）已够用；引通用容器 = 单用途抽象 + 投机基建（AGENTS §2/C12）。cordis/DeepCode 只取**形状**（按 id 注册、可 dispose 生命周期、inert discovery、错误二分）。
