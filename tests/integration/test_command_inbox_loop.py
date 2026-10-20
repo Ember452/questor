@@ -14,14 +14,18 @@ from questor.contracts.events import Cancel, EventType, SubmitMessage
 from questor.contracts.inbox import InboxStatus
 from questor.contracts.ports import StreamChunk
 from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, Message, Role, RunStatus
+from questor.kernel.durability import resume_and_drive
 from questor.kernel.events import InProcessEventBus
 from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.permissions import DefaultPermissionEngine
+from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.policy.react_policy import ReActPolicy
 from questor.providers.fake import ScriptedProvider
+from questor.providers.litellm_adapter import to_openai_messages
 from questor.providers.store_sqlite import SQLiteStore
 from questor.state.domain_state import Run
+from questor.state.persist_form import SCAFFOLDING_CLOSE, SCAFFOLDING_OPEN
 
 _ANSWER = [StreamChunk(kind="text", text="ok"), StreamChunk(kind="finish", finish_reason="stop")]
 
@@ -150,6 +154,53 @@ async def test_submit_after_terminal_is_rejected_and_surface_starts_a_new_run(tm
         assert receipt2.status is InboxStatus.ACCEPTED  # 新建 run 是可用路径（本刀不改 surface）
     finally:
         await store.close()
+
+
+async def test_resume_transcript_equals_production_transcript(tmp_path: Path) -> None:
+    """c5（本刀核验测试）：一次 run 提交 3 条消息 → ``rebuild_run`` + ``to_openai_messages``
+    重建请求与生产路径**逐条相等**；kill（关库、新连接模拟新进程）后经 ``--resume`` 入口
+    重建，可见转录不丢、也不被续跑改写。
+
+    3 条消息在同一安全点批量消费：第 1 条 idle（run_started），第 2/3 条 busy（各产 user_message）。
+    第 3 条带注入标记 → 两种形态各归其位：持久事实（user_message.text）无标记，
+    模型输入（context → 重建请求）保留注入段。
+    """
+    db = str(tmp_path / "replay.db")
+    store = await SQLiteStore(db).connect()
+    loop, _bus = _durable_loop(tmp_path, store)
+    run = _run()
+    controller = RunController(run)
+    texts = ["first", "second while busy", f"third {SCAFFOLDING_OPEN}injected segment{SCAFFOLDING_CLOSE} tail"]
+    for index, text in enumerate(texts, start=1):
+        await controller.submit(
+            SubmitMessage(run_id=run.run_id, content=_user_message(text)),
+            source="test",
+            idempotency_key=f"submit:{index}",
+        )
+    production = await loop.drive_controller(controller)
+    assert production.status is RunStatus.COMPLETED
+    production_messages = to_openai_messages(production.context.items, None)
+    assert [m["content"] for m in production_messages if m["role"] == "user"] == texts
+
+    rows = await store.replay(production.run_id, 0)
+    user_rows = [row for row in rows if row["type"] == "user_message"]
+    assert [row["data"]["text"] for row in user_rows] == ["second while busy", "third  tail"], user_rows
+    assert all(SCAFFOLDING_OPEN not in row["data"]["text"] for row in user_rows), user_rows
+
+    await store.close()  # kill：丢弃进程内一切，只剩磁盘
+    reopened = await SQLiteStore(db).connect()  # 新连接 = 新进程语义
+    try:
+        rebuilt = await rebuild_run(reopened, production.run_id)
+        assert rebuilt is not None
+        assert to_openai_messages(rebuilt.context.items, None) == production_messages  # 重放=生产（逐条相等）
+        assert [m["content"] for m in to_openai_messages(rebuilt.context.items, None) if m["role"] == "user"] == texts
+
+        resumed = await resume_and_drive(_durable_loop(tmp_path, reopened)[0], reopened, production.run_id)
+        assert resumed is not None and resumed.status is RunStatus.COMPLETED  # 终态续跑幂等空转
+        assert to_openai_messages(resumed.context.items, None) == production_messages  # 续跑不改写转录
+        assert await reopened.replay(production.run_id, 0) == rows  # 也不新增事实行
+    finally:
+        await reopened.close()
 
 
 async def test_terminal_controller_rejects_late_command(tmp_path: Path) -> None:
