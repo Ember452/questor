@@ -95,6 +95,26 @@ class StorePort(Protocol):
         ...
 
     # ---- P9/ADR-0047：跨进程 exactly-once 的投递账本 + 单机多进程 run 租约（纯增量）----
+    async def create_obligation(
+        self,
+        delivery_id: str,
+        obligation_id: str,
+        platform: str,
+        *,
+        session_id: str | None = None,
+        run_id: str | None = None,
+        ref_kind: str | None = None,
+        channel_ref: str | None = None,
+        content_sha: str | None = None,
+        now: float | None = None,
+    ) -> bool:
+        """创建内容寻址投递义务（幂等 by delivery_id）；未实装 platform 置 undeliverable。"""
+        ...
+
+    async def delivery_row(self, delivery_id: str) -> JsonObject | None:
+        """完整交付行；无则 None。"""
+        ...
+
     async def claim_delivery(self, delivery_id: str, ttl_seconds: float = 30.0) -> bool:
         """claim-then-deliver：拿到投递所有权返 True（首次 claim，或前次 claim 已过 TTL 的崩溃重取）。
 

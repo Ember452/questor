@@ -37,10 +37,13 @@ from questor.contracts.submissions import (
 from questor.kernel.command_window import MAX_WINDOW_ROWS, WINDOW_MIN_ROWS, global_trim_plan, trim_plan
 
 #: 本仓 store DDL 的版本；读到更高版本即 fail-closed（不猜测半升级表形）。
-STORE_SCHEMA_VERSION = 3
+STORE_SCHEMA_VERSION = 4
 
 #: 一轮至多一个终态事件（C13）；某 run 若已落其一，则不再视为"可续跑的未完成 run"。
 _TERMINAL_TYPES = ("run_completed", "run_cancelled", "run_failed")
+
+#: B11：v3 实装的四平台；其余为开放词表但义务行置 undeliverable（sweep 不投）。
+_DELIVERABLE_PLATFORMS: frozenset[str] = frozenset({"desktop", "http", "openai", "cli"})
 
 # 单一 schema authority、幂等 DDL（IF NOT EXISTS）。
 # event_log：per-run 逻辑 seq 复合主键保证不重，全局 gseq 单调物理序供跨 run watermark。
@@ -86,7 +89,20 @@ CREATE TABLE IF NOT EXISTS deliveries (
     delivery_id  TEXT    PRIMARY KEY,
     state        TEXT    NOT NULL,
     claimed_at   REAL    NOT NULL,
-    ttl_seconds  REAL    NOT NULL
+    ttl_seconds  REAL    NOT NULL,
+    obligation_id TEXT,
+    run_id        TEXT,
+    session_id    TEXT,
+    ref_kind      TEXT,
+    platform      TEXT,
+    channel_ref   TEXT,
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    owner_pid     INTEGER,
+    owner_start   REAL,
+    recovered     INTEGER NOT NULL DEFAULT 0,
+    last_error_class TEXT,
+    not_before    REAL,
+    last_content_sha TEXT
 );
 CREATE TABLE IF NOT EXISTS run_leases (
     run_id       TEXT    PRIMARY KEY,
@@ -213,6 +229,23 @@ class SQLiteStore(StorePort):
         await self._ensure_column("event_log", "session_id", "TEXT")
         await self._ensure_column("event_log", "scope", "TEXT NOT NULL DEFAULT 'run'")
         await self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_session ON event_log (session_id, gseq)")
+        # B11：交付义务扩列（旧行保默认值；claim_delivery 的 legacy 语义不变）。
+        for column, ddl in (
+            ("obligation_id", "TEXT"),
+            ("run_id", "TEXT"),
+            ("session_id", "TEXT"),
+            ("ref_kind", "TEXT"),
+            ("platform", "TEXT"),
+            ("channel_ref", "TEXT"),
+            ("attempts", "INTEGER NOT NULL DEFAULT 0"),
+            ("owner_pid", "INTEGER"),
+            ("owner_start", "REAL"),
+            ("recovered", "INTEGER NOT NULL DEFAULT 0"),
+            ("last_error_class", "TEXT"),
+            ("not_before", "REAL"),
+            ("last_content_sha", "TEXT"),
+        ):
+            await self._ensure_column("deliveries", column, ddl)
 
     async def close(self) -> None:
         if self._db is not None:
@@ -378,6 +411,74 @@ class SQLiteStore(StorePort):
                 _TERMINAL_TYPES,
             )
             return tuple(r[0] for r in await cur.fetchall())
+
+    # ---- B11：交付义务账本（content-addressed obligation；legacy claim_delivery 语义保留）----
+    async def create_obligation(
+        self,
+        delivery_id: str,
+        obligation_id: str,
+        platform: str,
+        *,
+        session_id: str | None = None,
+        run_id: str | None = None,
+        ref_kind: str | None = None,
+        channel_ref: str | None = None,
+        content_sha: str | None = None,
+        now: float | None = None,
+    ) -> bool:
+        """创建一条投递义务（幂等 by delivery_id）；未实装 platform 置 ``undeliverable``。"""
+        state = "pending" if platform in _DELIVERABLE_PLATFORMS else "undeliverable"
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("SELECT obligation_id FROM deliveries WHERE delivery_id = ?", (delivery_id,))
+                row = await cur.fetchone()
+                if row is not None:
+                    await db.commit()
+                    return row[0] == obligation_id
+                await db.execute(
+                    "INSERT INTO deliveries (delivery_id, state, claimed_at, ttl_seconds, obligation_id, run_id, session_id, ref_kind, platform, channel_ref, attempts, recovered, last_content_sha) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,0,0,?)",
+                    (delivery_id, state, now or time.time(), 0.0, obligation_id, run_id, session_id, ref_kind, platform, channel_ref, content_sha),
+                )
+                await db.commit()
+                return True
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    async def delivery_row(self, delivery_id: str) -> JsonObject | None:
+        """完整交付行（状态机/测试用）；无则 None。"""
+        async with self._lock:
+            cur = await self._dbp().execute(
+                "SELECT delivery_id, state, claimed_at, ttl_seconds, obligation_id, run_id, session_id, ref_kind, platform, "
+                "channel_ref, attempts, owner_pid, owner_start, recovered, last_error_class, not_before, last_content_sha "
+                "FROM deliveries WHERE delivery_id = ?",
+                (delivery_id,),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                return None
+            return {
+                "delivery_id": row[0],
+                "state": row[1],
+                "claimed_at": row[2],
+                "ttl_seconds": row[3],
+                "obligation_id": row[4],
+                "run_id": row[5],
+                "session_id": row[6],
+                "ref_kind": row[7],
+                "platform": row[8],
+                "channel_ref": row[9],
+                "attempts": row[10],
+                "owner_pid": row[11],
+                "owner_start": row[12],
+                "recovered": bool(row[13]),
+                "last_error_class": row[14],
+                "not_before": row[15],
+                "last_content_sha": row[16],
+            }
 
     async def claim_delivery(self, delivery_id: str, ttl_seconds: float = 30.0) -> bool:
         """claim-then-deliver（ADR-0047）：原子取投递所有权。``BEGIN IMMEDIATE`` 跨进程串行化。
