@@ -105,14 +105,15 @@ class EventServer:
         """请求优雅关闭（仅置信号，不硬杀）；serve 看门狗会拾起并让 uvicorn 退出。"""
         self.shutdown_event.set()
 
-    def _loop(self, cancel: asyncio.Event, surface: RunToolSurface, run_id: str = "") -> DefaultTurnLoop:
+    def _loop(self, cancel: asyncio.Event, surface: RunToolSurface, run_id: str = "", session_id: str = "") -> DefaultTurnLoop:
         """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。
 
         注入 orchestrator 使本服务驱的 run 可调 `delegate` 起子 run（P8）；不调则无副作用。
-        策略按 run 经 surface 的 PolicyRegistry 解析（P9）：活 run 端口不变、换 registry 只影响新 run。"""
-        return self.surface._loop(self.bus, cancel, surface, subagent_spawner=self.orchestrator, run_id=run_id)
+        策略按 run 经 surface 的 PolicyRegistry 解析（P9）：活 run 端口不变、换 registry 只影响新 run。
+        B6：本入口注册同一 TurnSettler（serve/serve-openai/sidecar 共用）。"""
+        return self.surface._loop(self.bus, cancel, surface, subagent_spawner=self.orchestrator, run_id=run_id, session_id=session_id)
 
-    async def _run_with_mcp(self, controller: RunController, run_id: str, lease_holder: str | None = None) -> None:
+    async def _run_with_mcp(self, controller: RunController, run_id: str, lease_holder: str | None = None, session_id: str = "") -> None:
         """发现 MCP → 冻结工具面 → 驱动到终态 → per-run teardown。四步**必须同任务**。
 
         MCP stdio 会话的 anyio cancel scope 在哪个 task 进入就必须在那个 task 退出；若把 discover 放在
@@ -129,7 +130,7 @@ class EventServer:
             # 长 run 必须周期续租：否则超 TTL 后过期行可被抢→双驱破 C2 单写者。
             if lease_holder is not None:
                 renew_task = asyncio.create_task(self._renew_lease_loop(run_id, lease_holder))
-            await self._loop(asyncio.Event(), tool_surface, run_id=run_id).drive_controller(controller)
+            await self._loop(asyncio.Event(), tool_surface, run_id=run_id, session_id=session_id).drive_controller(controller)
         finally:
             if renew_task is not None:
                 renew_task.cancel()
@@ -184,7 +185,7 @@ class EventServer:
             )
         msg = Message(id=new_id("msg"), role=Role.USER, content=(ContentBlock(type="text", text=text),), seq=0)
         await self.registry.submit(run_id, SubmitMessage(run_id=run_id, content=msg), source="http", idempotency_key=f"submit:{run_id}")
-        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))
+        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder, session_id=sid))
         task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）
         self.registry.set_task(run_id, task)
         return run_id
@@ -261,9 +262,10 @@ class EventServer:
         holder = f"http-resume:{new_id('drv')}"
         if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
             raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
-        controller = RunController(run, queue=self.store, session_id=(await self.store.run_session(run_id)) or f"sess:{run_id}")
+        sid = (await self.store.run_session(run_id)) or f"sess:{run_id}"
+        controller = RunController(run, queue=self.store, session_id=sid)
         self.registry.register(controller)
-        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约
+        task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder, session_id=sid))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约
         task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）
         self.registry.set_task(run_id, task)
         return run_id

@@ -42,6 +42,7 @@ from questor.kernel.permissions import DefaultPermissionEngine
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.kernel.seed import SeedRef, build_seed_context, coerce_seed_refs
+from questor.kernel.settle import TurnSettler
 from questor.memory.distill import flush_run_to_daily
 from questor.observability.projection import log_envelope
 from questor.policy.null_policy import NullPolicy
@@ -184,12 +185,14 @@ class CliSurface:
         """能力名册合成版本：工具注册表 + 插件宿主 generation 之和（注入 loop 探测热插拔→发 tools_changed）。"""
         return self.registry.generation + self.plugin_host.generation
 
-    def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface, subagent_spawner: SubagentSpawnerPort | None = None, *, run_id: str = "") -> DefaultTurnLoop:
+    def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface, subagent_spawner: SubagentSpawnerPort | None = None, *, run_id: str = "", session_id: str = "") -> DefaultTurnLoop:
         """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。
 
         ``subagent_spawner`` 由组合根注入（P8 多 agent）；未注入时单 run 行为逐字不变。
-        策略经 PolicyRegistry 按 run 解析（P9）：活 run 用其已注入端口、换 registry 只影响新 run。"""
+        策略经 PolicyRegistry 按 run 解析（P9）：活 run 用其已注入端口、换 registry 只影响新 run。
+        B6：本入口注册同一 TurnSettler（CLI 的四驱动点共用），记忆写回只经 WriteMemory。"""
         policy, _ref = self._resolve_for_run(run_id)
+        settler = TurnSettler(bus, self.store, self.memory_store, session_id or f"sess:{run_id}")
         return DefaultTurnLoop(
             provider=self.provider,
             policy=policy,
@@ -210,6 +213,7 @@ class CliSurface:
             process_runner=self.process_runner,
             artifact_store=self.artifact_store,
             sandbox=self.sandbox,
+            settle=settler.settle,
         )
 
     async def _discover_mcp(self, run_id: str) -> tuple[list[Tool], Teardown]:
@@ -259,7 +263,7 @@ class CliSurface:
         seed_message = await self._seed_message(run, sid, seed_requested, seed_refs)
         mcp_tools, mcp_teardown = await self._discover_mcp(run.run_id)
         surface = self._freeze_surface(run.run_id, mcp_tools)
-        loop = self._loop(bus, cancel, surface, run_id=run.run_id)
+        loop = self._loop(bus, cancel, surface, run_id=run.run_id, session_id=sid)
         controller = RunController(run, queue=self.store, session_id=sid)
         registry = RunRegistry()
         registry.register(controller)
@@ -285,7 +289,6 @@ class CliSurface:
                 idempotency_key=f"submit:{run.run_id}",
             )
             final = await loop.drive_controller(controller)
-            await self._flush_run_to_daily(final)
         finally:
             # 两个消费者都会自然收到终态帧并退出（queue 里已有 terminal）；超时才强收。
             _, still_pending = await asyncio.wait({printer, approver}, timeout=2.0)
@@ -367,8 +370,8 @@ class CliSurface:
         bus.add_observer(log_envelope)  # bus 级唯一投影订阅（ADR-0033）
         cancel = asyncio.Event()
         tool_surface = self.registry.freeze_for_run(run.run_id)
-        loop = self._loop(bus, cancel, tool_surface, run_id=run.run_id)
         sid = await self.store.run_session(run_id) if callable(getattr(self.store, "run_session", None)) else None
+        loop = self._loop(bus, cancel, tool_surface, run_id=run.run_id, session_id=sid or f"sess:{run_id}")
         controller = RunController(run, queue=self.store, session_id=sid or f"sess:{run_id}")
         interactive = sys_stdin_tty()
         printer_queue = bus.add_subscriber(run.run_id)
@@ -388,7 +391,6 @@ class CliSurface:
             renew_task = asyncio.create_task(self._renew_lease_loop(run_id, holder))
             try:
                 final = await loop.drive_controller(controller)
-                await self._flush_run_to_daily(final)
             finally:
                 renew_task.cancel()
         finally:
