@@ -220,6 +220,30 @@ class StorePort(Protocol):
         """最近 N 条 user/assistant 事实（新→旧），供 SeedContext 取原文。"""
         ...
 
+    # ---- B2：有界命令窗口（canonical digest；只记录已接受命令）----
+    async def record_command(
+        self,
+        run_id: str,
+        seq: int,
+        command_type: str,
+        payload: str,
+        *,
+        source: str,
+        idem_key: str,
+        digest: str,
+        accepted: bool = True,
+        session_id: str | None = None,
+        ts: str | None = None,
+    ) -> JsonObject:
+        """同键同 digest 幂等，同键异 digest 拒；返回 {cseq, duplicate}。"""
+        ...
+
+    async def command_window_rows(
+        self, *, run_id: str | None = None, session_id: str | None = None, limit: int | None = None
+    ) -> list[JsonObject]:
+        """命令窗口行（cseq 升序；测试/诊断用）。"""
+        ...
+
 
 @runtime_checkable
 class Clock(Protocol):

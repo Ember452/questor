@@ -28,6 +28,7 @@ from questor.contracts.ports import StorePort
 from questor.contracts.submissions import (
     MAX_QUEUE_ITEMS,
     SUBMISSIONS_DDL,
+    CommandDigestConflict,
     SubmissionConflictError,
     SubmissionQueueFullError,
     canonical_json,
@@ -111,6 +112,21 @@ CREATE TABLE IF NOT EXISTS sessions (
     next_seq             INTEGER NOT NULL DEFAULT 1,
     metadata_json        TEXT    NOT NULL DEFAULT '{}'
 );
+CREATE TABLE IF NOT EXISTS command_window (
+    cseq        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    run_id      TEXT    NOT NULL,
+    session_id  TEXT,
+    seq         INTEGER NOT NULL,
+    type        TEXT    NOT NULL,
+    payload     TEXT    NOT NULL,
+    source      TEXT    NOT NULL,
+    idem_key    TEXT    NOT NULL,
+    digest      TEXT    NOT NULL,
+    accepted    INTEGER NOT NULL,
+    ts          TEXT    NOT NULL,
+    UNIQUE (run_id, idem_key)
+);
+CREATE INDEX IF NOT EXISTS idx_cw_run ON command_window (run_id, cseq);
 """
 
 
@@ -847,6 +863,94 @@ class SQLiteStore(StorePort):
             rows = await cur.fetchall()
             return [
                 {"gseq": row[0], "run_id": row[1], "seq": row[2], "type": row[3], "data": json.loads(row[4]), "ts": row[5]}
+                for row in rows
+            ]
+
+    # ---- B2：有界命令窗口（canonical digest；被拒命令不入窗）----
+    async def record_command(
+        self,
+        run_id: str,
+        seq: int,
+        command_type: str,
+        payload: str,
+        *,
+        source: str,
+        idem_key: str,
+        digest: str,
+        accepted: bool = True,
+        session_id: str | None = None,
+        ts: str | None = None,
+    ) -> JsonObject:
+        """记录一条已接受命令：同键同 digest 幂等；同键异 digest 拒（``CommandDigestConflict``）。"""
+        async with self._lock:
+            db = self._dbp()
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute(
+                    "SELECT digest, cseq FROM command_window WHERE run_id = ? AND idem_key = ?", (run_id, idem_key)
+                )
+                row = await cur.fetchone()
+                if row is not None:
+                    if row[0] != digest:
+                        raise CommandDigestConflict(
+                            f"command window key {idem_key!r} on run {run_id!r} is already bound to a different digest"
+                        )
+                    await db.commit()
+                    return {"cseq": row[1], "duplicate": True}
+                if session_id is None:
+                    if run_id.startswith("sess:"):
+                        session_id = run_id[5:]
+                    else:
+                        cur = await db.execute("SELECT session_id FROM runs WHERE run_id = ?", (run_id,))
+                        bound = await cur.fetchone()
+                        session_id = bound[0] if bound is not None else None
+                cur = await db.execute(
+                    "INSERT INTO command_window (run_id, session_id, seq, type, payload, source, idem_key, digest, accepted, ts) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (run_id, session_id, seq, command_type, payload, source, idem_key, digest, 1 if accepted else 0, ts or utc_now().isoformat()),
+                )
+                await db.commit()
+                return {"cseq": cur.lastrowid, "duplicate": False}
+            except BaseException:
+                await db.execute("ROLLBACK")
+                raise
+
+    async def command_window_rows(
+        self, *, run_id: str | None = None, session_id: str | None = None, limit: int | None = None
+    ) -> list[JsonObject]:
+        """命令窗口行（测试/诊断/裁剪用；按 cseq 升序）。"""
+        async with self._lock:
+            sql = "SELECT cseq, run_id, session_id, seq, type, payload, source, idem_key, digest, accepted, ts FROM command_window"
+            where: list[str] = []
+            params: list[object] = []
+            if run_id is not None:
+                where.append("run_id = ?")
+                params.append(run_id)
+            if session_id is not None:
+                where.append("session_id = ?")
+                params.append(session_id)
+            if where:
+                sql += " WHERE " + " AND ".join(where)
+            sql += " ORDER BY cseq"
+            if limit is not None:
+                sql += " LIMIT ?"
+                params.append(limit)
+            cur = await self._dbp().execute(sql, tuple(params))
+            rows = await cur.fetchall()
+            return [
+                {
+                    "cseq": row[0],
+                    "run_id": row[1],
+                    "session_id": row[2],
+                    "seq": row[3],
+                    "type": row[4],
+                    "payload": row[5],
+                    "source": row[6],
+                    "idem_key": row[7],
+                    "digest": row[8],
+                    "accepted": bool(row[9]),
+                    "ts": row[10],
+                }
                 for row in rows
             ]
 

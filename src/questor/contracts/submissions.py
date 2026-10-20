@@ -68,6 +68,10 @@ class SubmissionQueueFullError(RuntimeError):
     """单会话在途提交达到 ``MAX_QUEUE_ITEMS``：明确背压，不静默丢弃。"""
 
 
+class CommandDigestConflict(ValueError):
+    """命令窗口里同一 ``(run_id, idem_key)`` 指向了不同 digest：拒绝，不覆盖。"""
+
+
 def _json_default(value: object) -> object:
     """canonical JSON 的叶编码：datetime/Enum/bytes 稳定表示；其余退化为字符串。"""
     if isinstance(value, datetime):
@@ -166,6 +170,7 @@ __all__ = [
     "SUBMISSION_STATES",
     "SubmissionConflictError",
     "SubmissionQueueFullError",
+    "CommandDigestConflict",
     "canonical_json",
     "command_digest",
     "command_identity_payload",
