@@ -323,6 +323,21 @@ class StorePort(Protocol):
         """会话行（含双游标/metadata）；无则 None。"""
         ...
 
+    # ---- B13（可退/可看可改）：会话列表与元数据投影（纯增量，复用既有列）----
+    async def list_sessions(self, *, include_archived: bool = False, limit: int | None = None) -> list[JsonObject]:
+        """会话列表（置顶优先、更新时间倒序）；只读投影，默认不列归档项。"""
+        ...
+
+    async def update_session_row(
+        self, session_id: str, *, title: str | None = None, archived: bool | None = None, pinned: bool | None = None
+    ) -> JsonObject | None:
+        """写会话行的既有列（title/archived/pinned）并返回新行。
+
+        本方法是**投影写**：对应事实先由 `UpdateSession`→reduce 以 `session_renamed/archived/pinned`
+        落在 `sess:<id>` 流上（事实唯一权威，C13）；行失败不影响事件，可由事件重刷。
+        """
+        ...
+
     async def advance_last_consolidated(self, session_id: str, seq: int) -> int:
         """巩固游标只前进；返回受影响行数。"""
         ...

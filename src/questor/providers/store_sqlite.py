@@ -1224,6 +1224,68 @@ class SQLiteStore(StorePort):
                 "metadata": json.loads(row[15]) if row[15] else {},
             }
 
+    async def update_session_row(
+        self,
+        session_id: str,
+        *,
+        title: str | None = None,
+        archived: bool | None = None,
+        pinned: bool | None = None,
+    ) -> JsonObject | None:
+        """写会话行的既有列（title/archived/pinned + updated_at）；**不新增列、不新增表**。
+
+        返回更新后的行（无此行时 None）。这里是**投影**：事实是 `sess:<id>` 流上的
+        `session_renamed/archived/pinned`，行只是它们的当前值；失败时事件仍在，行可由事件重刷。
+        """
+        sets: list[str] = []
+        params: list[object] = []
+        for column, value in (("title", title), ("archived", archived), ("pinned", pinned)):
+            if value is not None:
+                sets.append(f"{column} = ?")
+                params.append(int(value) if isinstance(value, bool) else value)
+        if not sets:
+            return await self.session_row(session_id)
+        sets.append("updated_at = ?")
+        params.append(utc_now().isoformat())
+        params.append(session_id)
+        async with self._lock:
+            db = self._dbp()
+            await db.execute(f"UPDATE sessions SET {', '.join(sets)} WHERE session_id = ?", tuple(params))
+            await db.commit()
+        return await self.session_row(session_id)
+
+    async def list_sessions(self, *, include_archived: bool = False, limit: int | None = None) -> list[JsonObject]:
+        """会话列表（置顶优先、再按更新时间倒序）；默认不列归档项。
+
+        只读投影，不取号、不写任何东西：面板要的“当前值”来自行，“为什么变了”靠事件流回放。
+        """
+        sql = "SELECT session_id, title, kind, model, created_at, updated_at, archived, pinned, head_change_version, last_consolidated FROM sessions"
+        if not include_archived:
+            sql += " WHERE archived = 0"
+        sql += " ORDER BY pinned DESC, updated_at DESC"
+        params: tuple[object, ...] = ()
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = (max(0, int(limit)),)
+        async with self._lock:
+            cur = await self._dbp().execute(sql, params)
+            rows = await cur.fetchall()
+        return [
+            {
+                "session_id": row[0],
+                "title": row[1],
+                "kind": row[2],
+                "model": row[3],
+                "created_at": row[4],
+                "updated_at": row[5],
+                "archived": bool(row[6]),
+                "pinned": bool(row[7]),
+                "head_change_version": row[8],
+                "last_consolidated": row[9],
+            }
+            for row in rows
+        ]
+
     async def advance_last_consolidated(self, session_id: str, seq: int) -> int:
         """巩固游标只前进：``last_consolidated = max(old, seq)``；返回受影响行数。"""
         async with self._lock:

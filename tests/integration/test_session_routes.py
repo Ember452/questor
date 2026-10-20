@@ -112,3 +112,54 @@ def test_session_commands_stay_pure_data() -> None:
     fork = ForkSession(run_id="a", source_session_id="sess", from_seq=0)
     assert rewind.type == "rewind_run" and fork.type == "fork_session"
     assert set(rewind.__dataclass_fields__) == {"run_id", "base_run_id", "base_to_seq", "reason", "type"}
+
+
+async def test_session_list_and_patch_round_trip(tmp_path: Path) -> None:
+    """B13 验收：会话列表可用；PATCH 后行与事件一致，**同值重试不产生第二条事实**。"""
+    store = await SQLiteStore(str(tmp_path / "s.db")).connect()
+    client = await _client(store, tmp_path)
+    try:
+        run = await client.post("/run", json={"text": "triage", "session_id": "sess-list"})
+        assert run.status_code == 200
+        await _wait_types(store, run.json()["run_id"], {"run_completed"})
+
+        listed = (await client.get("/sessions")).json()["items"]
+        assert any(row["session_id"] == "sess-list" for row in listed)
+
+        patched = await client.patch("/sessions/sess-list", json={"title": "Triage 12-04", "pinned": True})
+        assert patched.status_code == 200, patched.text
+        body = patched.json()
+        assert body["changed"] == ["session_renamed", "session_pinned"]
+        assert body["session"]["title"] == "Triage 12-04" and body["session"]["pinned"] is True
+        rows = await store.replay(session_stream_id("sess-list"), 0)
+        assert [r["type"] for r in rows] == ["session_renamed", "session_pinned"]
+
+        head_before = len(rows)
+        retry = await client.patch("/sessions/sess-list", json={"title": "Triage 12-04", "pinned": True})
+        assert retry.json()["changed"] == []  # 同值 PATCH 是 no-op，不是新事实
+        assert len(await store.replay(session_stream_id("sess-list"), 0)) == head_before
+
+        archived = await client.patch("/sessions/sess-list", json={"archived": True})
+        assert archived.json()["changed"] == ["session_archived"]
+        assert all(row["session_id"] != "sess-list" for row in (await client.get("/sessions")).json()["items"])
+        shown = (await client.get("/sessions", params={"include_archived": "true"})).json()["items"]
+        assert any(row["session_id"] == "sess-list" for row in shown)
+    finally:
+        await client.aclose()
+        await store.close()
+
+
+async def test_session_patch_rejects_stray_fields_unknown_session_and_bad_values(tmp_path: Path) -> None:
+    store = await SQLiteStore(str(tmp_path / "s.db")).connect()
+    client = await _client(store, tmp_path)
+    try:
+        assert (await client.patch("/sessions/nope", json={"title": "x"})).status_code == 404
+        assert (await client.patch("/sessions/sess-bad", json={"model": "gpt"})).status_code == 400
+        assert (await client.patch("/sessions/sess-bad", json={"archived": "yes"})).status_code == 400
+        assert (await client.patch("/sessions/sess-bad", json={})).status_code == 400
+        assert (await client.get("/sessions", params={"limit": 0})).status_code == 400
+        # 拒绝过的请求不能留下任何会话事实（包括 404 路径）
+        assert await store.replay(session_stream_id("sess-bad"), 0) == []
+    finally:
+        await client.aclose()
+        await store.close()

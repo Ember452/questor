@@ -168,3 +168,46 @@ async def test_session_update_and_fork_helpers_write_their_streams(tmp_path):
         assert "session_forked" not in [r["type"] for r in rows_a]  # 源流不被写入
     finally:
         await store.close()
+
+
+async def test_session_patch_compares_against_the_current_row(tmp_path):
+    """同值 PATCH 不是第二条事实：会话流每次都从头取号，只能靠现值比对挡住重试/双击/重放。"""
+    store = await SQLiteStore(str(tmp_path / "s.db")).connect()
+    try:
+        bus = InProcessEventBus(store)
+        sid = await store.create_session()
+        _run, first = await apply_session_update(store, bus, session_id=sid, title="launch review")
+        assert [e.type for e in first] == ["session_renamed"]
+        assert (await store.session_row(sid))["title"] == "launch review"  # 投影写真的落了行
+        head_after = await store.sequence_head(session_stream_id(sid))
+
+        _run2, again = await apply_session_update(store, bus, session_id=sid, title="launch review")
+        assert again == ()  # 完全同值：不发事件
+        assert await store.sequence_head(session_stream_id(sid)) == head_after  # 也**不占 seq**
+        assert (await store.session_row(sid))["title"] == "launch review"
+
+        _run3, third = await apply_session_update(store, bus, session_id=sid, title="renamed", pinned=True)
+        assert [e.type for e in third] == ["session_renamed", "session_pinned"]
+        row = await store.session_row(sid)
+        assert row["title"] == "renamed" and row["pinned"] is True
+    finally:
+        await store.close()
+
+
+async def test_session_list_orders_pinned_first_and_hides_archived(tmp_path):
+    """会话列表：置顶优先、更新时间倒序，归档项默认不列（不新增列，复用既有位）。"""
+    store = await SQLiteStore(str(tmp_path / "s.db")).connect()
+    try:
+        bus = InProcessEventBus(store)
+        plain = await store.create_session()
+        other = await store.create_session()
+        _r, _e = await apply_session_update(store, bus, session_id=other, title="pinned one", pinned=True)
+        _r2, _e2 = await apply_session_update(store, bus, session_id=plain, title="archived one", archived=True)
+        ids = [row["session_id"] for row in await store.list_sessions()]
+        assert plain not in ids  # 归档默认不列
+        assert ids[0] == other  # 置顶排最前
+        shown = await store.list_sessions(include_archived=True)
+        assert {row["session_id"] for row in shown} >= {plain, other}
+        assert next(row for row in shown if row["session_id"] == plain)["archived"] is True
+    finally:
+        await store.close()

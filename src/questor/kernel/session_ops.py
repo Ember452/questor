@@ -69,21 +69,37 @@ async def apply_session_update(
     pinned: bool | None = None,
     idempotency_key: str | None = None,
 ) -> tuple[Run, tuple[Envelope, ...]]:
-    """改名 / 归档 / 置顶：一次命令只对**给了的** facet 各发一条事件。
+    """改名 / 归档 / 置顶：**先与行的现值比对**，只对本次真变化者发事件并发投影写。
 
-    幂等键默认由 facet 值决定——同一个值重投得到同一个键（会话元数据的"重复 PATCH"必须无副作用）。
+    为什么比对而不是只靠幂等键：会话流没有活 controller，每次 `apply_on_stream` 都从 store 头
+    重新取号，所以"同一个值再 PATCH 一次"在事件层面会被当成新事实。重试/双击/前端重放都不该
+    把"改名为 X"记成两次——**只有真的变了才是事实**。行写放在事件之后：事实是唯一权威（C13），
+    投影写失败时事件仍在，行可由事件重刷。
     """
-    key = idempotency_key or f"session:{session_id}:t={title or ''}:a={int(bool(archived))}:p={int(bool(pinned))}"
+    current: dict[str, object] = {}
+    if store is not None and callable(getattr(store, "session_row", None)):
+        row = await store.session_row(session_id)  # type: ignore[union-attr]
+        current = dict(row or {})
+    wanted = {"title": title, "archived": archived, "pinned": pinned}
+    changed = {name: value for name, value in wanted.items() if value is not None and current.get(name) != value}
+    stream = session_stream_id(session_id)
+    if not changed:
+        head = 0
+        if store is not None and callable(getattr(store, "sequence_head", None)):
+            head = int(await store.sequence_head(stream))  # type: ignore[union-attr]
+        return Run(run_id=stream, seq=head), ()
+    key = idempotency_key or f"session:{session_id}:" + ":".join(f"{name}={changed[name]}" for name in sorted(changed))
     command = UpdateSession(
-        run_id=session_stream_id(session_id),
+        run_id=stream,
         session_id=session_id,
-        title=title,
-        archived=archived,
-        pinned=pinned,
+        title=changed.get("title"),
+        archived=changed.get("archived"),
+        pinned=changed.get("pinned"),
     )
-    return await apply_on_stream(
-        store, bus, stream_run_id=session_stream_id(session_id), command=command, source="session", idempotency_key=key
-    )
+    new_run, events = await apply_on_stream(store, bus, stream_run_id=stream, command=command, source="session", idempotency_key=key)
+    if store is not None and callable(getattr(store, "update_session_row", None)):
+        await store.update_session_row(session_id, **changed)  # type: ignore[union-attr]
+    return new_run, events
 
 
 async def apply_fork(

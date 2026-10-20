@@ -33,7 +33,7 @@ from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.kernel.seed import SeedRef, SeedRejected, build_seed_context, coerce_seed_refs
-from questor.kernel.session_ops import apply_fork, make_rewind, prefix_seed_refs, session_stream_id
+from questor.kernel.session_ops import apply_fork, apply_session_update, make_rewind, prefix_seed_refs, session_stream_id
 from questor.observability.projection import log_envelope
 from questor.state.domain_state import Run
 from questor.state.transition import apply
@@ -237,6 +237,33 @@ class EventServer:
     async def session_head(self, session_id: str) -> int:
         """会话作用域流的当前头（分叉缺省位点）；只读，不取号。"""
         return int(await self.store.sequence_head(session_stream_id(session_id)))
+
+    async def list_sessions(self, *, include_archived: bool = False, limit: int | None = None) -> list[dict]:
+        """会话列表（B13）：只读投影，不取号、不写任何东西。"""
+        return await self.store.list_sessions(include_archived=include_archived, limit=limit)
+
+    async def update_session(
+        self,
+        session_id: str,
+        *,
+        title: str | None = None,
+        archived: bool | None = None,
+        pinned: bool | None = None,
+    ) -> dict:
+        """改名/归档/置顶：先落 durable 事实，再写行投影（顺序不可逆，C13）。
+
+        未知会话 404：不代用户创造会话（`ensure_session` 是另一件事，那是绑定 run 时做的）。
+        """
+        if await self.store.session_row(session_id) is None:
+            raise HTTPException(status_code=404, detail=f"unknown session {session_id}")
+        try:
+            _run, events = await apply_session_update(
+                self.store, self.bus, session_id=session_id, title=title, archived=archived, pinned=pinned
+            )
+        except ValueError as exc:  # 形状非法（空标题/超长/无 facet）→ 400，不拼一个猜的值
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        row = await self.store.session_row(session_id)
+        return {"session_id": session_id, "changed": [env.type for env in events], "session": row}
 
     async def fork_session(self, source_session_id: str, *, from_seq: int, reason: str | None = None) -> str:
         """B13：分叉一支新会话；`session_forked` 只落在新流 `sess:<new>` 上，源流不改写。
@@ -463,6 +490,34 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
             raise HTTPException(status_code=400, detail="from_seq must be >= 0")
         new_session_id = await server.fork_session(session_id, from_seq=from_seq, reason=payload.get("reason"))
         return {"session_id": new_session_id, "source_session_id": session_id, "from_seq": from_seq}
+
+    # ---- B13（可看可改）：会话列表与元数据。只读列表 + 先事实后投影的 PATCH ----
+    @app.get("/sessions", dependencies=[Depends(require_token)])
+    async def sessions(include_archived: bool = False, limit: int | None = None) -> dict:
+        """会话列表（置顶优先、更新时间倒序）；默认不列归档项。"""
+        if limit is not None and (limit < 1 or limit > 500):
+            raise HTTPException(status_code=400, detail="limit must be between 1 and 500")
+        return {"items": await server.list_sessions(include_archived=include_archived, limit=limit)}
+
+    @app.patch("/sessions/{session_id}", dependencies=[Depends(require_token)])
+    async def patch_session(session_id: str, payload: dict) -> JSONResponse:
+        """改名 / 归档 / 置顶。只认这三个 facet，其它键 400（不接受“顺手改点什么”）。"""
+        unknown = set(payload) - {"title", "archived", "pinned"}
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"unsupported session fields: {sorted(unknown)}")
+        if not ("title" in payload or "archived" in payload or "pinned" in payload):
+            raise HTTPException(status_code=400, detail="at least one of title/archived/pinned is required")
+        for flag in ("archived", "pinned"):
+            if flag in payload and not isinstance(payload[flag], bool):
+                raise HTTPException(status_code=400, detail=f"{flag} must be a boolean")
+        return JSONResponse(
+            await server.update_session(
+                session_id,
+                title=payload.get("title"),
+                archived=payload.get("archived"),
+                pinned=payload.get("pinned"),
+            )
+        )
 
     @app.get("/sessions/{session_id}/submissions", dependencies=[Depends(require_token)])
     async def session_submissions(session_id: str, after_version: int = 0) -> dict:
