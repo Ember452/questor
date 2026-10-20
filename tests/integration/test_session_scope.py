@@ -5,11 +5,13 @@ from __future__ import annotations
 import aiosqlite
 import pytest
 
+from questor.contracts.events import Envelope
 from questor.contracts.state_schema import RunStatus
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.seed import SeedRef, SeedRejected, build_seed_context
 from questor.providers.fake import EchoProvider
 from questor.providers.store_sqlite import SQLiteStore
+from questor.state.domain_state import DomainState, Run
 from questor.surfaces.cli import CliSurface
 from questor.surfaces.http_sse import EventServer
 
@@ -183,3 +185,14 @@ async def store_task(server: EventServer, run_id: str) -> None:
     active = server.registry._runs.get(run_id)  # noqa: SLF001 - 测试观察点
     assert active is not None and active.task is not None
     await active.task
+
+
+def test_domain_state_session_id_remains_unwired() -> None:
+    """B4：session 只做存储列；Run 不得长出 session_id，DomainState 仍无生产者（B4' 禁止）。"""
+    import dataclasses
+
+    run_fields = {field.name for field in dataclasses.fields(Run)}
+    assert "session_id" not in run_fields
+    domain_fields = {field.name for field in dataclasses.fields(DomainState)}
+    assert "session_id" in domain_fields  # 字段存在，但本 PR 不构造/不读取
+    assert {field.name for field in dataclasses.fields(Envelope)} == {"v", "seq", "run_id", "type", "ts", "turn", "data"}
