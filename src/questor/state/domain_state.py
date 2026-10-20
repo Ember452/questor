@@ -154,7 +154,13 @@ class SessionDefaults:
 
 @dataclass(frozen=True, slots=True)
 class DomainState:
-    """会话根：一个用户可见的长期对话线（§1）。"""
+    """会话根：一个用户可见的长期对话线（§1）。
+
+    .. note:: **UNWIRED（§17 第 14 条 ④）**：本类当前**零生产者、零消费者**——会话连续性实际由
+       `sessions` 表 + `command_window.session_id` + 会话作用域流 `sess:<id>` 承载（B4/B9/B13），
+       而不是这个内存对象。保留它是 B4'（聚合根上提）的形状占位；**在 B4' 之前不得接线**
+       （接上就是变相实现 B4'，违反 §14）。本行注释就是那四项待办里"标 UNWIRED 或删除"的交付。
+    """
 
     session_id: str
     runs: tuple[Run, ...] = ()
