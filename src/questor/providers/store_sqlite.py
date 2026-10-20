@@ -352,11 +352,11 @@ class SQLiteStore(StorePort):
             return (await cur.fetchone())[0]
 
     async def list_unfinished_runs(self) -> tuple[str, ...]:
-        """由 log 派生非终态 run：有事件但 event_log 中不含任一终态事件（log 权威，不旁记 status）。"""
+        """由 log 派生非终态 run：只认 ``scope='run'``（会话流 ``sess:`` 不混入 ``--list``）。"""
         async with self._lock:
             placeholders = ",".join("?" for _ in _TERMINAL_TYPES)
             cur = await self._dbp().execute(
-                f"SELECT DISTINCT run_id FROM event_log WHERE run_id NOT IN "
+                f"SELECT DISTINCT run_id FROM event_log WHERE scope = 'run' AND run_id NOT IN "
                 f"(SELECT DISTINCT run_id FROM event_log WHERE type IN ({placeholders})) ORDER BY run_id",
                 _TERMINAL_TYPES,
             )

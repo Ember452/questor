@@ -75,3 +75,13 @@ async def test_append_derives_scope_and_session_id(tmp_path) -> None:
         ]
     finally:
         await store.close()
+
+
+async def test_list_unfinished_runs_excludes_session_stream(tmp_path) -> None:
+    store = await SQLiteStore(str(tmp_path / "list.db")).connect()
+    try:
+        await store.append("run-open", ({"type": "run_started", "data": {}},))
+        await store.append("sess:s1", ({"type": "memory_written", "data": {}},))
+        assert await store.list_unfinished_runs() == ("run-open",)  # 会话流不混入 --list
+    finally:
+        await store.close()
