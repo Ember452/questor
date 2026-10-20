@@ -27,7 +27,7 @@ from questor.contracts.extension import (
     InterceptionPoint,
     ObserveChain,
 )
-from questor.contracts.memory import MemoryStorePort
+from questor.contracts.memory import MemoryStorePort, RecallPort
 from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyRef, PolicyTrust
 from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort
 from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role, RunStatus
@@ -140,6 +140,12 @@ def _settle_extension_entry(settler: TurnSettler | None) -> ExtensionEntry:
     return ExtensionEntry(descriptor, lambda: _hook)
 
 
+def memory_root_of(memory_store: MemoryStorePort | None) -> Path | None:
+    """从注入的记忆端口取真源根目录（只读属性）；拿不到就算“不可识别”，不猜。"""
+    root = getattr(memory_store, "memory_root", None)
+    return Path(root) if isinstance(root, (str, Path)) else None
+
+
 def inspect_extensions_text() -> str:
     """无 store/无日志装配的装配链文本（``--inspect-extensions`` 用）。"""
     registry = ExtensionRegistry()
@@ -172,6 +178,7 @@ class CliSurface:
         sandbox: object | None = None,
         context_assembler: ContextAssemblerPort | None = None,
         memory_index_enabled: bool = False,
+        recall: RecallPort | None = None,
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
@@ -205,6 +212,9 @@ class CliSurface:
         # `self.system` 本身**不动**：它仍是 skills 装配结果，既有逐字节 golden 契约零改动。
         self.memory_index_enabled = memory_index_enabled
         self.memory_index: MemoryIndexBlock | None = None
+        # B8：召回端口由**组合根**注入（默认 None = 不召回，既有直连构造逐字不变）。
+        # surface 不自己 new 实现、不读 embedding env：它只是把端口递给 loop。
+        self.recall = recall
 
     async def refresh_memory_index(self) -> None:
         """从记忆真源重建档1 索引段（未开启/无 store/读失败 → `None` = 本轮不注入）。
@@ -279,6 +289,9 @@ class CliSurface:
             sandbox=self.sandbox,
             stop=stop,
             memory_injection=block.event_data() if block is not None else None,
+            recall=self.recall,
+            # 只用于“这次 Read 读的是不是记忆文件”的判定（不传句柄、不代工具读写）。
+            memory_root=memory_root_of(self.memory_store),
         )
 
     async def _discover_mcp(self, run_id: str) -> tuple[list[Tool], Teardown]:

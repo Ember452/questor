@@ -20,7 +20,7 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from contextlib import ExitStack
 from dataclasses import replace
 from datetime import timedelta
@@ -61,7 +61,18 @@ from questor.contracts.extension import (
     ObserveChain,
     ObserveEntry,
 )
-from questor.contracts.memory import MemoryScope, MemoryStorePort, MemoryWrite, MemoryWriteKind
+from questor.contracts.memory import (
+    CITATION_OPEN,
+    MemoryCitation,
+    MemoryScope,
+    MemoryStorePort,
+    MemoryWrite,
+    MemoryWriteKind,
+    RecallPort,
+    consumption_kind_for,
+    parse_citation,
+    recall_skipped_by_flags,
+)
 from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
 from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort
 from questor.contracts.sandbox import Confinement, SandboxBackend, SandboxDescriptor
@@ -330,6 +341,8 @@ class DefaultTurnLoop:
         stop: ObserveChain | None = None,
         memory_injection: JsonObject | None = None,
         query_source: str = "main",
+        recall: RecallPort | None = None,
+        memory_root: Path | None = None,
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -364,6 +377,16 @@ class DefaultTurnLoop:
         self.query_source = query_source
         self._cache_ttl = cache_ttl_for(query_source)
         self._cache_plan: CachePlan | None = None
+        # B8（§6.2/§6.3）：召回只经注入的 RecallPort（kernel 不 import memory 层）；
+        # ``memory_root`` 只用来判定“这次 Read 读的是不是记忆文件”（花费打点用）。
+        self.recall = recall
+        self.memory_root = memory_root
+        # 门控③：上一轮消费到的 ``skip_recall`` 标记只对**下一次发请求**生效（一次性）。
+        self._recall_skip = False
+        self._recalled_ids: set[str] = set()
+        # B8（§6.3）：本轮从正文剥出的引用，由 `_drive_controller` 随 AppendAssistantMessage 一次携带。
+        # 存局部变量而不是改返回 arity：`_stream_turn` 的三元组已被既有测试钉住（R3 不改断言）。
+        self._turn_citations: MemoryCitation | None = None
         # P9/ADR-0046：能力名册探针（未注入则不发 tools_changed）。loop 每安全点比对、变化即发 live-only。
         self.capability_probe = capability_probe
         self._capability_gen = capability_probe() if capability_probe is not None else 0
@@ -471,7 +494,10 @@ class DefaultTurnLoop:
                         return run
                     continue
                 total_tokens += _token_total(usage)
-                run, events = await self._transition(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
+                citations, self._turn_citations = self._turn_citations, None
+                run, events = await self._transition(
+                    run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg, citations=citations)
+                )
                 controller.run = run
                 await self._emit(events)
                 if not any(env.type == EventType.MESSAGE_COMPLETED for env in events):
@@ -557,6 +583,9 @@ class DefaultTurnLoop:
                 await self._emit(events)
                 # 记忆写副作用：reduce 已受理（产 memory_written）后，由 kernel 在消费点经注入的
                 # MemoryStorePort 落库——写唯一入口仍是 Command（C4/C16），幂等键取已占的 durable seq。
+                if isinstance(command, SubmitMessage) and recall_skipped_by_flags(command.flags):  # type: ignore[arg-type]
+                    # 门控③：系统/自动轮次（提交方显式标了 skip_recall）下一轮不召回。
+                    self._recall_skip = True
                 if isinstance(command, WriteMemory) and self.memory_store is not None:
                     ack = next((e for e in events if e.type == EventType.MEMORY_WRITTEN), None)
                     if ack is not None:
@@ -685,6 +714,7 @@ class DefaultTurnLoop:
             if entry.message:
                 entry = replace(entry, message=strip_prompt_echo(entry.message, _prompt_echo_baseline(run)))
             return await self._fail_with_entry(run, turn, entry, "provider_error"), None, {}
+        message = await self._strip_citation(run, turn, message)
         return run, message, usage
 
     async def _ensure_paired_history(self, controller: RunController, run: Run, turn: int) -> Run:
@@ -734,6 +764,10 @@ class DefaultTurnLoop:
                 seq=0,
             )
             messages = (summary_msg, *messages)
+        # B8（§6.1 档2）：召回正文**绝不进 system**，只作 user-role 前缀消息进尾部易变段。
+        recall_message = await self._build_recall_message(run, turn)
+        if recall_message is not None:
+            messages = (*messages, recall_message)
         await self._announce_memory_injection(run, turn)
         request = ProviderRequest(model=self.model, messages=messages, tools=self._specs(), system=self.system)
         await self._track_cache_break(run, turn, request)
@@ -940,6 +974,7 @@ class DefaultTurnLoop:
         run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=tool_call_id, status=result.status, result=result.result, display=result.display))
         controller.run = run
         await self._emit(events)
+        await self._report_memory_read(run, name, args, result)  # B8：只有真读了记忆文件才打消费点
         await self._checkpoint(run, "post_tool")  # 工具结果已落库 → 快照收窄在途窗口（ADR-0020）
         return run
 
@@ -1107,6 +1142,87 @@ class DefaultTurnLoop:
     async def _live(self, run: Run, turn: int, etype: str, data: dict) -> None:
         # live-only delta：只转发给订阅者，永不持久化（design/01 I3）。
         await self.bus.emit(Envelope(v=1, seq=run.seq, run_id=run.run_id, type=etype, turn=turn, data=data))
+
+    async def _strip_citation(self, run: Run, turn: int, message: Message) -> Message:
+        """§6.3：从定稿正文里剥出引用，作为**事件字段**携带，永不回送 provider。
+
+        剥完后的正文才是进 context / 下一轮请求体的内容；引用同时发一条
+        条目级 `memory_consumed`（被引用 = 消费；但**命中不算**，见 `_execute_tool` 一侧）。
+        """
+        blocks: list[ContentBlock] = []
+        citation: MemoryCitation | None = None
+        for block in message.content:
+            if block.type == "text" and block.text and CITATION_OPEN in block.text:
+                cleaned, parsed = parse_citation(block.text)
+                if parsed is not None:
+                    citation = parsed
+                blocks.append(replace(block, text=cleaned))
+                continue
+            blocks.append(block)
+        if citation is None:
+            return message
+        self._turn_citations = citation
+        for entry in citation.entries:
+            await self._live(
+                run,
+                turn,
+                EventType.MEMORY_CONSUMED,
+                {"kind": consumption_kind_for(entry.path), "entry_id": entry.entry_id, "tool_name": None},
+            )
+        return replace(message, content=tuple(blocks))
+
+    async def _report_memory_read(self, run: Run, name: str, args: object, result: ToolResult) -> None:
+        """§6.3 硬规定的另一腿：只有 `read` 类工具**真读了记忆文件**才算消费。
+
+        `memory_search` 命中不发本事件（否则“注入型召回”会把写入噪声率虚假清零）；
+        识别不了的路径/工具直接不计数（codex “宁可不计数也不猜”）。
+        """
+        if self.memory_root is None or name != "read" or result.status != "success" or not isinstance(args, Mapping):
+            return
+        raw = args.get("file_path")
+        if not isinstance(raw, str) or not raw:
+            return
+        try:
+            target = (self.workspace_root / raw).resolve()
+            relative = target.relative_to(self.memory_root.resolve())
+        except (ValueError, OSError):
+            return  # 不在记忆根下（或解析不了）：不计数，不猜
+        rel = relative.as_posix()
+        offset = args.get("offset")
+        limit = args.get("limit")
+        # `read` 的 offset 是 **0-based 行下标**，而条目 id 是 1-based 行号：不换算就会错开一行。
+        start = (offset if isinstance(offset, int) and offset > 0 else 0) + 1
+        count = limit if isinstance(limit, int) and limit > 0 else 1
+        await self._live(
+            run,
+            run.turn,
+            EventType.MEMORY_CONSUMED,
+            {"kind": consumption_kind_for(rel), "entry_id": f"{rel}:{start}-{start + count - 1}", "tool_name": name},
+        )
+
+    async def _build_recall_message(self, run: Run, turn: int) -> Message | None:
+        """按最后一个真实 user 原话跑一次召回；返回一条**不入库**的 user-role 前缀消息。
+
+        为什么不写进 Domain_State：召回是“本轮模型看到什么”，不是“发生了什么”（C5）；
+        进了事实流就会污染重放与缓存前缀。门控与上限全在端口里（kernel 不判）。
+        """
+        if self.recall is None:
+            return None
+        skip, self._recall_skip = self._recall_skip, False
+        query = _last_real_user_text(run)
+        if not query:
+            return None
+        block = await self.recall.recall(query, skip=skip)
+        if block is None or not block.text or not block.entry_ids:
+            return None
+        self._recalled_ids.update(block.entry_ids)
+        await self._live(run, turn, EventType.MEMORY_INJECTED, dict(block.event_data()))
+        return Message(
+            id=f"recall:{run.run_id}:{turn}",
+            role=Role.USER,
+            content=(ContentBlock(type="text", text=block.text),),
+            seq=0,
+        )
 
     async def _announce_memory_injection(self, run: Run, turn: int) -> None:
         """首次发出请求前落一条 live-only ``memory_injected``（每 run 一次）。

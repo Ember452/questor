@@ -45,7 +45,7 @@ from questor.contracts.events import (
     UpdateTaskTree,
     WriteMemory,
 )
-from questor.contracts.memory import source_for_write
+from questor.contracts.memory import MemoryCitation, source_for_write
 from questor.contracts.profile import PERMISSION_MODE_SET
 from questor.contracts.state_schema import (
     OPEN_TOOL_CALL_STATUSES,
@@ -106,12 +106,15 @@ def _bounded_user_text(text: str) -> tuple[str, bool]:
     return raw[:_USER_MESSAGE_TEXT_BYTES].decode("utf-8", errors="ignore"), True
 
 
-def _message_completed_data(message: Message) -> dict[str, object]:
+def _message_completed_data(message: Message, citations: MemoryCitation | None = None) -> dict[str, object]:
     """为 ``message_completed`` 派生**有界**定稿正文（D-P7-C 选型①；ADR-0034）。
 
     取消息可见文本（text 块拼接）写进事件帧，使 ``after_seq`` 重放**仅靠事件流**即可恢复定稿
     消息——单一真源，不另开 `/transcript` 第二读契约。纯字符串截断（L1 不做 IO）；`item_id` 供前端
     把 live delta 与定稿消息归组。**未定稿的半条在途 delta 仍不在本事件里**（诚实边界，标 UNVERIFIED）。
+
+    ``citations``（B8；§6.3）是 harness 从正文剥出的**条目级引用**：只进事件、不进 context，
+    因此下一轮请求体永不会把协议块再送一次。无引用时不发该键（additive optional）。
     """
     text = "".join(b.text or "" for b in message.content if b.type == "text")
     data: dict[str, object] = {
@@ -121,6 +124,8 @@ def _message_completed_data(message: Message) -> dict[str, object]:
     }
     if text:
         data["final_text"] = text[:_MSG_FINAL_TEXT_CHARS]
+    if citations is not None and citations.entries:
+        data["citations"] = dict(citations.to_payload())
     return data
 
 
@@ -297,7 +302,7 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
         ledger = replace(run.tool_ledger, calls=(*run.tool_ledger.calls, *new_calls))
         ctx = replace(run.context, items=(*run.context.items, command.message))
         new = replace(run, context=ctx, tool_ledger=ledger, seq=run.seq + 1)
-        return new, [_event(new.seq, new, command.turn, EventType.MESSAGE_COMPLETED, _message_completed_data(command.message))]
+        return new, [_event(new.seq, new, command.turn, EventType.MESSAGE_COMPLETED, _message_completed_data(command.message, citations=command.citations))]
 
     if isinstance(command, RecordToolResult):
         target = _open_call(run, command.tool_call_id)

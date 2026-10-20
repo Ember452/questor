@@ -21,9 +21,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from questor.config.model import load_config
-from questor.contracts.memory import MemoryStorePort
+from questor.contracts.memory import MemoryStorePort, RecallPort
 from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort, SurfacePort
+from questor.memory.recall import MemoryRecall
 from questor.providers.artifact_store import FileSystemArtifactStore
+from questor.providers.fake import FakeEmbedder
 from questor.providers.process_runner import SandboxedProcessRunner
 from questor.providers.provider_factory import provider_from_env
 from questor.providers.sandbox import select_sandbox
@@ -107,6 +109,8 @@ class AssembleSpec:
     profile: str | None = None
     #: 沙箱后端选择（OPT-7）：只选后端、不放宽 fail-closed；None = 现探测。
     sandbox_backend: str | None = None
+    #: 记忆召回端口（B8）：None = 组合根自己构造默认实现（生产默认开，见 `build_app`）。
+    recall: RecallPort | None = None
 
 
 @dataclass
@@ -149,6 +153,9 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
             if spec.provider_factory is not None
             else provider_from_env(payload_preview=payload_preview_from_env())
         )
+        # B8 `[behavior]`：生产入口默认开自动召回（直接构造 CliSurface 仍默认无召回）。
+        # embedding 用确定性 fake：CI 无密钥时只证向量通道接得通，真检索质量仍 UNVERIFIED。
+        recall = spec.recall if spec.recall is not None else MemoryRecall(memory, embedder=FakeEmbedder(), enabled=True)
         surface = CliSurface(
             store=store,
             memory_store=memory,
@@ -163,6 +170,7 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
             context_assembler=spec.context_assembler,
             # B7 `[behavior]`：生产入口默认开档1 记忆索引注入（直接构造 CliSurface 仍默认关）。
             memory_index_enabled=True,
+            recall=recall,
         )
     else:
         surface = spec.surface
