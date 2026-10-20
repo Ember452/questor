@@ -5,7 +5,7 @@
 - :class:`ExtensionRegistry`：B5 的通用声明式注册表——存 ``ExtensionDescriptor`` + 工厂，
   按 ``at`` 分组、按 priority 降序解析；治理字段（``trust``/``broken_reason``）留在注册侧，
   **不进**声明结构。
-- :class:`PolicyRegistry`：既有策略名册的兼容外壳，保留 ``_pick``/``resolve_or_default``/
+- :class:`PolicyRegistry`：既有策略名册的兼容外壳，保留 ``_pick_entry``/``resolve_or_default``/
   ``ab_select`` 全部语义；内部改存 ``ExtensionEntry``，因此 ``inspect-extensions`` 能同时
   看到策略与观察者。
 
