@@ -181,6 +181,7 @@ class CliSurface:
         memory_index_enabled: bool = False,
         recall: RecallPort | None = None,
         summarizer: SummarizerPort | None = None,
+        extra_tools: tuple[Tool, ...] = (),
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
@@ -195,6 +196,11 @@ class CliSurface:
         self.log_dir = log_dir
         self.read = ReadTool()
         self.registry = _default_registry()
+        # B15：额外内置工具由**组合根**追加（现在只有 `ask_user`）。走同一个注册表，因此权限/沙箱/
+        # 审批一视同仁；默认 profile 的名册逐字不变（`test_default_profile_keeps_the_exact_eleven_tool_order`），
+        # 直接拼 CliSurface 的旧路径也不会多出工具——默认翻转只发生在 `build_app()`。
+        for tool in extra_tools:
+            self.registry.register(tool)
         # P9/ADR-0045：策略经进程内 registry 按 run 解析（fail-open 默认 react）；不再硬编码 ReActPolicy。
         self.policy_registry = _default_policy_registry()
         self.policy_id = policy_id

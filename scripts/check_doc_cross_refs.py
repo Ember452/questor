@@ -55,12 +55,12 @@ EXPECTED: dict[str, int] = {
     "blades": 17,  # §13「17 刀（T16）」+ T16；数 `^| **B` 行（B0.5 算一刀）
     "points_live": 13,  # §5.1 表内 13 行生效点位（B6 启用 Stop）
     "points_reserved": 4,  # §5.1「预留 4 位」句里的 4 个名字（Notification/Elicitation/TaskUpdated/PlanStep）
-    "src_py": 142,  # §21 前提判断（B5 +4；B7 +2；B8 +1；B9 +2；B10 +1；B13 +1：kernel/session_ops.py）
+    "src_py": 144,  # §21 前提判断（B5 +4；B7 +2；B8 +1；B9 +2；B10 +1；B13 +1；B15 +2：ask_user / context_report）
     "gate_scripts": 17,  # §21：15 个 check_*.py + 2 个 verify_*.py（不含 _diag_threads.py；B5 新增 check_extension_points.py）
     "ci_gate_steps": 19,  # §21 / PLAN SCAN-1：boundaries 恒阻塞 job 的「门步」数（B5 新增 1 步）
     "reduce_calls": 0,  # §2-1：B0 后 loop.py/recovery.py 不再直调 reduce（17 处全改走 apply()）
-    "test_files": 220,  # PLAN SCAN-2：tests/ 下 .py 合计 220（B5 +5、P10 +2、B7 +4、B8 +4、B9 +2、B10 +4、B12 +3、B13/14 +3）
-    "test_unit": 133,  # PLAN SCAN-2：unit 133（B5 +4、P10 +2、B7 +4、B8 +4、B9 +2、B10 +3、B13 +1）
+    "test_files": 221,  # PLAN SCAN-2：tests/ 下 .py 合计 221（B5 +5、P10 +2、B7 +4、B8 +4、B9 +2、B10 +4、B12 +3、B13/14 +3、B15 +1）
+    "test_unit": 134,  # PLAN SCAN-2：unit 134（B5 +4、P10 +2、B7 +4、B8 +4、B9 +2、B10 +3、B13 +1、B15 +1）
     "test_integration": 77,  # PLAN SCAN-2：integration 77（B5 +1 inspect-extensions；B13 +1 会话路由；B14 +1 记忆管理面）
     "test_support": 3,  # PLAN SCAN-2：support 3（fixture 基建，非 test_* 命名）
     "test_evals": 6,  # PLAN SCAN-2：evals 6（B10 新增 p99 1 个；B12 新增 tasks/metrics/test_b12_evals 3 个）

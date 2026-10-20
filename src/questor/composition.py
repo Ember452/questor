@@ -20,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from questor.capabilities.tools.ask_user import AskUserTool
 from questor.config.model import load_config
 from questor.contracts.memory import MemoryStorePort, RecallPort
 from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort, SurfacePort
@@ -175,6 +176,8 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
             memory_index_enabled=True,
             recall=recall,
             compaction=production_compaction_from_env(model),
+            # B15 [behavior]：生产入口才追加 ask_user（直接构造 CliSurface 的名册不变）。
+            extra_tools=(AskUserTool(),)
         )
     else:
         surface = spec.surface
