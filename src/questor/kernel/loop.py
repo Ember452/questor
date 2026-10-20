@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
@@ -231,12 +232,29 @@ def _analyze_shell(tool_spec: ToolSpec, arguments: JsonObject) -> ShellAnalysis 
     )
 
 
+def _submit_key(command: SubmitMessage, run: Run) -> str:
+    """用户消息的**内容派生**幂等键（B1/c3）：``submit:<turn>:<content_sha256>``。
+
+    为何不能沿用通用键：通用键只含 ``command.type`` 与游标，同一安全点批量消费的两条不同用户消息
+    会撞成同键 → ``apply`` 判成“同 key 异 digest”拒绝（``IdempotencyConflictError``）或误判为重复。
+    内容派生键使：同内容重投 → 同键 → no-op（不重复追加）；不同内容 → 不同键 → 各自进事实流。
+    """
+    text = "".join(b.text or "" for b in command.content.content if b.type == "text")
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return f"submit:{run.turn}:{digest}"
+
+
 def _transition_key(command: Command, run: Run) -> str:
     """幂等键：命令类型 + 当前游标 + 关联键（同状态上同一命令 → 同键；不同命令 → 不同键）。
 
     不含随机量：重投/重放的同一命令在同一状态上得到同一键，``apply`` 才能识别“已应用”；
     不同命令即使同类型也因关联键/状态游标不同而自动分开（不会误判成冲突）。
+
+    ``SubmitMessage`` 例外走内容派生键（B1/c3，见 :func:`_submit_key`）：用户消息的“同一意图”
+    由正文决定，不由游标决定。
     """
+    if isinstance(command, SubmitMessage):
+        return _submit_key(command, run)
     tied = (
         getattr(command, "tool_call_id", "")
         or getattr(command, "request_id", "")

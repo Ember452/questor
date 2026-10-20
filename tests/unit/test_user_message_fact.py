@@ -20,8 +20,9 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from questor.contracts.artifacts import OutputBudget
-from questor.contracts.events import Envelope, EventType, SubmitMessage
+from questor.contracts.events import Envelope, EventType, FinalizeRun, SubmitMessage
 from questor.contracts.state_schema import ContentBlock, Message, Role, RunStatus
+from questor.kernel.loop import _transition_key
 from questor.state.domain_state import Run
 from questor.state.reduce import _USER_MESSAGE_TEXT_BYTES, reduce
 from questor.state.transition import apply, reset_idempotency_window
@@ -117,3 +118,47 @@ def _as_wire(event: Envelope) -> dict:
         "type": event.type,
         "data": dict(event.data),
     }
+
+
+# --------------------------------------------------------------------------- #
+# c3：内核幂等提交（内容派生键 / 终态拒收），覆盖 idle 与 busy
+# --------------------------------------------------------------------------- #
+def test_submit_key_is_content_derived() -> None:
+    """幂等键 = ``submit:<turn>:<content_sha256>``：同内容同 state → 同键（可去重）；异内容 → 异键（不互撞）。
+
+    旧通用键（type+游标）让同一安全点批量消费的两条不同消息撞成同键 → apply 抛
+    ``IdempotencyConflictError``；内容派生键是 busy 批量提交正确性的前提。
+    """
+    run = _busy_run("r_key")
+    key_a = _transition_key(SubmitMessage(run_id=run.run_id, content=_user("go", mid="a")), run)
+    key_b = _transition_key(SubmitMessage(run_id=run.run_id, content=_user("go", mid="b")), run)
+    key_c = _transition_key(SubmitMessage(run_id=run.run_id, content=_user("stop", mid="c")), run)
+    assert key_a == key_b  # 同正文同 turn：同一意图（不同 Message id 不参与关键性）
+    assert key_a != key_c  # 异正文：不同键，绝不互撞
+    assert key_a.startswith(f"submit:{run.turn}:")
+    assert len(key_a.rsplit(":", 1)[1]) == 64  # sha256 十六进制
+
+
+def test_terminal_run_rejects_submit_with_warning_and_never_appends() -> None:
+    """C13 不因 B1 放宽：终态后的 SubmitMessage 被拒（warning + bump seq），状态与 context 零变化。
+
+    终态 run 无法在不放宽 C13 的前提下写入 → surface 的唯一合法处置是**新建 run**
+    （CLI/http/openai 面本就“一条消息一个 run”）。
+    """
+    run = _busy_run("r_term")
+    done, _ = reduce(run, FinalizeRun(run_id=run.run_id, status="completed", exit_reason="answered"))
+    assert done.status is RunStatus.COMPLETED
+    before_items = done.context.items
+    new, events = apply(
+        None,
+        done,
+        SubmitMessage(run_id=done.run_id, content=_user("late input", mid="late")),
+        source="test",
+        idempotency_key="k_late",
+    )
+    assert [e.type for e in events] == [EventType.WARNING]
+    assert "already" in events[0].data["message"]
+    assert new.status is RunStatus.COMPLETED
+    assert new.context.items == before_items  # 绝不追加
+    assert new.seq == done.seq + 1  # 警告仍占一个 durable seq（C2）
+    assert _VALIDATOR.is_valid(_as_wire(events[0]))
