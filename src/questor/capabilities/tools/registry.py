@@ -8,23 +8,19 @@
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import replace
 
+from questor.contracts.common import bound_description
 from questor.contracts.tool import RunToolSurface, Tool, ToolSpec
 
 _log = logging.getLogger("questor.tools")
-
-_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-_WHITESPACE = re.compile(r"\s+")
-_DESCRIPTION_MIN = 20
-_DESCRIPTION_MAX = 2000
 
 
 def _sanitize_description(spec: ToolSpec) -> ToolSpec:
     """去控制字符、折叠空白、截上限；过短则退化为含工具名的说明。
 
     只收紧不外传原文：过长/含注入字符的 description 不能进入 provider 工具面。
+    规则本体已下沉 L0 :func:`questor.contracts.common.bound_description`（记忆索引段共用）。
     """
     cleaned = bound_description(spec.description, name=spec.name, max_chars=spec.description_max_chars)
     if cleaned != spec.description:
@@ -32,22 +28,16 @@ def _sanitize_description(spec: ToolSpec) -> ToolSpec:
     return spec
 
 
-def bound_description(text: str, *, name: str, max_chars: int | None) -> str:
-    """共享描述净化（C08 单一真源）：内置工具、skills 目录、未来的 MCP 远程描述都走这一套规则。
+def _is_available(tool: Tool, spec: ToolSpec) -> bool:
+    """工具是否进入本 run 的工具面：**两个**条件都要真。
 
-    去控制字符 → 折叠空白 → 过短退化（含工具名、绝不空）→ 超界截断加省略号。行为与原
-    `_sanitize_description` 逐字一致（抽出仅为复用，不改语义）。
+    - `Tool.available()`：动态可用性（凭据/平台/特性开关）；
+    - `ToolSpec.available`：静态默认值（G7 僵尸位——以前无人读，现接线）。
+
+    内置工具均不显式给 `available`（默认 True），所以本改动对现有名册**零行为变更**；
+    它的作用是让声明期就能把工具关成“注册但不外露”（如未完成的实验工具），而不必删代码。
     """
-    cleaned = _WHITESPACE.sub(" ", _CONTROL_CHARS.sub("", text)).strip()
-    limit = max(_DESCRIPTION_MIN, min(max_chars or _DESCRIPTION_MAX, _DESCRIPTION_MAX))
-    if len(cleaned) < _DESCRIPTION_MIN:
-        # 退化：保证 provider 永远看到含工具名、达下限的说明，而不是空/过短 description。
-        cleaned = f"{name} tool: {cleaned}".strip()
-        if len(cleaned) < _DESCRIPTION_MIN:
-            cleaned = f"{cleaned} - minimal tool description".strip()
-    if len(cleaned) > limit:
-        cleaned = cleaned[: limit - 1].rstrip() + "…"
-    return cleaned
+    return spec.available and tool.available()
 
 
 class ToolRegistry:
@@ -94,12 +84,12 @@ class ToolRegistry:
         return self._tools.get(name)
 
     def list_available(self) -> tuple[Tool, ...]:
-        """列出 available() 为真的工具（特性开关/凭据/平台缺失时隐藏）。"""
-        return tuple(tool for name, tool in self._tools.items() if tool.available())
+        """列出可用工具（特性开关/凭据/平台缺失时隐藏；`ToolSpec.available` 为假也隐藏）。"""
+        return tuple(tool for name, tool in self._tools.items() if _is_available(tool, self._specs[name]))
 
     def definitions(self) -> tuple[ToolSpec, ...]:
         """available 工具的已 sanitize spec（喂 provider）。"""
-        return tuple(self._specs[name] for name, tool in self._tools.items() if tool.available())
+        return tuple(self._specs[name] for name, tool in self._tools.items() if _is_available(tool, self._specs[name]))
 
     def candidates(self, name: str) -> tuple[str, ...]:
         """委托已冻结 surface 的同名逻辑（保持单一真源）。"""
@@ -107,7 +97,9 @@ class ToolRegistry:
 
     def freeze_for_run(self, run_id: str) -> RunToolSurface:
         """快照当前 available 工具面给这个 run；后续 register/unregister 不影响此快照。"""
-        available = [(self._specs[name], tool) for name, tool in self._tools.items() if tool.available()]
+        available = [
+            (self._specs[name], tool) for name, tool in self._tools.items() if _is_available(tool, self._specs[name])
+        ]
         return RunToolSurface(
             tools=tuple(tool for _, tool in available),
             specs=tuple(spec for spec, _ in available),

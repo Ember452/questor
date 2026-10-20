@@ -82,4 +82,5 @@ addopts = "--timeout=60 --timeout-method=thread"
 # 挂进独立非阻塞 lane；未标记用例不受影响。承 pitfalls 确定性纪律，绝不用真 key/真网络。
 markers = [
     "eval: deterministic task-level regression net (scripted provider, no key/network); selectable via -m eval",
+    "e2e: cross-blade closed-loop acceptance E1-E8 (scripted provider, no key/network); selectable via -m e2e",
 ]

@@ -46,8 +46,19 @@ export type QuestorExternalEventProjectionV1 = {
     | "tools_changed"
     | "compact_started"
     | "compact_applied"
+    | "compact_warning"
     | "user_message"
-    | "turn_completed";
+    | "turn_completed"
+    | "memory_injected"
+    | "cache_break"
+    | "memory_consumed"
+    | "memory_deleted"
+    | "memory_updated"
+    | "run_rewounded"
+    | "session_forked"
+    | "session_renamed"
+    | "session_archived"
+    | "session_pinned";
   data: {
     [k: string]: unknown;
   };
@@ -75,13 +86,385 @@ export interface ReasoningDeltaData {
   delta: string;
 }
 /**
- * A finalized message (D-P7-C option (1); ADR-0034). final_text is the bounded committed body so after_seq replay alone recovers text for every surface; oversized bodies set truncated (full text stays authoritative in checkpoint). Not logged (C20).
+ * A finalized message (D-P7-C option (1); ADR-0034). final_text is the bounded committed body so after_seq replay alone recovers text for every surface; oversized bodies set truncated (full text stays authoritative in checkpoint). citations (B7/B8; design 6.3) are entry-granular memory references parsed off the model body; the raw body is not carried here. Not logged (C20).
  */
 export interface MessageCompletedData {
   message_id: string;
   item_id?: string | null;
   final_text?: string;
   truncated?: boolean;
+  citations?: {
+    /**
+     * @maxItems 10
+     */
+    entries:
+      | []
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ]
+      | [
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          },
+          {
+            path: string;
+            line_start: number;
+            line_end: number;
+            note?: string;
+          }
+        ];
+    /**
+     * @maxItems 10
+     */
+    rollout_ids?:
+      | []
+      | [string]
+      | [string, string]
+      | [string, string, string]
+      | [string, string, string, string]
+      | [string, string, string, string, string]
+      | [string, string, string, string, string, string]
+      | [string, string, string, string, string, string, string]
+      | [string, string, string, string, string, string, string, string]
+      | [string, string, string, string, string, string, string, string, string]
+      | [string, string, string, string, string, string, string, string, string, string];
+  } | null;
 }
 export interface ToolStartedData {
   tool_call_id: string;
@@ -204,19 +587,43 @@ export interface ToolsChangedData {
   domain: "tools" | "skills" | "mcp" | "plugins" | "settings";
 }
 /**
- * Kernel began recoverable context compaction at a turn boundary (P10/ADR-0048, design/02 §10). reason is a short kernel label; no payload, never the summary text (C18/C20).
+ * Kernel began recoverable context compaction at a turn boundary (P10/ADR-0048, design/02 §10). reason is a short kernel label; no payload, never the summary text (C18/C20). B10 adds the window identity (design/07 §7.1): compaction is a generational event, not an in-place trim, so trigger/source/window_id/previous_window_id/window_number tell a renderer which window this fold belongs to. All optional — frames persisted before B10 legitimately lack them.
  */
 export interface CompactStartedData {
   reason: string;
+  trigger?: "auto" | "manual" | "legacy";
+  source?: "server_observed" | "estimated";
+  window_id?: string | null;
+  previous_window_id?: string | null;
+  window_number?: number;
 }
 /**
- * Compaction applied; baseline_seq is the durable seq that rewrote context so renderers re-fold their view (design/02 §10). covered_from/covered_to are the evicted durable event seq range (originals read back from append-only event_log); summary_bytes is the summary size only, never its text (C20).
+ * Compaction applied; baseline_seq is the durable seq that rewrote context so renderers re-fold their view (design/02 §10). covered_from/covered_to are the evicted durable event seq range (originals read back from append-only event_log); summary_bytes is the summary size only, never its text (C20). B10 adds the window identity plus bounded counters (evicted_count/before_tokens/after_tokens) so the overflow path is measurable without copying any body text.
  */
 export interface CompactAppliedData {
   baseline_seq: number;
   covered_from: number;
   covered_to: number;
   summary_bytes: number;
+  trigger?: "auto" | "manual" | "legacy";
+  source?: "server_observed" | "estimated";
+  window_id?: string | null;
+  previous_window_id?: string | null;
+  window_number?: number;
+  evicted_count?: number;
+  before_tokens?: number | null;
+  after_tokens?: number | null;
+}
+/**
+ * B10/ADR-0057 (design/07 §7.1/§7.3): a durable, plaintext-free compaction advisory — either the absolute warning threshold was crossed (reason=pressure) or the consecutive-failure breaker tripped (reason=breaker_tripped, after which automatic compaction stops for the run). Carries only thresholds, observed usage and the failure count; the body text never enters the event (C18/C20). Durable because a silent near-overflow is exactly what users experience as an unexplained failure.
+ */
+export interface CompactWarningData {
+  reason: "pressure" | "breaker_tripped";
+  trigger: "auto" | "manual" | "legacy";
+  used_tokens?: number | null;
+  threshold?: number | null;
+  window_number?: number;
+  failures?: number;
 }
 /**
  * User-originated message body persisted into the fact stream (B1; design §4.2). text is the bounded user-originated text (maxLength = OutputBudget.model_result_bytes; injected scaffolding stripped before persisting); truncated=true when the stored body was cut. Full body stays authoritative in the checkpoint. Not logged (C20).
@@ -234,3 +641,129 @@ export interface TurnCompletedData {
   };
   interrupted?: boolean;
 }
+/**
+ * Memory section actually injected into this turn's request (B7; design §6.1 constraint 4). entry_ids are entry-granular pointers (path:start-end) and bounded; no section body is ever carried here or in logs (C18/C20).
+ */
+export interface MemoryInjectedData {
+  kind: "index" | "recall";
+  /**
+   * @maxItems 40
+   */
+  entry_ids?: string[];
+  lines?: number;
+  bytes?: number;
+  truncated?: boolean;
+}
+/**
+ * Prompt-cache break detection (B7; design §6.1 cache clause 3). Three one-way segment hashes plus the reason bit plus the granted breakpoint count; hashes are irreversible, zero plaintext (C18/C20).
+ */
+export interface CacheBreakData {
+  system_hash?: string | null;
+  tools_hash?: string | null;
+  history_hash?: string | null;
+  reason: "cold" | "system" | "tools" | "history" | "ttl" | "budget";
+  breakpoints?: number;
+}
+/**
+ * Memory actually consumed by the model (B8; design 6.3): a search hit is NOT consumption - only a real read or a citation counts. kind is the tier, entry_id is entry-granular path:start-end, tool_name is the reader (null when the citation produced it). Unrecognisable tools are simply not counted. No body is carried (C18/C20).
+ */
+export interface MemoryConsumedData {
+  kind: "memory_md" | "index" | "raw" | "summary" | "skills";
+  entry_id: string;
+  tool_name?: string | null;
+}
+/**
+ * Memory revocation receipt (B9; design 6.4 rule 6 / 20.3 C-7): a soft-delete bit plus this durable event is the whole revocation history. No memory_history table exists and no body is carried (C18/C20).
+ */
+export interface MemoryDeletedData {
+  entry_id: string;
+  reason?: string | null;
+}
+/**
+ * User edited one memory entry (B14; design 6.4): entry-level receipt only. The new body is deliberately NOT carried — the fact stream is not a second copy of memory (C18/C20), and rewrites take effect through the derived index, not through this frame. `layer` uses the same closed vocabulary as memory_consumed so consumption attribution and edits stay comparable.
+ */
+export interface MemoryUpdatedData {
+  entry_id: string;
+  layer: "memory_md" | "index" | "raw" | "summary" | "skills";
+  bytes: number;
+  reason?: string | null;
+}
+/**
+ * A new run rewound to a point inside an older run (B13; design 8). Durable and append-only: the older run's frames are never rewritten or removed, and the anchor `{base_run_id, base_to_seq}` is exactly what the new run's `history_base` carries. Replaying this stream therefore reproduces the rewind as a fact instead of pretending history shrank.
+ */
+export interface RunRewoundedData {
+  base_run_id: string;
+  base_to_seq: number;
+  reason?: string | null;
+}
+/**
+ * A session forked off an existing one at a point (B13). Lands on the NEW session's scoped stream `sess:<id>`; the source stream is untouched and no second session table appears.
+ */
+export interface SessionForkedData {
+  source_session_id: string;
+  from_seq: number;
+  reason?: string | null;
+}
+/**
+ * Session renamed (B13). title is bounded user metadata, not body text; the sessions row's existing `title` column stays the write target — this frame exists so a session list can be rebuilt from events instead of only from the table (C13).
+ */
+export interface SessionRenamedData {
+  session_id: string;
+  title: string;
+}
+/**
+ * Session archived / un-archived (B13): a boolean facet on the existing sessions row, no new column and no new table.
+ */
+export interface SessionArchivedData {
+  session_id: string;
+  archived: boolean;
+}
+/**
+ * Session pinned / unpinned (B13): a boolean facet on the existing sessions row.
+ */
+export interface SessionPinnedData {
+  session_id: string;
+  pinned: boolean;
+}
+
+// Derived from the schema's `type` enum (OPT-10c): consumers must not hand-write the event list.
+export const EVENT_TYPE_NAMES = [
+  "run_started",
+  "turn_started",
+  "text_delta",
+  "reasoning_delta",
+  "message_completed",
+  "tool_started",
+  "tool_progress",
+  "tool_completed",
+  "approval_request",
+  "approval_resolved",
+  "permission_mode_changed",
+  "node_updated",
+  "usage_delta",
+  "heartbeat",
+  "run_cancelled",
+  "run_failed",
+  "run_completed",
+  "resync_required",
+  "warning",
+  "memory_written",
+  "peer_started",
+  "peer_ended",
+  "tools_changed",
+  "compact_started",
+  "compact_applied",
+  "compact_warning",
+  "user_message",
+  "turn_completed",
+  "memory_injected",
+  "cache_break",
+  "memory_consumed",
+  "memory_deleted",
+  "memory_updated",
+  "run_rewounded",
+  "session_forked",
+  "session_renamed",
+  "session_archived",
+  "session_pinned",
+] as const;

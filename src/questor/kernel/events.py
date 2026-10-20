@@ -49,7 +49,8 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.REASONING_DELTA: frozenset({"delta"}),
     # 重连定稿正文（D-P7-C 选型①；ADR-0034）：additive 有界 final_text + item_id（单一真源，不另开 /transcript）。
     # final_text 只进事件协议，绝不进带外投影白名单（projection._DATA_KEYS 不含，C20）。
-    EventType.MESSAGE_COMPLETED: frozenset({"message_id", "item_id", "final_text", "truncated"}),
+    # citations（B8；§6.3）：模型自报的**条目级**引用（path:start-end），只进事件协议、不进日志。
+    EventType.MESSAGE_COMPLETED: frozenset({"message_id", "item_id", "final_text", "truncated", "citations"}),
     EventType.TOOL_STARTED: frozenset({"tool_call_id", "name", "capability", "risk", "args_summary"}),
     EventType.TOOL_PROGRESS: frozenset({"message"}),
     # 工具卡（P7 T7）additive：有界 preview + artifact 指针 + truncated（C18/C20；ADR-0035）。
@@ -77,14 +78,50 @@ EXTERNAL_EVENT_FIELDS: dict[str, frozenset[str] | None] = {
     EventType.TOOLS_CHANGED: frozenset({"domain"}),
     # compact_started/compact_applied（P10/ADR-0048，design/02 §10）：只带栅栏/有界量、无正文（C18/C20）。
     # baseline_seq 供渲染侧重折上下文视图；不进 projection._DATA_KEYS（摘要文本属载荷、日得不复制，C20）。
-    EventType.COMPACT_STARTED: frozenset({"reason"}),
-    EventType.COMPACT_APPLIED: frozenset({"baseline_seq", "covered_from", "covered_to", "summary_bytes"}),
+    EventType.COMPACT_STARTED: frozenset({"reason", "trigger", "source", "window_id", "previous_window_id", "window_number"}),
+    EventType.COMPACT_APPLIED: frozenset(
+        {
+            "baseline_seq",
+            "covered_from",
+            "covered_to",
+            "summary_bytes",
+            "trigger",
+            "source",
+            "window_id",
+            "previous_window_id",
+            "window_number",
+            "evicted_count",
+            "before_tokens",
+            "after_tokens",
+        }
+    ),
+    # compact_warning（B10/§7.1/§7.3）：durable 预警。只带阈值/用量/连续失败计数，零正文；
+    # reason 闭集：pressure（快满了）/ breaker_tripped（熔断跳闸）。
+    EventType.COMPACT_WARNING: frozenset({"reason", "trigger", "used_tokens", "threshold", "window_number", "failures"}),
     # user_message（B1；设计文档 §4.2）：用户原话进外部投影（重连可见 + 可重放）。
     # text 由 reduce 侧按 OutputBudget 有界、落库前剥掉注入脚手架；只进事件协议，
     # 绝不进带外投影白名单（projection._DATA_KEYS 不含 text，C20 零明文）。
     EventType.USER_MESSAGE: frozenset({"text", "truncated"}),
     # turn_completed（B6；设计文档 §5.1 Stop 点）：只带 base 用量与中断位，无正文（C18/C20）。
     EventType.TURN_COMPLETED: frozenset({"usage", "interrupted"}),
+    # memory_injected（B7；设计文档 §6.1 第④约）：live-only 观测条目。kind 区分索引段/召回正文，
+    # entry_ids 有界（≤上限条数）、只到条目粒度（path:start-end），无任一段正文（C18/C20）。
+    EventType.MEMORY_INJECTED: frozenset({"kind", "entry_ids", "lines", "bytes", "truncated"}),
+    # cache_break（B7；§6.1 cache 三条款）：三段 sha256 + 原因 + 断点数；hash 不可逆，零明文（C18/C20）。
+    EventType.CACHE_BREAK: frozenset({"system_hash", "tools_hash", "history_hash", "reason", "breakpoints"}),
+    # memory_consumed（B8；§6.3）：层级 kind + 条目级 entry_id + 是哪个工具取的；无正文（C18/C20）。
+    EventType.MEMORY_CONSUMED: frozenset({"kind", "entry_id", "tool_name"}),
+    # memory_deleted（B9；§6.4-6）： durable 撤回回执。只条目 id + 短原因；**不建 memory_history 表**（C-7）。
+    EventType.MEMORY_DELETED: frozenset({"entry_id", "reason"}),
+    # B13 会话形状（均 durable）：回退/分叉只带锚点与短原因；元数据变更只带标题/布尔位。
+    # 会话列表因此可从 `sess:<id>` 流重建，而不是只能读表（C13）。
+    EventType.RUN_REWOUNDED: frozenset({"base_run_id", "base_to_seq", "reason"}),
+    EventType.SESSION_FORKED: frozenset({"source_session_id", "from_seq", "reason"}),
+    EventType.SESSION_RENAMED: frozenset({"session_id", "title"}),
+    EventType.SESSION_ARCHIVED: frozenset({"session_id", "archived"}),
+    EventType.SESSION_PINNED: frozenset({"session_id", "pinned"}),
+    # memory_updated（B14；§6.4）：条目 id + 层级 + 字节数；**新正文不进事件**（C18/C20）。
+    EventType.MEMORY_UPDATED: frozenset({"entry_id", "layer", "bytes", "reason"}),
 }
 
 

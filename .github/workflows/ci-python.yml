@@ -75,6 +75,12 @@ jobs:
         run: |
           uv run python scripts/check_layering_ast.py --self-test
           uv run python scripts/check_layering_ast.py
+      # B5 (v3 §5.1/§5.2): 13 live + 4 reserved points stay closed, OBSERVE cannot abort,
+      # kernel never imports policy/surfaces, and the composition root stays assembly-only.
+      - name: Extension points guard (self-test proves it can go red)
+        run: |
+          uv run python scripts/check_extension_points.py --self-test
+          uv run python scripts/check_extension_points.py
       - name: Wire-contract single source drift check
         run: |
           uv run python scripts/check_protocol_schema.py --self-test

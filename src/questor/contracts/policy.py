@@ -88,16 +88,109 @@ class CompactionConfig:
     边界安全点据此判定是否压缩（I2 内核决定、策略只能发 advisory）；阈值取单一真源
     （``trigger_tokens`` 对比累计 token），loop 只消费不重推窗口数学。
 
+    B10/§7.1 口径重写：给了 ``context_window`` 后走 **绝对阈值**（Claude-Code 同族口径，
+    推翻 v2 的 fraction），未给则逐字退回旧的 ``trigger_tokens``/``max_items`` 路径（既有测试不
+    受影响）。三个阈值都是算出来的、不是拍出来的：
+
+    - 有效窗口 ``EW = context_window − min(max_output, summary_reserve)``；
+    - 自动阈值 ``EW − max(summary_reserve, auto_buffer)``（摘要自己也要预留输出，否则摘要溢出）；
+    - 手动阈值 ``EW − manual_buffer``（用户主动 `/compact` 用更紧的界）；
+    - 预警阈值 ``EW − warning_buffer``（“快满了”可见告警，比自动阈值更早）。
+
     - ``keep_head``：从头保留不被逐出的条数（保护开头 user/系统轮）；
     - ``keep_tail``：从尾保留的条数（保住最新可见回复与在途区）；
     - ``trigger_tokens``：累计用量达此阈值才触发（None=不因 token 触发）；
     - ``max_items``：context 条数超此值才触发（None=不因条数触发）。
-    两者均 None 时不触发（保守默认，与 ADR-0041 保守默认一致）。"""
+    两者均 None 且未给 ``context_window`` 时不触发（保守默认，与 ADR-0041 一致）。"""
 
     keep_head: int = 2
     keep_tail: int = 2
     trigger_tokens: int | None = None
     max_items: int | None = None
+    # ---- B10/§7.1 绝对阈值面（additive：不给 context_window 就逐字走旧路径）----
+    #: 模型的上下文窗口（token）；来自 `providers/model_windows.py`，None = 不知道窗口。
+    context_window: int | None = None
+    #: 模型的最大输出（token）；参与 ``min(max_output, summary_reserve)`` 计算。
+    max_output: int | None = None
+    #: 摘要输出预留（20_000，取 Claude-Code `autoCompact.ts` 实测常量；改前需先自测，§17-8）。
+    summary_reserve: int = 20_000
+    #: 自动压缩缓冲（13_000，同上游 `AUTOCOMPACT_BUFFER_TOKENS`）。
+    auto_buffer: int = 13_000
+    #: 手动压缩缓冲（3_000，同上游 `MANUAL_COMPACT_BUFFER`）。
+    manual_buffer: int = 3_000
+    #: 预警缓冲（26_000）：**questor 自定值、无上游实测来源**，ADR-0057 的 p99 实测后才能改。
+    warning_buffer: int = 26_000
+    #: 可压工具白名单；None = 用 :data:`COMPACTABLE_TOOLS` 默认（写类结果不压）。
+    compactable_tools: tuple[str, ...] | None = None
+
+    def __post_init__(self) -> None:
+        if self.keep_head < 0 or self.keep_tail < 0:
+            raise ValueError("CompactionConfig.keep_head/keep_tail must be >= 0")
+        for name in ("summary_reserve", "auto_buffer", "manual_buffer", "warning_buffer"):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"CompactionConfig.{name} must be > 0")
+        if self.context_window is not None:
+            if self.context_window <= 0:
+                raise ValueError("CompactionConfig.context_window must be > 0")
+            if self.effective_window() is None or self.auto_threshold() is None:
+                raise ValueError(
+                    "CompactionConfig.context_window is too small to leave any usable window; "
+                    "it must exceed both summary_reserve and manual_buffer"
+                )
+
+    def effective_window(self) -> int | None:
+        """§7.1 有效窗口 = ``context_window − min(max_output, summary_reserve)``。
+
+        未给 ``max_output`` 时按 ``summary_reserve`` 计（即扣满预留）——宁保守也不高估可用空间。"""
+        if self.context_window is None:
+            return None
+        deduct = min(self.max_output, self.summary_reserve) if self.max_output is not None else self.summary_reserve
+        usable = self.context_window - deduct
+        return usable if usable > 0 else None
+
+    def threshold(self, trigger: str) -> int | None:
+        """按触发来路取绝对阈值；未给 ``context_window`` 返回 None（退回旧信号）。
+
+        ``trigger`` 闭集：``auto`` / ``manual`` / ``warning``——与事件里的 `trigger` 字段同源，
+        不猜：未知来路直接拒（fail-closed，与配置非法值拒绝启动同口径）。"""
+        effective = self.effective_window()
+        if effective is None:
+            return None
+        if trigger == "auto":
+            value = effective - max(self.summary_reserve, self.auto_buffer)
+        elif trigger == "manual":
+            value = effective - self.manual_buffer
+        elif trigger == "warning":
+            value = effective - self.warning_buffer
+        else:
+            raise ValueError(f"unknown compaction trigger {trigger!r}; use auto/manual/warning")
+        return value if value > 0 else None
+
+    def auto_threshold(self) -> int | None:
+        return self.threshold("auto")
+
+    def manual_threshold(self) -> int | None:
+        return self.threshold("manual")
+
+    def warning_threshold(self) -> int | None:
+        return self.threshold("warning")
+
+    def compactable(self) -> tuple[str, ...]:
+        """本配置生效的可压工具白名单（未配则用默认 :data:`COMPACTABLE_TOOLS`）。"""
+        return COMPACTABLE_TOOLS if self.compactable_tools is None else tuple(self.compactable_tools)
+
+
+#: §7.2 白名单：只读检索类与受控 shell 的输出可折叠；**写类工具（write/edit/apply_patch）与
+#: 子 agent 报告（delegate）的结果不压**——它们要么就是任务本身，要么不可重建。
+COMPACTABLE_TOOLS: tuple[str, ...] = (
+    "read",
+    "grep",
+    "glob",
+    "ls",
+    "memory_search",
+    "bash",
+    "powershell",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +252,7 @@ __all__ = [
     "SuggestFinish",
     "SuggestCancel",
     "PolicyIntent",
+    "COMPACTABLE_TOOLS",
     "CompactionConfig",
     "LoopPolicy",
     "PolicyTrust",

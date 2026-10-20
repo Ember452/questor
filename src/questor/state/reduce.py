@@ -26,10 +26,12 @@ from questor.contracts.events import (
     Cancel,
     Command,
     CompactContext,
+    DeleteMemory,
     Envelope,
     EventType,
     ExpireApproval,
     FinalizeRun,
+    ForkSession,
     MarkToolDenied,
     MarkToolRunning,
     MarkToolValidated,
@@ -39,13 +41,17 @@ from questor.contracts.events import (
     ReportChildTerminal,
     RequestApproval,
     ResolveApproval,
+    RewindRun,
     SetPermissionMode,
     SpawnSubagent,
     SubmitMessage,
+    UpdateMemory,
+    UpdateSession,
     UpdateTaskTree,
+    WarnCompaction,
     WriteMemory,
 )
-from questor.contracts.memory import source_for_write
+from questor.contracts.memory import MemoryCitation, consumption_kind_for, source_for_write
 from questor.contracts.profile import PERMISSION_MODE_SET
 from questor.contracts.state_schema import (
     OPEN_TOOL_CALL_STATUSES,
@@ -106,12 +112,15 @@ def _bounded_user_text(text: str) -> tuple[str, bool]:
     return raw[:_USER_MESSAGE_TEXT_BYTES].decode("utf-8", errors="ignore"), True
 
 
-def _message_completed_data(message: Message) -> dict[str, object]:
+def _message_completed_data(message: Message, citations: MemoryCitation | None = None) -> dict[str, object]:
     """为 ``message_completed`` 派生**有界**定稿正文（D-P7-C 选型①；ADR-0034）。
 
     取消息可见文本（text 块拼接）写进事件帧，使 ``after_seq`` 重放**仅靠事件流**即可恢复定稿
     消息——单一真源，不另开 `/transcript` 第二读契约。纯字符串截断（L1 不做 IO）；`item_id` 供前端
     把 live delta 与定稿消息归组。**未定稿的半条在途 delta 仍不在本事件里**（诚实边界，标 UNVERIFIED）。
+
+    ``citations``（B8；§6.3）是 harness 从正文剥出的**条目级引用**：只进事件、不进 context，
+    因此下一轮请求体永不会把协议块再送一次。无引用时不发该键（additive optional）。
     """
     text = "".join(b.text or "" for b in message.content if b.type == "text")
     data: dict[str, object] = {
@@ -121,6 +130,8 @@ def _message_completed_data(message: Message) -> dict[str, object]:
     }
     if text:
         data["final_text"] = text[:_MSG_FINAL_TEXT_CHARS]
+    if citations is not None and citations.entries:
+        data["citations"] = dict(citations.to_payload())
     return data
 
 
@@ -297,7 +308,7 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
         ledger = replace(run.tool_ledger, calls=(*run.tool_ledger.calls, *new_calls))
         ctx = replace(run.context, items=(*run.context.items, command.message))
         new = replace(run, context=ctx, tool_ledger=ledger, seq=run.seq + 1)
-        return new, [_event(new.seq, new, command.turn, EventType.MESSAGE_COMPLETED, _message_completed_data(command.message))]
+        return new, [_event(new.seq, new, command.turn, EventType.MESSAGE_COMPLETED, _message_completed_data(command.message, citations=command.citations))]
 
     if isinstance(command, RecordToolResult):
         target = _open_call(run, command.tool_call_id)
@@ -422,6 +433,104 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
             _event(new.seq, new, run.turn, EventType.MEMORY_WRITTEN, {"kind": payload.kind.value, "chunk_count": 1, "source": source_for_write(payload.kind).value})
         ]
 
+    if isinstance(command, DeleteMemory):
+        # B9 纪律⑥（§20 C-7）：撤回 = 一个 durable seq + `memory_deleted` 事件，**不建历史表**。
+        # 真源 md 不就地删（文件仍是真源）；软删位由消费点经 MemoryStorePort 完成（本层零 IO）。
+        new = replace(run, seq=run.seq + 1)
+        return new, [
+            _event(
+                new.seq,
+                new,
+                run.turn,
+                EventType.MEMORY_DELETED,
+                {"entry_id": command.entry_id, "reason": command.reason},
+            )
+        ]
+
+    if isinstance(command, WarnCompaction):
+        # B10/§7.3：压缩预警/熔断跳闸——**不改状态**，只占一个 durable seq（与 RecordWarning 同族）。
+        # 只带阈值/用量/计数，零正文（C18/C20）：“快满了”必须可回放，否则用户只看到一次莫名失败。
+        new = replace(run, seq=run.seq + 1)
+        return new, [
+            _event(
+                new.seq,
+                new,
+                command.turn,
+                EventType.COMPACT_WARNING,
+                {
+                    "reason": command.reason,
+                    "trigger": command.trigger,
+                    "used_tokens": command.used_tokens,
+                    "threshold": command.threshold,
+                    "window_number": command.window_number,
+                    "failures": command.failures,
+                },
+            )
+        ]
+
+    if isinstance(command, RewindRun):
+        # B13（可退）：回退在**新 run** 上落一条 durable 事实，并把旧前缀的锚写进权威状态。
+        # 旧 run 的事件流**一行不改**：“回到过去”必须是新增事实，不是篡改历史（C5/C13）。
+        new = replace(run, seq=run.seq + 1, history_base={"run_id": command.base_run_id, "to_seq": command.base_to_seq})
+        return new, [
+            _event(
+                new.seq,
+                new,
+                run.turn,
+                EventType.RUN_REWOUNDED,
+                {"base_run_id": command.base_run_id, "base_to_seq": command.base_to_seq, "reason": command.reason},
+            )
+        ]
+
+    if isinstance(command, ForkSession):
+        # B13：分叉同样不改写源会话流；只在新流上留“从哪里、到哪个位点分出来”的锚。
+        new = replace(run, seq=run.seq + 1)
+        return new, [
+            _event(
+                new.seq,
+                new,
+                run.turn,
+                EventType.SESSION_FORKED,
+                {"source_session_id": command.source_session_id, "from_seq": command.from_seq, "reason": command.reason},
+            )
+        ]
+
+    if isinstance(command, UpdateSession):
+        # B13：会话元数据变更。只对**本次真给了**的 facet 各发一条（不猜、不空发）；连续取号。
+        # 状态本身不存会话行（那是 store 的 `sessions` 表）：本层只产可回放的事实（C13）。
+        seq = run.seq
+        events: list[Envelope] = []
+        if command.title is not None:
+            seq += 1
+            events.append(_event(seq, run, None, EventType.SESSION_RENAMED, {"session_id": command.session_id, "title": command.title}))
+        if command.archived is not None:
+            seq += 1
+            events.append(_event(seq, run, None, EventType.SESSION_ARCHIVED, {"session_id": command.session_id, "archived": command.archived}))
+        if command.pinned is not None:
+            seq += 1
+            events.append(_event(seq, run, None, EventType.SESSION_PINNED, {"session_id": command.session_id, "pinned": command.pinned}))
+        return replace(run, seq=seq), events
+
+    if isinstance(command, UpdateMemory):
+        # B14：改写一条记忆。事件只带条目 id/层级/字节数，**新正文不进事实流**（C18/C20）；
+        # 真源 md 不删，IO 由消费点经 MemoryStorePort 完成（与写/撤回同一纪律）。
+        new = replace(run, seq=run.seq + 1)
+        path = command.entry_id.rsplit(":", 1)[0]
+        return new, [
+            _event(
+                new.seq,
+                new,
+                run.turn,
+                EventType.MEMORY_UPDATED,
+                {
+                    "entry_id": command.entry_id,
+                    "layer": consumption_kind_for(path),
+                    "bytes": len(command.text.encode("utf-8")),
+                    "reason": command.reason,
+                },
+            )
+        ]
+
     if isinstance(command, CompactContext):
         # P10/ADR-0048：压缩应用——reduce **纯校验 + 纯应用**（对抗评审 MAJ-8）：摘要/锚/floor 均
         # 由 loop 侧算好随命令携带，reduce 绝不计算摘要/哈希。三道 fail-closed：
@@ -446,7 +555,20 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
         # 为本次两条事件连续取号（不复用同一 seq，ADR-0011）；baseline_seq = compact_applied 的 seq。
         seq = run.seq
         seq += 1
-        started = _event(seq, run, run.turn, EventType.COMPACT_STARTED, {"reason": "kernel_token_pressure"})
+        started = _event(
+            seq,
+            run,
+            run.turn,
+            EventType.COMPACT_STARTED,
+            {
+                "reason": "kernel_token_pressure",
+                "trigger": command.trigger,
+                "source": command.source,
+                "window_id": command.window_id,
+                "previous_window_id": command.previous_window_id,
+                "window_number": command.window_number,
+            },
+        )
         seq += 1
         covered_from = command.new_pointers[0].seq_from
         covered_to = command.new_pointers[-1].seq_to
@@ -455,7 +577,20 @@ def reduce(run: Run, command: Command, *, now: datetime | None = None) -> tuple[
             run,
             run.turn,
             EventType.COMPACT_APPLIED,
-            {"baseline_seq": seq, "covered_from": covered_from, "covered_to": covered_to, "summary_bytes": len(command.summary_text.encode("utf-8"))},
+            {
+                "baseline_seq": seq,
+                "covered_from": covered_from,
+                "covered_to": covered_to,
+                "summary_bytes": len(command.summary_text.encode("utf-8")),
+                "trigger": command.trigger,
+                "source": command.source,
+                "window_id": command.window_id,
+                "previous_window_id": command.previous_window_id,
+                "window_number": command.window_number,
+                "evicted_count": command.evict_end - command.evict_start,
+                "before_tokens": command.before_tokens,
+                "after_tokens": command.after_tokens,
+            },
         )
         new = replace(run, context=ctx, seq=seq)
         return new, [started, applied]

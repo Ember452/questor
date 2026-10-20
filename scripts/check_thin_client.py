@@ -49,27 +49,31 @@ GENERATED_EVENT_SYMBOL = "QuestorExternalEventProjectionV1"
 _SRC_SUFFIXES = {".ts", ".tsx"}
 
 
-def analyze_source(source: str, path: str) -> list[str]:
-    """返回该文件的违规信息（业务 token 下沉 / 事件类型未从 generated 导入）。"""
+def analyze_source(source: str, path: str, generated_symbol: str = GENERATED_EVENT_SYMBOL) -> list[str]:
+    """返回该文件的违规信息（业务 token 下沉 / 事件类型未从 generated 导入）。
+
+    ``generated_symbol`` 可参数化（OPT-10 壳中立）：默认仍是 Tauri/web 现用的信封类型名，
+    换壳时只改命令行参数，不改守卫逻辑。
+    """
     violations: list[str] = []
     for token in BUSINESS_TOKENS:
         if token in source:
             lineno = source[: source.index(token)].count("\n") + 1
             violations.append(f"{path}:{lineno}: thin client must not embed harness logic token {token!r} (S6/C14/C16)")
-    if GENERATED_EVENT_SYMBOL in source:
+    if generated_symbol in source:
         # 引用了对外事件信封类型，必须有一条 import ... from '.../generated/...' 提供来源。
         imported_from_generated = any(
-            ("import" in line and GENERATED_EVENT_SYMBOL in line and "generated" in line)
+            ("import" in line and generated_symbol in line and "generated" in line)
             for line in source.splitlines()
         )
         if not imported_from_generated:
             violations.append(
-                f"{path}: event envelope type {GENERATED_EVENT_SYMBOL!r} must be imported from the codegen'd generated/ tree (C15)"
+                f"{path}: event envelope type {generated_symbol!r} must be imported from the codegen'd generated/ tree (C15)"
             )
     return violations
 
 
-def check(root: Path) -> tuple[list[str], int]:
+def check(root: Path, generated_symbol: str = GENERATED_EVENT_SYMBOL) -> tuple[list[str], int]:
     """扫描 ``root`` 下所有 TS 源（排除 generated/）；返回 (违规, 扫描文件数)。"""
     violations: list[str] = []
     scanned = 0
@@ -79,7 +83,7 @@ def check(root: Path) -> tuple[list[str], int]:
         if "generated" in ts.parts:  # codegen 产物本身不参与瘦客户端业务扫描
             continue
         scanned += 1
-        violations += analyze_source(ts.read_text(encoding="utf-8"), str(ts))
+        violations += analyze_source(ts.read_text(encoding="utf-8"), str(ts), generated_symbol)
     return violations, scanned
 
 
@@ -94,13 +98,31 @@ def self_test() -> int:
     reduce_hits = analyze_source(reduce_call, "b.ts")
     drift_hits = analyze_source(event_no_generated, "c.ts")
     clean_hits = analyze_source(clean, "d.ts")
-    ok = bool(leak_hits) and bool(reduce_hits) and bool(drift_hits) and not clean_hits
+    # OPT-10：参数化信封类型名——别的壳（Electron/IDE）用另一个名字时同样能拦。
+    other_symbol = "ElectronEventProjectionV1"
+    param_drift = analyze_source(
+        f'import {{ {other_symbol} }} from "../types";\nexport type E = {other_symbol};\n', "e.ts", other_symbol
+    )
+    param_clean = analyze_source(
+        f'import type {{ {other_symbol} }} from "../generated/event";\nexport const s: {other_symbol} | null = null;\n',
+        "f.ts",
+        other_symbol,
+    )
+    ok = (
+        bool(leak_hits)
+        and bool(reduce_hits)
+        and bool(drift_hits)
+        and not clean_hits
+        and bool(param_drift)
+        and not param_clean
+    )
     print(
         "self-test: "
         f"business-leak={bool(leak_hits)} reduce-call={bool(reduce_hits)} "
-        f"event-not-generated={bool(drift_hits)} clean-passed={not clean_hits}"
+        f"event-not-generated={bool(drift_hits)} clean-passed={not clean_hits} "
+        f"param-symbol-red={bool(param_drift)} param-symbol-clean={not param_clean}"
     )
-    for msg in (*leak_hits, *reduce_hits, *drift_hits):
+    for msg in (*leak_hits, *reduce_hits, *drift_hits, *param_drift):
         print(f"  expected-red -> {msg}")
     print("self-test:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
@@ -110,6 +132,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true", help="run built-in fixtures")
     parser.add_argument("--root", default="desktop/web/src", type=Path)
+    parser.add_argument("--generated-symbol", default=GENERATED_EVENT_SYMBOL, help="codegen'd envelope type name (OPT-10)")
     args = parser.parse_args()
 
     if args.self_test:
@@ -118,7 +141,7 @@ def main() -> int:
     if not args.root.exists():
         print(f"fail-on-empty: scan target {args.root} does not exist", file=sys.stderr)
         return 2
-    violations, scanned = check(args.root)
+    violations, scanned = check(args.root, args.generated_symbol)
     if scanned == 0:
         print(f"fail-on-empty: scanned 0 TS sources under {args.root}", file=sys.stderr)
         return 2

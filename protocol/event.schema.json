@@ -40,8 +40,19 @@
         "tools_changed",
         "compact_started",
         "compact_applied",
+        "compact_warning",
         "user_message",
-        "turn_completed"
+        "turn_completed",
+        "memory_injected",
+        "cache_break",
+        "memory_consumed",
+        "memory_deleted",
+        "memory_updated",
+        "run_rewounded",
+        "session_forked",
+        "session_renamed",
+        "session_archived",
+        "session_pinned"
       ]
     },
     "data": { "type": "object" }
@@ -72,8 +83,19 @@
     { "if": { "properties": { "type": { "const": "tools_changed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/tools_changed" } } } },
     { "if": { "properties": { "type": { "const": "compact_started" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/compact_started" } } } },
     { "if": { "properties": { "type": { "const": "compact_applied" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/compact_applied" } } } },
+    { "if": { "properties": { "type": { "const": "compact_warning" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/compact_warning" } } } },
     { "if": { "properties": { "type": { "const": "user_message" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/user_message" } } } },
-    { "if": { "properties": { "type": { "const": "turn_completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/turn_completed" } } } }
+    { "if": { "properties": { "type": { "const": "turn_completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/turn_completed" } } } },
+    { "if": { "properties": { "type": { "const": "memory_injected" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_injected" } } } },
+    { "if": { "properties": { "type": { "const": "cache_break" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/cache_break" } } } },
+    { "if": { "properties": { "type": { "const": "memory_consumed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_consumed" } } } },
+    { "if": { "properties": { "type": { "const": "memory_deleted" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_deleted" } } } },
+    { "if": { "properties": { "type": { "const": "memory_updated" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/memory_updated" } } } },
+    { "if": { "properties": { "type": { "const": "run_rewounded" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/run_rewounded" } } } },
+    { "if": { "properties": { "type": { "const": "session_forked" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session_forked" } } } },
+    { "if": { "properties": { "type": { "const": "session_renamed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session_renamed" } } } },
+    { "if": { "properties": { "type": { "const": "session_archived" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session_archived" } } } },
+    { "if": { "properties": { "type": { "const": "session_pinned" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/session_pinned" } } } }
   ],
   "$defs": {
     "run_started": {
@@ -119,12 +141,35 @@
       "type": "object",
       "required": ["message_id"],
       "additionalProperties": false,
-      "description": "A finalized message (D-P7-C option (1); ADR-0034). final_text is the bounded committed body so after_seq replay alone recovers text for every surface; oversized bodies set truncated (full text stays authoritative in checkpoint). Not logged (C20).",
+      "description": "A finalized message (D-P7-C option (1); ADR-0034). final_text is the bounded committed body so after_seq replay alone recovers text for every surface; oversized bodies set truncated (full text stays authoritative in checkpoint). citations (B7/B8; design 6.3) are entry-granular memory references parsed off the model body; the raw body is not carried here. Not logged (C20).",
       "properties": {
         "message_id": { "type": "string", "minLength": 1, "maxLength": 128 },
         "item_id": { "type": ["string", "null"], "maxLength": 128 },
         "final_text": { "type": "string", "maxLength": 8192 },
-        "truncated": { "type": "boolean" }
+        "truncated": { "type": "boolean" },
+        "citations": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["entries"],
+          "properties": {
+            "entries": {
+              "type": "array",
+              "maxItems": 10,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "line_start", "line_end"],
+                "properties": {
+                  "path": { "type": "string", "minLength": 1, "maxLength": 256 },
+                  "line_start": { "type": "integer", "minimum": 0 },
+                  "line_end": { "type": "integer", "minimum": 0 },
+                  "note": { "type": "string", "maxLength": 256 }
+                }
+              }
+            },
+            "rollout_ids": { "type": "array", "maxItems": 10, "items": { "type": "string", "maxLength": 128 } }
+          }
+        }
       }
     },
     "tool_started": {
@@ -314,19 +359,48 @@
       "type": "object",
       "required": ["reason"],
       "additionalProperties": false,
-      "description": "Kernel began recoverable context compaction at a turn boundary (P10/ADR-0048, design/02 §10). reason is a short kernel label; no payload, never the summary text (C18/C20).",
-      "properties": { "reason": { "type": "string", "maxLength": 128 } }
+      "description": "Kernel began recoverable context compaction at a turn boundary (P10/ADR-0048, design/02 §10). reason is a short kernel label; no payload, never the summary text (C18/C20). B10 adds the window identity (design/07 §7.1): compaction is a generational event, not an in-place trim, so trigger/source/window_id/previous_window_id/window_number tell a renderer which window this fold belongs to. All optional — frames persisted before B10 legitimately lack them.",
+      "properties": {
+        "reason": { "type": "string", "maxLength": 128 },
+        "trigger": { "type": "string", "enum": ["auto", "manual", "legacy"] },
+        "source": { "type": "string", "enum": ["server_observed", "estimated"] },
+        "window_id": { "type": ["string", "null"], "maxLength": 80 },
+        "previous_window_id": { "type": ["string", "null"], "maxLength": 80 },
+        "window_number": { "type": "integer", "minimum": 0 }
+      }
     },
     "compact_applied": {
       "type": "object",
       "required": ["baseline_seq", "covered_from", "covered_to", "summary_bytes"],
       "additionalProperties": false,
-      "description": "Compaction applied; baseline_seq is the durable seq that rewrote context so renderers re-fold their view (design/02 §10). covered_from/covered_to are the evicted durable event seq range (originals read back from append-only event_log); summary_bytes is the summary size only, never its text (C20).",
+      "description": "Compaction applied; baseline_seq is the durable seq that rewrote context so renderers re-fold their view (design/02 §10). covered_from/covered_to are the evicted durable event seq range (originals read back from append-only event_log); summary_bytes is the summary size only, never its text (C20). B10 adds the window identity plus bounded counters (evicted_count/before_tokens/after_tokens) so the overflow path is measurable without copying any body text.",
       "properties": {
         "baseline_seq": { "type": "integer", "minimum": 0 },
         "covered_from": { "type": "integer", "minimum": 0 },
         "covered_to": { "type": "integer", "minimum": 0 },
-        "summary_bytes": { "type": "integer", "minimum": 0 }
+        "summary_bytes": { "type": "integer", "minimum": 0 },
+        "trigger": { "type": "string", "enum": ["auto", "manual", "legacy"] },
+        "source": { "type": "string", "enum": ["server_observed", "estimated"] },
+        "window_id": { "type": ["string", "null"], "maxLength": 80 },
+        "previous_window_id": { "type": ["string", "null"], "maxLength": 80 },
+        "window_number": { "type": "integer", "minimum": 0 },
+        "evicted_count": { "type": "integer", "minimum": 0 },
+        "before_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "after_tokens": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "compact_warning": {
+      "type": "object",
+      "required": ["reason", "trigger"],
+      "additionalProperties": false,
+      "description": "B10/ADR-0057 (design/07 §7.1/§7.3): a durable, plaintext-free compaction advisory — either the absolute warning threshold was crossed (reason=pressure) or the consecutive-failure breaker tripped (reason=breaker_tripped, after which automatic compaction stops for the run). Carries only thresholds, observed usage and the failure count; the body text never enters the event (C18/C20). Durable because a silent near-overflow is exactly what users experience as an unexplained failure.",
+      "properties": {
+        "reason": { "type": "string", "enum": ["pressure", "breaker_tripped"] },
+        "trigger": { "type": "string", "enum": ["auto", "manual", "legacy"] },
+        "used_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "threshold": { "type": ["integer", "null"], "minimum": 0 },
+        "window_number": { "type": "integer", "minimum": 0 },
+        "failures": { "type": "integer", "minimum": 0 }
       }
     },
     "user_message": {
@@ -346,6 +420,117 @@
       "properties": {
         "usage": { "type": "object" },
         "interrupted": { "type": "boolean" }
+      }
+    },
+    "memory_injected": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "description": "Memory section actually injected into this turn's request (B7; design §6.1 constraint 4). entry_ids are entry-granular pointers (path:start-end) and bounded; no section body is ever carried here or in logs (C18/C20).",
+      "properties": {
+        "kind": { "type": "string", "enum": ["index", "recall"] },
+        "entry_ids": { "type": "array", "items": { "type": "string", "maxLength": 128 }, "maxItems": 40 },
+        "lines": { "type": "integer", "minimum": 0 },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    "cache_break": {
+      "type": "object",
+      "required": ["reason"],
+      "additionalProperties": false,
+      "description": "Prompt-cache break detection (B7; design §6.1 cache clause 3). Three one-way segment hashes plus the reason bit plus the granted breakpoint count; hashes are irreversible, zero plaintext (C18/C20).",
+      "properties": {
+        "system_hash": { "type": ["string", "null"], "maxLength": 80 },
+        "tools_hash": { "type": ["string", "null"], "maxLength": 80 },
+        "history_hash": { "type": ["string", "null"], "maxLength": 80 },
+        "reason": { "type": "string", "enum": ["cold", "system", "tools", "history", "ttl", "budget"] },
+        "breakpoints": { "type": "integer", "minimum": 0, "maximum": 4 }
+      }
+    },
+    "memory_consumed": {
+      "type": "object",
+      "required": ["kind", "entry_id"],
+      "additionalProperties": false,
+      "description": "Memory actually consumed by the model (B8; design 6.3): a search hit is NOT consumption - only a real read or a citation counts. kind is the tier, entry_id is entry-granular path:start-end, tool_name is the reader (null when the citation produced it). Unrecognisable tools are simply not counted. No body is carried (C18/C20).",
+      "properties": {
+        "kind": { "type": "string", "enum": ["memory_md", "index", "raw", "summary", "skills"] },
+        "entry_id": { "type": "string", "minLength": 1, "maxLength": 288 },
+        "tool_name": { "type": ["string", "null"], "maxLength": 64 }
+      }
+    },
+    "memory_deleted": {
+      "type": "object",
+      "required": ["entry_id"],
+      "additionalProperties": false,
+      "description": "Memory revocation receipt (B9; design 6.4 rule 6 / 20.3 C-7): a soft-delete bit plus this durable event is the whole revocation history. No memory_history table exists and no body is carried (C18/C20).",
+      "properties": {
+        "entry_id": { "type": "string", "minLength": 1, "maxLength": 288 },
+        "reason": { "type": ["string", "null"], "maxLength": 256 }
+      }
+    },
+    "memory_updated": {
+      "type": "object",
+      "required": ["entry_id", "layer", "bytes"],
+      "additionalProperties": false,
+      "description": "User edited one memory entry (B14; design 6.4): entry-level receipt only. The new body is deliberately NOT carried — the fact stream is not a second copy of memory (C18/C20), and rewrites take effect through the derived index, not through this frame. `layer` uses the same closed vocabulary as memory_consumed so consumption attribution and edits stay comparable.",
+      "properties": {
+        "entry_id": { "type": "string", "minLength": 1, "maxLength": 288 },
+        "layer": { "type": "string", "enum": ["memory_md", "index", "raw", "summary", "skills"] },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "reason": { "type": ["string", "null"], "maxLength": 256 }
+      }
+    },
+    "run_rewounded": {
+      "type": "object",
+      "required": ["base_run_id", "base_to_seq"],
+      "additionalProperties": false,
+      "description": "A new run rewound to a point inside an older run (B13; design 8). Durable and append-only: the older run's frames are never rewritten or removed, and the anchor `{base_run_id, base_to_seq}` is exactly what the new run's `history_base` carries. Replaying this stream therefore reproduces the rewind as a fact instead of pretending history shrank.",
+      "properties": {
+        "base_run_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "base_to_seq": { "type": "integer", "minimum": 0 },
+        "reason": { "type": ["string", "null"], "maxLength": 256 }
+      }
+    },
+    "session_forked": {
+      "type": "object",
+      "required": ["source_session_id", "from_seq"],
+      "additionalProperties": false,
+      "description": "A session forked off an existing one at a point (B13). Lands on the NEW session's scoped stream `sess:<id>`; the source stream is untouched and no second session table appears.",
+      "properties": {
+        "source_session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "from_seq": { "type": "integer", "minimum": 0 },
+        "reason": { "type": ["string", "null"], "maxLength": 256 }
+      }
+    },
+    "session_renamed": {
+      "type": "object",
+      "required": ["session_id", "title"],
+      "additionalProperties": false,
+      "description": "Session renamed (B13). title is bounded user metadata, not body text; the sessions row's existing `title` column stays the write target — this frame exists so a session list can be rebuilt from events instead of only from the table (C13).",
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 }
+      }
+    },
+    "session_archived": {
+      "type": "object",
+      "required": ["session_id", "archived"],
+      "additionalProperties": false,
+      "description": "Session archived / un-archived (B13): a boolean facet on the existing sessions row, no new column and no new table.",
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "archived": { "type": "boolean" }
+      }
+    },
+    "session_pinned": {
+      "type": "object",
+      "required": ["session_id", "pinned"],
+      "additionalProperties": false,
+      "description": "Session pinned / unpinned (B13): a boolean facet on the existing sessions row.",
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "pinned": { "type": "boolean" }
       }
     }
   }

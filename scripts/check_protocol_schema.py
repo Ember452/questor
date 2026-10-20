@@ -257,6 +257,25 @@ def _valid_fixtures() -> dict[str, dict[str, Any]]:
         # P10 additive（ADR-0048）：compact_started 单 reason；compact_applied 只栅栏/有界量、无正文。
         "compact_started": _envelope("compact_started", {"reason": "kernel_token_pressure"}),
         "compact_applied": _envelope("compact_applied", {"baseline_seq": 7, "covered_from": 1, "covered_to": 3, "summary_bytes": 42}),
+        # B10/ADR-0057：预警与跳闸是 durable 的，只带阈值/用量/计数（零正文）；窗口身份可为 null。
+        "compact_warning": _envelope(
+            "compact_warning",
+            {"reason": "pressure", "trigger": "auto", "used_tokens": 120000, "threshold": 100000, "window_number": 1, "failures": 0},
+        ),
+        # B7 additive：memory_injected（live-only 审计条目，只条目 id + 计量）与 cache_break（三段 hash + 原因）。
+        "memory_injected": _envelope("memory_injected", {"kind": "index", "entry_ids": ["MEMORY.md:1-1"], "lines": 3, "bytes": 240, "truncated": False}),
+        "cache_break": _envelope("cache_break", {"system_hash": "sha256:aaa", "tools_hash": None, "history_hash": None, "reason": "cold", "breakpoints": 1}),
+        # B8 additive：memory_consumed（命中不算消费，只有真读/引用才发）与 message_completed.citations。
+        "memory_consumed": _envelope("memory_consumed", {"kind": "raw", "entry_id": "memory/2026-10-01.md:3-7", "tool_name": "read"}),
+        # B9 additive：memory_deleted（撤回回执：只条目 id + 短原因；变更史只有事件流一份，C-7）。
+        "memory_deleted": _envelope("memory_deleted", {"entry_id": "memory/2026-10-01.md:3-7", "reason": "user revoked"}),
+        # B13/B14 additive：会话形状与记忆改写。全部 durable、零正文（正文绝不进这些帧）。
+        "memory_updated": _envelope("memory_updated", {"entry_id": "memory/2026-10-01.md:3-7", "layer": "raw", "bytes": 42, "reason": "typo"}),
+        "run_rewounded": _envelope("run_rewounded", {"base_run_id": "run_old", "base_to_seq": 5, "reason": None}),
+        "session_forked": _envelope("session_forked", {"source_session_id": "sess_old", "from_seq": 12, "reason": None}),
+        "session_renamed": _envelope("session_renamed", {"session_id": "sess_old", "title": "launch review"}),
+        "session_archived": _envelope("session_archived", {"session_id": "sess_old", "archived": True}),
+        "session_pinned": _envelope("session_pinned", {"session_id": "sess_old", "pinned": False}),
     }
 
 
@@ -278,8 +297,33 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
     policy_over_field = _envelope("run_started", {"run_id": "run_x", "policy_ref": {"id": "r", "fingerprint": "f", "leak": 1}})
     # P10 compact_*（ADR-0048）：compact_applied 额外携 summary_text 正文必须被 additionalProperties:false 拒（C20）。
     compact_over_field = _envelope("compact_applied", {"baseline_seq": 7, "covered_from": 1, "covered_to": 3, "summary_bytes": 42, "summary_text": "leaked body"})
+    # B10 compact_warning：reason 是闭集（pressure/breaker_tripped），不接受自由文本（不泄正文）。
+    compact_warning_bad_reason = _envelope("compact_warning", {"reason": "nearly out of context", "trigger": "auto"})
+    # B13/B14：记忆改写不得带新正文；锚位不得为负；标题不得为空；布尔位不接受字符串。
+    memory_updated_over_field = _envelope("memory_updated", {"entry_id": "m:1-2", "layer": "raw", "bytes": 3, "text": "leaked body"})
+    memory_updated_bad_layer = _envelope("memory_updated", {"entry_id": "m:1-2", "layer": "magic", "bytes": 3})
+    rewind_negative_seq = _envelope("run_rewounded", {"base_run_id": "run_old", "base_to_seq": -1})
+    fork_missing_from_seq = _envelope("session_forked", {"source_session_id": "sess_old"})
+    rename_blank_title = _envelope("session_renamed", {"session_id": "s", "title": ""})
+    archived_string_bool = _envelope("session_archived", {"session_id": "s", "archived": "yes"})
     # B6：turn_completed 不得携正文/额外字段（additionalProperties:false）。
     turn_completed_over_field = _envelope("turn_completed", {"usage": {}, "interrupted": False, "text": "leak"})
+    # B7：memory_injected 不得携索引正文；cache_break 的 reason 必在枚举内、断点数不超 4 个预算。
+    memory_injected_over_field = _envelope("memory_injected", {"kind": "index", "text": "leaked index body"})
+    memory_injected_bad_kind = _envelope("memory_injected", {"kind": "bogus"})
+    cache_break_bad_reason = _envelope("cache_break", {"reason": "magic", "breakpoints": 1})
+    cache_break_over_budget = _envelope("cache_break", {"reason": "budget", "breakpoints": 9})
+    # B8：memory_consumed 缺 entry_id 必拒（条目级归因不允许降为文件级）；citations 多余字段必拒。
+    memory_consumed_missing_entry = _envelope("memory_consumed", {"kind": "raw"})
+    citations_over_field = _envelope(
+        "message_completed",
+        {"message_id": "m1", "citations": {"entries": [{"path": "MEMORY.md", "line_start": 1, "line_end": 2, "text": "leaked body"}]}},
+    )
+    citations_missing_line_range = _envelope(
+        "message_completed", {"message_id": "m1", "citations": {"entries": [{"path": "MEMORY.md"}]}}
+    )
+    # B9：memory_deleted 不得携被删正文（软删位 + 事件就是全部历吏，C-7/C18）。
+    memory_deleted_with_body = _envelope("memory_deleted", {"entry_id": "MEMORY.md:1-2", "text": "leaked revoked body"})
     return {
         "over_field": over_field,
         "missing_required": missing_required,
@@ -290,7 +334,22 @@ def _bad_fixtures() -> dict[str, dict[str, Any]]:
         "tools_bad_domain": tools_bad_domain,
         "policy_over_field": policy_over_field,
         "compact_over_field": compact_over_field,
+        "compact_warning_bad_reason": compact_warning_bad_reason,
+        "memory_updated_over_field": memory_updated_over_field,
+        "memory_updated_bad_layer": memory_updated_bad_layer,
+        "rewind_negative_seq": rewind_negative_seq,
+        "fork_missing_from_seq": fork_missing_from_seq,
+        "rename_blank_title": rename_blank_title,
+        "archived_string_bool": archived_string_bool,
         "turn_completed_over_field": turn_completed_over_field,
+        "memory_injected_over_field": memory_injected_over_field,
+        "memory_injected_bad_kind": memory_injected_bad_kind,
+        "cache_break_bad_reason": cache_break_bad_reason,
+        "cache_break_over_budget": cache_break_over_budget,
+        "memory_consumed_missing_entry": memory_consumed_missing_entry,
+        "citations_over_field": citations_over_field,
+        "citations_missing_line_range": citations_missing_line_range,
+        "memory_deleted_with_body": memory_deleted_with_body,
     }
 
 

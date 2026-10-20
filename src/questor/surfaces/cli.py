@@ -2,7 +2,7 @@
 
 零业务逻辑：它只装配注入的 Port，并把用户/审批意图**转成 Command 提交进 RunController**，
 绝不直接 reduce。所有状态变更仍由 loop → ``reduce`` 完成（C2）。
-Provider 由配置选：无密钥时 ``EchoProvider`` 离线演示，有密钥时 ``LiteLLMProvider`` 走真模型。
+Provider 由组合根选择（OPT-6）：无密钥时离线 ``EchoProvider``，有密钥时 ``LiteLLMProvider``。
 """
 
 from __future__ import annotations
@@ -15,24 +15,22 @@ import sys
 from pathlib import Path
 
 from questor.capabilities._host import PluginHost
-from questor.capabilities.subagent.delegate import DelegateTool
-from questor.capabilities.tools.apply_patch import ApplyPatchTool
-from questor.capabilities.tools.bash import BashTool
-from questor.capabilities.tools.edit import EditTool
-from questor.capabilities.tools.glob import GlobTool
-from questor.capabilities.tools.grep import GrepTool
-from questor.capabilities.tools.ls import LsTool
-from questor.capabilities.tools.memory_search import MemorySearchTool
-from questor.capabilities.tools.powershell import PowerShellTool
+from questor.capabilities.tools._output import envelope_for_text
 from questor.capabilities.tools.read import ReadTool
 from questor.capabilities.tools.registry import ToolRegistry
-from questor.capabilities.tools.write import WriteTool
-from questor.config.model import load_config
+from questor.capabilities.toolset import build_tools
 from questor.contracts.common import new_id
 from questor.contracts.events import EventType, ResolveApproval, SubmitMessage
-from questor.contracts.memory import MemoryStorePort
+from questor.contracts.extension import (
+    ExtensionDescriptor,
+    ExtensionKind,
+    HookOutcome,
+    InterceptionPoint,
+    ObserveChain,
+)
+from questor.contracts.memory import MemoryStorePort, RecallPort
 from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyRef, PolicyTrust
-from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort
+from questor.contracts.ports import ContextAssemblerPort, ProviderPort, StorePort, SummarizerPort
 from questor.contracts.state_schema import ApprovalStatus, Budget, ContentBlock, Message, Role, RunStatus
 from questor.contracts.subagent import SubagentSpawnerPort
 from questor.contracts.tool import RunToolSurface, Tool
@@ -44,17 +42,17 @@ from questor.kernel.run_control import RunController
 from questor.kernel.seed import SeedRef, build_seed_context, coerce_seed_refs
 from questor.kernel.settle import TurnSettler
 from questor.memory.distill import flush_run_to_daily
+from questor.memory.index import MemoryIndexBlock, admitted, build_index_block
 from questor.observability.projection import log_envelope
 from questor.policy.null_policy import NullPolicy
 from questor.policy.react_policy import ReActPolicy
-from questor.policy.registry import PolicyEntry, PolicyRegistry
-from questor.providers.fake import EchoProvider
-from questor.providers.litellm_adapter import LiteLLMProvider
+from questor.policy.registry import ExtensionEntry, ExtensionRegistry, PolicyEntry, PolicyRegistry
 from questor.state.domain_state import Run
 from questor.surfaces._assembly import (
     DEFAULT_CONTEXT_ASSEMBLER,
     assemble_logging,
     compaction_from_env,
+    inject_memory_block,
     payload_preview_from_env,
     reconfigure_output_streams,
 )
@@ -89,16 +87,13 @@ def _final_answer_text(run: Run) -> str:
 
 
 def provider_from_env() -> ProviderPort:
-    """根据环境变量选 provider：有 model+key 走 LiteLLM，否则离线 Echo。
+    """兼容薄壳：provider 选择已上移组合根（OPT-6），这里只委托 providers 层。
 
-    env 读取与判定口径收口在 ``config``（OPT-3 c2）：``model`` 保留原样（未设 = None）、
-    密钥只判存在；无 model 或无 key 一律 Echo（与历史逐字等价）。
+    surface 不再自己读 provider env；直接构造 ``CliSurface``（测试/嵌入）仍可用此入口。
     """
-    cfg = load_config()
-    if cfg.llm.model and cfg.llm.has_litellm_key:
-        # P10/ADR-0049：preview 预算由组合根解析注入（None=零原文默认）；非空才落独立 llm 通道。
-        return LiteLLMProvider(cfg.llm.model, payload_preview=payload_preview_from_env())
-    return EchoProvider()
+    from questor.providers.provider_factory import provider_from_env as _provider_from_env
+
+    return _provider_from_env(payload_preview=payload_preview_from_env())
 
 
 def sys_stdin_tty() -> bool:
@@ -106,10 +101,10 @@ def sys_stdin_tty() -> bool:
     return sys.stdin.isatty()
 
 
-def _default_registry() -> ToolRegistry:
-    """P2 默认内置工具集（注册表只收 available() 为真的，缺 bash 的平台自动隐藏）。"""
+def _default_registry(profile: str | None = None) -> ToolRegistry:
+    """默认内置工具集（OPT-5：profile→tool_id 数据表；注册表只收 available() 为真的）。"""
     registry = ToolRegistry()
-    for tool in (ReadTool(), WriteTool(), EditTool(), ApplyPatchTool(), LsTool(), GlobTool(), GrepTool(), BashTool(), PowerShellTool(), MemorySearchTool(), DelegateTool()):
+    for tool in build_tools(profile):
         registry.register(tool)
     return registry
 
@@ -124,6 +119,41 @@ def _default_policy_registry() -> PolicyRegistry:
     registry.register(PolicyEntry(id="react", factory=ReActPolicy, trust=PolicyTrust.SYSTEM))
     registry.register(PolicyEntry(id="null", factory=NullPolicy, trust=PolicyTrust.SYSTEM))
     return registry
+
+
+def _settle_extension_entry(settler: TurnSettler | None) -> ExtensionEntry:
+    """把 TurnSettler 包装成 **Stop 点位的单条 OBSERVE 条目**（B5；§5.1 第 13 行）。
+
+    ``settler=None`` 用于 inspect：只声明形状，不执行写回。
+    """
+
+    async def _hook(payload: object) -> HookOutcome:
+        if settler is not None:
+            await settler.settle(payload)  # type: ignore[arg-type]
+        return HookOutcome()
+
+    descriptor = ExtensionDescriptor(
+        id="settle-turn",
+        kind=ExtensionKind.OBSERVE,
+        at=InterceptionPoint.STOP.value,
+        priority=100,
+    )
+    return ExtensionEntry(descriptor, lambda: _hook)
+
+
+def memory_root_of(memory_store: MemoryStorePort | None) -> Path | None:
+    """从注入的记忆端口取真源根目录（只读属性）；拿不到就算“不可识别”，不猜。"""
+    root = getattr(memory_store, "memory_root", None)
+    return Path(root) if isinstance(root, (str, Path)) else None
+
+
+def inspect_extensions_text() -> str:
+    """无 store/无日志装配的装配链文本（``--inspect-extensions`` 用）。"""
+    registry = ExtensionRegistry()
+    for entry in _default_policy_registry().all_entries():
+        registry.register(entry)
+    registry.register(_settle_extension_entry(None))
+    return registry.render_chain()
 
 
 class CliSurface:
@@ -148,6 +178,10 @@ class CliSurface:
         artifact_store: object | None = None,
         sandbox: object | None = None,
         context_assembler: ContextAssemblerPort | None = None,
+        memory_index_enabled: bool = False,
+        recall: RecallPort | None = None,
+        summarizer: SummarizerPort | None = None,
+        extra_tools: tuple[Tool, ...] = (),
     ) -> None:
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.provider = provider or provider_from_env()
@@ -162,6 +196,11 @@ class CliSurface:
         self.log_dir = log_dir
         self.read = ReadTool()
         self.registry = _default_registry()
+        # B15：额外内置工具由**组合根**追加（现在只有 `ask_user`）。走同一个注册表，因此权限/沙箱/
+        # 审批一视同仁；默认 profile 的名册逐字不变（`test_default_profile_keeps_the_exact_eleven_tool_order`），
+        # 直接拼 CliSurface 的旧路径也不会多出工具——默认翻转只发生在 `build_app()`。
+        for tool in extra_tools:
+            self.registry.register(tool)
         # P9/ADR-0045：策略经进程内 registry 按 run 解析（fail-open 默认 react）；不再硬编码 ReActPolicy。
         self.policy_registry = _default_policy_registry()
         self.policy_id = policy_id
@@ -169,6 +208,9 @@ class CliSurface:
         # P10/Major-1：可恢复压缩旋钮由组合根注入（显式传参优先，否则读 QUESTOR_COMPACTION env）。
         # None=默认不压缩（向后兼容）；非 None 则 _loop 透传给 DefaultTurnLoop，生产 run 达阈会真压缩。
         self.compaction = compaction if compaction is not None else compaction_from_env()
+        # B10/§7.4：摘要器由组合根注入（None = 用 L2 确定性启发式）。与 `compaction` 同理：
+        # 直接拼 CliSurface 的既有路径逐字不变，只有生产组合根会递一个进来。
+        self.summarizer = summarizer
         # P9/ADR-0046：能力热插拔宿主（统一 init/teardown + 熔断隔离）；generation 与工具注册表共构探针。
         self.plugin_host = PluginHost()
         # 技能生效（DoD①）：system prompt 的「system + skills catalog」拼接已外提为 context_assembler
@@ -176,6 +218,32 @@ class CliSurface:
         # system 原样（None 仍 None）——不影既有 run。描述已在 catalog 内过 `bound_description` 有界。
         assembler = context_assembler if context_assembler is not None else DEFAULT_CONTEXT_ASSEMBLER
         self.system = assembler.assemble(system, skills_dir)
+        # B7（§6.1 档1）：记忆索引段。**默认关**，由生产组合根翻 on（D3）；开时每次 run 开始前
+        # 从真源 `MEMORY.md` 重建有界索引，作为定界静态子段接到 system 末尾（正文不进召回位）。
+        # `self.system` 本身**不动**：它仍是 skills 装配结果，既有逐字节 golden 契约零改动。
+        self.memory_index_enabled = memory_index_enabled
+        self.memory_index: MemoryIndexBlock | None = None
+        # B8：召回端口由**组合根**注入（默认 None = 不召回，既有直连构造逐字不变）。
+        # surface 不自己 new 实现、不读 embedding env：它只是把端口递给 loop。
+        self.recall = recall
+
+    async def refresh_memory_index(self) -> None:
+        """从记忆真源重建档1 索引段（未开启/无 store/读失败 → `None` = 本轮不注入）。
+
+        只在异步入口（run_once / resume / HTTP start_run）调用：IO 经注入的 MemoryStorePort，
+        surface 不碰文件、不碰库实现（C4）。"""
+        if not self.memory_index_enabled or self.memory_store is None:
+            self.memory_index = None
+            return
+        try:
+            core = await self.memory_store.read_memory_text("MEMORY.md")
+        except Exception:  # noqa: BLE001 - 索引不可用是合法降级（不注入），不得拖垮装配
+            _log.warning("memory index refresh failed; running without the index section", exc_info=True)
+            self.memory_index = None
+            return
+        block = build_index_block(core)
+        # 四道约束缺一即整体降级为“不进 system”（§6.1）：宁可不注入也不破 prompt cache 纪律。
+        self.memory_index = block if admitted(block) else None
 
     def _resolve_for_run(self, run_id: str) -> tuple[PolicyPort, PolicyRef]:
         """按 run 解析策略（fail-open 回落默认）→ (PolicyPort, 冻结 PolicyRef)。"""
@@ -185,6 +253,18 @@ class CliSurface:
         """能力名册合成版本：工具注册表 + 插件宿主 generation 之和（注入 loop 探测热插拔→发 tools_changed）。"""
         return self.registry.generation + self.plugin_host.generation
 
+    def build_extension_registry(self, settler: TurnSettler | None = None) -> ExtensionRegistry:
+        """本 surface 的装配视图：策略名册 + Stop 观察者（inspect 与 _loop 共用同一形状）。"""
+        registry = ExtensionRegistry()
+        for entry in self.policy_registry.all_entries():
+            registry.register(entry)
+        registry.register(_settle_extension_entry(settler))
+        return registry
+
+    def inspect_extensions(self) -> str:
+        """稳定 ASCII 装配链（``--inspect-extensions`` 用；不触 store/loop）。"""
+        return inspect_extensions_text()
+
     def _loop(self, bus: InProcessEventBus, cancel: asyncio.Event, surface: RunToolSurface, subagent_spawner: SubagentSpawnerPort | None = None, *, run_id: str = "", session_id: str = "") -> DefaultTurnLoop:
         """组装一个面向本次 run 的 turn 循环，工具面取自冻结 surface（run 内不变）。
 
@@ -193,6 +273,11 @@ class CliSurface:
         B6：本入口注册同一 TurnSettler（CLI 的四驱动点共用），记忆写回只经 WriteMemory。"""
         policy, _ref = self._resolve_for_run(run_id)
         settler = TurnSettler(bus, self.store, self.memory_store, session_id or f"sess:{run_id}")
+        registry = self.build_extension_registry(settler)
+        stop: ObserveChain = registry.resolve_observe(InterceptionPoint.STOP.value)
+        # B7：索引段作为定界静态子段接到本 run 的 system 末尾（一次性、跨 turn 不变 → 可入 cache 前缀）。
+        block = self.memory_index
+        system = inject_memory_block(self.system, (lambda: block.text) if block is not None else None)
         return DefaultTurnLoop(
             provider=self.provider,
             policy=policy,
@@ -205,7 +290,7 @@ class CliSurface:
             memory_store=self.memory_store,
             workspace_root=self.workspace_root,
             model=self.model,
-            system=self.system,
+            system=system,
             cancel_event=cancel,
             subagent_spawner=subagent_spawner,
             capability_probe=self.capability_probe,
@@ -213,7 +298,16 @@ class CliSurface:
             process_runner=self.process_runner,
             artifact_store=self.artifact_store,
             sandbox=self.sandbox,
-            settle=settler.settle,
+            stop=stop,
+            memory_injection=block.event_data() if block is not None else None,
+            recall=self.recall,
+            # B10/§7.4：真 LLM 摘要器或确定性 fake（未给则 L2 启发式，回放仍确定）。
+            summarizer=self.summarizer,
+            # B10/§7.2 C-1：大工具输出归档的信封工厂。**kernel 不 import L3**，故由 surface 递
+            # 函数而非具体实现；artifact_store 未装时 loop 自己跳过归档（既有测试路径不变）。
+            output_envelope=envelope_for_text,
+            # 只用于“这次 Read 读的是不是记忆文件”的判定（不传句柄、不代工具读写）。
+            memory_root=memory_root_of(self.memory_store),
         )
 
     async def _discover_mcp(self, run_id: str) -> tuple[list[Tool], Teardown]:
@@ -255,6 +349,7 @@ class CliSurface:
         # 带外投影改挂 bus 级唯一只读订阅（ADR-0033）：不再逐消费者调 log_envelope，
         # 与 run 内 printer/approver 两个订阅队列并存也不会双投。
         bus.add_observer(log_envelope)
+        await self.refresh_memory_index()  # B7：真源为文件，逐 run 重建索引（写入后下一轮可见）
         cancel = asyncio.Event()
         run_id = new_id("run")
         _policy, ref = self._resolve_for_run(run_id)
@@ -368,6 +463,7 @@ class CliSurface:
             return None
         bus = InProcessEventBus(self.store)
         bus.add_observer(log_envelope)  # bus 级唯一投影订阅（ADR-0033）
+        await self.refresh_memory_index()  # B7：resume 同样重建索引（不拿 stale 段进新 turn）
         cancel = asyncio.Event()
         tool_surface = self.registry.freeze_for_run(run.run_id)
         sid = await self.store.run_session(run_id) if callable(getattr(self.store, "run_session", None)) else None

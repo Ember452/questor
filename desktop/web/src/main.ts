@@ -1,18 +1,15 @@
 // P7 T4/T5/T6/T7：桌面薄客户端 UI。仅消费事件协议 + 投 Command，绝不做业务/权限/状态计算（S6/C14/C17）。
 // 连接 same-origin 的 sidecar（webview 指向本服务，ADR-0007）；EventSource 原生带 Last-Event-ID 重连。
 import { CommandClient } from "./api/commandClient";
+import { formatCitations } from "./api/citations";
 import { ThreadEventStream } from "./api/eventStream";
 import { statusBanner } from "./api/status";
+import { EVENT_TYPE_NAMES } from "./generated/event";
 import type { QuestorExternalEventProjectionV1 as Event } from "./generated/event";
 import type { SidecarStatus } from "./generated/sidecarStatus";
 
 // 订阅 UI 关心的事件类型（均来自协议）。EventSource 只对命名事件分发，故逐类型 addEventListener。
-const EVENT_TYPES: string[] = [
-  "run_started", "turn_started", "text_delta", "reasoning_delta", "message_completed",
-  "tool_started", "tool_progress", "tool_completed", "approval_request", "approval_resolved",
-  "permission_mode_changed", "node_updated", "usage_delta", "heartbeat", "run_cancelled",
-  "run_failed", "run_completed", "resync_required", "warning", "memory_written",
-];
+const EVENT_TYPES: readonly string[] = EVENT_TYPE_NAMES;
 
 // 会话 token：壳把 bootstrap 里的 token 经 URL 查询注入（http://127.0.0.1:port/?token=…）；前端读取后
 // 随写命令头/事件流查询带上。无 token 的本地其它进程会被服务端 401 拒（HITL 不被本机旁路）。
@@ -40,6 +37,14 @@ function appendText(target: HTMLElement, text: string): void {
   target.appendChild(document.createTextNode(text));
 }
 
+// B14：把“你为什么知道这个”的条目级归因挂在定稿消息下方。**只读事件 data**，
+// 不反查记忆库、不推断引用（那会变成前端的第二份业务逻辑，S6）。
+function renderCitations(data: unknown): void {
+  const line = formatCitations(data);
+  if (!line) return; // 无引用就不画节点（不画“来源：（无）”）
+  log.appendChild(el("div", "citations", line));
+}
+
 // live 文本增量：起/续一个 assistant 气泡并追加（流式上屏）。
 function renderDelta(_itemId: string | null, text: string): void {
   if (!assistantBubble) assistantBubble = el("div", "msg assistant");
@@ -63,6 +68,7 @@ function renderEvent(env: Event): void {
       }
       assistantBubble = null; // 下一条消息另起气泡
       liveDeltaSeen = false;
+      renderCitations(env.data); // 定稿消息之后：条目级来源
       break;
     }
     case "tool_started": {

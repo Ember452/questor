@@ -22,8 +22,18 @@ from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 from questor.contracts.common import new_id, thaw
-from questor.contracts.events import Cancel, Envelope, EventType, ResolveApproval, SetPermissionMode, SubmitMessage
+from questor.contracts.events import (
+    Cancel,
+    DeleteMemory,
+    Envelope,
+    EventType,
+    ResolveApproval,
+    SetPermissionMode,
+    SubmitMessage,
+    UpdateMemory,
+)
 from questor.contracts.inbox import InboxReceipt
+from questor.contracts.memory import MemoryScope, MemoryWrite, MemoryWriteKind
 from questor.contracts.ports import StorePort
 from questor.contracts.profile import PERMISSION_MODE_SET
 from questor.contracts.state_schema import Budget, CancelReason, ContentBlock, Message, Role
@@ -33,8 +43,18 @@ from questor.kernel.loop import DefaultTurnLoop
 from questor.kernel.recovery import rebuild_run
 from questor.kernel.run_control import RunController
 from questor.kernel.seed import SeedRef, SeedRejected, build_seed_context, coerce_seed_refs
+from questor.kernel.session_ops import (
+    apply_fork,
+    apply_on_stream,
+    apply_session_update,
+    make_rewind,
+    prefix_seed_refs,
+    session_stream_id,
+)
+from questor.memory.consolidate import supersede
 from questor.observability.projection import log_envelope
 from questor.state.domain_state import Run
+from questor.state.transition import apply
 from questor.surfaces.approval import http_status_for_receipt
 from questor.surfaces.cli import CliSurface
 from questor.surfaces.run_registry import RunRegistry
@@ -169,6 +189,7 @@ class EventServer:
         run_id: str | None = None,
         session_id: str | None = None,
         seed_refs: object | None = None,
+        prelude: object | None = None,
     ) -> str:
         """后台启动一次 run（用户文本经 SubmitMessage Command 进入 inbox）。
 
@@ -176,9 +197,16 @@ class EventServer:
         B4：给 ``session_id`` 时确保会话行 + 绑定 run + 注入 SeedContext；不给时新建 session 行。
         """
         run_id = run_id or new_id("run")
+        await self.surface.refresh_memory_index()  # B7：逐 run 从真源重建档1 索引段（写入后下一轮可见）
         sid, seed_requested = await self._prepare_session(run_id, session_id)
         # P9/ADR-0045：创建 run 时按 run 解析策略、冻结 policy_ref（reduce 会在 run_started 带出）。
         run = Run(run_id=run_id, budget=Budget(), policy_ref=self.surface._resolve_for_run(run_id)[1])
+        if prelude is not None:
+            # B13：预置命令经同一个咽喉取号并交总线持久化（surface 不自建事件、不直调 reduce 之外的写）。
+            applied = apply(self.store, run, prelude, source="http", idempotency_key=f"prelude:{run_id}:{getattr(prelude, 'type', 'cmd')}")  # type: ignore[arg-type]
+            run, pre_events = applied
+            for env in pre_events:
+                await self.bus.emit(env)
         seed_message = await self._seed_message(run, sid, seed_requested, seed_refs)
         # 单写者栅栏（C2/ADR-0047）：start_run 也取租约，防另一进程对同 run_id 的 resume 抢驱。
         # holder 每驱动任务唯一（非 pid），使同进程对同一 run 的二次驱动也会被拒（非静默覆盖）。
@@ -197,6 +225,151 @@ class EventServer:
         task.add_done_callback(_log_drive_failure)  # 驱动 task 异常绝不静默（#170）
         self.registry.set_task(run_id, task)
         return run_id
+
+    async def rewind(
+        self,
+        base_run_id: str,
+        *,
+        base_to_seq: int,
+        text: str = "",
+        session_id: str | None = None,
+        reason: str | None = None,
+    ) -> str:
+        """B13（可退）：开一个**新 run** 回到旧 run 的某个位点；旧事件流一行不改。
+
+        旧前缀经 B4 已有的 seed 接缝带入（`prefix_seed_refs` 把 per-run seq 换算成全局 gseq）。
+        回退本身走 `start_run(prelude=...)`：先 start 再投 inbox 会跟驱动赛跑，快 run 先终态
+        就把回退拒成一条 warning，所以必须同一个创建点取号。
+        """
+        sid = session_id or await self.store.run_session(base_run_id) or f"sess:{base_run_id}"
+        refs = await prefix_seed_refs(self.store, base_run_id=base_run_id, base_to_seq=base_to_seq, session_id=str(sid))
+        new_run_id = new_id("run")
+        return await self.start_run(
+            text or "(rewound)",
+            run_id=new_run_id,
+            session_id=str(sid),
+            seed_refs=refs,
+            prelude=make_rewind(new_run_id=new_run_id, base_run_id=base_run_id, base_to_seq=base_to_seq, reason=reason),
+        )
+
+    async def session_head(self, session_id: str) -> int:
+        """会话作用域流的当前头（分叉缺省位点）；只读，不取号。"""
+        return int(await self.store.sequence_head(session_stream_id(session_id)))
+
+    async def list_sessions(self, *, include_archived: bool = False, limit: int | None = None) -> list[dict]:
+        """会话列表（B13）：只读投影，不取号、不写任何东西。"""
+        return await self.store.list_sessions(include_archived=include_archived, limit=limit)
+
+    def _memory_store(self) -> object | None:
+        """取 surface 上的记忆端口（未装记忆库时 None → 路由 501，不编一个空的）。"""
+        memory = getattr(self.surface, "memory_store", None)
+        return memory if memory is not None and callable(getattr(memory, "list_entries", None)) else None
+
+    async def list_memory(self, *, limit: int = 200, include_deleted: bool = False) -> dict:
+        """B14：列记忆条目（路径/条目 id/行区间/软删位/归因/有界 snippet）。"""
+        memory = self._memory_store()
+        if memory is None:
+            raise HTTPException(status_code=501, detail="no memory store wired into this server")
+        return {"items": await memory.list_entries(limit=limit, include_deleted=include_deleted)}  # type: ignore[union-attr]
+
+    async def patch_memory(
+        self,
+        *,
+        entry_id: str,
+        text: str | None = None,
+        delete: bool = False,
+        session_id: str | None = None,
+        reason: str | None = None,
+    ) -> dict:
+        """B14：改或删一条记忆——**先落 durable 事实，再做派生索引的退役/重写**。
+
+        为什么不补一条 `memory_written`：一次编辑对用户是一个事实（`memory_updated`），
+        “退役旧行 + 写新行”是它的实现细节；多记一条写入会把 B12 的写入噪声率虚增。
+        真源 md **不删不改**（事实流与文件仍是真相）；改写走 `supersede`，顺序固定先退后写
+        （ADR-0056 决策 4：反了会在两步之间把矛盾事实同时召回）。
+        """
+        memory = self._memory_store()
+        if memory is None:
+            raise HTTPException(status_code=501, detail="no memory store wired into this server")
+        stream = session_stream_id(session_id or f"mem:{entry_id}")
+        if delete:
+            _run, events = await apply_on_stream(
+                self.store,
+                self.bus,
+                stream_run_id=stream,
+                command=DeleteMemory(run_id=stream, entry_id=entry_id, reason=reason),
+                source="memory-admin",
+                idempotency_key=f"memdel:{stream}:{entry_id}",
+            )
+            receipt = await memory.soft_delete(entry_id, idempotency_key=f"ui:{stream}:{entry_id}")  # type: ignore[union-attr]
+            return {"entry_id": entry_id, "action": "deleted", "events": [env.type for env in events], "receipt": dict(receipt or {})}
+        if not text or not text.strip():
+            raise HTTPException(status_code=400, detail="text must be non-blank unless delete=true")
+        _run, events = await apply_on_stream(
+            self.store,
+            self.bus,
+            stream_run_id=stream,
+            command=UpdateMemory(run_id=stream, entry_id=entry_id, text=text, reason=reason),
+            source="memory-admin",
+            idempotency_key=f"memupd:{stream}:{entry_id}",
+        )
+        if not events:
+            raise HTTPException(status_code=409, detail="memory update rejected by state")
+        outcome = await supersede(
+            memory,  # type: ignore[arg-type]
+            entry_id=entry_id,
+            replacement=MemoryWrite(
+                kind=MemoryWriteKind.DAILY, scope=MemoryScope.USER, text=text.strip(), attributed_to="user"
+            ),
+            idempotency_key=f"ui-edit:{stream}:{entry_id}",
+        )
+        return {
+            "entry_id": entry_id,
+            "action": "updated",
+            "events": [env.type for env in events],
+            "superseded": outcome.superseded,
+            "wrote": outcome.wrote,
+        }
+
+    async def update_session(
+        self,
+        session_id: str,
+        *,
+        title: str | None = None,
+        archived: bool | None = None,
+        pinned: bool | None = None,
+    ) -> dict:
+        """改名/归档/置顶：先落 durable 事实，再写行投影（顺序不可逆，C13）。
+
+        未知会话 404：不代用户创造会话（`ensure_session` 是另一件事，那是绑定 run 时做的）。
+        """
+        if await self.store.session_row(session_id) is None:
+            raise HTTPException(status_code=404, detail=f"unknown session {session_id}")
+        try:
+            _run, events = await apply_session_update(
+                self.store, self.bus, session_id=session_id, title=title, archived=archived, pinned=pinned
+            )
+        except ValueError as exc:  # 形状非法（空标题/超长/无 facet）→ 400，不拼一个猜的值
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        row = await self.store.session_row(session_id)
+        return {"session_id": session_id, "changed": [env.type for env in events], "session": row}
+
+    async def fork_session(self, source_session_id: str, *, from_seq: int, reason: str | None = None) -> str:
+        """B13：分叉一支新会话；`session_forked` 只落在新流 `sess:<new>` 上，源流不改写。
+
+        会话行仍只有 `sessions` 一张表（复用 `create_session`）；历史前缀由后续 run 的 seed_refs
+        自己带，不在这里另开第二条历史通道。
+        """
+        new_session_id = await self.store.create_session(model=self.surface.model, workspace_root=str(self.surface.workspace_root))
+        await apply_fork(
+            self.store,
+            self.bus,
+            new_session_id=str(new_session_id),
+            source_session_id=source_session_id,
+            from_seq=from_seq,
+            reason=reason,
+        )
+        return str(new_session_id)
 
     async def _prepare_session(self, run_id: str, session_id: str | None) -> tuple[str, bool]:
         """确保会话行 + 绑定 run；返回 (session_id, 是否请求 seed)。"""
@@ -271,6 +444,7 @@ class EventServer:
         if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
             raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
         sid = (await self.store.run_session(run_id)) or f"sess:{run_id}"
+        await self.surface.refresh_memory_index()  # B7：resume 也重建索引，不把 stale 段带进新 turn
         controller = RunController(run, queue=self.store, session_id=sid)
         self.registry.register(controller)
         task = asyncio.create_task(self._run_with_mcp(controller, run_id, lease_holder=holder, session_id=sid))  # 续跑面同样接 MCP（同任务 discover+drive+teardown）+ 收尾释放租约
@@ -373,6 +547,102 @@ def create_app(server: EventServer, static_dir: Path | None = None, token: str |
     async def resume_run(run_id: str) -> dict:
         """从持久态续跑被 kill/重启的 run（P3）；提交驱动，不直 reduce。"""
         return {"run_id": await server.resume(run_id)}
+
+    # ---- B13（可退）：回退与分叉。两者都只追加事实，绝不改写旧流 ----
+    @app.post("/runs/{run_id}/rewind", dependencies=[Depends(require_token)])
+    async def rewind_run(run_id: str, payload: dict) -> dict:
+        """开新 run 回到 `run_id` 的 `to_seq` 位点；返回新 run id（旧流一行不动）。"""
+        try:
+            to_seq = int(payload.get("to_seq", 0))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="to_seq must be an integer >= 0") from None
+        if to_seq < 0:
+            raise HTTPException(status_code=400, detail="to_seq must be >= 0")
+        new_run_id = await server.rewind(
+            run_id,
+            base_to_seq=to_seq,
+            text=str(payload.get("text", "")),
+            session_id=payload.get("session_id"),
+            reason=payload.get("reason"),
+        )
+        return {"run_id": new_run_id, "base_run_id": run_id, "base_to_seq": to_seq}
+
+    @app.post("/sessions/{session_id}/fork", dependencies=[Depends(require_token)])
+    async def fork_session(session_id: str, payload: dict) -> dict:
+        """从现有会话分叉一支新会话（B13）；`from_seq` 缺省取会话当前头。"""
+        raw_from = payload.get("from_seq")
+        try:
+            from_seq = int(raw_from) if raw_from is not None else int(await server.session_head(session_id))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="from_seq must be an integer >= 0") from None
+        if from_seq < 0:
+            raise HTTPException(status_code=400, detail="from_seq must be >= 0")
+        new_session_id = await server.fork_session(session_id, from_seq=from_seq, reason=payload.get("reason"))
+        return {"session_id": new_session_id, "source_session_id": session_id, "from_seq": from_seq}
+
+    # ---- B13（可看可改）：会话列表与元数据。只读列表 + 先事实后投影的 PATCH ----
+    @app.get("/sessions", dependencies=[Depends(require_token)])
+    async def sessions(include_archived: bool = False, limit: int | None = None) -> dict:
+        """会话列表（置顶优先、更新时间倒序）；默认不列归档项。"""
+        if limit is not None and (limit < 1 or limit > 500):
+            raise HTTPException(status_code=400, detail="limit must be between 1 and 500")
+        return {"items": await server.list_sessions(include_archived=include_archived, limit=limit)}
+
+    @app.patch("/sessions/{session_id}", dependencies=[Depends(require_token)])
+    async def patch_session(session_id: str, payload: dict) -> JSONResponse:
+        """改名 / 归档 / 置顶。只认这三个 facet，其它键 400（不接受“顺手改点什么”）。"""
+        unknown = set(payload) - {"title", "archived", "pinned"}
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"unsupported session fields: {sorted(unknown)}")
+        if not ("title" in payload or "archived" in payload or "pinned" in payload):
+            raise HTTPException(status_code=400, detail="at least one of title/archived/pinned is required")
+        for flag in ("archived", "pinned"):
+            if flag in payload and not isinstance(payload[flag], bool):
+                raise HTTPException(status_code=400, detail=f"{flag} must be a boolean")
+        return JSONResponse(
+            await server.update_session(
+                session_id,
+                title=payload.get("title"),
+                archived=payload.get("archived"),
+                pinned=payload.get("pinned"),
+            )
+        )
+
+    # ---- B14（可见可改）：记忆管理面。只读列表 + “先事实后重写”的 PATCH，无 DELETE 路由 ----
+    @app.get("/memory", dependencies=[Depends(require_token)])
+    async def memory_items(limit: int = 200, include_deleted: bool = False) -> dict:
+        """列记忆条目（默认不列已撤回）；limit 有界，不给一次拉穿索引。"""
+        if limit < 1 or limit > 500:
+            raise HTTPException(status_code=400, detail="limit must be between 1 and 500")
+        return await server.list_memory(limit=limit, include_deleted=include_deleted)
+
+    @app.patch("/memory", dependencies=[Depends(require_token)])
+    async def patch_memory_item(payload: dict) -> JSONResponse:
+        """改一条记忆（`entry_id` + `text`）或撤回它（`entry_id` + `delete: true`）。
+
+        只认这四个键：记忆面不能变成“递什么改什么”的万能接口（那会把派生索引写成第二个真相）。
+        """
+        unknown = set(payload) - {"entry_id", "text", "delete", "session_id", "reason"}
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"unsupported memory fields: {sorted(unknown)}")
+        entry_id = payload.get("entry_id")
+        if not isinstance(entry_id, str) or not entry_id.strip() or ":" not in entry_id:
+            raise HTTPException(status_code=400, detail="entry_id must be a non-empty 'path:start-end' id")
+        delete = payload.get("delete", False)
+        if not isinstance(delete, bool):
+            raise HTTPException(status_code=400, detail="delete must be a boolean")
+        text = payload.get("text")
+        if text is not None and not isinstance(text, str):
+            raise HTTPException(status_code=400, detail="text must be a string")
+        return JSONResponse(
+            await server.patch_memory(
+                entry_id=entry_id.strip(),
+                text=text,
+                delete=delete,
+                session_id=payload.get("session_id"),
+                reason=payload.get("reason"),
+            )
+        )
 
     @app.get("/sessions/{session_id}/submissions", dependencies=[Depends(require_token)])
     async def session_submissions(session_id: str, after_version: int = 0) -> dict:

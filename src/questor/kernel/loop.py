@@ -20,7 +20,7 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from contextlib import ExitStack
 from dataclasses import replace
 from datetime import timedelta
@@ -28,6 +28,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+from questor.contracts.artifacts import OutputBudget
 from questor.contracts.common import JsonObject, new_id, thaw, utc_now
 from questor.contracts.errors import ErrorEntry, ErrorKind, ErrorLayer, RecoveryHints, classify_provider_error
 from questor.contracts.events import (
@@ -36,6 +37,7 @@ from questor.contracts.events import (
     Cancel,
     Command,
     CompactContext,
+    DeleteMemory,
     Envelope,
     EventType,
     ExpireApproval,
@@ -50,11 +52,32 @@ from questor.contracts.events import (
     ResolveApproval,
     SpawnSubagent,
     SubmitMessage,
+    WarnCompaction,
     WriteMemory,
 )
-from questor.contracts.memory import MemoryScope, MemoryStorePort, MemoryWrite, MemoryWriteKind
+from questor.contracts.extension import (
+    ExtensionDescriptor,
+    ExtensionKind,
+    HookOutcome,
+    HookOutcomeKind,
+    InterceptionPoint,
+    ObserveChain,
+    ObserveEntry,
+)
+from questor.contracts.memory import (
+    CITATION_OPEN,
+    MemoryCitation,
+    MemoryScope,
+    MemoryStorePort,
+    MemoryWrite,
+    MemoryWriteKind,
+    RecallPort,
+    consumption_kind_for,
+    parse_citation,
+    recall_skipped_by_flags,
+)
 from questor.contracts.policy import CompactionConfig, PolicyPort, PolicyView, ProposeToolCall, SuggestFinish
-from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort
+from questor.contracts.ports import ProviderPort, ProviderRequest, SandboxPort, StorePort, SummarizerPort
 from questor.contracts.sandbox import Confinement, SandboxBackend, SandboxDescriptor
 from questor.contracts.shell_analysis import ShellAnalysis, ShellDialect, ShellParseStatus
 from questor.contracts.state_schema import (
@@ -70,7 +93,13 @@ from questor.contracts.subagent import SpawnRequest, SpawnResult, SubagentSpawne
 from questor.contracts.submissions import command_digest
 from questor.contracts.tool import RunToolSurface, Tool, ToolResult, ToolSpec
 from questor.kernel.command_window import window_payload
-from questor.kernel.compaction import plan_compaction
+from questor.kernel.compaction import (
+    MAX_CONSECUTIVE_COMPACT_FAILURES,
+    SUMMARY_MAX_CHARS,
+    EvictWindow,
+    evict_window,
+    plan_compaction,
+)
 from questor.kernel.events import EventBus
 from questor.kernel.permission_policy import PermissionDecision, PermissionEvaluation
 from questor.kernel.run_control import RunController
@@ -78,6 +107,7 @@ from questor.kernel.settle import TurnBoundary
 from questor.kernel.shell_parse_posix import parse_posix_shell
 from questor.kernel.shell_parse_powershell import parse_powershell
 from questor.kernel.tool_arguments import extract_shell_commands
+from questor.memory.cache_plan import CachePlan, CacheSegments, break_reason, cache_ttl_for, plan_cache
 from questor.observability.redact import strip_prompt_echo
 from questor.observability.scope import bind
 from questor.state.checkpoint import open_tool_use_ids
@@ -269,6 +299,28 @@ def _transition_key(command: Command, run: Run) -> str:
     return f"{command.type}:{run.seq}:{run.turn}:{tied}:{status}"
 
 
+def _settle_chain_from_callback(settle: Callable[[TurnBoundary], Awaitable[None]] | None) -> ObserveChain:
+    """R3 兼容：把旧 ``settle=`` callable 包成**单条** Stop OBSERVE 条目。
+
+    这是为了让既有 ``DefaultTurnLoop(settle=...)`` 调用点零改动；内核只持 ``_stop`` 一个字段，
+    ``_settle_turn`` 只有一个调用点——不是两套机制并存（ADR-0053）。
+    """
+    if settle is None:
+        return ObserveChain()
+
+    async def _hook(payload: object) -> HookOutcome:
+        await settle(payload)  # type: ignore[arg-type]
+        return HookOutcome()
+
+    descriptor = ExtensionDescriptor(
+        id="settle-turn",
+        kind=ExtensionKind.OBSERVE,
+        at=InterceptionPoint.STOP.value,
+        priority=100,
+    )
+    return ObserveChain((ObserveEntry(descriptor, _hook),))
+
+
 class DefaultTurnLoop:
     """P1 内核循环：用注入的 provider/policy/permission/tools/bus/store 驱动 phase pipeline。"""
 
@@ -295,6 +347,13 @@ class DefaultTurnLoop:
         capability_probe: Callable[[], int] | None = None,
         compaction: CompactionConfig | None = None,
         settle: Callable[[TurnBoundary], Awaitable[None]] | None = None,
+        stop: ObserveChain | None = None,
+        memory_injection: JsonObject | None = None,
+        query_source: str = "main",
+        recall: RecallPort | None = None,
+        memory_root: Path | None = None,
+        summarizer: SummarizerPort | None = None,
+        output_envelope: object | None = None,
     ) -> None:
         self.provider = provider
         self.policy = policy
@@ -316,8 +375,39 @@ class DefaultTurnLoop:
         self.subagent_spawner = subagent_spawner
         # P10/ADR-0048：可恢复压缩旋钮；None = 不压缩（向后兼容，等价旧 disable_compaction=True）。
         self.compaction = compaction
-        # B6：Stop/Interrupt 点的 settle 回调（surface 注册；None = 不写记忆，kernel 仍 emit turn_completed）。
-        self.settle = settle
+        # B10/§7.3–7.4：可注入摘要器（未给则用 L2 确定性启发式）；熔断只数**连续**失败，
+        # 预警按窗口去重（一个窗口一次“快满了”，不静默也不刷屏）。两者都是 run 内状态。
+        self.summarizer = summarizer
+        self._compact_failures = 0
+        self._warned_windows: set[int] = set()
+        self._usage_source = "estimated"
+        # §7.2 C-1（BLK-10 收口）：大工具输出归档的信封工厂，由 **surface 注入**（形状取
+        # `capabilities.tools._output.envelope_for_text`）——kernel 不 import L3，所以递的是 callable。
+        # 未注入（直接拼 loop 的旧路径）则工具结果逐字不变，既有行为不破。
+        self.output_envelope = output_envelope
+        # B6/B5：Stop 点是 settle 的唯一入口。``stop`` 是装配好的 OBSERVE 链；
+        # ``settle=`` 是 R3 兼容薄糖（既有测试直接传 callable），内部包成单条 Stop 链，
+        # **不存在第二套回调字段**。
+        self._stop = stop if stop is not None else _settle_chain_from_callback(settle)
+        # B7（§6.1 第④约束）：已装进 system 定界子段的索引段计量。loop **不读正文**，
+        # 只在首次真正发出请求时落一条 live-only `memory_injected`（“请求里确实带了它”才可归因）。
+        self.memory_injection = memory_injection
+        self._memory_injection_announced = False
+        # B7（§6.1 cache 三条款）：TTL 按 query source 门控——side-query（终选器/摘要器）
+        # 不开 cache，也就不得把用户前缀的断裂事件规到自己头上（避免面板/日志被内部调用污染）。
+        self.query_source = query_source
+        self._cache_ttl = cache_ttl_for(query_source)
+        self._cache_plan: CachePlan | None = None
+        # B8（§6.2/§6.3）：召回只经注入的 RecallPort（kernel 不 import memory 层）；
+        # ``memory_root`` 只用来判定“这次 Read 读的是不是记忆文件”（花费打点用）。
+        self.recall = recall
+        self.memory_root = memory_root
+        # 门控③：上一轮消费到的 ``skip_recall`` 标记只对**下一次发请求**生效（一次性）。
+        self._recall_skip = False
+        self._recalled_ids: set[str] = set()
+        # B8（§6.3）：本轮从正文剥出的引用，由 `_drive_controller` 随 AppendAssistantMessage 一次携带。
+        # 存局部变量而不是改返回 arity：`_stream_turn` 的三元组已被既有测试钉住（R3 不改断言）。
+        self._turn_citations: MemoryCitation | None = None
         # P9/ADR-0046：能力名册探针（未注入则不发 tools_changed）。loop 每安全点比对、变化即发 live-only。
         self.capability_probe = capability_probe
         self._capability_gen = capability_probe() if capability_probe is not None else 0
@@ -425,7 +515,14 @@ class DefaultTurnLoop:
                         return run
                     continue
                 total_tokens += _token_total(usage)
-                run, events = await self._transition(run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg))
+                if usage:
+                    # §7.1 信号源：模型报回来的 usage 是 **server-observed**，比任何本地估算都可信；
+                    # 没报（假 provider / 只产文本）就仍是 estimated，摘要与阈值都按它标来源，不冒充观测值。
+                    self._usage_source = "server_observed"
+                citations, self._turn_citations = self._turn_citations, None
+                run, events = await self._transition(
+                    run, AppendAssistantMessage(run_id=run.run_id, turn=turn, message=assistant_msg, citations=citations)
+                )
                 controller.run = run
                 await self._emit(events)
                 if not any(env.type == EventType.MESSAGE_COMPLETED for env in events):
@@ -448,8 +545,8 @@ class DefaultTurnLoop:
 
                 # P10/ADR-0048：turn 边界安全点（快照已落、全部 tool_use 已闭合）尝试可恢复压缩。
                 # I2：压缩由内核决定（策略只能发 advisory hint）；未配 compaction 则逐字不变。
+                await self._maybe_warn_pressure(controller, run, turn, total_tokens)
                 run = await self._maybe_compact(controller, run, turn, total_tokens)
-
                 if run.budget.max_tokens is not None and total_tokens > run.budget.max_tokens:
                     return await self._fail(run, turn, ErrorKind.INTERNAL, f"token budget {run.budget.max_tokens} exceeded (used {total_tokens})", "budget_exhausted")
 
@@ -511,10 +608,20 @@ class DefaultTurnLoop:
                 await self._emit(events)
                 # 记忆写副作用：reduce 已受理（产 memory_written）后，由 kernel 在消费点经注入的
                 # MemoryStorePort 落库——写唯一入口仍是 Command（C4/C16），幂等键取已占的 durable seq。
+                if isinstance(command, SubmitMessage) and recall_skipped_by_flags(command.flags):  # type: ignore[arg-type]
+                    # 门控③：系统/自动轮次（提交方显式标了 skip_recall）下一轮不召回。
+                    self._recall_skip = True
                 if isinstance(command, WriteMemory) and self.memory_store is not None:
-                    ack = next((e for e in events if e.type == EventType.MEMORY_WRITTEN), None)
+                    ack = next((env for env in events if env.type == EventType.MEMORY_WRITTEN), None)
                     if ack is not None:
                         await self.memory_store.write(command.payload, idempotency_key=f"mem:{command.run_id}:{ack.seq}")
+                if isinstance(command, DeleteMemory) and self.memory_store is not None:
+                    # B9 纪律⑥：事件已受理才做软删（与写同纪律：reduce 发事、消费点做 IO）。
+                    ack = next((env for env in events if env.type == EventType.MEMORY_DELETED), None)
+                    if ack is not None:
+                        soft_delete = getattr(self.memory_store, "soft_delete", None)
+                        if callable(soft_delete):  # 旧/简 store 无此能力时跳过（additive 端口方法）
+                            await soft_delete(command.entry_id, idempotency_key=f"memdel:{command.run_id}:{ack.seq}")
                 # P8（ADR-0038/§4.1）：reduce 受理 SpawnSubagent（产出 peer_started = 已绑 node）后，
                 # 才由端口实体化子 run——对齐 WriteMemory 的"reduce 发事件、消费点做 IO"。reduce 若判重/拒
                 # （无 peer_started）则不建子，避免重投/回放留下孤儿子。
@@ -537,8 +644,8 @@ class DefaultTurnLoop:
         *,
         interrupted: bool,
     ) -> None:
-        """Stop/Interrupt 点：把边界事实交给 surface 注册的 settle；失败绝不打断回复。"""
-        if self.settle is None:
+        """Stop/Interrupt 点：把边界事实交给 Stop 点位的观察链；失败绝不打断回复。"""
+        if not self._stop:
             return
         boundary = TurnBoundary(
             run_id=run.run_id,
@@ -548,12 +655,107 @@ class DefaultTurnLoop:
             interrupted=interrupted,
             usage=dict(usage or {}),
         )
-        try:
-            await self.settle(boundary)
-        except Exception:  # noqa: BLE001 - best-effort：settle 故障只留痕，不阻塞回复
-            _log.warning("settle_turn callback failed for run=%s turn=%s", run.run_id, turn, exc_info=True)
+        outcomes = await self._stop.emit(boundary)
+        for outcome in outcomes:
+            if outcome.kind is not HookOutcomeKind.SUCCESS:
+                _log.warning(
+                    "stop hook %s ended %s: %s",
+                    outcome.entry_id,
+                    outcome.kind.value,
+                    outcome.reason,
+                )
 
-    async def _maybe_compact(self, controller: RunController, run: Run, turn: int, total_tokens: int) -> Run:
+    async def _window_identity(self, run: Run) -> JsonObject:
+        """从 **现有 `command_window` 行** 派生本 run 的压缩窗口身份（B10/§7.1，零新表）。
+
+        store 不支持时返回单窗口默认（number=0、身份 None），压缩照旧工作、只是事件不带身份。"""
+        window_identity = getattr(self.store, "window_identity", None)
+        if not callable(window_identity):
+            return {"window_number": 0, "window_id": None, "previous_window_id": None}
+        try:
+            row = await window_identity(run.run_id)
+        except Exception:  # noqa: BLE001 - 身份是观测面，拿不到就降级为无身份，绝不拖垮压缩
+            _log.warning("window identity lookup failed run=%s", run.run_id, exc_info=True)
+            return {"window_number": 0, "window_id": None, "previous_window_id": None}
+        if not row:
+            return {"window_number": 0, "window_id": None, "previous_window_id": None}
+        return {
+            "window_number": int(row.get("window_number", 0)),
+            "window_id": row.get("window_id"),
+            "previous_window_id": row.get("previous_window_id"),
+        }
+
+    async def _emit_compact_warning(
+        self,
+        controller: RunController,
+        run: Run,
+        turn: int,
+        *,
+        reason: str,
+        trigger: str,
+        used_tokens: int | None,
+        threshold: int | None,
+        window_number: int,
+        failures: int,
+    ) -> Run:
+        """落一条 durable `compact_warning`（同 `RecordWarning`：经 reduce 取号，保 seq 单调）。"""
+        run, events = await self._transition(
+            run,
+            WarnCompaction(
+                run_id=run.run_id,
+                turn=turn,
+                reason=reason,
+                trigger=trigger,
+                used_tokens=used_tokens,
+                threshold=threshold,
+                window_number=window_number,
+                failures=failures,
+            ),
+        )
+        controller.run = run
+        await self._emit(events)
+        return run
+
+    async def _maybe_warn_pressure(self, controller: RunController, run: Run, turn: int, total_tokens: int) -> None:
+        """§7.1 预警：累计用量越过 `EW - warning_buffer` 就发一次“快满了”（每个窗口只发一次）。
+
+        未配 `context_window`（算不出绝对阈值）时完全不动作，行为逐字同 P10。"""
+        if self.compaction is None:
+            return
+        threshold = self.compaction.warning_threshold()
+        if threshold is None or total_tokens < threshold:
+            return
+        identity = await self._window_identity(run)
+        number = int(identity["window_number"])
+        if number in self._warned_windows:
+            return  # 一次窗口一次告警：不静默，也不刷屏
+        self._warned_windows.add(number)
+        await self._emit_compact_warning(
+            controller,
+            run,
+            turn,
+            reason="pressure",
+            trigger="auto",
+            used_tokens=total_tokens,
+            threshold=threshold,
+            window_number=number,
+            failures=self._compact_failures,
+        )
+
+    async def _summary_for(self, window: EvictWindow) -> str | None:
+        """有 `SummarizerPort` 就问它（异步 IO 不得进 L2 纯决策），否则返回 None 用内置启发式。
+
+        摘要器报错不冒泡：压缩失败是合法结果（熔断会计它），但绝不能把回复带崩。"""
+        if self.summarizer is None:
+            return None
+        try:
+            return await self.summarizer.summarize(window.evicted, max_chars=SUMMARY_MAX_CHARS)
+        except Exception:  # noqa: BLE001 - 摘要器故障计入熔断，不击穿回复（C10 同向）
+            _log.warning("summarizer raised; falling back to deterministic summary", exc_info=True)
+            self._compact_failures += 1
+            return None
+
+    async def _maybe_compact(self, controller: RunController, run: Run, turn: int, total_tokens: int, *, trigger: str = "auto") -> Run:
         """P10/ADR-0048：在 turn 边界安全点尝试一次**可恢复压缩**。
 
         步骤（全部经 Command→reduce→durable，绝不上 out-of-band）：
@@ -565,9 +767,18 @@ class DefaultTurnLoop:
         """
         if self.compaction is None:
             return run
-        plan = plan_compaction(run, self.compaction, total_tokens)
+        if trigger == "auto" and self._compact_failures >= MAX_CONSECUTIVE_COMPACT_FAILURES:
+            # §7.3 熔断：跳闸后**不再自动压**（没有它的代价写在 Claude-Code 注释里：1,279 个会话、
+            # 最高 3,272 次连续失败）。溢出则走既有 budget/失败归一路径，不静默重试烧钱。
+            return run
+        window = evict_window(run, self.compaction, total_tokens, trigger=trigger)
+        if window is None:
+            return run
+        summary_text = await self._summary_for(window)
+        plan = plan_compaction(run, self.compaction, total_tokens, trigger=trigger, summary_text=summary_text)
         if plan is None:
             return run
+        identity = await self._window_identity(run)
         await self._checkpoint(run, "pre_compact")  # 压缩前全量快照，保证可确定性还原压缩前态
         run, events = await self._transition(
             run,
@@ -578,12 +789,34 @@ class DefaultTurnLoop:
                 summary_text=plan.summary_text,
                 new_floor=plan.new_floor,
                 new_pointers=plan.new_pointers,
+                trigger=plan.trigger,
+                source=self._usage_source,
+                window_id=identity["window_id"],
+                previous_window_id=identity["previous_window_id"],
+                window_number=int(identity["window_number"]),
+                before_tokens=total_tokens,
+                after_tokens=None,  # 逐出后的累计用量本轮未知：不编造（None 不进事件字段假数）
             ),
         )
         controller.run = run
         await self._emit(events)
         if not any(e.type == EventType.COMPACT_APPLIED for e in events):
-            return run  # reduce 拒了（如越 closed_prefix）→不进蒸馏写
+            # reduce 拒了（如越 closed_prefix）→不进蒸馏写，并计入连续失败（§7.3 熔断）。
+            self._compact_failures += 1
+            if trigger == "auto" and self._compact_failures >= MAX_CONSECUTIVE_COMPACT_FAILURES:
+                run = await self._emit_compact_warning(
+                    controller,
+                    run,
+                    turn,
+                    reason="breaker_tripped",
+                    trigger="auto",
+                    used_tokens=total_tokens,
+                    threshold=self.compaction.auto_threshold(),
+                    window_number=int(identity["window_number"]),
+                    failures=self._compact_failures,
+                )
+            return run
+        self._compact_failures = 0  # 一次成功就清零：熔断只数**连续**失败
         # L2' 蒸馏桥：被压区浓缩写 daily（正文只放浓缩、绝不放 delta/原文，I3）。
         if self.memory_store is not None:
             p = plan.new_pointers[0]
@@ -634,6 +867,7 @@ class DefaultTurnLoop:
             if entry.message:
                 entry = replace(entry, message=strip_prompt_echo(entry.message, _prompt_echo_baseline(run)))
             return await self._fail_with_entry(run, turn, entry, "provider_error"), None, {}
+        message = await self._strip_citation(run, turn, message)
         return run, message, usage
 
     async def _ensure_paired_history(self, controller: RunController, run: Run, turn: int) -> Run:
@@ -683,7 +917,13 @@ class DefaultTurnLoop:
                 seq=0,
             )
             messages = (summary_msg, *messages)
+        # B8（§6.1 档2）：召回正文**绝不进 system**，只作 user-role 前缀消息进尾部易变段。
+        recall_message = await self._build_recall_message(run, turn)
+        if recall_message is not None:
+            messages = (*messages, recall_message)
+        await self._announce_memory_injection(run, turn)
         request = ProviderRequest(model=self.model, messages=messages, tools=self._specs(), system=self.system)
+        await self._track_cache_break(run, turn, request)
         text_parts: list[str] = []
         usage: JsonObject = {}
         calls: dict[int, dict] = {}
@@ -849,6 +1089,26 @@ class DefaultTurnLoop:
         # 统一交给 _execute_tool（普通 turn 与 resume 重派共用，design/03 §8 deadline 对所有工具生效）。
         return await self._execute_tool(controller, run, tool, intent.tool_call_id or "", intent.args, intent.name)
 
+    async def _archive_output(self, run: Run, tool_call_id: str, result: ToolResult) -> ToolResult:
+        """§7.2 C-1：超预算的工具全文进内容寻址 artifact，prompt 只留有界信封（BLK-10 接线）。"""
+        envelope_for = self.output_envelope
+        if not callable(envelope_for) or self.artifact_store is None or not isinstance(result.result, str):
+            return result  # 未注入就逐字同 P10：不新建第二套归档路径，也不强行归档
+        try:
+            envelope, _ref, archived = await envelope_for(  # type: ignore[misc]
+                result.result,
+                store=self.artifact_store,
+                run_id=run.run_id,
+                tool_call_id=tool_call_id,
+                budget=OutputBudget(),
+            )
+        except Exception:  # noqa: BLE001 - 归档失败降级为有界原样，绝不把全文塑回 prompt（ADR-0019）
+            _log.warning("tool output archiving failed; keeping bounded result run=%s call=%s", run.run_id, tool_call_id, exc_info=True)
+            return result
+        if not archived or not isinstance(envelope, dict):
+            return result
+        return replace(result, result=envelope)
+
     async def _execute_tool(self, controller: RunController, run: Run, tool: Tool, tool_call_id: str, args: object, name: str) -> Run:
         """执行工具并 settle 一条耐久结果（Harness 兜 panic/deadline，design/03 §8/C10）。
 
@@ -884,9 +1144,11 @@ class DefaultTurnLoop:
                 result=f"tool '{name}' raised {type(exc).__name__}: {exc}",
                 display=f"{name} crashed",
             )
+        result = await self._archive_output(run, tool_call_id, result)
         run, events = await self._transition(run, RecordToolResult(run_id=run.run_id, tool_call_id=tool_call_id, status=result.status, result=result.result, display=result.display))
         controller.run = run
         await self._emit(events)
+        await self._report_memory_read(run, name, args, result)  # B8：只有真读了记忆文件才打消费点
         await self._checkpoint(run, "post_tool")  # 工具结果已落库 → 快照收窄在途窗口（ADR-0020）
         return run
 
@@ -1054,6 +1316,117 @@ class DefaultTurnLoop:
     async def _live(self, run: Run, turn: int, etype: str, data: dict) -> None:
         # live-only delta：只转发给订阅者，永不持久化（design/01 I3）。
         await self.bus.emit(Envelope(v=1, seq=run.seq, run_id=run.run_id, type=etype, turn=turn, data=data))
+
+    async def _strip_citation(self, run: Run, turn: int, message: Message) -> Message:
+        """§6.3：从定稿正文里剥出引用，作为**事件字段**携带，永不回送 provider。
+
+        剥完后的正文才是进 context / 下一轮请求体的内容；引用同时发一条
+        条目级 `memory_consumed`（被引用 = 消费；但**命中不算**，见 `_execute_tool` 一侧）。
+        """
+        blocks: list[ContentBlock] = []
+        citation: MemoryCitation | None = None
+        for block in message.content:
+            if block.type == "text" and block.text and CITATION_OPEN in block.text:
+                cleaned, parsed = parse_citation(block.text)
+                if parsed is not None:
+                    citation = parsed
+                blocks.append(replace(block, text=cleaned))
+                continue
+            blocks.append(block)
+        if citation is None:
+            return message
+        self._turn_citations = citation
+        for entry in citation.entries:
+            await self._live(
+                run,
+                turn,
+                EventType.MEMORY_CONSUMED,
+                {"kind": consumption_kind_for(entry.path), "entry_id": entry.entry_id, "tool_name": None},
+            )
+        return replace(message, content=tuple(blocks))
+
+    async def _report_memory_read(self, run: Run, name: str, args: object, result: ToolResult) -> None:
+        """§6.3 硬规定的另一腿：只有 `read` 类工具**真读了记忆文件**才算消费。
+
+        `memory_search` 命中不发本事件（否则“注入型召回”会把写入噪声率虚假清零）；
+        识别不了的路径/工具直接不计数（codex “宁可不计数也不猜”）。
+        """
+        if self.memory_root is None or name != "read" or result.status != "success" or not isinstance(args, Mapping):
+            return
+        raw = args.get("file_path")
+        if not isinstance(raw, str) or not raw:
+            return
+        try:
+            target = (self.workspace_root / raw).resolve()
+            relative = target.relative_to(self.memory_root.resolve())
+        except (ValueError, OSError):
+            return  # 不在记忆根下（或解析不了）：不计数，不猜
+        rel = relative.as_posix()
+        offset = args.get("offset")
+        limit = args.get("limit")
+        # `read` 的 offset 是 **0-based 行下标**，而条目 id 是 1-based 行号：不换算就会错开一行。
+        start = (offset if isinstance(offset, int) and offset > 0 else 0) + 1
+        count = limit if isinstance(limit, int) and limit > 0 else 1
+        await self._live(
+            run,
+            run.turn,
+            EventType.MEMORY_CONSUMED,
+            {"kind": consumption_kind_for(rel), "entry_id": f"{rel}:{start}-{start + count - 1}", "tool_name": name},
+        )
+
+    async def _build_recall_message(self, run: Run, turn: int) -> Message | None:
+        """按最后一个真实 user 原话跑一次召回；返回一条**不入库**的 user-role 前缀消息。
+
+        为什么不写进 Domain_State：召回是“本轮模型看到什么”，不是“发生了什么”（C5）；
+        进了事实流就会污染重放与缓存前缀。门控与上限全在端口里（kernel 不判）。
+        """
+        if self.recall is None:
+            return None
+        skip, self._recall_skip = self._recall_skip, False
+        query = _last_real_user_text(run)
+        if not query:
+            return None
+        block = await self.recall.recall(query, skip=skip)
+        if block is None or not block.text or not block.entry_ids:
+            return None
+        self._recalled_ids.update(block.entry_ids)
+        await self._live(run, turn, EventType.MEMORY_INJECTED, dict(block.event_data()))
+        return Message(
+            id=f"recall:{run.run_id}:{turn}",
+            role=Role.USER,
+            content=(ContentBlock(type="text", text=block.text),),
+            seq=0,
+        )
+
+    async def _announce_memory_injection(self, run: Run, turn: int) -> None:
+        """首次发出请求前落一条 live-only ``memory_injected``（每 run 一次）。
+
+        “已注入”的口径是“**本轮请求里带了它**”（§6.3 消费可归因的下笔），不是“surface 里有数据”；
+        载荷已由装配方裁剪（无正文），本方法不读记忆内容也不做业务判断（C1）。
+        """
+        if self.memory_injection is None or self._memory_injection_announced:
+            return
+        self._memory_injection_announced = True
+        await self._live(run, turn, EventType.MEMORY_INJECTED, dict(self.memory_injection))
+
+    async def _track_cache_break(self, run: Run, turn: int, request: ProviderRequest) -> None:
+        """§6.1 条款 3：三段 hash（system 块 / 工具面 / 历史起点）一变就发 live-only ``cache_break``。
+
+        首轮只建基线（不算断裂）；不开 cache 的来源（side-query）不参与断裂观测。
+        载荷只含不可逆 hash 与断点数（条款 1 的预算口径），零正文（C18/C20）。
+        """
+        if self._cache_ttl is None:
+            return
+        segments = CacheSegments(
+            system=request.system,
+            tools=tuple(spec.name for spec in request.tools),
+            history_start=request.messages[0].seq if request.messages else None,
+        )
+        plan = plan_cache(segments)
+        reason = break_reason(self._cache_plan, plan)
+        self._cache_plan = plan
+        if reason is not None:
+            await self._live(run, turn, EventType.CACHE_BREAK, plan.event_data(reason=reason))
 
     async def _maybe_announce_capability(self, run: Run, turn: int) -> None:
         """安全点比对能力名册 generation：变化则发一条 live-only ``tools_changed``（ADR-0046）。

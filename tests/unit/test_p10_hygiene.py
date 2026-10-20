@@ -8,10 +8,16 @@ artifact GC **只删孤儿**（不被任何引用命中），活跃引用恒保�
 from __future__ import annotations
 
 import time
+from dataclasses import fields
 from pathlib import Path
 
+from questor.contracts.memory import MemorySearchResult, MemorySource
+from questor.contracts.state_schema import ToolCall
 from questor.providers.artifact_store import FileSystemArtifactStore, referenced_artifact_ids
 from questor.providers.store_sqlite import SQLiteStore
+from questor.state.domain_state import Run, ToolLedger
+from questor.state.reduce import _tool_completed_data
+from questor.state.snapshot import from_snapshot, to_snapshot
 from questor.surfaces.maintenance import run_maintenance_command
 
 
@@ -88,3 +94,55 @@ async def test_maintenance_command_reclaims_via_production_caller(tmp_path: Path
         assert "reclaimed_stale_claims=1" in out
     finally:
         await store.close()
+
+
+# ---- G7 僵尸位：artifact_ref 家族先拆同名、再判死活（不得直删）--------------- #
+def test_artifact_ref_family_is_three_distinct_symbols_not_one() -> None:
+    """§21 G7：“同名不同物”必须先拆开，否则“删死字段”会删掉活代码。"""
+    tool_call_fields = {field.name for field in fields(ToolCall)}
+    memory_hit_fields = {field.name for field in fields(MemorySearchResult)}
+    assert "artifact_refs" in tool_call_fields  # 复数：账本上的引用列表
+    assert "artifact_ref" in memory_hit_fields  # 单数：记忆命中的外置指针
+    assert "artifact_refs" not in memory_hit_fields and "artifact_ref" not in tool_call_fields
+    # 第三个同名物是 dict 键（envelope_for_text 的产物），不是 dataclass 字段。
+    assert "artifact_ref" in _archived_envelope()["result"]
+
+
+def test_toolcall_artifact_refs_round_trips_through_snapshot() -> None:
+    """判决：**活字段**（快照往返不丢），不能删。"""
+    call = ToolCall(tool_call_id="tc1", turn=1, name="read", args={}, artifact_refs=("artifact://a",))
+    run = Run(run_id="run_g7", tool_ledger=ToolLedger(calls=(call,)))
+    restored = from_snapshot(to_snapshot(run))
+    assert restored.tool_ledger.calls[0].artifact_refs == ("artifact://a",)
+
+
+def test_archived_envelope_is_the_live_producer_of_the_event_artifact_ref() -> None:
+    """判决：**活链路**——`reduce` 只认归档信封里的 `artifact_ref.artifact_id`，短输出不带。"""
+    envelope = _archived_envelope()["result"]
+    data = _tool_completed_data("tc1", "success", result=envelope, display=None)
+    assert data["artifact_ref"] == "artifact://a"
+    assert data["truncated"] is True and data["preview"] == "head"
+    short = _tool_completed_data("tc2", "success", result="tiny output", display=None)
+    assert "artifact_ref" not in short and short["truncated"] is False
+
+
+def test_memory_search_result_artifact_ref_is_a_reserved_slot_not_dead_code() -> None:
+    """判决：**预留位**（当前无生产者，但属 L0 契约词汇）——保留，不删（删 = 破坏性契约变更）。"""
+    hit = MemorySearchResult(
+        path="MEMORY.md", start_line=1, end_line=2, score=0.5, snippet="s", source=MemorySource.CORE
+    )
+    assert hit.artifact_ref is None  # 超阈全文外置时才非 None（design/06 §0；ADR-0019）
+
+
+def _archived_envelope() -> dict:
+    """`envelope_for_text` 的产物形状（_output.py:41）；写失败不得回退原文。"""
+    return {
+        "result": {
+            "kind": "archived_tool_result",
+            "artifact_ref": {"artifact_id": "artifact://a", "sha256": "x"},
+            "content_sha256": "x",
+            "total_bytes": 999999,
+            "preview": "head",
+            "continuation": {"has_more": True, "next": {"tool_call_id": "tc1", "artifact_id": "artifact://a"}},
+        }
+    }

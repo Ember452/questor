@@ -97,3 +97,25 @@ def test_candidates_hint_for_unknown_tool() -> None:
     candidates = registry.candidates("redi")
     assert "read" in candidates
     assert registry.candidates("zzzzz") == ()
+
+
+def test_spec_level_available_flag_is_wired_not_dead() -> None:
+    """G7：`ToolSpec.available=False` 现在真的把工具关在外露面之外（仍已注册）。"""
+    registry = ToolRegistry()
+    quiet = _NamedTool(_spec("quiet", "a tool switched off at declaration time", available=False), available=True)
+    registry.register(quiet)
+    registry.register(_NamedTool(_spec("loud", "a tool switched on everywhere")))
+    assert registry.get("quiet") is quiet  # 注册仍在，只是不外露
+    assert {tool.spec.name for tool in registry.list_available()} == {"loud"}
+    assert {spec.name for spec in registry.definitions()} == {"loud"}
+    surface = registry.freeze_for_run("run-g7")
+    assert {spec.name for spec in surface.specs} == {"loud"}
+    assert surface.get("quiet") is None
+
+
+def test_default_tools_keep_spec_available_true_so_nothing_disappears() -> None:
+    """接线 `spec.available` 对现有名册零行为变更（无人写 False）。"""
+    registry = ToolRegistry()
+    registry.register(ReadTool())
+    assert ReadTool().spec.available is True
+    assert {spec.name for spec in registry.definitions()} == {"read"}

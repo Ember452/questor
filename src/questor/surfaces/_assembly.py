@@ -22,6 +22,7 @@ from questor.config.model import load_config
 from questor.contracts.policy import CompactionConfig
 from questor.observability.configure import configure_logging, logging_status
 from questor.observability.entry import LogLevel
+from questor.providers.model_windows import window_from_env
 
 #: 装配完成后的自述行 logger（一方 inline 记录，走桥进主干与 console）。
 _LOG = logging.getLogger("questor.assembly")
@@ -121,6 +122,41 @@ def compaction_from_env() -> CompactionConfig | None:
             return CompactionConfig(keep_head=2, keep_tail=6, max_items=int(digits))
     # 非法值：宁可不猜也不静默错配——拒绝启动（与 payload 门同口径 fail-closed）。
     raise SystemExit(f"QUESTOR_COMPACTION={raw!r} invalid; use 'off', 'on', or 'items:<N>'")
+
+
+def production_compaction_from_env(model: str | None) -> CompactionConfig | None:
+    """**生产组合根专用口径（B10 翻默认）**：未设 `QUESTOR_COMPACTION` = 开，显式 `off` 仍关。
+
+    与 :func:`compaction_from_env` 的分工是刻意的（不是两套并存）：
+    - `compaction_from_env()`：“未设=关”的兼容读法，`CliSurface` 直接构造路径与既有测试仍用它，
+      逐字不改（R3：不改既有断言）；
+    - 本函数只在 `composition.build_app()` 里用：“没说话”就读作“按生产默认开”，而
+      **用户显式说 `off` 仍然关**（翻默认不等于抢走否决权）。
+
+    绝对阈值面按 §7.1：能从 `providers/model_windows.py` 拿到窗口就带上（走绝对阈值），
+    拿不到就只给旧的条数信号（宁可不压也不拿假窗口截断）。`items:N` 仍尊重用户给的条数。
+    """
+    raw = load_config().logging.compaction.strip().lower()
+    if raw == "off":
+        return None
+    max_items = 24
+    if raw.startswith("items:"):
+        digits = raw[len("items:") :]
+        if not (digits.isdigit() and int(digits) > 0):
+            raise SystemExit(f"QUESTOR_COMPACTION={raw!r} invalid; use 'off', 'on', 'items:<N>'")
+        max_items = int(digits)
+    elif raw not in {"", "on"}:
+        raise SystemExit(f"QUESTOR_COMPACTION={raw!r} invalid; use 'off', 'on', 'items:<N>'")
+    window = window_from_env(model)
+    if window.known():
+        return CompactionConfig(
+            keep_head=2,
+            keep_tail=6,
+            max_items=max_items,
+            context_window=window.context_window,
+            max_output=window.max_output,
+        )
+    return CompactionConfig(keep_head=2, keep_tail=6, max_items=max_items)
 
 
 def payload_preview_from_env() -> int | None:

@@ -32,6 +32,13 @@ LIVE_ONLY: frozenset[str] = frozenset(
         EventType.HEARTBEAT,
         EventType.USAGE_DELTA,
         EventType.TOOLS_CHANGED,
+        # B7：记忆注入与 cache 断裂都是“本轮请求的观察结果”，不是发生记录——正文/hash 不可逆，
+        # 但它们的量级与频次也不该挤占事实流，故永不入库（§6.1 第④条只要求可观测，不要求可回放）。
+        EventType.MEMORY_INJECTED,
+        EventType.CACHE_BREAK,
+        # B8：消费打点同上——“注入了/消费了什么”是可观测信号（带外面板与日志用），
+        # 不是发生记录；归因数据可从 citation/工具事流重建，不必占 durable seq。
+        EventType.MEMORY_CONSUMED,
     }
 )
 

@@ -13,11 +13,14 @@ providers/policy/surfaces），故本文件只依赖 :mod:`questor.contracts.com
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from questor.contracts.common import JsonObject, freeze, require_non_empty
+from questor.contracts.common import JsonObject, freeze, require_aware, require_non_empty
 
 
 class MemoryScope(StrEnum):
@@ -50,6 +53,10 @@ class MemoryWriteKind(StrEnum):
     DISTILL = "distill"
 
 
+#: 归因位取值域（B9 纪律⑤；写入必标其一，使“用户说的”与“模型推的”可分别处理）。
+ATTRIBUTION_VALUES: frozenset[str] = frozenset({"user", "assistant"})
+
+
 #: 写 kind → 记忆 source 层（distill 浓缩固化进 daily，design/06 §3）。L0 词汇映射，
 #: 供 ``reduce``（发 memory_written 事件）与 store（落库）共用，避免 kind/source 语义漂移。
 _WRITE_KIND_TO_SOURCE: dict[MemoryWriteKind, MemorySource] = {
@@ -80,6 +87,12 @@ class MemoryChunk:
     hash: str  # 内容哈希，用于 sync 去重 / stale reconcile
     embedding: tuple[float, ...] | None = None  # 缺省 None → 检索降级关键词-only（ADR-0026）
     metadata: JsonObject | None = None
+    #: 软删位（B9 纪律⑥）：撤回不删真源、不建历史表，只在派生索引上抹除（默认 False = 旧行为）。
+    is_deleted: bool = False
+    #: 硬过期时刻（B9 纪律⑦）：与衰减排序分离；None = 永不过期。
+    expires_at: datetime | None = None
+    #: 归因位（B9 纪律⑤）：从真源节头 `attributed=` 恢复，无标记时 None（不猜）。
+    attributed_to: str | None = None
 
     def __post_init__(self) -> None:
         require_non_empty(self.id, "MemoryChunk.id")
@@ -87,6 +100,10 @@ class MemoryChunk:
         require_non_empty(self.hash, "MemoryChunk.hash")
         if self.start_line < 0 or self.end_line < self.start_line:
             raise ValueError("MemoryChunk requires 0 <= start_line <= end_line")
+        if self.attributed_to is not None and self.attributed_to not in ATTRIBUTION_VALUES:
+            raise ValueError(f"MemoryChunk.attributed_to must be one of {sorted(ATTRIBUTION_VALUES)}")
+        if self.expires_at is not None:
+            require_aware(self.expires_at, "MemoryChunk.expires_at")
         if self.metadata is not None:
             object.__setattr__(self, "metadata", freeze(self.metadata))
 
@@ -106,6 +123,9 @@ class MemorySearchResult:
     source: MemorySource
     scope: MemoryScope = MemoryScope.USER
     artifact_ref: str | None = None  # 超阈全文的外置引用（ADR-0019 语义）
+    #: 归因/过期位随命中一起外发（有界枚举，无正文），供消费打点与面板显示。
+    attributed_to: str | None = None
+    expires_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if self.end_line < self.start_line:
@@ -152,10 +172,18 @@ class MemoryWrite:
     covered_to: int | None = None  # 同上，被压原文区终点（context 快照索引）
     covered_hash: str | None = None  # 仅 distill：覆盖区语义哈希锚（读取 fail-closed 校验）
     note: str | None = None  # 有界来源说明（勿塞原始 transcript）
+    #: 归因位（B9 纪律⑤）：用户声明的事实优先于模型推断；未知/未给时按 ``assistant`` 写。
+    attributed_to: str | None = None
+    #: 硬过期时刻（B9 纪律⑦）：与时间衰减**分离**——衰减只排序，过期才退出检索。
+    expires_at: datetime | None = None
     metadata: JsonObject | None = None
 
     def __post_init__(self) -> None:
         require_non_empty(self.text, "MemoryWrite.text")
+        if self.attributed_to is not None and self.attributed_to not in ATTRIBUTION_VALUES:
+            raise ValueError(f"MemoryWrite.attributed_to must be one of {sorted(ATTRIBUTION_VALUES)}")
+        if self.expires_at is not None:
+            require_aware(self.expires_at, "MemoryWrite.expires_at")
         if self.kind is MemoryWriteKind.DISTILL:
             # distill 写必须成对给出可校验的覆盖区锚，否则读回无法 fail-closed（ADR-0024）。
             if self.covered_from is None or self.covered_to is None or not self.covered_hash:
@@ -249,6 +277,14 @@ class MemoryStorePort(Protocol):
         """归档/删除索引条目（rotation 等）；真源文件的修剪后置 P10。"""
         ...
 
+    async def soft_delete(self, entry_id: str, *, idempotency_key: str) -> JsonObject:
+        """按条目级 id（``path:start-end``）置软删位并从检索索引摸掉（B9 纪律⑥）。
+
+        **不删真源 md 文件**、**不建历史表**：撤回史只有 durable `memory_deleted` 事件一份；
+        重复 ``idempotency_key`` 必须幂等。返回有界 receipt（命中条数与 path）。
+        """
+        ...
+
     # ---- 离线维护路径（Deep Dream / run-边界 flush；ADR-0025：同一收口、无旁路）----
     async def read_memory_text(self, rel_path: str) -> str:
         """读一个真源 md 文件内容（相对 memory root）；不存在返回空串。越界路径 fail-closed。"""
@@ -271,6 +307,214 @@ class MemoryStorePort(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class CitationEntry:
+    """一条**条目级**引用（§6.3）：粒度到 `path:start_line-end_line`，不是文件级。
+
+    为什么必须到行区间：只到文件就分不清“模型真读了哪段”与“只是命中过”，
+    写入噪声率（§10 指标）会假清零（命中 = 消费的错觉）。
+    """
+
+    path: str
+    line_start: int
+    line_end: int
+    note: str | None = None
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.path, "CitationEntry.path")
+        if self.line_start < 0 or self.line_end < self.line_start:
+            raise ValueError("CitationEntry requires 0 <= line_start <= line_end")
+
+    @property
+    def entry_id(self) -> str:
+        """条目级 id（与消费打点/索引共用同一粒度）。"""
+        return f"{self.path}:{self.line_start}-{self.line_end}"
+
+    def to_payload(self) -> JsonObject:
+        body: dict[str, object] = {"path": self.path, "line_start": self.line_start, "line_end": self.line_end}
+        if self.note:
+            body["note"] = self.note
+        return body
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryCitation:
+    """模型自报的“本轮引用了哪些记忆”（§6.3；仿 codex `memory_citation.rs`）。
+
+    它是**事件字段**，不是 provider 输入：解析后从 assistant 正文剥掉，不进下一轮请求体。
+    """
+
+    entries: tuple[CitationEntry, ...] = ()
+    rollout_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "entries", tuple(self.entries))
+        object.__setattr__(self, "rollout_ids", tuple(self.rollout_ids))
+
+    @property
+    def entry_ids(self) -> tuple[str, ...]:
+        return tuple(entry.entry_id for entry in self.entries)
+
+    def to_payload(self) -> JsonObject:
+        return {
+            "entries": [entry.to_payload() for entry in self.entries],
+            "rollout_ids": list(self.rollout_ids),
+        }
+
+
+def citation_from_payload(payload: object, *, max_entries: int = 10) -> MemoryCitation | None:
+    """把解析好的 dict 转成 typed 引用；非法/超上限条目**丢弃不猜**（宁缺不假归因）。
+
+    上限与 `protocol/event.schema.json` 的 `maxItems` 同源，避免一条回答把引用面撞成堆。
+    """
+    if not isinstance(payload, dict):
+        return None
+    raw_entries = payload.get("entries")
+    if not isinstance(raw_entries, list) or not raw_entries:
+        return None
+    entries: list[CitationEntry] = []
+    for item in raw_entries[:max_entries]:
+        if not isinstance(item, dict):
+            continue
+        path = item.get("path")
+        start = item.get("line_start")
+        end = item.get("line_end")
+        if not isinstance(path, str) or not isinstance(start, int) or not isinstance(end, int):
+            continue
+        note = item.get("note")
+        try:
+            entries.append(CitationEntry(path=path, line_start=start, line_end=end, note=note if isinstance(note, str) else None))
+        except ValueError:
+            continue  # 行区间非法：丢掉这一条，不修正、不猜
+    if not entries:
+        return None
+    rollouts = payload.get("rollout_ids")
+    ids = tuple(str(item) for item in rollouts if isinstance(item, (str, int))) if isinstance(rollouts, list) else ()
+    return MemoryCitation(entries=tuple(entries), rollout_ids=ids)
+
+
+@dataclass(frozen=True, slots=True)
+class RecallBlock:
+    """一段可注入的召回正文（档2：**永不进 system**，只作 user-role 前缀消息）。
+
+    ``entry_ids`` 是条目级 id，专给 ``memory_injected`` 做消费可归因用（§6.3）。
+    """
+
+    text: str
+    entry_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.text, "RecallBlock.text")
+        object.__setattr__(self, "entry_ids", tuple(self.entry_ids))
+
+    def event_data(self, *, kind: str = "recall", max_ids: int = 40) -> JsonObject:
+        """``memory_injected`` 载荷：只 kind/条目 id/计量，**无正文**（C18/C20）。"""
+        return {
+            "kind": kind,
+            "entry_ids": list(self.entry_ids[:max_ids]),
+            "lines": len(self.text.splitlines()),
+            "bytes": len(self.text.encode("utf-8")),
+            "truncated": len(self.entry_ids) > max_ids,
+        }
+
+
+@runtime_checkable
+class EmbeddingPort(Protocol):
+    """向量生成接缝（§6.2）：**只产向量，不管存储**（§20 C-3 单库约束）。
+
+    入库仍必须走同一个 :class:`MemoryStorePort` 与同一份 `memory_chunks.embedding` 列；
+    不得起第二 store/第二索引表。CI 无密钥时由 `providers/fake.py` 的确定性 fake 顶。
+    """
+
+    async def embed(self, texts: Sequence[str]) -> tuple[tuple[float, ...], ...]:
+        """一批文本 → 等长向量元组（一次调用处理 N 条，不逐条往返）。"""
+        ...
+
+
+#: 消费打点的层级枚举（与 wire `memory_consumed.kind` 同源；§6.3 要求 kind 级 + 条目级两层）。
+CONSUMPTION_KINDS: frozenset[str] = frozenset({"memory_md", "index", "raw", "summary", "skills"})
+
+
+def consumption_kind_for(path: str) -> str:
+    """把记忆真源路径归到消费层级（“读了 MEMORY.md”与“读了 daily 原文”不是同一回事）。
+
+    不确定时归 ``raw``（保守）；本函数入 L0 是因为 kernel（发事）与评测环（读数）都要用
+    同一口径，两处各写一套就会分叉。
+    """
+    norm = (path or "").replace("\\", "/").lower()
+    if norm.endswith("memory.md"):
+        return "memory_md"
+    if "skills" in norm:
+        return "skills"
+    if norm.startswith("dreams/") or "/dreams/" in norm:
+        return "summary"
+    if norm.startswith("index/") or "/index/" in norm:
+        return "index"
+    return "raw"
+
+
+#: 模型自报引用的协议块标记（§6.3）；harness 解析后**从正文剥掉**，永不回送 provider。
+CITATION_OPEN = "<citation_entries>"
+CITATION_CLOSE = "</citation_entries>"
+
+#: 引用条目上限（与 `protocol/event.schema.json` 的 `maxItems` 同源）。
+CITATION_MAX_ENTRIES = 10
+
+
+def parse_citation(
+    text: str, *, max_entries: int = CITATION_MAX_ENTRIES
+) -> tuple[str, MemoryCitation | None]:
+    """从模型正文里剥出 ``<citation_entries>…</citation_entries>`` → (干净正文, 引用)。
+
+    解析失败/形状非法 → 返回原正文 + ``None``（**不猜**：宁可少一份归因，也不记一条假的）；
+    未闭合只剥标记、不动用户可见正文。解析成功则整块删除，不进下一轮请求体。
+    入 L0 是因为 kernel（剥）、评测环（读数）与 surface 要用同一份解析口径。
+    """
+    if not text or CITATION_OPEN not in text:
+        return text, None
+    start = text.index(CITATION_OPEN)
+    tail = text[start + len(CITATION_OPEN) :]
+    if CITATION_CLOSE not in tail:
+        return text.replace(CITATION_OPEN, ""), None
+    body, rest = tail.split(CITATION_CLOSE, 1)
+    cleaned = (text[:start] + rest).strip()
+    try:
+        payload: object = json.loads(body.strip())
+    except (json.JSONDecodeError, ValueError):
+        return cleaned, None
+    citation = citation_from_payload(payload, max_entries=max_entries)
+    return cleaned, citation
+
+
+def recall_skipped_by_flags(flags: Mapping[str, object] | None) -> bool:
+    """提交方 ``flags.skip_recall`` 的**唯一**谓词（B8 门控③）。
+
+    放在 L0 是因为两头都要用：内核从 ``SubmitMessage.flags`` 读它，召回侧从自己的入口读它。
+    不定义一份就会两处各写一套真值判定（开放词表里“什么算 true”很易漂）。
+    未知 key 一律忽略（与 §20 C-6 的 source 口径一致）。
+    """
+    if not flags:
+        return False
+    value = flags.get("skip_recall")
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+@runtime_checkable
+class RecallPort(Protocol):
+    """记忆召回接缝（B8；§6.2）：内核只持本端口，不 import ``memory/``、不持 store 裸句柄。
+
+    “三通道 + 三门控 + 终选”全部住在实现侧（`memory/recall.py`）；内核只问“本轮该注入什么”，
+    拿回一个**已定界、已弹足计量**的块（或 ``None`` = 不注入）。返回块必须带 ``entry_ids``
+    才能发 ``memory_injected``——**不可归因的召回不得注入**（门控②）。
+    """
+
+    async def recall(
+        self, query: str, *, scope: MemoryScope | None = None, skip: bool = False
+    ) -> RecallBlock | None: ...
+
+
 __all__ = [
     "MemoryScope",
     "MemorySource",
@@ -281,6 +525,20 @@ __all__ = [
     "RecoveryPointer",
     "MemoryWrite",
     "MemoryStrategyConfig",
+    "ATTRIBUTION_VALUES",
     "VectorBackend",
     "MemoryStorePort",
+    "CitationEntry",
+    "MemoryCitation",
+    "citation_from_payload",
+    "EmbeddingPort",
+    "RecallBlock",
+    "RecallPort",
+    "recall_skipped_by_flags",
+    "CONSUMPTION_KINDS",
+    "consumption_kind_for",
+    "CITATION_MAX_ENTRIES",
+    "CITATION_CLOSE",
+    "CITATION_OPEN",
+    "parse_citation",
 ]

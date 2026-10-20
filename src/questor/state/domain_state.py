@@ -11,10 +11,11 @@ Harness 全程唯一可信状态：权威、可序列化、可回放、可断点
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from questor.contracts.common import require_aware, utc_now
+from questor.contracts.common import JsonObject, freeze, require_aware, utc_now
 from questor.contracts.errors import ErrorEntry
 from questor.contracts.memory import RecoveryPointer
 from questor.contracts.policy import PolicyRef
@@ -103,6 +104,9 @@ class Run:
     cancel_reason: CancelReason | None = None
     # P9/ADR-0045 additive：run 创建时经 PolicyRegistry 解析、按值快照冻结；默认 None 不破既有构造点/旧快照。
     policy_ref: PolicyRef | None = None
+    #: B13 additive：本 run 是从哪个旧 run 的哪个位点**回退/分叉**而来的指针。
+    #: 形状固定 `{"run_id": str, "to_seq": int}`；None = 普通新 run（旧快照读回 None，不猜）。
+    history_base: JsonObject | None = None
     created_at: datetime = field(default_factory=utc_now)
     completed_at: datetime | None = None
 
@@ -113,6 +117,17 @@ class Run:
         if self.turn < 0:
             raise ValueError("Run.turn must be >= 0")
         require_aware(self.created_at, "Run.created_at")
+        if self.history_base is not None:
+            # 只校验形状，不猜语义：缺键或 to_seq 为负都是上游 bug，宁拒不误放。
+            # 用 Mapping 而不是 dict：freeze() 出来的是 immutables.Map，`replace(run, …)` 再过一次
+            # __post_init__ 时必须是幂等的（否则一条回退事实会在下一次任何状态迁移上崩）。
+            if not isinstance(self.history_base, Mapping):
+                raise ValueError("Run.history_base must be a mapping")
+            if not self.history_base.get("run_id") or not isinstance(self.history_base.get("to_seq"), int):
+                raise ValueError('Run.history_base requires {"run_id": non-empty str, "to_seq": int}')
+            if self.history_base["to_seq"] < 0:
+                raise ValueError("Run.history_base.to_seq must be >= 0")
+            object.__setattr__(self, "history_base", freeze(self.history_base))  # freeze 对 Map 幂等
         # 终态一致性（C13）：一轮至多一个终态且字段自洽。
         if self.status.is_terminal:
             if self.completed_at is None:
@@ -139,7 +154,13 @@ class SessionDefaults:
 
 @dataclass(frozen=True, slots=True)
 class DomainState:
-    """会话根：一个用户可见的长期对话线（§1）。"""
+    """会话根：一个用户可见的长期对话线（§1）。
+
+    .. note:: **UNWIRED（§17 第 14 条 ④）**：本类当前**零生产者、零消费者**——会话连续性实际由
+       `sessions` 表 + `command_window.session_id` + 会话作用域流 `sess:<id>` 承载（B4/B9/B13），
+       而不是这个内存对象。保留它是 B4'（聚合根上提）的形状占位；**在 B4' 之前不得接线**
+       （接上就是变相实现 B4'，违反 §14）。本行注释就是那四项待办里"标 UNWIRED 或删除"的交付。
+    """
 
     session_id: str
     runs: tuple[Run, ...] = ()

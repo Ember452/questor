@@ -14,9 +14,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, ClassVar
 
-from questor.contracts.common import JsonObject, freeze, require_aware, utc_now
+from questor.contracts.common import JsonObject, freeze, require_aware, require_non_empty, utc_now
 from questor.contracts.errors import ErrorEntry
-from questor.contracts.memory import MemoryWrite, RecoveryPointer
+from questor.contracts.memory import MemoryCitation, MemoryWrite, RecoveryPointer
 from questor.contracts.state_schema import CancelReason, Message, TaskNode
 
 #: 关联键——一旦发布永不改名/删除（design/02 §1）。
@@ -33,11 +33,21 @@ EVENT_SCHEMA_VERSION = 1
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class SubmitMessage:
-    """用户发起一轮：受理时即占用 durable seq（02 §10）。"""
+    """用户发起一轮：受理时即占用 durable seq（02 §10）。
+
+    ``flags`` 是**提交方自报的有界标记**（B8 三门控的可跳过一位，如 ``{"skip_recall": true}``
+    ——系统/自动轮次不做召回）；它不改正文、不参与安全判定，未知 key 一律忽略（开放词表，
+    与 §20 C-6 的 source 口径一致）。additive：默认 ``None`` = 与旧行为逐字等价。
+    """
 
     run_id: str
     content: Message
+    flags: JsonObject | None = None
     type: ClassVar[str] = "submit_message"
+
+    def __post_init__(self) -> None:
+        if self.flags is not None:
+            object.__setattr__(self, "flags", freeze(self.flags))
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +143,125 @@ class WriteMemory:
 
 
 @dataclass(frozen=True, slots=True)
+class DeleteMemory:
+    """记忆撤回的唯一途径：同样经 Command→reduce→消费点（C4/C16）。
+
+    ``entry_id`` 是条目级指针 ``path:start-end``（与 citation/消费打点同粒度），不是数据库主键；
+    reduce 只产一条 durable ``memory_deleted`` 事件 + **软删位**，**不建历史表**（§20 C-7）：
+    “这条被改过几次”只能从事件流投影。真源 md 文件**不就地删文**（事实流与快照仍是真相）。
+    """
+
+    run_id: str
+    entry_id: str
+    reason: str | None = None
+    type: ClassVar[str] = "delete_memory"
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.entry_id, "DeleteMemory.entry_id")
+        if len(self.entry_id) > 288:
+            raise ValueError("DeleteMemory.entry_id exceeds 288 chars")
+
+
+@dataclass(frozen=True, slots=True)
+class RewindRun:
+    """B13（可退）：回到旧 run 的某个时点重新往下。
+
+    **旧事件流一行不改写**：本命令在**新 run** 上落一条 durable `run_rewounded`，并把
+    `history_base={run_id, to_seq}` 记在新 run 的权威状态上（旧前缀由 seed 机制注入）——
+    “回到过去”在事实流里必须是一个**新事实**，而不是对历史的篡改（C5/C13）。
+    """
+
+    run_id: str
+    base_run_id: str
+    base_to_seq: int
+    reason: str | None = None
+    type: ClassVar[str] = "rewind_run"
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.base_run_id, "RewindRun.base_run_id")
+        if self.base_to_seq < 0:
+            raise ValueError("RewindRun.base_to_seq must be >= 0")
+        if self.base_run_id == self.run_id:
+            raise ValueError("RewindRun cannot rewind a run onto itself")
+        if self.reason is not None and len(self.reason) > 200:
+            raise ValueError("RewindRun.reason exceeds 200 chars")
+
+
+@dataclass(frozen=True, slots=True)
+class ForkSession:
+    """B13：从现有会话的某个位点开一支新会话（分叉不是搬家）。
+
+    与 rewind 同一取向：源会话的事件流不改写，只在新流上落 `session_forked`；
+    新会话行由 surface 创建并复用 B4 的 seed 接缝带历史前缀。**不开第二张会话表**。
+    """
+
+    run_id: str
+    source_session_id: str
+    from_seq: int
+    reason: str | None = None
+    type: ClassVar[str] = "fork_session"
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.source_session_id, "ForkSession.source_session_id")
+        if self.from_seq < 0:
+            raise ValueError("ForkSession.from_seq must be >= 0")
+        if self.reason is not None and len(self.reason) > 200:
+            raise ValueError("ForkSession.reason exceeds 200 chars")
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateSession:
+    """B13（可看可改）：改名 / 归档 / 置顶。一次命令只对本次**真变了**的 facet 各发一条事件。
+
+    只存会话行上已有的列（title/archived/pinned）——**不新建表也不新建列**；事件落在会话作用域流
+    `sess:<id>` 上，使“会话列表”可以从事件重建，而不是只能读行（C13）。
+    """
+
+    run_id: str
+    session_id: str
+    title: str | None = None
+    archived: bool | None = None
+    pinned: bool | None = None
+    type: ClassVar[str] = "update_session"
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.session_id, "UpdateSession.session_id")
+        if len(self.session_id) > 128:
+            raise ValueError("UpdateSession.session_id exceeds 128 chars")
+        if self.title is None and self.archived is None and self.pinned is None:
+            raise ValueError("UpdateSession requires at least one facet to change")
+        if self.title is not None and not self.title.strip():
+            raise ValueError("UpdateSession.title must be non-blank when given")
+        if self.title is not None and len(self.title) > 200:
+            raise ValueError("UpdateSession.title exceeds 200 chars")
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateMemory:
+    """B14：用户改掉一条记忆。**真源 md 不删**，只写新正文 + 重写派生索引。
+
+    与 `DeleteMemory` 同粒度（条目级 `path:start-end`），事件只带条目 id / 层级 / 字节数，
+    **不带新正文**（C18/C20）；改后下次召回不含旧值，靠的是派生索引重写而非事件携带。
+    """
+
+    run_id: str
+    entry_id: str
+    text: str
+    reason: str | None = None
+    type: ClassVar[str] = "update_memory"
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.entry_id, "UpdateMemory.entry_id")
+        if len(self.entry_id) > 288:
+            raise ValueError("UpdateMemory.entry_id exceeds 288 chars")
+        require_non_empty(self.text, "UpdateMemory.text")
+        if len(self.text.encode("utf-8")) > 16 * 1024:
+            raise ValueError("UpdateMemory.text exceeds the 16 KiB write budget")
+        if self.reason is not None and len(self.reason) > 200:
+            raise ValueError("UpdateMemory.reason exceeds 200 chars")
+
+
+@dataclass(frozen=True, slots=True)
 class RecordWarning:
     """内核需在 ``reduce`` 之外落一条 durable 告警时的唯一入口（保 seq 单调，C2）。
 
@@ -145,6 +274,39 @@ class RecordWarning:
     turn: int | None
     message: str
     type: ClassVar[str] = "record_warning"
+
+
+#: `WarnCompaction.reason` 闭集（§7.1/§7.3）：预警阈值越过了，或连续失败熔断已跳闸。
+COMPACT_WARNING_REASONS: frozenset[str] = frozenset({"pressure", "breaker_tripped"})
+#: 触发来路闭集，与 `CompactionConfig.threshold()` 与事件 `trigger` 字段同源。
+COMPACT_TRIGGERS: frozenset[str] = frozenset({"auto", "manual", "legacy"})
+
+
+@dataclass(frozen=True, slots=True)
+class WarnCompaction:
+    """内核落一条 durable `compact_warning` 的唯一入口（B10/§7.3；与 `RecordWarning` 同族）。
+
+    为什么不能走总线：本事件是 **durable**——“快满了”与“熔断已跳闸”必须可回放，否则用户只会
+    看到一次莫名其妙的失败而查不到原因。durable 事件只能由 reduce 产，所以需要一个命令占 seq。
+    只带阈值/用量/计数，**零正文**（C18/C20）；不改任何状态。"""
+
+    run_id: str
+    turn: int | None
+    reason: str
+    trigger: str = "auto"
+    used_tokens: int | None = None
+    threshold: int | None = None
+    window_number: int = 0
+    failures: int = 0
+    type: ClassVar[str] = "warn_compaction"
+
+    def __post_init__(self) -> None:
+        if self.reason not in COMPACT_WARNING_REASONS:
+            raise ValueError(f"WarnCompaction.reason must be one of {sorted(COMPACT_WARNING_REASONS)}")
+        if self.trigger not in COMPACT_TRIGGERS:
+            raise ValueError(f"WarnCompaction.trigger must be one of {sorted(COMPACT_TRIGGERS)}")
+        if self.window_number < 0 or self.failures < 0:
+            raise ValueError("WarnCompaction.window_number/failures must be >= 0")
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,21 +341,41 @@ class CompactContext:
     summary_text: str
     new_floor: int
     new_pointers: tuple[RecoveryPointer, ...] = ()
+    # ---- B10/§7.1–7.2 additive：触发来路与窗口身份（身份由 loop 从 store 派生，reduce 不计）----
+    #: 触发来路：``auto``（阈值）/ ``manual``（用户 `/compact`）/ ``legacy``（未配绝对阈值）。
+    trigger: str = "auto"
+    #: 信号源：``server_observed``（优先）或 ``estimated``（resume/重算基线）。
+    source: str = "estimated"
+    #: 本次压缩所属窗口（代际身份）；无 store 能力时为 ``None``（单窗口）。
+    window_id: str | None = None
+    previous_window_id: str | None = None
+    window_number: int = 0
+    #: 逐出前后的累计 token（仅计量、无正文）；未知道时 ``None``，不编造。
+    before_tokens: int | None = None
+    after_tokens: int | None = None
     type: ClassVar[str] = "compact_context"
 
     def __post_init__(self) -> None:
         if self.evict_start < 0 or self.evict_end < self.evict_start:
             raise ValueError("CompactContext requires 0 <= evict_start <= evict_end")
+        if self.window_number < 0:
+            raise ValueError("CompactContext.window_number must be >= 0")
 
 
 # ---- 内核内部 Command（仍是 Command，仍经 reduce 单写；C2）----
 @dataclass(frozen=True, slots=True)
 class AppendAssistantMessage:
-    """定稿一条 assistant 消息；其 tool_use 块会在账本登记为 pending 调用。"""
+    """定稿一条 assistant 消息；其 tool_use 块会在账本登记为 pending 调用。
+
+    ``citations`` 是 harness 从正文里解析出来的**条目级引用**（B8；§6.3）：它随命令进入、
+    由 reduce 挂到 ``message_completed`` 事件字段，**不回写进 context 正文**（解析即剥）。
+    默认 ``None`` = 旧行为逐字等价。
+    """
 
     run_id: str
     turn: int
     message: Message
+    citations: MemoryCitation | None = None
     type: ClassVar[str] = "append_assistant_message"
 
 
@@ -303,6 +485,12 @@ Command = (
     | MarkToolRunning
     | Cancel
     | WriteMemory
+    | DeleteMemory
+    | RewindRun
+    | ForkSession
+    | UpdateSession
+    | UpdateMemory
+    | WarnCompaction
     | CompactContext
     | AppendAssistantMessage
     | AdvanceTurn
@@ -366,6 +554,9 @@ class EventType:
     TOOLS_CHANGED = "tools_changed"  # 能力名册变更 live-only 告警（P9；ADR-0046，design/02 §7）
     COMPACT_STARTED = "compact_started"  # 压缩开始（P10；ADR-0048，design/02 §10）
     COMPACT_APPLIED = "compact_applied"  # 压缩应用 + baseline_seq 栅栏（P10；ADR-0048，design/02 §10）
+    # 压缩预警（B10/§7.1/§7.3）：durable——“快满了”与“熔断已跳闸”必须可回放，不静默。
+    # 只带阈值/用量计量与 reason，零正文（C18/C20）；可被上游抑制（一次窗口只发一次）。
+    COMPACT_WARNING = "compact_warning"
     # 用户原话 durable（B1；设计文档 §4.2 事实流补齐）：非 idle 提交把有界正文写进事实流，
     # 使「重放 = 生产」与 --resume 的可见转录不依赖第二真相（idle 首条仍由 run_started + 快照承载，
     # 既有冻结断言 test_reduce.py:51 / test_transition_chokepoint.py:45 不改）。
@@ -373,6 +564,30 @@ class EventType:
     # turn 边界（B6；设计文档 §5.1 的 Stop 点）：durable 成本/中断事实，供 settle_turn 与
     # 桌面“这轮花了多少”消费；只带 usage/interrupted，无正文（C18/C20）。
     TURN_COMPLETED = "turn_completed"
+    # 记忆索引段已注入本轮请求（B7；设计文档 §6.1 四道约束的第④条）：live-only 观测条目，
+    # 只带条目 id 与有界计量（行数/字节数），**无索引正文**——“注入了什么”可审计，“内容是什么”
+    # 永不进日志/wire（C18/C20）。
+    MEMORY_INJECTED = "memory_injected"
+    # prompt cache 断裂（B7；设计文档 §6.1 cache 三条款之第 3 条）：live-only，只带三段 hash
+    # （system 块 / 工具面 / 历史起点）+ 断裂原因位 + 断点数，零明文（C18/C20）。
+    CACHE_BREAK = "cache_break"
+    # 记忆被**消费**（B8；设计文档 §6.3 硬规定）：live-only。kind = 层级（memory_md/index/raw/summary/skills），
+    # entry_id = 条目级 `path:start-end`。命不等于消费：`memory_search` 命中不发本事件，
+    # 只有真读了（Read/memory_read）或被 citation 引用才算；不可识别的工具直接不计数（宁缺不猜）。
+    MEMORY_CONSUMED = "memory_consumed"
+    # 记忆撤回（B9；§6.4-6 / §20 C-7）：durable，与 `is_deleted` 软删位同步产生。
+    # 只带条目 id 与短原因，无正文；**不开 `memory_history` 表**，回放时从事件流重建撤回史。
+    MEMORY_DELETED = "memory_deleted"
+    # B13（可退）：两个 **durable** 会话形状——回退与分叉都是事实，不是就地改写。
+    # 只带锚点（base run/seq、source session/seq）与短原因，零正文（C18/C20）。
+    RUN_REWOUNDED = "run_rewounded"
+    SESSION_FORKED = "session_forked"
+    # B13：会话元数据变更（改名/归档/置顶）落在会话作用域流 `sess:<id>` 上。
+    SESSION_RENAMED = "session_renamed"
+    SESSION_ARCHIVED = "session_archived"
+    SESSION_PINNED = "session_pinned"
+    # B14：用户改掉一条记忆（与 `memory_deleted` 同作：新 durable 事件 + 派生索引重写，真源保留）。
+    MEMORY_UPDATED = "memory_updated"
 
 
 #: 未知时不得被静默丢弃的事件类型（C6 的例外：错误类至少告警）。
@@ -388,6 +603,14 @@ __all__ = [
     "ResolveApproval",
     "Cancel",
     "WriteMemory",
+    "DeleteMemory",
+    "RewindRun",
+    "ForkSession",
+    "UpdateSession",
+    "UpdateMemory",
+    "WarnCompaction",
+    "COMPACT_TRIGGERS",
+    "COMPACT_WARNING_REASONS",
     "CompactContext",
     "AppendAssistantMessage",
     "AdvanceTurn",

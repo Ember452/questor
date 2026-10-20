@@ -20,6 +20,7 @@ layers =
     questor.policy
     questor.capabilities
     questor.kernel
+    questor.memory
     questor.state
     questor.contracts
 

@@ -22,6 +22,11 @@ uv run python scripts/check_protocol_schema.py --self-test  # proves the guard c
 It asserts this schema's `type` enum equals `questor.contracts.events.EventType` exactly — so
 the JSON Schema, the Python contract and the codegen'd TS can never silently diverge.
 
+Current counts (mechanically synced; `check_protocol_schema --check` stays the authority, this line is
+documentation only): **38** `EventType` values and **26** `Command` union members
+(`src/questor/contracts/events.py`). Both grow additively only — new values never rename or renumber
+an existing one, and `v` bumps only on a breaking change.
+
 TS codegen (P7 T3): `cd desktop/web && npm run generate:protocol` writes `src/generated/event.ts`
 from this schema via `json-schema-to-typescript`; `npm run check:protocol` re-generates in-memory
 and exits non-zero if the committed `event.ts` is stale (drift gate, mirrors the Python `--check`).

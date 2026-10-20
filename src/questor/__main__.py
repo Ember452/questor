@@ -40,7 +40,8 @@ from questor.config.model import load_config
 from questor.memory.distill import DistillOutcome, deep_dream
 from questor.schedule import Scheduler
 from questor.surfaces._assembly import assemble_logging, log_dir_from_env, reconfigure_output_streams
-from questor.surfaces.cli import interactive
+from questor.surfaces.cli import inspect_extensions_text, interactive
+from questor.surfaces.context_report import context_report_for_run, cost_report_for_store
 from questor.surfaces.http_sse import EventServer, create_app
 from questor.surfaces.logs import run_logs_command
 from questor.surfaces.maintenance import run_maintenance_command
@@ -50,7 +51,9 @@ from questor.surfaces.serve import serve
 _LOG = logging.getLogger("questor.composition")
 
 #: 可识别的入口选项；`--resume` 需带 run_id，但选项名本身在此。
-_KNOWN_COMMANDS: frozenset[str] = frozenset({"--serve", "--serve-openai", "--resume", "--list", "--dream"})
+_KNOWN_COMMANDS: frozenset[str] = frozenset(
+    {"--serve", "--serve-openai", "--resume", "--list", "--dream", "--inspect-extensions", "--context", "--cost"}
+)
 
 #: CLI 用法文本（Issue #148）：与上方模块 docstring 的入口清单同源，供 `-h/--help` 与未知选项提示共用。
 #: **必须 ASCII-only**：这是用户可见输出（AGENTS §5.6：一方输出用英文，中文只进注释/docstring）。
@@ -131,6 +134,11 @@ async def _amain(argv: list[str]) -> int:
         print(f"unknown option: {argv[0]}", file=sys.stderr)
         print(_USAGE, file=sys.stderr)
         return 2
+    if argv and argv[0] == "--inspect-extensions":
+        # B5：只打印装配链，先于日志/存储装配（与 --help 同纪律：不建库、不装日志）。
+        # 刻意不进 _USAGE：`test_assemble_spec_default` 钉了 --help 逐字节快照，改它属改既有断言。
+        print(inspect_extensions_text())
+        return 0
     assemble_logging()
     # env 读取收口在 config（OPT-3 c2）：本入口只取子块；解析/校验仍在各自使用点。
     cfg = load_config()
@@ -180,6 +188,18 @@ async def _amain(argv: list[str]) -> int:
                 print(run_id)
             if not unfinished:
                 print("(no unfinished runs)")
+            return 0
+        if argv and argv[0] == "--context":
+            # B15：只读上下文账单（分段 token 估算）。刻意不进 _USAGE：--help 有逐字节快照测试，
+            # 与 --inspect-extensions 同一纪律（隐藏能力命令，不扩公开用法文本）。
+            if len(argv) < 2:
+                print("usage: python -m questor --context <run_id>", file=sys.stderr)
+                return 2
+            print(await context_report_for_run(app.store, app.surface, argv[1]))
+            return 0
+        if argv and argv[0] == "--cost":
+            # B15：成本只报 token 级；美元需价目表（仓内没有，标 UNVERIFIED，§17-9）。
+            print(await cost_report_for_store(app.store))
             return 0
         if argv and argv[0] == "--resume":
             if len(argv) < 2:
