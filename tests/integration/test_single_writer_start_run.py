@@ -95,3 +95,25 @@ async def test_rejected_start_does_not_rebind_session(tmp_path: Path) -> None:
         assert await store.run_session("run-R") is None  # _prepare_session 未执行 → 未绑 S2
     finally:
         await store.close()
+
+
+async def test_cancel_during_blocked_provider_ends_cancelled(tmp_path: Path) -> None:
+    """W5-002：provider 阻塞时用户 /cancel，provider 释放后 run 必须落 cancelled，不得谎报 completed。"""
+    store = await SQLiteStore(str(tmp_path / "db.sqlite")).connect()
+    try:
+        provider = _BlockingProvider()
+        surface = CliSurface(workspace_root=tmp_path, store=store, provider=provider)  # type: ignore[arg-type]
+        server = EventServer(surface, store)
+        run_id = await server.start_run("hi")
+        active = server.registry._runs.get(run_id)
+        assert active is not None and active.task is not None
+        task = active.task
+        await asyncio.sleep(0.05)  # 确保已进入 provider 阻塞
+        receipt = await server.cancel(run_id)
+        assert receipt.accepted
+        provider.release.set()
+        await task
+        types = {e["type"] for e in await store.replay(run_id, 0)}
+        assert "run_cancelled" in types and "run_completed" not in types, f"取消被谎报为完成：{types}"
+    finally:
+        await store.close()
