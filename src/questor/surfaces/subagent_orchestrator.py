@@ -42,6 +42,8 @@ _DEFAULT_MAX_PARALLEL = 4
 _DEFAULT_MAX_TREE_DEPTH = 1
 #: 子结果摘要进事件/回模型的上限（C18/ADR-0019：正文有界）。
 _MAX_CHILD_SUMMARY_CHARS = 4096
+#: 子 run 单写者租约 TTL（与 cli/http_sse 同口径，W5-004）。
+_RUN_LEASE_TTL_SECONDS = 300.0
 
 _TERMINAL_MAP: dict[str, str] = {
     RunStatus.COMPLETED.value: "completed",
@@ -167,11 +169,44 @@ class SubagentOrchestrator:
             )
             tool_surface = self._surface._freeze_surface(child_run_id, [])  # 复用装配：子用内置工具面（v1 不给子挂 MCP）
             loop = self._surface._loop(self._bus, asyncio.Event(), tool_surface, subagent_spawner=self)
-            final = await loop.drive_controller(controller)
-            terminal = _TERMINAL_MAP.get(final.status.value, "failed")
-            await self._complete_child(child_run_id, parent_run_id, node_id, terminal, _last_assistant_text(final))
+            # W5-004：子 run 驱动前取单写者租约，防另一进程/路径对同一 child_run_id 双驱。
+            holder = f"subagent:{child_run_id}"
+            lease_acquired = False
+            if self._store is not None and callable(getattr(self._store, "acquire_lease", None)):
+                if not await self._store.acquire_lease(child_run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
+                    await self._complete_child(child_run_id, parent_run_id, node_id, "failed", "child lease held by another driver")
+                    return
+                lease_acquired = True
+            renew_task = asyncio.create_task(self._renew_lease_loop(child_run_id, holder)) if lease_acquired else None
+            try:
+                final = await loop.drive_controller(controller)
+                terminal = _TERMINAL_MAP.get(final.status.value, "failed")
+                await self._complete_child(child_run_id, parent_run_id, node_id, terminal, _last_assistant_text(final))
+            finally:
+                if renew_task is not None:
+                    renew_task.cancel()
+                if lease_acquired:
+                    with contextlib.suppress(Exception):
+                        await self._store.release_lease(child_run_id, holder, 1)  # type: ignore[attr-defined]
         except Exception as exc:  # noqa: BLE001 - 子编排故障绝不带崩父（C10）：归一为子 failed 并回父
             await self._complete_child(child_run_id, parent_run_id, node_id, "failed", f"child orchestration error: {type(exc).__name__}")
+
+    async def _renew_lease_loop(self, run_id: str, holder: str) -> None:
+        """每 ttl/2 续租（W5-004）：瞬时故障重试，租约被夺则停，绝不双驱。"""
+        interval = max(1.0, _RUN_LEASE_TTL_SECONDS / 2)
+        try:
+            while True:
+                await asyncio.sleep(interval)
+                try:
+                    ok = await self._store.renew_lease(run_id, holder, 1)  # type: ignore[attr-defined]
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001 - 瞬时 DB 故障不得使续租猝死
+                    continue
+                if not ok:
+                    return
+        except asyncio.CancelledError:
+            pass
 
     async def _complete_child(self, child_run_id: str, parent_run_id: str, node_id: str, terminal: str, summary: str) -> None:
         """子终态收尾：先向父 inbox **await** 提 ``ReportChildTerminal``（bookkeeping + peer_ended），
@@ -180,6 +215,12 @@ class SubagentOrchestrator:
         父若已终态则得 REJECTED_TERMINAL（不复活，诚实 at-least-once；子已在自己账本落终态）。"""
         self._children.get(parent_run_id, set()).discard(child_run_id)
         self._registry.unregister(child_run_id)  # 子驱动结束即回收其 controller（不依赖 SSE 消费者，防常驻泄漏）
+        # W5-017：回收编排表里的子任务/深度项，并剪空父集（否则 _child_tasks/_depth 随子数无界增长）。
+        self._child_tasks.pop(child_run_id, None)
+        self._depth.pop(child_run_id, None)
+        siblings = self._children.get(parent_run_id)
+        if siblings is not None and not siblings:
+            self._children.pop(parent_run_id, None)
         bounded = (summary or "")[:_MAX_CHILD_SUMMARY_CHARS]
         # P9/ADR-0047：claim-then-deliver-then-ack——稳定投递 id 使跨进程/崩溃重放的
         # 同一子终态只投一次（exactly-once）；claim 不中=已被投/持有，跳过重投但仍解 waiter。
