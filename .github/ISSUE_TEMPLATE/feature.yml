@@ -16,7 +16,7 @@ body:
     id: layer
     attributes:
       label: 落在哪一层
-      options: [harness/kernel, capability/tools-mcp, policy, providers, surfaces/api, shell/desktop, memory, 其它]
+      options: [harness/kernel, capability/tools-mcp, policy, providers, surfaces/api, memory, 其它]
   - type: textarea
     id: alt
     attributes: { label: 替代方案 }

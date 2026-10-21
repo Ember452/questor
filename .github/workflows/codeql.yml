@@ -1,6 +1,6 @@
 name: codeql
 
-# SAST：Python 内核 + 桌面前端 TS。
+# SAST：Python 内核。
 # build-mode:none —— 无需完整构建即可解析源码，避免 runner 上因构建失败而漏扫。
 on:
   push:
@@ -27,13 +27,13 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.python == 'true' || needs.changes.outputs.desktop == 'true' || needs.changes.outputs.workflows == 'true'
+    if: github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.python == 'true' || needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        language: [python, javascript-typescript]
+        language: [python]
     steps:
       - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v3

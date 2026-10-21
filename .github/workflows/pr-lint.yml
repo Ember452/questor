@@ -36,4 +36,4 @@ jobs:
           subjectPatternError: >
             PR 标题 "{title}" 不符合 Conventional Commits。
             期望：<type>(<scope>): <小写描述、句尾无句号>
-            例：feat(desktop): add sidecar_status lifecycle
+            例：feat(surfaces): add sidecar_status lifecycle

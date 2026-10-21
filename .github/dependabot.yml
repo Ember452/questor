@@ -14,11 +14,3 @@ updates:
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 5
     labels: [ci, dependencies]
-
-  # 桌面子项目引入后取消注释：
-  # - package-ecosystem: "npm"
-  #   directory: "/desktop/web"
-  #   schedule: { interval: "weekly" }
-  # - package-ecosystem: "cargo"
-  #   directory: "/desktop/src-tauri"
-  #   schedule: { interval: "weekly" }

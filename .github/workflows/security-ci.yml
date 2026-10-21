@@ -61,9 +61,9 @@ jobs:
         with:
           fail-on-severity: high
 
-  # 全量深度审计（schedule/手动）：前端 npm、Python uv 锁定环境、两个 Rust crate 的 Cargo.lock。
+  # 全量深度审计（schedule/手动）：Python uv 锁定环境。
   deep-audit:
-    name: Dependency audit (npm / pip / cargo)
+    name: Dependency audit (pip)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -73,12 +73,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: desktop/web/package-lock.json
-
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -86,24 +80,10 @@ jobs:
             pyproject.toml
             uv.lock
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Audit Node (desktop/web)
-        working-directory: desktop/web
-        run: |
-          npm ci
-          npm audit --audit-level=high || echo "::warning::npm audit reported high+ advisories"
-
       - name: Audit Python (locked env)
         run: |
           uv sync --locked --all-groups
           uv run --with pip-audit pip-audit --desc
-
-      - name: Audit Rust (both crates' Cargo.lock)
-        run: |
-          cargo install cargo-audit --version 0.22.2 --locked
-          cargo audit --file desktop/src-tauri/Cargo.lock
-          cargo audit --file desktop/sidecar/Cargo.lock
 
       - name: Open/update audit issue on failure
         if: failure()
@@ -117,5 +97,5 @@ jobs:
             gh issue comment "$existing" --body "Scheduled audit failed again: $RUN_URL"
           else
             gh issue create --title "$title" --label security \
-              --body "Scheduled npm/pip/cargo audit found advisories. See failing step in $RUN_URL and bump the affected lockfile."
+              --body "Scheduled pip audit found advisories. See failing step in $RUN_URL and bump the affected lockfile."
           fi
