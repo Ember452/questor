@@ -74,6 +74,24 @@ async def test_flush_writes_on_completed_run(tmp_path: Path) -> None:
         await mem.close()
 
 
+async def test_flush_scrubs_secret_and_media_before_daily(tmp_path: Path) -> None:
+    """W6-006：flush_run_to_daily 必须先过 prepare_write 写纪律，secret/base64 媒体不得明文落 daily。"""
+    mem = await SQLiteMemoryStore(db_path=str(tmp_path / "m.db"), memory_root=str(tmp_path / "root")).connect()
+    try:
+        from questor.memory.distill import flush_run_to_daily
+
+        secret = "sk-LIVE-SECRET-ABCDEFGHIJKLMNOP"
+        summary = f"部署备注，密钥 {secret}，附图 ![diagram](data:image/png;base64,AAAA)"
+        await flush_run_to_daily(mem, summary_text=summary, run_id="run-secret")
+        daily = [p for p in await mem.list_memory_paths() if p.startswith("memory/2") and "/dreams/" not in p]
+        joined = "".join([await mem.read_memory_text(p) for p in daily])
+        assert secret not in joined, f"secret 明文落盘：{joined!r}"
+        assert "base64,AAAA" not in joined, f"媒体 base64 未降级：{joined!r}"
+        assert "部署备注" in joined  # 正常正文仍保留
+    finally:
+        await mem.close()
+
+
 async def test_flush_skips_failed_run(tmp_path: Path) -> None:
     # failed/cancelled 的残缺输出不得污染长期记忆（链走发现：旧码在任意终态都 flush）。
     mem = await SQLiteMemoryStore(db_path=str(tmp_path / "m.db"), memory_root=str(tmp_path / "root")).connect()

@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import secrets
 import sys
 from pathlib import Path
 
@@ -45,7 +47,7 @@ from questor.surfaces.context_report import context_report_for_run, cost_report_
 from questor.surfaces.http_sse import EventServer, create_app
 from questor.surfaces.logs import run_logs_command
 from questor.surfaces.maintenance import run_maintenance_command
-from questor.surfaces.serve import serve
+from questor.surfaces.serve import serve, write_bootstrap
 
 #: 组合根自述行 logger（一方 inline 记录；DoD A① 的"起手即有日志"靠它兑现）。
 _LOG = logging.getLogger("questor.composition")
@@ -178,7 +180,15 @@ async def _amain(argv: list[str]) -> int:
             import uvicorn  # 延迟 import：仅服务入口需要。
 
             server = EventServer(surface, app.store, ledger_enabled=cfg.delivery.enabled, scheduler=_scheduler_for(app.store, cfg))
-            openai_app = create_app(server, openai_api_keys=keys)
+            # W1-003：显式生成会话 token 传给 create_app（不传则内部随机、运维无从取用），
+            # 并把 host/port/token 落 bootstrap 文件，使 /shutdown、/run、/events、/sessions、/approvals 可用。
+            token = secrets.token_urlsafe(24)
+            openai_app = create_app(server, openai_api_keys=keys, token=token)
+            try:
+                write_bootstrap(Path(sidecar_bootstrap_from_env()), host=host, port=port, generation=sidecar_generation_from_env(), pid=os.getpid(), token=token)
+            except ValueError:
+                # 非 loopback 宿主：bootstrap 契约禁 0.0.0.0（C12）；跨机运维需自行带外传递 token。
+                _LOG.info("openai bootstrap skipped: non-loopback host; pass the session token out-of-band")
             _LOG.info("openai lane serving host=%s port=%s", host, port)
             await uvicorn.Server(uvicorn.Config(openai_app, host=host, port=port, log_level="warning")).serve()
             return 0

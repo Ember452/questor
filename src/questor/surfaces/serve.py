@@ -21,6 +21,8 @@ import logging
 import os
 import secrets
 import socket
+import subprocess
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -31,6 +33,27 @@ _log = logging.getLogger("questor.serve")
 
 #: sidecar 唯一允许 bind 的 host：loopback。写 bootstrap 时也据此拒绝 0.0.0.0（进程边界红线）。
 _LOOPBACK = "127.0.0.1"
+
+
+def _restrict_bootstrap_permissions(path: Path) -> None:
+    """收紧 bootstrap 文件权限，防同机其他用户读/写会话 token（W6-008）。
+
+    - POSIX：`0o600` 仅属主读写（配合创建时 mode 已私有）。
+    - Windows：`os.chmod` 只翻只读位、不做 per-user 授权，需 `icacls` 移除继承 ACL 并只授当前用户；
+      尽力而为（非管理员/无 icacls 时静默降级），不因平台差异阻断服务启动。
+    """
+    with contextlib.suppress(OSError):
+        os.chmod(path, 0o600)
+    if sys.platform == "win32":
+        user = os.environ.get("USERNAME") or os.environ.get("USER")
+        if user:
+            with contextlib.suppress(Exception):
+                subprocess.run(
+                    ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:F"],
+                    check=False,
+                    capture_output=True,
+                    timeout=10,
+                )
 
 
 def make_loopback_socket() -> tuple[socket.socket, int]:
@@ -58,7 +81,11 @@ def write_bootstrap(path: Path, *, host: str, port: int, generation: int, pid: i
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data), encoding="utf-8")
+    # 私有创建（O_CREAT mode 0o600）：避免 write→chmod 之间 token 以默认 0644 暴露（W6-008）。
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(data))
+    _restrict_bootstrap_permissions(tmp)
     tmp.replace(path)
     return data
 
