@@ -16,9 +16,6 @@ on:
       python:
         description: "Python 内核/测试/契约/依赖或 workflow 自身发生变更"
         value: ${{ jobs.changes.outputs.python }}
-      desktop:
-        description: "桌面/前端/Rust/契约或 workflow 自身发生变更"
-        value: ${{ jobs.changes.outputs.desktop }}
       workflows:
         description: "CI workflow 自身发生变更（强制全 lane 自验）"
         value: ${{ jobs.changes.outputs.workflows }}
@@ -37,7 +34,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       python: ${{ steps.filter.outputs.python }}
-      desktop: ${{ steps.filter.outputs.desktop }}
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - uses: actions/checkout@v7
@@ -57,13 +53,5 @@ jobs:
               - '.importlinter'
               - 'ruff.toml'
               - 'setup.py'
-            desktop:
-              - 'desktop/**'
-              - 'protocol/**'
-              - 'src/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'rust-toolchain.toml'
-              - '.node-version'
             workflows:
               - '.github/workflows/**'
