@@ -222,6 +222,20 @@ async def test_wait_for_releases_unmatched_and_returns_match() -> None:
         await store.close()
 
 
+async def test_next_batch_is_run_scoped_no_cross_run_steal() -> None:
+    """W5-001：同会话两个 run 各自 next_batch 只取绑定自己的提交，B 不得领走 A 的输入。"""
+    store = await SQLiteStore(":memory:").connect()
+    try:
+        a = RunController(Run(run_id="run-A"), queue=store, session_id="s1")
+        b = RunController(Run(run_id="run-B"), queue=store, session_id="s1")
+        await a.submit(SubmitMessage(run_id="run-A", content=_user("for A")), source="cli", idempotency_key="kA")
+        assert await b.next_batch() == ()  # B 不得抢 A 绑定的提交
+        batch = await a.next_batch()
+        assert len(batch) == 1 and batch[0].content.content[0].text == "for A"
+    finally:
+        await store.close()
+
+
 async def test_http_session_submissions_after_version(tmp_path) -> None:
     store = await SQLiteStore(str(tmp_path / "queue.db")).connect()
     try:

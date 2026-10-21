@@ -1016,17 +1016,29 @@ class SQLiteStore(StorePort):
                 raise
 
     async def claim_submissions(self, session_id: str, *, limit: int = 100, run_id: str | None = None) -> list[JsonObject]:
-        """原子 claim pending/deferred 行（置 deferred + run_id）；按 seq_in_session 升序返回。"""
+        """原子 claim pending/deferred 行（置 deferred + run_id）；按 seq_in_session 升序返回。
+
+        W5-001：提交在入队时已绑定目标 `run_id`（RunController.submit→enqueue_submission），故
+        claim 必须**只取本 run 的行**；否则同会话内两个 run 会互相领走对方的输入并改写 run_id。
+        `run_id=None`（遗留/无 run）退回按 session 领取全部 pending。"""
         async with self._lock:
             db = self._dbp()
             await db.execute("BEGIN IMMEDIATE")
             try:
-                cur = await db.execute(
-                    "SELECT item_id, session_id, run_id, seq_in_session, kind, payload, source, idem_key, change_version "
-                    "FROM submissions WHERE session_id = ? AND state IN ('pending','deferred') "
-                    "ORDER BY seq_in_session LIMIT ?",
-                    (session_id, max(1, limit)),
-                )
+                if run_id is not None:
+                    cur = await db.execute(
+                        "SELECT item_id, session_id, run_id, seq_in_session, kind, payload, source, idem_key, change_version "
+                        "FROM submissions WHERE session_id = ? AND (run_id = ? OR run_id IS NULL) AND state IN ('pending','deferred') "
+                        "ORDER BY seq_in_session LIMIT ?",
+                        (session_id, run_id, max(1, limit)),
+                    )
+                else:
+                    cur = await db.execute(
+                        "SELECT item_id, session_id, run_id, seq_in_session, kind, payload, source, idem_key, change_version "
+                        "FROM submissions WHERE session_id = ? AND state IN ('pending','deferred') "
+                        "ORDER BY seq_in_session LIMIT ?",
+                        (session_id, max(1, limit)),
+                    )
                 rows = await cur.fetchall()
                 if rows:
                     await db.executemany(
