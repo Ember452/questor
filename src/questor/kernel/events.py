@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from collections.abc import AsyncIterator, Callable
 from dataclasses import replace
 from datetime import datetime
@@ -157,9 +157,8 @@ class InProcessEventBus(EventBus):
     def __init__(self, store: StorePort | None = None) -> None:
         self._store = store
         self._subs: dict[str, list[asyncio.Queue[Envelope]]] = defaultdict(list)
-        self._closed: set[str] = set()
-        # bus 级只读 observer（ADR-0033 / D-P7-A）：每条**投影后**的对外 Envelope 恰触发一次，
-        # 与消费者/订阅者数量无关——带外投影（log_envelope）由此挂载，杜绝"逐消费者各投 = 多 surface 双投"。
+        # 终态去重记忆（C13）：仅存最近 _CLOSED_MAX 个 run id，FIFO 淘汰防长驻 sidecar 无界增长（W5-012）。
+        self._closed: OrderedDict[str, None] = OrderedDict()
         # 依赖方向：observer 由 surfaces/组合根注入回调，kernel 不 import observability（S7 九内核零依赖不破）。
         self._observers: list[Callable[[Envelope], None]] = []
 
@@ -182,6 +181,17 @@ class InProcessEventBus(EventBus):
             if not queues:
                 del self._subs[run_id]
 
+    _CLOSED_MAX = 10_000
+
+    def _mark_closed(self, run_id: str) -> None:
+        """记录已落库的终态 run；有界 FIFO，超出上限逐出最旧（W5-012：防无界增长）。"""
+        if run_id in self._closed:
+            self._closed.move_to_end(run_id)
+        else:
+            self._closed[run_id] = None
+            if len(self._closed) > self._CLOSED_MAX:
+                self._closed.popitem(last=False)
+
     async def emit(self, env: Envelope) -> None:
         """落库（非 live-only）→投影后向订阅者转发；终态至多一条。
 
@@ -189,10 +199,9 @@ class InProcessEventBus(EventBus):
         ``append`` 的 holder/epoch 取自 store 记录的**本次驱动身份**（持租约的 surfaces 在
         acquire_lease 时盖章），store 在事务内校验 run_leases——陈旧 epoch → StaleWriterError。
         """
-        if is_terminal(env):
-            if env.run_id in self._closed:  # first-writer-wins：已终态则丢弃后续
-                return
-            self._closed.add(env.run_id)
+        terminal = is_terminal(env)
+        if terminal and env.run_id in self._closed:  # first-writer-wins：已持久过终态则丢弃后续
+            return
 
         durable = durable_form(env)
         if durable is not None and self._store is not None:
@@ -205,6 +214,11 @@ class InProcessEventBus(EventBus):
             except Exception as exc:  # noqa: BLE001 - 持久化失败出声后上冒：数据丢失不可静默吞，保持既有致命语义
                 _log.warning("bus persist failed run=%s seq=%s: %s", durable.run_id, durable.seq, exc)
                 raise
+            # 仅在终态**成功落库后**才记 closed；append 抛错不得标记，否则后续重投的终态会在入口被静默吞（W5-012）。
+            if terminal:
+                self._mark_closed(env.run_id)
+        elif terminal:
+            self._mark_closed(env.run_id)  # 无 store：仍做进程内终态去重
 
         projected = project(env)
         if projected is None:
@@ -219,7 +233,7 @@ class InProcessEventBus(EventBus):
                 _log.warning("bus subscriber queue full, dropped frame run=%s seq=%s", env.run_id, env.seq)
         if is_terminal(env):
             self._subs.pop(env.run_id, None)  # run 已结束：释放订阅队列（防泄漏）。
-            # 保留 _closed：它是“抑制本 run 后续任何终态”的记忆（C13），只存短 run id。
+            # _closed 是“抑制本 run 后续任何终态”的记忆（C13）；有界 FIFO（_CLOSED_MAX），不再无界增长（W5-012）。
 
     def _lease_kwargs(self, run_id: str) -> dict[str, object]:
         """本 store 实例记录的写者身份（holder/epoch）；无记录则不传，交由 store 的栅栏判定。"""
