@@ -133,6 +133,14 @@ class EventServer:
             return
         await self.scheduler.run_forever()  # type: ignore[attr-defined]
 
+    async def cancel_active_drives(self) -> None:
+        """W5-005：关闭收尾——取消并等待在途 run 驱动任务，令其 finally 在 store 仍开启时释放单写者租约。"""
+        tasks = [active.task for active in self.registry._runs.values() if getattr(active, "task", None) is not None]  # noqa: SLF001
+        for task in tasks:
+            task.cancel()  # type: ignore[attr-defined]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
     def _loop(self, cancel: asyncio.Event, surface: RunToolSurface, run_id: str = "", session_id: str = "") -> DefaultTurnLoop:
         """复用 surface 的装配，但挂到本服务共享的 bus 上（工具面来自冻结 surface）。
 

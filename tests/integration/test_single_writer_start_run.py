@@ -117,3 +117,19 @@ async def test_cancel_during_blocked_provider_ends_cancelled(tmp_path: Path) -> 
         assert "run_cancelled" in types and "run_completed" not in types, f"取消被谎报为完成：{types}"
     finally:
         await store.close()
+
+
+async def test_cancel_active_drives_releases_lease(tmp_path: Path) -> None:
+    """W5-005：关闭收尾取消在途驱动，其 finally 在 store 仍开时释放租约（不再遗留 300s）。"""
+    store = await SQLiteStore(str(tmp_path / "db.sqlite")).connect()
+    try:
+        provider = _BlockingProvider()
+        surface = CliSurface(workspace_root=tmp_path, store=store, provider=provider)  # type: ignore[arg-type]
+        server = EventServer(surface, store)
+        run_id = await server.start_run("hi")
+        assert await store.acquire_lease(run_id, "x", 1, ttl_seconds=300.0) is False  # 驱动中，租约被持
+        await asyncio.wait_for(server.cancel_active_drives(), timeout=5)  # 取消并等待驱动任务
+        assert await store.acquire_lease(run_id, "x", 1, ttl_seconds=300.0) is True, "收尾后租约应已释放"
+    finally:
+        provider.release.set()
+        await store.close()

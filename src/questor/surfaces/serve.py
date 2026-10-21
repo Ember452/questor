@@ -124,5 +124,8 @@ async def serve(server: EventServer, *, generation: int, bootstrap_path: Path, s
             scheduler_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await scheduler_task
+        # W5-005：在调用方（_amain finally 的 close_app）关 store 之前，先取消并等待在途 run 驱动任务，
+        # 让它们的 finally 能在打开的 store 上释放单写者租约，否则遗留 300s 租约。
+        await server.cancel_active_drives()
         sock.close()
     return boot
