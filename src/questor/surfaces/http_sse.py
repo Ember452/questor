@@ -165,11 +165,13 @@ class EventServer:
             # 驱动结束即从注册表回收 controller（权威收尾点，不依赖是否有 SSE 消费者挂上，track surfaces MAJ-2）。
             # 置于 finally 首行，确保即便下方 teardown/释放抛错也已回收。
             self.registry.unregister(run_id)
-            if mcp_teardown is not None:  # discover 本身失败时无 teardown 可关；已建连接/句柄由 discover 内部回滚
-                await mcp_teardown()
-            # P9/ADR-0047：start_run 与 resume 均取唯一 holder 租约，未取到→lease_holder=None 那么 no-op。
-            if lease_holder is not None:
-                await self.store.release_lease(run_id, lease_holder, 1)
+            try:
+                if mcp_teardown is not None:  # discover 本身失败时无 teardown 可关；已建连接/句柄由 discover 内部回滚
+                    await mcp_teardown()
+            finally:
+                # W5-009：teardown 抛错（如 MCP 关闭失败）不得跳过租约释放，否则每带活动 run 的关闭都泄漏 300s 租约。
+                if lease_holder is not None:
+                    await self.store.release_lease(run_id, lease_holder, 1)
 
     async def _renew_lease_loop(self, run_id: str, holder: str) -> None:
         """每 ttl/2 续租一次；续租失败（已被夺走）即停——单写者栅栏，诚实放弃而非双驱。"""
@@ -177,7 +179,14 @@ class EventServer:
         try:
             while True:
                 await asyncio.sleep(interval)
-                if not await self.store.renew_lease(run_id, holder, 1):
+                try:
+                    renewed = await self.store.renew_lease(run_id, holder, 1)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - 瞬时 DB 故障不得使续租任务猝死（否则租约到期被抢→双驱，W5-006）
+                    _log.warning("lease renew transient failure run=%s holder=%s：%s（下轮重试）", run_id, holder, exc)
+                    continue
+                if not renewed:
                     _log.warning("lease lost for run=%s holder=%s：停续租（避免双驱）", run_id, holder)
                     return
         except asyncio.CancelledError:
@@ -197,6 +206,11 @@ class EventServer:
         B4：给 ``session_id`` 时确保会话行 + 绑定 run + 注入 SeedContext；不给时新建 session 行。
         """
         run_id = run_id or new_id("run")
+        # 单写者栅栏（C2/ADR-0047 / W5-007）：**先取租约再动 session**——租约被占时的 409 拒绝
+        # 不得留下 _prepare_session 对 run→session 绑定的改写（否则撕裂历史）。
+        holder = f"http:{new_id('drv')}"
+        if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
+            raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
         await self.surface.refresh_memory_index()  # B7：逐 run 从真源重建档1 索引段（写入后下一轮可见）
         sid, seed_requested = await self._prepare_session(run_id, session_id)
         # P9/ADR-0045：创建 run 时按 run 解析策略、冻结 policy_ref（reduce 会在 run_started 带出）。
@@ -208,11 +222,6 @@ class EventServer:
             for env in pre_events:
                 await self.bus.emit(env)
         seed_message = await self._seed_message(run, sid, seed_requested, seed_refs)
-        # 单写者栅栏（C2/ADR-0047）：start_run 也取租约，防另一进程对同 run_id 的 resume 抢驱。
-        # holder 每驱动任务唯一（非 pid），使同进程对同一 run 的二次驱动也会被拒（非静默覆盖）。
-        holder = f"http:{new_id('drv')}"
-        if not await self.store.acquire_lease(run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
-            raise HTTPException(status_code=409, detail=f"run {run_id} is being driven by another process (single-writer lease)")
         controller = RunController(run, queue=self.store, session_id=sid)
         self.registry.register(controller)
         if seed_message is not None:
