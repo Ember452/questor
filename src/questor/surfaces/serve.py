@@ -21,8 +21,6 @@ import logging
 import os
 import secrets
 import socket
-import subprocess
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -36,24 +34,15 @@ _LOOPBACK = "127.0.0.1"
 
 
 def _restrict_bootstrap_permissions(path: Path) -> None:
-    """收紧 bootstrap 文件权限，防同机其他用户读/写会话 token（W6-008）。
+    """收紧 bootstrap 文件权限，防同机其他用户读会话 token（W6-008）。
 
-    - POSIX：`0o600` 仅属主读写（配合创建时 mode 已私有）。
-    - Windows：`os.chmod` 只翻只读位、不做 per-user 授权，需 `icacls` 移除继承 ACL 并只授当前用户；
-      尽力而为（非管理员/无 icacls 时静默降级），不因平台差异阻断服务启动。
+    POSIX：`0o600` 仅属主读写（配合创建时 mode 已私有）。
+    Windows 的 per-user DACL 收紧需 `icacls`/win32 子进程，属 L5 关注点，不得进 surfaces
+    （T20 层界约束）；此处仅做平台无关的 chmod，Windows per-user ACL 作为已知残留由组合根
+    注入的 provider 助手完成（见 #206 W6-008 跟进）。尽力而为、不因平台差异阻断服务启动。
     """
     with contextlib.suppress(OSError):
         os.chmod(path, 0o600)
-    if sys.platform == "win32":
-        user = os.environ.get("USERNAME") or os.environ.get("USER")
-        if user:
-            with contextlib.suppress(Exception):
-                subprocess.run(
-                    ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:F"],
-                    check=False,
-                    capture_output=True,
-                    timeout=10,
-                )
 
 
 def make_loopback_socket() -> tuple[socket.socket, int]:
