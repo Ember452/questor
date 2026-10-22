@@ -2,7 +2,7 @@
 
 from questorharness.tools.ask_user_question_tool import AskUserQuestionTool
 from questorharness.tools.agent_tool import AgentTool
-from questorharness.tools.bash_tool import BashTool
+from questorharness.capabilities.tools.shell.bash_tool import BashTool
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult
 from questorharness.capabilities.tools.brief_tool import BriefTool
 from questorharness.capabilities.tools.config_tool import ConfigTool
@@ -30,7 +30,7 @@ from questorharness.tools.read_mcp_resource_tool import ReadMcpResourceTool
 from questorharness.capabilities.tools.remote_trigger_tool import RemoteTriggerTool
 from questorharness.tools.send_message_tool import SendMessageTool
 from questorharness.capabilities.tools.skill_tool import SkillTool
-from questorharness.tools.sleep_tool import SleepTool
+from questorharness.capabilities.tools.shell.sleep_tool import SleepTool
 from questorharness.tools.task_create_tool import TaskCreateTool
 from questorharness.tools.task_get_tool import TaskGetTool
 from questorharness.tools.task_list_tool import TaskListTool

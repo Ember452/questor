@@ -35,7 +35,7 @@ RESULTS: dict[str, tuple[bool, float]] = {}
 
 def _make_registry(extra_tools=None):
     from questorharness.capabilities.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
     from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool

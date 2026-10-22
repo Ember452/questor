@@ -69,7 +69,7 @@ async def task_hook_blocks_model_adapts():
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
@@ -152,7 +152,7 @@ async def task_model_invokes_skill_tool():
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
@@ -245,7 +245,7 @@ async def task_plugin_skill_in_agent_loop():
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
@@ -349,7 +349,7 @@ async def task_hook_gates_writes_skill_guides():
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
     from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool
@@ -503,7 +503,7 @@ async def task_swarm_teammates_use_skills():
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool

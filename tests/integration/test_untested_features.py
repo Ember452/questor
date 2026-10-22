@@ -47,7 +47,7 @@ def make_engine(system_prompt="You are a helpful assistant. Be concise.", cwd=No
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
     from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool
@@ -190,7 +190,7 @@ async def test_hooks_in_agent_loop():
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.hooks.events import HookEvent
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
@@ -544,7 +544,7 @@ async def test_commands_registry():
 async def test_web_fetch_real():
     """Agent fetches a real URL and summarizes it."""
     from questorharness.tools.web_fetch_tool import WebFetchTool
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
 
     engine = make_engine(
         "You are a web researcher. Fetch URLs when asked and summarize the content.",
@@ -663,7 +663,7 @@ async def test_combined_hooks_skills_agent():
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
@@ -729,7 +729,7 @@ async def test_full_swarm_autoagent():
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.tools.bash_tool import BashTool, BashToolInput
+from questorharness.capabilities.tools.shell.bash_tool import BashTool, BashToolInput
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.brief_tool import BriefTool, BriefToolInput
 from questorharness.tools.cron_create_tool import CronCreateTool, CronCreateToolInput
