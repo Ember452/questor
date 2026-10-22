@@ -36,8 +36,15 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DOCS = ROOT / "docs"
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 CODE_PATH_RE = re.compile(r"`([^`\n]+)`")
-PATH_ROOTS = ("src/", "tests/", "scripts/", "docs/", "frontend/")
-SIMPLE_PATHS = ("pyproject.toml", "uv.lock", ".importlinter", "README.md")
+PATH_ROOTS = ("src/", "tests/", "scripts/", "docs/", "frontend/", ".github/")
+SIMPLE_PATHS = (
+    "pyproject.toml",
+    "uv.lock",
+    ".importlinter",
+    ".pre-commit-config.yaml",
+    "Makefile",
+    "README.md",
+)
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,28 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: ruff-critical
+        name: ruff critical errors
+        entry: uv run ruff check --select E9,F63,F7,F82
+        language: system
+        types: [python]
+
+      - id: secret-projection
+        name: secret projection guard
+        entry: uv run python scripts/guards/check_secret_projection.py --fail-on-empty
+        language: system
+        pass_filenames: false
+
+      - id: doc-cross-refs
+        name: documentation cross-reference guard
+        entry: uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
+        language: system
+        pass_filenames: false

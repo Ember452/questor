@@ -35,6 +35,9 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra dev --frozen
 
+      - name: Pre-commit
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
       - name: Guard self-tests
         run: |
           uv run python scripts/guards/_guard_kit.py --self-test
