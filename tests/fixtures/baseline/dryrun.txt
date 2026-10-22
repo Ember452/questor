@@ -1,0 +1,66 @@
+QuestorHarness Dry Run
+
+Readiness
+- level: ready
+- No prompt provided; dry-run only validated the session setup path.
+- next actions:
+  - Provide `-p/--print` for a single prompt preview, or start `oh` normally to enter an interactive session.
+
+Execution
+- cwd: <REPO>
+- prompt: (none)
+- entrypoint: interactive_session
+- detail: QuestorHarness would start and wait for user input. No model or tool call happens until you submit one.
+
+Resolved Settings
+- profile: claude-api (Anthropic-Compatible API)
+- provider: anthropic
+- api_format: anthropic
+- model: claude-haiku-4-5
+- base_url: (default)
+- permission_mode: default
+- max_turns: 200
+- effort: medium / passes=1
+
+Validation
+- auth: configured
+- api client: ok
+- system prompt chars: 19008
+- mcp: skipped in dry-run (configured only; external servers are not started)
+- mcp config errors: 0
+
+Discovery
+- plugins: 0
+- skills: 50
+- slash commands: 111
+- built-in tools: 39
+- configured mcp servers: 0
+
+Available Tools
+- bash (required: command; optional: cwd, timeout_seconds)
+- ask_user_question (required: question)
+- read_file (required: path; optional: limit, offset)
+- write_file (required: content, path; optional: create_directories)
+- edit_file (required: new_str, old_str, path; optional: replace_all)
+- notebook_edit (required: cell_index, new_source, path; optional: cell_type, create_if_missing, mode)
+- lsp (required: operation; optional: character, file_path, line, query)
+- mcp_auth (required: mode, server_name, value; optional: key)
+- glob (required: pattern; optional: limit, root)
+- grep (required: pattern; optional: case_sensitive, file_glob, limit, root)
+- image_to_text (optional: image_data, image_path, max_tokens, media_type)
+- image_generation (optional: background, image_paths, input_fidelity, mask_path)
+- ... (+27 more)
+
+Available Skills
+- brainstorming: You MUST use this before any creative work - creating features, building components, adding funct...
+- commit: Create clean, well-structured git commits.
+- debug: Diagnose and fix bugs systematically.
+- diagnose: Diagnose why an agent run failed, regressed, or produced unexpected output — using structured evi...
+- dispatching-parallel-agents: Use when facing 2+ independent tasks that can be worked on without shared state or sequential dep...
+- executing-plans: Use when you have a written implementation plan to execute in a separate session with review chec...
+- finishing-a-development-branch: Use when implementation is complete, all tests pass, and you need to decide how to integrate the ...
+- lark-approval: 飞书审批：查询和处理审批待办/已办/实例，搜索可发起审批定义、查看定义详情并发起原生审批实例。当用户要处理审批任务、查看审批实例、搜索或发起审批时使用。审批待办不是飞书任务；非审批类待办走 la...
+- ... (+42 more)
+
+System Prompt Preview
+You are QuestorHarness, an open-source AI coding assistant CLI. You are an interactive agent that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user. IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming. You may use URLs provided by the user in their messages or local files. # System - All text you output outside of tool use is displayed to the user. Output text to communicate with the user. You can use Github-flavored markdown for ...

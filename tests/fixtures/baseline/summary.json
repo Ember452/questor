@@ -1,0 +1,19 @@
+{
+  "allowed_node_id_count": 2,
+  "cold_import": {
+    "exit": 0,
+    "output": ""
+  },
+  "lint": {
+    "broken": 0,
+    "kept": 1
+  },
+  "main_node_id_count": 1166,
+  "node_id_count": 1168,
+  "pytest": {
+    "deselected": 10,
+    "passed": 1139,
+    "skipped": 29
+  },
+  "snapshot_messages": 4
+}
