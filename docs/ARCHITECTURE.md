@@ -1,5 +1,11 @@
 # Architecture
 
+> This page describes the **current** v2 layout. The **target** package
+> structure, dependency rank, modes, and migration plan are in
+> [Structure](architecture/STRUCTURE.md), [Migration](architecture/MIGRATION.md),
+> and ADR-0002/0003. The memory provider contract is in
+> [Memory](architecture/MEMORY.md) and ADR-0004.
+
 ## Repository layout
 
 | Path | Responsibility |
