@@ -40,8 +40,8 @@
 4. **`runtime` 是循环与控制**：run/turn、tool cycle、session ops、budget、extension points、tasks、delegation、autopilot。它只认 `contracts/ports` 与 `kernel` 的公开入口，不 import 能力实现。
 5. **`capabilities` 是能力域**：context、memory、tools、policy、delivery、schedule、evolution。每个子域是一个叶子，拥有自己的 `model/ports/policy/store/README`。
 6. **`providers` 是适配器**：llm、auth、store、sandbox、search、lsp、mcp。只实现 `contracts/ports`，不 import runtime/capabilities；由 `bootstrap` 注入。
-7. **`surfaces` 是传输**：http、sse、ipc、gateway、channels、terminal。只认 `contracts` 和注入的 facade，不写业务、不写状态。
-8. **`profiles` 是模式装配，纯数据**：personal / coding 是两份 YAML，只引用注册表 ID；每次 run 记录 `profile_fingerprint`。模式不是目录，不复制 memory/context/loop。
+7. **`surfaces` 是传输**：http、sse、ipc、gateway、channels。只认 `contracts` 和注入的 facade，不写业务、不写状态；不建 `surfaces/terminal`（ADR-0005）。
+8. **`profiles` 是模式装配，纯数据**：personal / coding 是两份 YAML，只引用注册表 ID；每次 run 记录 `profile_fingerprint`。模式不是目录，不复制 memory/context/loop。profiles 只放 YAML 与文本；prompt 的加载代码归 `capabilities/context`，不下沉进 profiles。
 9. **产品只 import 引擎公开面**：`questorharness.api` + `bootstrap`。`questor` 负责组合根与产品策略（gateway 群规则、通知、onboarding、workspace）。
 10. **Electron 是宿主，不是第二后端**：`apps/desktop`（main/preload）+ `apps/web`（共享 renderer）；IPC 只是 Transport 的第二个实现，和 HTTP/SSE 共用同一套 Command/Event envelope。
 11. **字段三层（不预设事件溯源）**：domain（`contracts/domain`）/ storage（会话快照与 store 适配）/ wire（对外 schema）分离；现在只要求“旧快照能加载”与“wire 只增不删”；事件 `event_version` + upcaster 推到 durable 立项之后。新增字段必须 optional + 默认值 + 有生产者 + 有读取方。
@@ -51,6 +51,9 @@
 15. **Phase 1 按耦合度排序，不按行数**：搬之前先数测试里的 `monkeypatch.setattr("模块路径.名字")` 目标数；低的先搬，高的（gateway 76、autopilot 41、ui 37）推到 Phase 2。每个包的 patch 目标在同 PR 里改完。
 16. **禁止用 re-export shim 兼容测试 patch**：shim 只保 `import`，会静默改变 patch 命中目标，把红测试变成假绿。patch 目标数 > 0 的模块不许留 shim。
 17. **不建空目录**：`contracts/`、`kernel/`、`profiles/` 在第一个真实文件落地前不创建；目录从内容长出来。
+18. **`bootstrap` 只装配，不承载被 import 的配置类型**：配置类型放 `contracts/settings.py`（frozen dataclass，只依赖标准库），由 `bootstrap` 解析后注入。理由：`bootstrap` 是依赖秩最高层，而 `config` 当前被 78 处 import；把 `config/` 直接平移到 `bootstrap/` 会让下层反向依赖装配层。
+19. **模式差异走 `LoopStrategy` Port，不进循环骨架**：`contracts/ports/loop.py` 定义策略，`runtime/turn/loop.py` 只跑“装配→调用→判定→结算”骨架，`runtime/turn/strategies/*` 提供 react / plan-execute-verify；profile 只选 ID。循环内不得出现 `if profile == ...`。
+20. **UI 宿主以 ADR-0005 为准**：`apps/web`（React）是唯一 renderer，`apps/desktop` 只是宿主；不建 `surfaces/terminal/`，Python textual 与 Node Ink 不再演进。
 
 ## Alternatives considered
 
@@ -64,6 +67,9 @@
 - **用 `runtime/` 命名 spine**。拒绝：runtime 是变化最快的循环层，spine 是变化最慢的机制层；同名会互相拖累。spine 叫 `kernel`。
 - **建 `_reserved/` 放 subagents/dag/scheduler/codemode**。拒绝：这是平行的未来树，激活时要搬一次，等于保证第二次迁移；接缝应归属 `runtime/delegation`、`capabilities/schedule`、`capabilities/tools`。
 - **把 `composition.py` 放在产品包里作为唯一装配根**。拒绝：引擎将无法独立装配与测试。引擎提供 `bootstrap.compose(overrides)`；产品调用它并注入产品 bindings。
+- **把 `config/` 平移到 `bootstrap/config/`**。拒绝：`bootstrap` 是依赖秩最高层，而 `config` 被 78 处 import；直接平移会让下层反向依赖装配层。改为“类型进 contracts/settings、解析与注入留在 bootstrap”。
+- **保留 Python textual TUI 作为第二 UI**。拒绝：见 ADR-0005；三套 UI 会让 `surfaces/terminal` 与 `apps/web` 争抢同一份状态投影，且测试与依赖成本翻倍。
+- **把模式差异写进 `runtime/turn/loop.py`**。拒绝：一旦循环里出现 `if profile == ...`，第三个模式就会变成改内核；模式差异必须落成 `LoopStrategy` 与 capability strategy。
 
 ## Consequences
 
@@ -89,6 +95,8 @@
 - `capabilities` 永不 import `providers`；
 - `surfaces` 永不 import `runtime` / `capabilities`（facade 注入除外）；
 - `profiles` 只依赖 `contracts`；
+- 下层模块不得 import `bootstrap`（配置类型在 `contracts/settings.py`，由 bootstrap 注入）；
+- 循环骨架不得出现 profile 分支（差异走 `LoopStrategy`）；
 - 没有内容的目录不建；没有消费者的 Port 不建；
 - 任何文件 >1200 行、任何逻辑目录 >30 个源文件，CI 判红。
 

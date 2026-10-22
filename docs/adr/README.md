@@ -7,4 +7,5 @@ contracts, persistence, security, or the public CLI.
 - [0002: Target package structure and dependency rank](0002-target-structure.md)
 - [0003: File-level layout and readability budget](0003-file-layout.md)
 - [0004: Memory provider contract](0004-memory-provider-contract.md)
+- [0005: UI host canonicalization (Electron + React only)](0005-single-ui-host.md)
 - [Template](template.md)

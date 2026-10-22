@@ -12,7 +12,7 @@
 | --- | --- |
 | `src/questorharness/` | Engine: agent loop, providers, tools, permissions, memory, channels, cron, sandbox |
 | `src/questor/` | Product app: gateway, onboarding, workspace, Feishu group policy |
-| `frontend/terminal/` | Terminal UI |
+| `frontend/terminal/` | Terminal UI (frozen; removed in Phase 2 per ADR-0005) |
 | `tests/unit/` | Fast, isolated tests |
 | `tests/integration/` | Tests crossing process, filesystem, transport, or service boundaries |
 | `tests/e2e/` | Real end-to-end suites and their pytest gate |
@@ -22,6 +22,15 @@
 
 Both Python packages use the `src` layout. Do not add importable packages at the
 repository root.
+
+UI host: **Electron + React is the only long-term UI** (`apps/web` renderer,
+`apps/desktop` host). The Python `textual` UI and the Node Ink terminal are
+frozen and will be removed; do not add features to either. See
+[ADR-0005](adr/0005-single-ui-host.md).
+
+Configuration types belong in `contracts/settings.py` (future), not in
+`bootstrap/`: `bootstrap` is the assembly layer and must not be imported by
+lower layers. See ADR-0002 item 18.
 
 ## Dependency direction
 

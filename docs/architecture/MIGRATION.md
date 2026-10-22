@@ -22,8 +22,8 @@
 | 阶段 | 内容 | 是否改行为 | 出口 |
 |---|---|---|---|
 | **Phase 0** | 文档 + 3 个可落地守卫 + AGENTS 地图 | 否 | 守卫能跑；文档合并 |
-| **Phase 1** | Move-only：按耦合度搬包、同 PR 改测试 patch 目标、删空壳 | 否 | 基线五项不变 |
-| **Phase 2** | Code-shape：拆 god file、把循环从 UI 抽出、建 Port、统一 surfaces | 否 | 基线不变 + 尺寸阈值达标 |
+| **Phase 1** | Move-only：**只含 W1/W1b/W2/W2b**（≈99 处 patch）；W3/W3b 移入 Phase 2 | 否 | 基线五项不变 |
+| **Phase 2** | Code-shape + 语义归位：拆 god file、config 注入、state 拆分、plugins/skills 拆开、UI 移除 | 否 | 基线不变 + 尺寸阈值达标 |
 | **Phase 3** | Capabilities：profiles、memory provider、Electron、第二模式 | 是 | 新能力半径 ≤1；新模式不改引擎核心 |
 
 Phase 1 有**时间盒**：≤10 个 PR 或 ≤2 周。超时不加班，先砍范围（见 §3.7）。
@@ -39,7 +39,7 @@ Phase 1 有**时间盒**：≤10 个 PR 或 ≤2 周。超时不加班，先砍�
   3. gen_tree（待建，生成目录树文档，`--check` 防漂移）。
 - 已有的 `check_doc_cross_refs.py`、`check_secret_projection.py`、`check_thread_leak.py` 继续保留。
 - **不建**的守卫：字段 canonical、事件版本、wire codegen、conformance 目录 —— 前置概念还不存在。
-- 建 9 个 `AGENTS.md` 骨架（8 个引擎域 + `src/questor`）；`apps/desktop` / `apps/web` 在 Phase 3 创建后补。
+- 在**已存在的域**建 `AGENTS.md`（`src/questor` + 每个已落地的引擎域；`contracts` / `kernel` / `profiles` 随对应包落地时补，不建空目录）；`apps/desktop` / `apps/web` 在 Phase 3 创建后补。
 - 根 `AGENTS.md` 降级为指针：只指向 `docs/architecture/STRUCTURE.md` 与包级 `AGENTS.md`，不再新增规则。
 
 ---
@@ -48,13 +48,17 @@ Phase 1 有**时间盒**：≤10 个 PR 或 ≤2 周。超时不加班，先砍�
 
 ### 3.1 先冻结基线（每个 PR 都要重跑）
 
-1. `uv run pytest -m "unit or integration"` 通过集，记录数量与用例名；
-2. CLI 基线：`questor --help` 输出 + 一次固定会话的 stdout；
-3. 旧 session 快照能加载（取 `~/.questor/agent` 下一份真实快照做 fixture）；
-4. `uv run lint-imports` 绿；
-5. 冷导入：`uv run python -c "import questorharness"`。
+基线必须写成“命令 + 期望输出”，不能写“测试全绿”。2026-10-22 在 `main` 上实测：
 
-Phase 1 结束时这五项必须逐项不变。
+| # | 项 | 命令 | 期望 | 备注 |
+|---|---|---|---|---|
+| 1 | 测试通过集 | `uv run pytest -m "unit or integration" -q` | `1137 passed, 29 skipped, 10 deselected`（≈82s） | **必须用 `uv run`**；直接跑 `.venv\Scripts\python.exe -m pytest` 会得 `1135 passed, 2 failed`，因为 `tests/integration/test_import_boundaries.py` 用 `shutil.which("lint-imports")`，PATH 里没有 `.venv/Scripts` |
+| 2 | CLI 基线 | `uv run python -m questor --help`；`uv run questorharness --help` | 输出逐字不变 | 输出快照的存放位置随 Phase 0 交付物一起定（不建空目录） |
+| 3 | 旧快照能加载 | `tests/fixtures/snapshots/session-snapshot-v0.json` | `load_session_snapshot()` 返回 4 条消息 | 2026-10-22 用真实 `save_session_snapshot` API 生成（含 tool_use/tool_result）。**当前快照没有 `schema_version` 字段**，加载只靠 `_sanitize_snapshot_payload` 的宽容解析；加版本闸门前，“跨版本”只能靠字段可选 |
+| 4 | import 契约 | `uv run lint-imports` | `1 kept, 0 broken` | 增内层契约前先看 STRUCTURE §2.3 |
+| 5 | 冷导入 | `uv run python -c "import questorharness; import questor"` | 无输出、exit 0 | 已实测通过 |
+
+Phase 1 结束时这五项必须逐项不变。第 1 项的调用方式必须写进 PR 模板，否则“红/绿”会因跑法不同而不可比。
 
 ### 3.2 建目录规则
 
@@ -65,6 +69,8 @@ Phase 1 结束时这五项必须逐项不变。
 ### 3.3 耦合度排序（搬之前先看清楚）
 
 patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `mock.patch("...")` 引用的次数。
+
+2026-10-22 实测：`tests/` 下这两类调用共 **477 处，分布 52 个测试文件**（本文早先的 310 是更窄口径）。排序结论不变，但每波的实际改写量按 477 计；**单 PR 预算 ≤50 处改写 + ≤1 个包**，超了就拆。
 
 | 波次 | 内容 | patch 目标 | 说明 |
 |---|---|---|---|
@@ -101,23 +107,23 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `permissions/` | `capabilities/policy/` | 按 permission / sandbox / approval 拆 |
 | `channels/` | `surfaces/channels/` | 按 channel 拆；`feishu.py` 1115 行拆子目录 |
 | `mcp/` | `capabilities/tools/mcp/` + `providers/mcp/` | 策略与 transport 分离 |
-| `prompts/` | `profiles/prompts/`（W2 才建 `profiles`） | 按 profile 拆 |
-| `skills/`、`plugins/` | 根 `plugins/` | 数据包，不拆 |
-| `state/`（UI store） | `surfaces/terminal/state/` | 事实状态层不在本阶段 |
+| `prompts/` | prompt 文本 → `profiles/prompts/`；loader 代码 → `capabilities/context` | 按 profile 拆；`profiles` 保持纯数据 |
+| `skills/`、`plugins/` | loader/registry → `capabilities/tools/`；`bundled/*.md` → 根 `plugins/` | 代码与数据必须分开 |
+| `state/`（UI store） | **Phase 1 不动**；Phase 2 再拆 | 事实状态层不建（durable 未立项） |
 | `engine/` | **Phase 1 不动**（W4） | `runtime/turn/{loop,tool_cycle,stop}` + `capabilities/context/assemble` |
 | `commands/` | `runtime/commands/` | `registry.py` 2586 行按命令族拆 |
 | `coordinator/`、`swarm/` | `runtime/delegation/` + `capabilities/policy/` | 按 team / permission 拆 |
 | `tasks/` | `runtime/tasks/` | 拆 task_manager / local_agent / local_shell |
 | `autopilot/` | **Phase 1 不动**（W4） | `runtime/autopilot/{policy,loop,triggers,state}`（service.py 2089） |
 | `hooks/` | `runtime/extension/` | 按 hook 类型拆 |
-| `ui/` | **Phase 1 不动**（W4） | `surfaces/terminal/`；编排部分进 `runtime/` |
-| `keybindings/`、`themes/`、`vim/`、`output_styles/` | `surfaces/terminal/presentation/` | 按表现层拆 |
-| `voice/` | `providers/voice/` | 有策略时升 capabilities |
-| `utils/` | 锁进 `kernel` 之前先落 `providers/`（fs / shell / network_guard）| 解散，不留 utils |
-| `config/` | `bootstrap/config/` | 拆 schema / load / defaults |
+| `ui/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `surfaces/terminal/`；先解耦再删 |
+| `keybindings/`、`themes/`、`vim/`、`output_styles/` | **Phase 1 冻结**；Phase 2 随 UI 一起移除（ADR-0005） | 不迁 `surfaces/terminal/` |
+| `voice/` | `providers/voice/`（Phase 2） | 有策略时升 capabilities |
+| `utils/` | Phase 2 才归位；落 `providers/`（fs / shell / network_guard） | 解散，不留 utils |
+| `config/` | 类型 → `contracts/settings.py`；解析/注入 → `bootstrap/config/`（Phase 2） | 禁止下层 import `bootstrap` |
 | `bridge/` | **Phase 1 不动**（W4） | `surfaces/bridge/` |
 | `questor/gateway/` | **Phase 1 不动**（W5） | 协议路由进 `surfaces/gateway/`，产品策略留在产品包 |
-| `frontend/terminal/` | 不动（Node 工具链） | Phase 3 随 Electron 一起决定 |
+| `frontend/terminal/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `apps/terminal/`；wheel force-include 同步删除 |
 
 `services/` 的 5 个子包都没有独立模块文件，逻辑全在 `__init__.py`：`compact`、`lsp`、`memory_extract`、`session_memory` 整体搬到各自能力域（Phase 2 再拆文件），`oauth` 为空可直接删。
 
@@ -126,9 +132,10 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 - 不拆任何 >800 行的文件（`commands/registry.py`、`cli.py`、`autopilot/service.py`、`services/compact/__init__.py` 全部保持整文件搬迁）；
 - 不改函数签名、不改协议、不改事件/快照类型；
 - 不引入新依赖；
-- 不建 `contracts/`、`kernel/`、`profiles/`（`profiles` 到 W2 装 `prompts/` 时才建）；
+- 不建 `contracts/`、`kernel/`、`profiles/`（`profiles` 到 W2 装 prompt 文本时才建）；
 - 不动 `frontend/terminal/`、不建 `apps/desktop` / `apps/web`；
 - 不写 memory provider；ADR-0004 只记录契约，代码到 Phase 3。
+- **不做任何语义归位**（这些都不是 move-only，归 Phase 2）：config 注入、`state/` 拆分、`plugins/skills` 拆代码与数据、`prompts/` 重定位、`ui/` 移除、`utils/` 解散。
 
 Phase 1 允许的临时例外（写进 layout 豁免清单，Phase 2 销账）：
 
@@ -148,7 +155,7 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 - `lint-imports` 绿；
 - `check_layout.py` 只报豁免清单里的已知项，**不新增违规**；
 - 每个已建目录有 `AGENTS.md`；
-- **时间盒**：≤10 PR / ≤2 周。超盒时按顺序砍：先砍 W3b 的 `utils/`、`config/` 归位，再砍 W3 的 `state/`；W4/W5 本来就不在本阶段。
+- **时间盒**：≤10 PR / ≤2 周；单 PR ≤50 处 patch 改写 + ≤1 个包。超盒时先砍 W2b 的 `channels/`，再砍 W2b 的 `auth/`；W3/W3b/W4/W5 本来就不在本阶段。
 
 ---
 
@@ -278,7 +285,8 @@ apps/web/AGENTS.md                            （Phase 3）
 | 项 | 数值 |
 |---|---|
 | 工作区 Python 源文件 | 241（含 44 个 `__init__.py`，源文件 197） |
-| 测试里的字符串 patch 目标总数 | 310 |
+| 测试里的字符串 patch 目标总数 | 310（旧口径）；**477（2026-10-22 实测，含 `monkeypatch.setattr` / `mock.patch` 全部调用，52 个文件）** |
+| 快照 schema 版本字段 | **无**（实测 snapshot keys 只有 session_id/cwd/model/system_prompt/messages/usage/tool_metadata/created_at/summary/message_count） |
 | patch 热点 | gateway.runtime 76、autopilot.service 41、ui.app 23、auth.external 12、utils.shell 12、services.compact 11、api.copilot_auth 11、ui.backend_host 10 |
 | 测试内路径引用 | tools 172、questor.gateway 102、api 82、engine 64、ui 62、services 50、memory 31 |
 | >1200 行文件 | 4（2586 / 2245 / 2089 / 1527） |

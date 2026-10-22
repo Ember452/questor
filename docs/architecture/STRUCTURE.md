@@ -47,8 +47,7 @@ src/questor                                ← 产品组合根 + 产品策略
 questor/
 ├─ apps/                              # 非 Python 宿主：只装配 UI 与进程
 │  ├─ desktop/                        # Electron: main/ preload/ resources/
-│  ├─ web/                            # React renderer（desktop 与浏览器共用）
-│  └─ terminal/                       # Node Ink TUI（由 frontend/terminal 迁入）
+│  └─ web/                            # React renderer（desktop 与浏览器共用；唯一 UI，ADR-0005）
 │
 ├─ src/
 │  ├─ questorharness/                 # 引擎：headless、可独立装配
@@ -100,8 +99,7 @@ questor/
 │  │  │  ├─ sse/                      # 事件流
 │  │  │  ├─ ipc/                      # Electron preload ↔ sidecar
 │  │  │  ├─ gateway/                  # 协议/路由（无产品策略）
-│  │  │  ├─ channels/                 # channel adapters
-│  │  │  └─ terminal/                 # Python 终端 surface（如保留）
+│  │  │  └─ channels/                 # channel adapters
 │  │  ├─ profiles/                    # 模式装配（纯数据，只依赖 contracts）
 │  │  │  ├─ schema.py                 # Profile 槽位定义
 │  │  │  ├─ registry.py               # ID → 实现，fail-closed
@@ -252,6 +250,34 @@ forbidden_modules =
 - 禁止新代码继续依赖 `questorharness.ui`、`questorharness.utils`、`questorharness.services` 这三个漏桶（新债不加，旧债用 baseline 记录）。
 
 将来若立项 durable，再补：“`reduce(` 只出现在状态转移入口”、“事实流 append 只由内核内部调用”两条 AST 守卫。
+
+### 2.3 守卫的落地顺序（实测约束，2026-10-22）
+
+`layers` 契约**不能提前写**：import-linter 在层模块不存在时直接失败，而不是“跳过未建的层”。
+
+```text
+$ lint-imports --config <含 bootstrap/surfaces/... 的 layers 配置>
+Missing layer 'questorharness.bootstrap': module questorharness.bootstrap does not exist.
+EXIT=1
+```
+
+`forbidden` 契约相反，目标模块不存在时按“没有依赖”处理，判 KEPT：
+
+```text
+Probe: forbidden target modules that do not exist yet   KEPT
+Contracts: 1 kept, 0 broken.   EXIT=0
+```
+
+所以落地顺序固定为：
+
+| 契约 | 何时加 | 级别 |
+|---|---|---|
+| `engine-app-boundary`（已有） | 现在 | blocking |
+| 4 条 `forbidden`（capabilities / providers / surfaces / product） | Phase 0 | blocking |
+| `layers` 的每一行 | **对应层包真实落地后**，随 wave 追加 | 追加即 blocking |
+| 新代码禁依赖 `ui` / `utils` / `services` | Phase 0（AST 或 forbidden 均可） | blocking，带 baseline |
+
+未建的层（`kernel`、`contracts`、`profiles`）不写进 `layers`。ADR-0002 的“契约先行”按本表理解：**先上 forbidden，layers 增量**。
 
 ---
 
@@ -442,11 +468,14 @@ apps/web/
 |---|---|---|
 | `api/`、`auth/`、`sandbox/` | 降为适配器 | `providers/{llm,auth,sandbox}/` |
 | `engine/`、`commands/`、`coordinator/`、`swarm/`、`tasks/`、`autopilot/`、`hooks/` | 下沉到运行时 | `runtime/{turn,commands,delegation,tasks,autopilot,extension}/` |
-| `state/` | 拆分 | 事实状态 → `kernel/`；UI 可观察状态 → `surfaces/terminal/state.py` 或前端 store |
+| `state/` | Phase 1 **不动**，Phase 2 再拆 | 事实状态 → `kernel/`（durable 立项后）；UI 可观察状态 → 前端 store |
 | `services/*` | 解散 | `capabilities/{context,memory,schedule}/`、`providers/lsp/`、`runtime/budget/` |
+| `plugins/`、`skills/` | 拆代码与数据 | loader/registry → `capabilities/tools/`；`bundled/*.md` → 根 `plugins/`（包数据，`importlib.resources` 读取） |
+| `personalization/` | 升级为记忆能力 | `capabilities/memory/personalization/`（Phase 3） |
 | `memory/`、`permissions/`、`channels/`、`mcp/` | 升级为能力/传输 | `capabilities/{memory,policy,tools/mcp}/`、`surfaces/channels/`、`providers/mcp/` |
-| `ui/`、`keybindings/`、`themes/`、`vim/`、`output_styles/`、`voice/` | 上移出引擎 | `apps/terminal/`、`surfaces/terminal/`、`providers/voice/` |
-| `utils/`、`config/`、`bridge/` | 解散/归位 | `kernel/`（锁）、`bootstrap/config/`、`surfaces/`（bridge） |
+| `ui/`、`keybindings/`、`themes/`、`vim/`、`output_styles/` | Phase 1 冻结，Phase 2 移除（ADR-0005） | 不迁 `surfaces/terminal/`；先解耦再删 |
+| `voice/` | 下移为适配器 | `providers/voice/`（Phase 2） |
+| `utils/`、`config/`、`bridge/` | 解散/归位（Phase 2） | `kernel/`（锁）、`contracts/settings.py`（配置类型）+ `bootstrap/config/`（只做解析与注入）、`surfaces/`（bridge） |
 | `questor/gateway` | 拆产品策略与传输 | surfaces/gateway（协议路由）+ 产品包内的渠道策略目录 |
 
 `services/` 的 5 个子包都没有独立模块文件，逻辑全在 `__init__.py`：`compact`、`lsp`、`memory_extract`、`session_memory` 先迁到各自能力域，`oauth` 为空可直接删。
@@ -458,7 +487,7 @@ apps/web/
 | 阶段 | 内容 | 是否改行为 | 出口 |
 |---|---|---|---|
 | **Phase 0** | 文档 + 守卫 + AGENTS 地图 | 否 | 文档合并；3 个可落地守卫能跑 |
-| **Phase 1** | Move-only：按耦合度排序搬文件、同 PR 改测试 patch 目标 | 否 | 基线五项不变（测试/CLI/冷导入/import-linter/旧快照加载） |
+| **Phase 1** | Move-only：只含 W1/W1b/W2/W2b（≈99 处 patch）；W3/W3b 移入 Phase 2 | 否 | 基线五项不变（测试/CLI/冷导入/import-linter/旧快照加载） |
 | **Phase 2** | Code-shape：拆 god file、把循环从 UI 抽出、建 Port | 否 | 金标输出不变；无 >1200 行/ >30 文件 |
 | **Phase 3** | Capabilities：profiles、memory provider、Electron、第二模式 | 是 | 新能力半径 ≤1；新模式不改引擎核心 |
 
@@ -472,7 +501,7 @@ apps/web/
 
 | 守卫 | 作用 | 级别 |
 |---|---|---|
-| `.importlinter`（已有 1 条，扩到 4–5 条） | 引擎⊥产品；层级；禁止新代码依赖 `questorharness.ui`/`utils`/`services` | blocking |
+| `.importlinter`（已有 1 条；Phase 0 先加 4 条 `forbidden`，`layers` 随层包增量） | 引擎⊥产品；层级；禁止新代码依赖 `questorharness.ui`/`utils`/`services` | blocking |
 | check_layout.py（待建） | 目录扇出、文件行数、禁用名（带 baseline）、`__init__` 门面、AGENTS 地图 | blocking |
 | gen_tree.py（待建） | 生成目录树文档，--check 防漂移 | blocking |
 
