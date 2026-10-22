@@ -20,7 +20,7 @@ from questorharness.config.settings import load_settings, save_settings, Setting
 from questorharness.engine.messages import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine
 from questorharness.capabilities.memory.paths import get_project_memory_dir
-from questorharness.mcp.types import McpHttpServerConfig, McpStdioServerConfig
+from questorharness.capabilities.tools.mcp.types import McpHttpServerConfig, McpStdioServerConfig
 from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins.types import PluginCommandDefinition
 from questorharness.state import AppState, AppStateStore

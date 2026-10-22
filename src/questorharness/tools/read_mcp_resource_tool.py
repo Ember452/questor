@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.mcp.client import McpClientManager, McpServerNotConnectedError
+from questorharness.capabilities.tools.mcp.client import McpClientManager, McpServerNotConnectedError
 from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 

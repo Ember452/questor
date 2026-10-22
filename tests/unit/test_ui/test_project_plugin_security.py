@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from questorharness.config.settings import Settings
-from questorharness.mcp.config import load_mcp_server_configs
+from questorharness.capabilities.tools.mcp.config import load_mcp_server_configs
 from questorharness.plugins.loader import load_plugins
 
 

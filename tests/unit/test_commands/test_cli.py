@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 import questorharness.cli as cli
 from questorharness.config import load_settings
 from questorharness.config.settings import Settings
-from questorharness.mcp.types import McpStdioServerConfig
+from questorharness.capabilities.tools.mcp.types import McpStdioServerConfig
 
 
 app = cli.app

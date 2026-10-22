@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from questorharness.mcp.client import McpClientManager, McpServerNotConnectedError
-    from questorharness.mcp.types import (
+    from questorharness.capabilities.tools.mcp.client import McpClientManager, McpServerNotConnectedError
+    from questorharness.capabilities.tools.mcp.types import (
         McpConnectionStatus,
         McpHttpServerConfig,
         McpJsonConfig,
@@ -34,15 +34,15 @@ __all__ = [
 
 def __getattr__(name: str):
     if name == "McpClientManager":
-        from questorharness.mcp.client import McpClientManager
+        from questorharness.capabilities.tools.mcp.client import McpClientManager
 
         return McpClientManager
     if name == "McpServerNotConnectedError":
-        from questorharness.mcp.client import McpServerNotConnectedError
+        from questorharness.capabilities.tools.mcp.client import McpServerNotConnectedError
 
         return McpServerNotConnectedError
     if name == "load_mcp_server_configs":
-        from questorharness.mcp.config import load_mcp_server_configs
+        from questorharness.capabilities.tools.mcp.config import load_mcp_server_configs
 
         return load_mcp_server_configs
     if name in {
@@ -55,7 +55,7 @@ def __getattr__(name: str):
         "McpToolInfo",
         "McpWebSocketServerConfig",
     }:
-        from questorharness.mcp.types import (
+        from questorharness.capabilities.tools.mcp.types import (
             McpConnectionStatus,
             McpHttpServerConfig,
             McpJsonConfig,

@@ -1,0 +1,1 @@
+"""Model-visible tool capabilities."""

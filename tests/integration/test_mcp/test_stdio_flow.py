@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.mcp.client import McpClientManager
-from questorharness.mcp.types import McpStdioServerConfig
+from questorharness.capabilities.tools.mcp.client import McpClientManager
+from questorharness.capabilities.tools.mcp.types import McpStdioServerConfig
 from questorharness.tools import create_default_tool_registry
 from questorharness.tools.base import ToolExecutionContext
 

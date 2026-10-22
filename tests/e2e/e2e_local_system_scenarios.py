@@ -16,9 +16,9 @@ from questorharness.commands.registry import CommandContext, create_default_comm
 from questorharness.config.settings import Settings, load_settings
 from questorharness.engine.messages import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.mcp.client import McpClientManager
-from questorharness.mcp.config import load_mcp_server_configs
-from questorharness.mcp.types import McpStdioServerConfig
+from questorharness.capabilities.tools.mcp.client import McpClientManager
+from questorharness.capabilities.tools.mcp.config import load_mcp_server_configs
+from questorharness.capabilities.tools.mcp.types import McpStdioServerConfig
 from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins import load_plugins
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin

@@ -9,9 +9,9 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-import questorharness.mcp.client as client_module
-from questorharness.mcp.client import McpClientManager
-from questorharness.mcp.types import McpHttpServerConfig
+import questorharness.capabilities.tools.mcp.client as client_module
+from questorharness.capabilities.tools.mcp.client import McpClientManager
+from questorharness.capabilities.tools.mcp.types import McpHttpServerConfig
 from questorharness.tools import create_default_tool_registry
 from questorharness.tools.base import ToolExecutionContext
 
