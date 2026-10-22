@@ -1,0 +1,290 @@
+# Questor 结构迁移计划（Move-first）
+
+- 状态：Active plan
+- 日期：2026-10-22
+- 相关：[STRUCTURE](STRUCTURE.md)、[ADR-0002](../adr/0002-target-structure.md)、[ADR-0003](../adr/0003-file-layout.md)、[ADR-0004](../adr/0004-memory-provider-contract.md)
+
+## 0. 原则
+
+1. **先搬，再改，再加。** Phase 1 只做路径移动与 import 更新；Phase 2 才拆文件、抽端口；Phase 3 才加新能力。
+2. **Behavior-preserving。** Phase 1/2 前后，测试断言不变、CLI 输出不变、旧快照加载不变。
+3. **一个包一个 PR。** 禁止“搬 10 个包 + 顺手重构”混在一个 PR。
+4. **先搬测试。** 测试路径跟着源码走；先让测试在新路径跑通，再删旧路径。
+5. **搬迁顺序按耦合度排，不按行数排。** 先数测试里的字符串 patch 目标（`monkeypatch.setattr("模块路径.名字")`），低的先动。
+6. **禁止用 re-export shim 兼容测试 patch。** shim 只保 `import`；patch 旧路径会静默失去作用对象，把红测试变成假绿。patch 目标数 > 0 的模块不许留 shim。
+7. **不建空目录。** 目录只在第一个真实文件落地时创建；未立项的层（`kernel`、`contracts`、`profiles`）现在不建。
+8. **纯移动要能机器证明。** 移动 PR 的 diff 必须只含 import 行与改名；出现其他行的改动即视为越界，拆成两个 PR。
+
+---
+
+## 1. 三阶段总览
+
+| 阶段 | 内容 | 是否改行为 | 出口 |
+|---|---|---|---|
+| **Phase 0** | 文档 + 3 个可落地守卫 + AGENTS 地图 | 否 | 守卫能跑；文档合并 |
+| **Phase 1** | Move-only：按耦合度搬包、同 PR 改测试 patch 目标、删空壳 | 否 | 基线五项不变 |
+| **Phase 2** | Code-shape：拆 god file、把循环从 UI 抽出、建 Port、统一 surfaces | 否 | 基线不变 + 尺寸阈值达标 |
+| **Phase 3** | Capabilities：profiles、memory provider、Electron、第二模式 | 是 | 新能力半径 ≤1；新模式不改引擎核心 |
+
+Phase 1 有**时间盒**：≤10 个 PR 或 ≤2 周。超时不加班，先砍范围（见 §3.7）。
+
+---
+
+## 2. Phase 0：文档与守卫
+
+- 本文 + `STRUCTURE.md` + ADR-0002/0003/0004。
+- 现在就上的守卫只有 3 个：
+  1. 扩 `.importlinter`：保留“引擎不 import 产品”，加层级与“新代码不得依赖 `questorharness.ui` / `utils` / `services`”；
+  2. check_layout（待建，规格见 ADR-0003 §8，含 `--self-test` 与 fail-on-empty、baseline 只挡新增）；
+  3. gen_tree（待建，生成目录树文档，`--check` 防漂移）。
+- 已有的 `check_doc_cross_refs.py`、`check_secret_projection.py`、`check_thread_leak.py` 继续保留。
+- **不建**的守卫：字段 canonical、事件版本、wire codegen、conformance 目录 —— 前置概念还不存在。
+- 建 9 个 `AGENTS.md` 骨架（8 个引擎域 + `src/questor`）；`apps/desktop` / `apps/web` 在 Phase 3 创建后补。
+- 根 `AGENTS.md` 降级为指针：只指向 `docs/architecture/STRUCTURE.md` 与包级 `AGENTS.md`，不再新增规则。
+
+---
+
+## 3. Phase 1：Move-only
+
+### 3.1 先冻结基线（每个 PR 都要重跑）
+
+1. `uv run pytest -m "unit or integration"` 通过集，记录数量与用例名；
+2. CLI 基线：`questor --help` 输出 + 一次固定会话的 stdout；
+3. 旧 session 快照能加载（取 `~/.questor/agent` 下一份真实快照做 fixture）；
+4. `uv run lint-imports` 绿；
+5. 冷导入：`uv run python -c "import questorharness"`。
+
+Phase 1 结束时这五项必须逐项不变。
+
+### 3.2 建目录规则
+
+- 只建“这个 PR 就有文件进去”的目录。
+- 目标树里的 `contracts/`、`kernel/`、`profiles/` **不在 Phase 1 创建**。
+- 新目录的 `__init__.py` 是门面（≤40 行、≤10 导出、零逻辑），配 `AGENTS.md`。
+
+### 3.3 耦合度排序（搬之前先看清楚）
+
+patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `mock.patch("...")` 引用的次数。
+
+| 波次 | 内容 | patch 目标 | 说明 |
+|---|---|---|---|
+| **W1** | `tools/` 44 个平铺 → `capabilities/tools/` 下 fs / shell / web / task / agent / mcp / media / cron 八个子域 | ≈6 | 唯一 >30 文件的目录；工具彼此独立，失败响亮 |
+| **W1b** | `themes/`、`keybindings/`、`vim/`、`output_styles/` → `surfaces/terminal/presentation/`；`skills/`、`plugins/` → 根 `plugins/` | ≈6 | 表现层与数据包，几乎没人 patch |
+| **W2** | `memory/`(13) → `capabilities/memory/`；`permissions/` → `capabilities/policy/`；`mcp/` → `capabilities/tools/mcp/` + `providers/mcp/`；`prompts/` → `profiles/prompts/`（此时才建 `profiles`） | ≈31 | 领域清晰；`prompts` 有 3 处 patch |
+| **W2b** | `api/` → `providers/llm/`；`auth/` → `providers/auth/`；`sandbox/` → `providers/sandbox/`；`channels/` → `surfaces/channels/` | ≈56 | api 15、auth 19、sandbox 10、channels 少量；`api` 路径引用多但 patch 少 |
+| **W3** | `hooks/` → `runtime/extension/`；`commands/` → `runtime/commands/`；`tasks/` → `runtime/tasks/`；`coordinator/` + `swarm/` → `runtime/delegation/` + `capabilities/policy/`；`state/` → `surfaces/terminal/state/` | ≈30 | 核心编排相关；路径引用要改，但 patch 目标不高 |
+| **W3b** | `services/` 解散（compact / lsp / memory_extract / session_memory / cron / token_estimation / tool_outputs / session_*）；`utils/` 归位；`config/` → `bootstrap/config/` | ≈47 | `services.compact` 11、`utils` 18、`config` 少量；空壳 `oauth` 直接删 |
+| **W4（推到 Phase 2）** | `engine/` → `runtime/turn/`；`ui/` → `surfaces/terminal/`；`autopilot/` → `runtime/autopilot/`；`bridge/` → `surfaces/bridge/` | ≈158 | engine 64、ui 62、autopilot 41、bridge 少量；这几处一动必然大片红，单独排期 |
+| **W5（Phase 1 完全不动）** | 产品包 `questor/gateway/`（拆到 surfaces/ 与产品策略） | 76 + 102 | 单点最贵；且属于产品包，不影响引擎结构收敛 |
+
+一句话：**W1 用 ~6 处 patch 成本解决你最痛的 44 平铺；W5 用 178 处成本解决一个可有可无的归位——先做前者。**
+
+### 3.4 每个包的固定动作
+
+1. `git mv` 保历史；
+2. 更新生产代码与测试的 import；
+3. **同 PR 改写该包所有字符串 patch 目标**（数量在 PR 描述里写明：“patch 目标改写 N 处”）；
+4. 旧包位置只保留一个 `__init__.py` re-export（**仅当 patch 目标数 = 0**），保留一个版本窗口；
+5. 跑该包子集测试 + 全量基线五项；
+6. `uv sync` 后跑一次真实入口/entry point 加载（entry point 断在运行时，不在 import 时）；
+7. move-only 证明：`git show --stat` + 内容 diff 只含 import 行/改名行。
+
+### 3.5 移动映射表
+
+| 现状 | Phase 1 目标 | Phase 2 再拆 |
+|---|---|---|
+| `api/*.py` | `providers/llm/` | 按 vendor 拆 |
+| `auth/*.py` | `providers/auth/` | 按 OAuth / 凭据拆 |
+| `sandbox/*.py` | `providers/sandbox/` | 按 backend 拆 |
+| `tools/`（44 平铺） | `capabilities/tools/{fs,shell,web,task,agent,mcp,media,cron}/` | 一工具一文件，不拆 |
+| `memory/`（13 平铺） | `capabilities/memory/` | 按 recall / write / consolidate / backends 拆 |
+| `permissions/` | `capabilities/policy/` | 按 permission / sandbox / approval 拆 |
+| `channels/` | `surfaces/channels/` | 按 channel 拆；`feishu.py` 1115 行拆子目录 |
+| `mcp/` | `capabilities/tools/mcp/` + `providers/mcp/` | 策略与 transport 分离 |
+| `prompts/` | `profiles/prompts/`（W2 才建 `profiles`） | 按 profile 拆 |
+| `skills/`、`plugins/` | 根 `plugins/` | 数据包，不拆 |
+| `state/`（UI store） | `surfaces/terminal/state/` | 事实状态层不在本阶段 |
+| `engine/` | **Phase 1 不动**（W4） | `runtime/turn/{loop,tool_cycle,stop}` + `capabilities/context/assemble` |
+| `commands/` | `runtime/commands/` | `registry.py` 2586 行按命令族拆 |
+| `coordinator/`、`swarm/` | `runtime/delegation/` + `capabilities/policy/` | 按 team / permission 拆 |
+| `tasks/` | `runtime/tasks/` | 拆 task_manager / local_agent / local_shell |
+| `autopilot/` | **Phase 1 不动**（W4） | `runtime/autopilot/{policy,loop,triggers,state}`（service.py 2089） |
+| `hooks/` | `runtime/extension/` | 按 hook 类型拆 |
+| `ui/` | **Phase 1 不动**（W4） | `surfaces/terminal/`；编排部分进 `runtime/` |
+| `keybindings/`、`themes/`、`vim/`、`output_styles/` | `surfaces/terminal/presentation/` | 按表现层拆 |
+| `voice/` | `providers/voice/` | 有策略时升 capabilities |
+| `utils/` | 锁进 `kernel` 之前先落 `providers/`（fs / shell / network_guard）| 解散，不留 utils |
+| `config/` | `bootstrap/config/` | 拆 schema / load / defaults |
+| `bridge/` | **Phase 1 不动**（W4） | `surfaces/bridge/` |
+| `questor/gateway/` | **Phase 1 不动**（W5） | 协议路由进 `surfaces/gateway/`，产品策略留在产品包 |
+| `frontend/terminal/` | 不动（Node 工具链） | Phase 3 随 Electron 一起决定 |
+
+`services/` 的 5 个子包都没有独立模块文件，逻辑全在 `__init__.py`：`compact`、`lsp`、`memory_extract`、`session_memory` 整体搬到各自能力域（Phase 2 再拆文件），`oauth` 为空可直接删。
+
+### 3.6 Phase 1 不做的事
+
+- 不拆任何 >800 行的文件（`commands/registry.py`、`cli.py`、`autopilot/service.py`、`services/compact/__init__.py` 全部保持整文件搬迁）；
+- 不改函数签名、不改协议、不改事件/快照类型；
+- 不引入新依赖；
+- 不建 `contracts/`、`kernel/`、`profiles/`（`profiles` 到 W2 装 `prompts/` 时才建）；
+- 不动 `frontend/terminal/`、不建 `apps/desktop` / `apps/web`；
+- 不写 memory provider；ADR-0004 只记录契约，代码到 Phase 3。
+
+Phase 1 允许的临时例外（写进 layout 豁免清单，Phase 2 销账）：
+
+```text
+capabilities/context/compact 的 __init__.py（约 1.5k 行，Phase 2 拆）
+runtime/commands/registry.py（约 2.6k 行，Phase 2 拆）
+runtime/autopilot/service.py（约 2.1k 行，Phase 2 拆）
+surfaces/gateway/runtime.py（约 1.1k 行，Phase 2 拆）
+surfaces/channels/feishu.py（约 1.1k 行，Phase 2 拆）
+manager.py / service.py / utils 的存量命名（baseline 只挡新增）
+```
+
+### 3.7 Phase 1 出口与时间盒
+
+- 基线五项逐字不变；
+- 所有测试在新路径通过；旧路径 shim 只存在于 patch 目标为 0 的模块；
+- `lint-imports` 绿；
+- `check_layout.py` 只报豁免清单里的已知项，**不新增违规**；
+- 每个已建目录有 `AGENTS.md`；
+- **时间盒**：≤10 PR / ≤2 周。超盒时按顺序砍：先砍 W3b 的 `utils/`、`config/` 归位，再砍 W3 的 `state/`；W4/W5 本来就不在本阶段。
+
+---
+
+## 4. Phase 2：Code-shape
+
+### 4.1 拆 god file（按“patch 目标少 → 多”排）
+
+| 现状 | 行数 | patch 目标 | 拆成 |
+|---|---:|---:|---|
+| `runtime/commands/registry.py` | 2586 | ≈0 | `commands/{session,run,turn,memory,tool,profile}.py` + `registry.py` |
+| `questor/cli.py` | 2245 | 3 | `cli/{main,repl,render,input,commands}.py` |
+| `capabilities/context/compact/__init__.py` | 1527 | 11 | `compact/{policy,summarize,placeholders}.py` |
+| `providers/{auth,sandbox,llm}` 内部 | 544 / 497 / 1855 | 15–19 | 按 vendor / backend 拆 |
+| `capabilities/memory/*` | 1270 总量 | 31 | `recall/`、`write/`、`consolidate/`、`backends/` |
+| `runtime/turn/query.py`（W4 才搬进来） | 932 | 64 | `turn/{loop,tool_cycle,stop}.py` + `context/assemble.py` |
+| `runtime/autopilot/service.py` | 2089 | 41 | `autopilot/{policy,loop,triggers,state}.py` |
+| `surfaces/terminal/*`（原 `ui/`） | 723 / 879 | 37 | 表现层留 surface，编排进 `runtime/` |
+| `surfaces/gateway/runtime.py` | 1144 | 76 | `gateway/{session,events,commands}.py` |
+
+### 4.2 把循环从 UI 抽出
+
+- `ui/runtime.py`、`ui/backend_host.py` 的编排职责 → `runtime/run/controller.py`、`runtime/turn/loop.py`、`runtime/run/recovery.py`；
+- UI 只保留订阅与渲染；
+- 验收：CLI 基线输出逐字不变、旧快照仍可加载、恢复路径（resume）行为不变。
+
+### 4.3 建 Port（只建有真实调用方的）
+
+- `ModelPort`（providers/llm）；
+- `ToolInvokerPort`（runtime → capabilities/tools）；
+- `ContextAssemblerPort`、`TurnSettlerPort`（runtime 只认这两个，不认 memory）；
+- `SessionStorePort`（快照读写，当前形态）；
+- **不建** `EventStorePort`：durable 未立项；将来立项时单独 ADR。
+- `MemoryPort` 与 conformance 属于 Phase 3。
+
+### 4.4 尺寸与命名销账
+
+- 无文件 >1200 行；801–1200 行的文件必须在豁免清单里有理由；
+- 无逻辑目录 >30 个源文件；
+- `manager.py` / `service.py` / `utils/` 存量归零或降级为限定名；
+- `services/`、`utils/`、`config/`、`state/` 四个一级类型桶从包结构里消失。
+
+---
+
+## 5. Phase 3：Capabilities
+
+按顺序，不并行：
+
+1. **Profiles**：personal / coding 两份 YAML；当前行为固化为 `default` profile；`profile_fingerprint` 记录解析后的实现 ID + 参数 + prompt hash + 工具 schema hash。
+2. **Memory**：按 [ADR-0004](../adr/0004-memory-provider-contract.md)：NullMemory → FileMemory → SQLiteMemory → 外部 adapter；每步 conformance → shadow → canary。
+3. **Electron**：`apps/desktop` + `apps/web`；IPC 作为 Transport 的第二个实现；sidecar 崩溃恢复；此时 `apps/*/AGENTS.md` 才纳入守卫。
+4. **第二模式**：用第二个 profile 验证“新模式不改引擎共享文件”。
+5. **wire schema**：只有当前端要按事件类型分支时才定稿并上 codegen `--check`。
+
+---
+
+## 6. 触发条件（防止规划变成第二个项目）
+
+| 事项 | 触发条件（不满足就不做） |
+|---|---|
+| durable spine（事件流 / 回放 / upcast / 租约） | 需要 rewind-as-facts、审计重放、跨端同会话续跑中的任一项被真实需求顶穿；**必须先立项 ADR + 预算** |
+| `contracts/` 层 | 出现第一个需要跨层共享的不可变类型（在此之前类型留在各自包里） |
+| `profiles/` | 第一个真实模式差异需要表达（W2 时因 `prompts/` 提前建目录，仅装数据） |
+| `MemoryPort` + provider | 第二次要换/接 memory 实现，或 personal 与 coding 记忆策略第一次冲突 |
+| 字段 canonical 守卫 | 统一 domain 词表建好之后 |
+| 事件版本 / wire codegen 守卫 | 事件版本化 / schema 定稿之后 |
+| `apps/desktop` / `apps/web` | 前端事件契约定稿那天 |
+| conformance / golden 目录 | 有第一份真实 fixture 那天 |
+
+---
+
+## 7. 关键包的 AGENTS.md
+
+### 7.1 放哪些
+
+必需（目录存在时 9 个；Phase 3 后 11 个）：
+
+```text
+src/questorharness/contracts/AGENTS.md        （contracts 建立后）
+src/questorharness/runtime/AGENTS.md
+src/questorharness/capabilities/AGENTS.md
+src/questorharness/providers/AGENTS.md
+src/questorharness/surfaces/AGENTS.md
+src/questorharness/profiles/AGENTS.md         （profiles 建立后）
+src/questorharness/bootstrap/AGENTS.md
+src/questor/AGENTS.md
+apps/desktop/AGENTS.md                        （Phase 3）
+apps/web/AGENTS.md                            （Phase 3）
+```
+
+可选热点：`capabilities/memory/`、`capabilities/tools/`、`runtime/turn/`、`surfaces/gateway/`。
+
+### 7.2 模板（10–15 行）
+
+```markdown
+# <package> — Agent Contract
+
+职责：一句话。
+公开入口：__init__.py 导出的 3–5 个名字。
+拥有的数据：类型 / 表 / 文件。
+允许依赖：contracts / 同级 / 注入的 Port。
+不变式：2–3 条必须始终成立的约束。
+禁止：最容易犯的 2–3 个错误。
+测试：一条可直接复制运行的命令。
+关键文件：3 个文件路径（守卫会校验它们存在）。
+```
+
+### 7.3 规则
+
+- 一个包只放一份：`AGENTS.md` 或 `README.md`，不要两份同义文档；
+- 设计长篇留在 `docs/architecture/`，包级文件只写本地契约；
+- 根 `AGENTS.md` 只做指针，不再累积规则；
+- 不要每个文件一个 README。
+
+---
+
+## 8. 回滚
+
+- Phase 1 每包一个分支；回滚按包回滚，不按整波。
+- 旧路径 re-export 保留一个版本窗口（仅 patch 目标为 0 的模块适用）；窗口结束前不改调用方。
+- Phase 2 每个 god file 一个 PR；拆坏了只回滚该文件。
+- Phase 3 每个能力一个开关；memory / Electron / 第二模式都可配置关闭。
+
+---
+
+## 9. 附录：本次决策依据的实测数字（2026-10-22）
+
+| 项 | 数值 |
+|---|---|
+| 工作区 Python 源文件 | 241（含 44 个 `__init__.py`，源文件 197） |
+| 测试里的字符串 patch 目标总数 | 310 |
+| patch 热点 | gateway.runtime 76、autopilot.service 41、ui.app 23、auth.external 12、utils.shell 12、services.compact 11、api.copilot_auth 11、ui.backend_host 10 |
+| 测试内路径引用 | tools 172、questor.gateway 102、api 82、engine 64、ui 62、services 50、memory 31 |
+| >1200 行文件 | 4（2586 / 2245 / 2089 / 1527） |
+| 801–1200 行文件 | 5（1144 / 1115 / 940 / 932 / 913） |
+| 唯一 >30 文件的目录 | `tools/`（44，平均 69 行） |
+| 事件溯源相关符号 | 工作树 0 命中（无 Envelope / EventType / reduce / SNAPSHOT_VERSION / upcast） |
+| 持久化现状 | 会话快照 JSON（`services/session_backend.py` + 产品侧 session_storage），恢复粒度 = 上一个快照 |
+
+这些数字决定了两件事：**Phase 1 的排序**（按 patch 目标数）与**durable 必须显式立项**（当前树里没有任何 durable 实现可继承）。
