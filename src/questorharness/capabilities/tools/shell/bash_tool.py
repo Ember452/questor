@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from questorharness.contracts.errors import SandboxUnavailableError
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
-from questorharness.utils.shell import create_shell_subprocess
+from questorharness.contracts.shell import create_shell_subprocess
 
 
 _READ_REMAINING_OUTPUT_TIMEOUT_SECONDS = 2.0

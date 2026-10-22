@@ -7,8 +7,8 @@ from pathlib import Path
 
 from questorharness.config.paths import get_data_dir
 from questorharness.contracts.domain.message import ConversationMessage, ToolResultBlock
-from questorharness.services.token_estimation import estimate_tokens
-from questorharness.utils.fs import atomic_write_text
+from questorharness.contracts.tokens import estimate_tokens
+from questorharness.contracts.io import atomic_write_text
 
 MAX_SESSION_MEMORY_CHARS = 12_000
 MAX_RECENT_LINES = 80

@@ -54,9 +54,9 @@ from questorharness.prompts.system_prompt import get_base_system_prompt
 from questorharness.providers.auth.manager import AuthManager
 from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.contracts.usage import UsageSnapshot
-from questorharness.services.cron_scheduler import register_notification_handler
-from questorharness.services.session_backend import SessionBackend
-from questorharness.services.session_storage import (
+from questorharness.capabilities.schedule.cron_scheduler import register_notification_handler
+from questorharness.runtime.session.backend import SessionBackend
+from questorharness.contracts.session_storage import (
     _persistable_tool_metadata,
     _sanitize_snapshot_payload,
 )
@@ -73,8 +73,8 @@ from questorharness.ui.runtime import (
     handle_line,
     start_runtime,
 )
-from questorharness.utils.file_lock import exclusive_file_lock
-from questorharness.utils.fs import atomic_write_text
+from questorharness.contracts.locking import exclusive_file_lock
+from questorharness.contracts.io import atomic_write_text
 
 __all__ = [
     "SCHEMA_VERSION",

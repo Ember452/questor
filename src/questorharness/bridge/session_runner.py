@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from questorharness.utils.shell import create_shell_subprocess
+from questorharness.contracts.shell import create_shell_subprocess
 
 
 @dataclass

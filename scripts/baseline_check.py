@@ -57,7 +57,7 @@ import os, shutil, tempfile
 from pathlib import Path
 root = Path(tempfile.mkdtemp(prefix="questor-snapshot-"))
 os.environ["QUESTORHARNESS_DATA_DIR"] = str(root / "data")
-from questorharness.services.session_storage import get_project_session_dir, load_session_snapshot
+from questorharness.contracts.session_storage import get_project_session_dir, load_session_snapshot
 cwd = root / "baseline"
 cwd.mkdir()
 session_dir = get_project_session_dir(cwd)
@@ -150,7 +150,8 @@ def _snapshot() -> tuple[int, str]:
     result = _uv(["python", "-c", SNAPSHOT_SCRIPT])
     match = MESSAGES_LINE.search(result.stdout)
     if not match:
-        return -1, f"snapshot check failed (exit {result.returncode}):\n{result.stdout[-800:]}"
+        detail = (result.stdout + result.stderr)[-1500:]
+        return -1, f"snapshot check failed (exit {result.returncode}):\n{detail}"
     return int(match.group(1)), ""
 
 

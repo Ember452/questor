@@ -16,7 +16,7 @@ from questorharness.surfaces.channels.bus.queue import MessageBus
 from questorharness.surfaces.channels.impl.base import BaseChannel
 from questorharness.surfaces.channels.impl.base import resolve_channel_media_dir
 from questorharness.config.schema import FeishuConfig
-from questorharness.utils.helpers import safe_filename
+from questorharness.surfaces.channels.helpers import safe_filename
 
 import importlib.util
 import logging

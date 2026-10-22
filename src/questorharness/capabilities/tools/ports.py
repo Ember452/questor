@@ -44,6 +44,45 @@ class McpClientPort(Protocol):
 
 
 @runtime_checkable
+class LspRuntime(Protocol):
+    """Code-intelligence helpers used by the lsp tool."""
+
+    def workspace_symbol_search(self, root: Path, query: str) -> Any: ...
+
+    def list_document_symbols(self, file_path: Path) -> Any: ...
+
+    def go_to_definition(
+        self,
+        *,
+        root: Path,
+        file_path: Path,
+        symbol: str | None,
+        line: int | None,
+        character: int | None,
+    ) -> Any: ...
+
+    def find_references(
+        self,
+        *,
+        root: Path,
+        file_path: Path,
+        symbol: str | None,
+        line: int | None,
+        character: int | None,
+    ) -> Any: ...
+
+    def hover(
+        self,
+        *,
+        root: Path,
+        file_path: Path,
+        symbol: str | None,
+        line: int | None,
+        character: int | None,
+    ) -> Any: ...
+
+
+@runtime_checkable
 class LlmToolRuntime(Protocol):
     """LLM helpers needed by model-facing tools."""
 

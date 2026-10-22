@@ -26,13 +26,13 @@ from typing import Any
 
 from questorharness.config.paths import get_data_dir, get_logs_dir
 from questorharness.platforms import get_platform
-from questorharness.services.cron import (
+from questorharness.capabilities.schedule.cron import (
     load_cron_jobs,
     mark_job_run,
     validate_cron_expression,
 )
-from questorharness.providers.sandbox import SandboxUnavailableError
-from questorharness.utils.shell import create_shell_subprocess
+from questorharness.contracts.errors import SandboxUnavailableError
+from questorharness.contracts.shell import create_shell_subprocess
 
 NOTIFICATION_OUTPUT_LIMIT = 3500
 
@@ -587,7 +587,7 @@ def _spawn_scheduler_process() -> subprocess.Popen[bytes]:
     else:
         popen_kwargs["start_new_session"] = True
     return subprocess.Popen(
-        [sys.executable, "-m", "questorharness.services.cron_scheduler"],
+        [sys.executable, "-m", "questorharness.capabilities.schedule.cron_scheduler"],
         **popen_kwargs,
     )
 

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from questorharness.services.cron_scheduler import (
+from questorharness.capabilities.schedule.cron_scheduler import (
     _jobs_due,
     append_history,
     execute_job,
@@ -27,11 +27,11 @@ def _tmp_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     logs_dir = tmp_path / "logs"
     data_dir.mkdir()
     logs_dir.mkdir()
-    monkeypatch.setattr("questorharness.services.cron_scheduler.get_data_dir", lambda: data_dir)
-    monkeypatch.setattr("questorharness.services.cron_scheduler.get_logs_dir", lambda: logs_dir)
+    monkeypatch.setattr("questorharness.capabilities.schedule.cron_scheduler.get_data_dir", lambda: data_dir)
+    monkeypatch.setattr("questorharness.capabilities.schedule.cron_scheduler.get_logs_dir", lambda: logs_dir)
     # Also redirect the cron registry used by the scheduler
     monkeypatch.setattr(
-        "questorharness.services.cron.get_cron_registry_path",
+        "questorharness.capabilities.schedule.cron.get_cron_registry_path",
         lambda: data_dir / "cron_jobs.json",
     )
 
@@ -127,7 +127,7 @@ class TestExecuteJob:
 
     @pytest.mark.asyncio
     async def test_timeout_job(self) -> None:
-        with patch("questorharness.services.cron_scheduler.asyncio.wait_for") as mock_wait:
+        with patch("questorharness.capabilities.schedule.cron_scheduler.asyncio.wait_for") as mock_wait:
             import asyncio
 
             mock_wait.side_effect = asyncio.TimeoutError()
@@ -138,7 +138,7 @@ class TestExecuteJob:
             mock_process.kill = Mock()
             mock_process.wait = AsyncMock()
             with patch(
-                "questorharness.utils.shell.asyncio.create_subprocess_exec",
+                "questorharness.contracts.shell.asyncio.create_subprocess_exec",
                 return_value=mock_process,
             ):
                 job = {"name": "slow-test", "command": "sleep 999", "cwd": "/tmp"}
@@ -155,12 +155,12 @@ class TestSchedulerLoop:
     @pytest.mark.asyncio
     async def test_once_mode_fires_due_job(self) -> None:
         """Scheduler loop should fire a job that is due."""
-        from questorharness.services.cron import upsert_cron_job
+        from questorharness.capabilities.schedule.cron import upsert_cron_job
 
         upsert_cron_job({"name": "test-once", "schedule": "* * * * *", "command": "echo fired"})
 
         # Force next_run to the past so it's immediately due
-        from questorharness.services.cron import load_cron_jobs, save_cron_jobs
+        from questorharness.capabilities.schedule.cron import load_cron_jobs, save_cron_jobs
 
         jobs = load_cron_jobs()
         now = datetime.now(timezone.utc)
@@ -176,14 +176,14 @@ class TestSchedulerLoop:
     @pytest.mark.asyncio
     async def test_once_mode_handles_signal_registration_failures(self) -> None:
         """Signal handler setup should not block the scheduler loop on unsupported platforms."""
-        with patch("questorharness.services.cron_scheduler.signal.signal", side_effect=ValueError()):
+        with patch("questorharness.capabilities.schedule.cron_scheduler.signal.signal", side_effect=ValueError()):
             await run_scheduler_loop(once=True)
 
 
 class TestDaemonStartup:
     def test_start_daemon_uses_portable_process_spawn(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Windows startup should use subprocess spawning instead of fork."""
-        monkeypatch.setattr("questorharness.services.cron_scheduler.get_platform", lambda: "windows")
+        monkeypatch.setattr("questorharness.capabilities.schedule.cron_scheduler.get_platform", lambda: "windows")
         monkeypatch.setattr(subprocess, "DETACHED_PROCESS", 0x00000008, raising=False)
         monkeypatch.setattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200, raising=False)
 
@@ -198,14 +198,14 @@ class TestDaemonStartup:
             spawned["kwargs"] = kwargs
             return fake_process
 
-        with patch("questorharness.services.cron_scheduler.subprocess.Popen", side_effect=_fake_popen), patch(
-            "questorharness.services.cron_scheduler.read_pid",
+        with patch("questorharness.capabilities.schedule.cron_scheduler.subprocess.Popen", side_effect=_fake_popen), patch(
+            "questorharness.capabilities.schedule.cron_scheduler.read_pid",
             side_effect=[None, 4321],
         ):
             pid = start_daemon()
 
         assert pid == 4321
-        assert spawned["argv"] == [sys.executable, "-m", "questorharness.services.cron_scheduler"]
+        assert spawned["argv"] == [sys.executable, "-m", "questorharness.capabilities.schedule.cron_scheduler"]
         assert spawned["kwargs"]["creationflags"] == 0x00000208
         assert spawned["kwargs"]["stdin"] is subprocess.DEVNULL
         assert spawned["kwargs"]["stdout"] is subprocess.DEVNULL

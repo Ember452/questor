@@ -29,8 +29,8 @@ from questorharness.contracts.domain.message import (
 )
 from questorharness.contracts.domain.events import CompactProgressEvent
 from questorharness.hooks import HookEvent, HookExecutor
-from questorharness.services.tool_outputs import is_microcompactable_tool_result
-from questorharness.services.token_estimation import estimate_tokens
+from questorharness.contracts.tool_outputs import is_microcompactable_tool_result
+from questorharness.contracts.tokens import estimate_tokens
 
 log = logging.getLogger(__name__)
 
@@ -899,7 +899,7 @@ def _build_file_session_memory_message(metadata: dict[str, Any] | None) -> Conve
     if not path:
         return None
     try:
-        from questorharness.services.session_memory import (
+        from questorharness.capabilities.memory.session import (
             get_session_memory_content,
             session_memory_to_compact_text,
         )
@@ -1150,7 +1150,7 @@ async def compact_conversation(
     Returns:
         Structured compaction result that can be rebuilt into post-compact messages.
     """
-    from questorharness.providers.llm.client import ApiMessageRequest, ApiMessageCompleteEvent
+    from questorharness.contracts.llm import ApiMessageRequest, ApiMessageCompleteEvent
 
     if len(messages) <= preserve_recent:
         return _build_passthrough_compaction_result(

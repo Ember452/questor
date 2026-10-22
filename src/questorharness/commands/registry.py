@@ -66,14 +66,14 @@ from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.plugins import load_plugins
 from questorharness.prompts import build_runtime_system_prompt
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin
-from questorharness.services import (
+from questorharness.capabilities.context.compact import (
     build_post_compact_messages,
     compact_conversation,
     compact_messages,
     estimate_conversation_tokens,
     summarize_messages,
 )
-from questorharness.services.autodream import (
+from questorharness.capabilities.memory.consolidate import (
     diff_memory_dirs,
     format_memory_diff,
     latest_memory_backup,
@@ -81,13 +81,13 @@ from questorharness.services.autodream import (
     restore_memory_backup,
     start_dream_now,
 )
-from questorharness.services.memory_extract import extract_memories_from_turn
-from questorharness.services.session_memory import (
+from questorharness.capabilities.memory.extract import extract_memories_from_turn
+from questorharness.capabilities.memory.session import (
     get_session_memory_content,
     get_session_memory_path,
     update_session_memory_file,
 )
-from questorharness.services.session_backend import DEFAULT_SESSION_BACKEND, SessionBackend
+from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, SessionBackend
 from questorharness.skills import load_skill_registry
 from questorharness.skills.types import SkillDefinition
 from questorharness.tasks import get_task_manager
@@ -1830,7 +1830,7 @@ def create_default_command_registry(
         return CommandResult(message=f"Vim mode {'enabled' if enabled else 'disabled'}.")
 
     async def _voice_handler(args: str, context: CommandContext) -> CommandResult:
-        from questorharness.voice import extract_keyterms, inspect_voice_capabilities
+        from questorharness.providers.voice import extract_keyterms, inspect_voice_capabilities
 
         settings = load_settings()
         diagnostics = inspect_voice_capabilities(detect_provider(settings))

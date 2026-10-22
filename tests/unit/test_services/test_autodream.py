@@ -6,16 +6,16 @@ import time
 from pathlib import Path
 
 from questorharness.config.settings import Settings
-from questorharness.services.autodream.backup import create_memory_backup, diff_memory_dirs, restore_memory_backup
-from questorharness.services.autodream.lock import (
+from questorharness.capabilities.memory.consolidate.backup import create_memory_backup, diff_memory_dirs, restore_memory_backup
+from questorharness.capabilities.memory.consolidate.lock import (
     list_sessions_touched_since,
     read_last_consolidated_at,
     rollback_consolidation_lock,
     try_acquire_consolidation_lock,
 )
-from questorharness.services.autodream.prompt import build_consolidation_prompt
-from questorharness.services.autodream.service import execute_auto_dream, start_dream_now
-from questorharness.services.session_storage import get_project_session_dir
+from questorharness.capabilities.memory.consolidate.prompt import build_consolidation_prompt
+from questorharness.capabilities.memory.consolidate.service import execute_auto_dream, start_dream_now
+from questorharness.contracts.session_storage import get_project_session_dir
 
 
 def test_consolidation_lock_acquire_and_rollback(tmp_path: Path, monkeypatch) -> None:
@@ -170,7 +170,7 @@ async def test_start_dream_now_uses_overrides(tmp_path: Path, monkeypatch) -> No
                 env=kwargs["env"],
             )
 
-    monkeypatch.setattr("questorharness.services.autodream.service.get_task_manager", lambda: _Manager())
+    monkeypatch.setattr("questorharness.capabilities.memory.consolidate.service.get_task_manager", lambda: _Manager())
     settings = Settings()
     task = await start_dream_now(
         cwd=cwd,
@@ -224,7 +224,7 @@ async def test_start_dream_now_propagates_transient_provider_settings(tmp_path: 
                 env=kwargs["env"],
             )
 
-    monkeypatch.setattr("questorharness.services.autodream.service.get_task_manager", lambda: _Manager())
+    monkeypatch.setattr("questorharness.capabilities.memory.consolidate.service.get_task_manager", lambda: _Manager())
     settings = Settings(
         provider="openai",
         api_format="openai",

@@ -21,8 +21,8 @@ from pydantic import BaseModel, Field
 from questorharness.hooks.schemas import HookDefinition
 from questorharness.contracts.mcp import McpServerConfig
 from questorharness.capabilities.policy.modes import PermissionMode
-from questorharness.utils.file_lock import exclusive_file_lock
-from questorharness.utils.fs import atomic_write_text
+from questorharness.contracts.locking import exclusive_file_lock
+from questorharness.contracts.io import atomic_write_text
 
 
 # ANSI 转义序列模式

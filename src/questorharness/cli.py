@@ -886,7 +886,7 @@ def plugin_uninstall(
 @cron_app.command("start")
 def cron_start() -> None:
     """Start the cron scheduler daemon."""
-    from questorharness.services.cron_scheduler import is_scheduler_running, start_daemon
+    from questorharness.capabilities.schedule.cron_scheduler import is_scheduler_running, start_daemon
 
     if is_scheduler_running():
         print("Cron scheduler is already running.")
@@ -898,7 +898,7 @@ def cron_start() -> None:
 @cron_app.command("stop")
 def cron_stop() -> None:
     """Stop the cron scheduler daemon."""
-    from questorharness.services.cron_scheduler import stop_scheduler
+    from questorharness.capabilities.schedule.cron_scheduler import stop_scheduler
 
     if stop_scheduler():
         print("Cron scheduler stopped.")
@@ -909,7 +909,7 @@ def cron_stop() -> None:
 @cron_app.command("status")
 def cron_status_cmd() -> None:
     """Show cron scheduler status and job summary."""
-    from questorharness.services.cron_scheduler import scheduler_status
+    from questorharness.capabilities.schedule.cron_scheduler import scheduler_status
 
     status = scheduler_status()
     state = "running" if status["running"] else "stopped"
@@ -921,7 +921,7 @@ def cron_status_cmd() -> None:
 @cron_app.command("list")
 def cron_list_cmd() -> None:
     """List all registered cron jobs with schedule and status."""
-    from questorharness.services.cron import load_cron_jobs
+    from questorharness.capabilities.schedule.cron import load_cron_jobs
 
     jobs = load_cron_jobs()
     if not jobs:
@@ -957,7 +957,7 @@ def cron_toggle_cmd(
     enabled: bool = typer.Argument(..., help="true to enable, false to disable"),
 ) -> None:
     """Enable or disable a cron job."""
-    from questorharness.services.cron import set_job_enabled
+    from questorharness.capabilities.schedule.cron import set_job_enabled
 
     if not set_job_enabled(name, enabled):
         print(f"Cron job not found: {name}")
@@ -972,7 +972,7 @@ def cron_history_cmd(
     limit: int = typer.Option(20, "--limit", "-n", help="Number of entries"),
 ) -> None:
     """Show cron execution history."""
-    from questorharness.services.cron_scheduler import load_history
+    from questorharness.capabilities.schedule.cron_scheduler import load_history
 
     entries = load_history(limit=limit, job_name=name)
     if not entries:
@@ -2435,7 +2435,7 @@ def main(
 
     # 处理 --continue 和 --resume 标志
     if continue_session or resume is not None:
-        from questorharness.services.session_storage import (
+        from questorharness.contracts.session_storage import (
             list_session_snapshots,
             load_session_by_id,
             load_session_snapshot,

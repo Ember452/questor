@@ -15,7 +15,7 @@ from questorharness.capabilities.memory.schema import (
     split_memory_file,
     utc_now,
 )
-from questorharness.utils.fs import atomic_write_text
+from questorharness.contracts.io import atomic_write_text
 
 
 @dataclass(frozen=True)

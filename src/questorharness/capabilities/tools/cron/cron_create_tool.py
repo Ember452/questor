@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from questorharness.services.cron import upsert_cron_job, validate_cron_expression, validate_timezone
+from questorharness.capabilities.schedule.cron import upsert_cron_job, validate_cron_expression, validate_timezone
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 

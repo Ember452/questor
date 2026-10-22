@@ -437,8 +437,8 @@ async def test_query_engine_surfaces_retry_status_events(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_query_engine_emits_compact_progress_before_reply(tmp_path: Path, monkeypatch):
     long_text = "alpha " * 50000
-    monkeypatch.setattr("questorharness.services.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
-    monkeypatch.setattr("questorharness.services.compact.should_autocompact", lambda *args, **kwargs: True)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.should_autocompact", lambda *args, **kwargs: True)
     engine = QueryEngine(
         api_client=FakeApiClient(
             [
@@ -483,8 +483,8 @@ async def test_query_engine_emits_compact_progress_before_reply(tmp_path: Path, 
 
 @pytest.mark.asyncio
 async def test_query_engine_reactive_compacts_after_prompt_too_long(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr("questorharness.services.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
-    monkeypatch.setattr("questorharness.services.compact.should_autocompact", lambda *args, **kwargs: False)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.should_autocompact", lambda *args, **kwargs: False)
     engine = QueryEngine(
         api_client=PromptTooLongThenSuccessApiClient(),
         tool_registry=create_default_tool_registry(),
@@ -1274,7 +1274,7 @@ async def test_query_engine_persists_compacted_tool_turn_history(tmp_path: Path,
     """Compaction must not make a completed tool turn disappear from engine history."""
 
     monkeypatch.delenv("CLAUDE_CODE_COORDINATOR_MODE", raising=False)
-    monkeypatch.setattr("questorharness.services.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
     should_calls = {"count": 0}
 
     def _should_compact_once(*args, **kwargs):
@@ -1282,7 +1282,7 @@ async def test_query_engine_persists_compacted_tool_turn_history(tmp_path: Path,
         should_calls["count"] += 1
         return should_calls["count"] == 1
 
-    monkeypatch.setattr("questorharness.services.compact.should_autocompact", _should_compact_once)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.should_autocompact", _should_compact_once)
 
     registry = ToolRegistry()
     registry.register(_OkTool())

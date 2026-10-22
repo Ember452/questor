@@ -26,7 +26,7 @@ from questorharness.hooks.schemas import (
 )
 from questorharness.hooks.types import AggregatedHookResult, HookResult
 from questorharness.providers.sandbox import SandboxUnavailableError
-from questorharness.utils.shell import create_shell_subprocess
+from questorharness.contracts.shell import create_shell_subprocess
 
 
 @dataclass

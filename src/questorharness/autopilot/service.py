@@ -38,7 +38,7 @@ from questorharness.config.paths import (
 )
 from questorharness.contracts.domain.events import AssistantTextDelta, AssistantTurnComplete, ErrorEvent
 from questorharness.swarm.worktree import WorktreeManager
-from questorharness.utils.fs import atomic_write_text
+from questorharness.contracts.io import atomic_write_text
 
 _SOURCE_BASE_SCORES: dict[RepoTaskSource, int] = {
     "questor_request": 100,
@@ -1172,7 +1172,7 @@ class RepoAutopilotStore:
         )
 
     def install_default_cron(self) -> list[str]:
-        from questorharness.services.cron import upsert_cron_job
+        from questorharness.capabilities.schedule.cron import upsert_cron_job
 
         jobs = [
             {

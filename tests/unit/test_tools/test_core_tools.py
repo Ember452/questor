@@ -28,6 +28,7 @@ from questorharness.capabilities.tools.skill_tool import SkillTool, SkillToolInp
 from questorharness.capabilities.tools.todo_write_tool import TodoWriteTool, TodoWriteToolInput
 from questorharness.capabilities.tools.agent.tool_search_tool import ToolSearchTool, ToolSearchToolInput
 from questorharness.capabilities.tools import create_default_tool_registry
+from questorharness.providers.lsp.runtime import ProviderLspRuntime
 
 
 @pytest.mark.asyncio
@@ -298,7 +299,7 @@ async def test_lsp_tool(tmp_path: Path):
         "from pkg.utils import greet\n\nprint(greet('world'))\n",
         encoding="utf-8",
     )
-    context = ToolExecutionContext(cwd=tmp_path)
+    context = ToolExecutionContext(cwd=tmp_path, lsp=ProviderLspRuntime())
 
     document_symbols = await LspTool().execute(
         LspToolInput(operation="document_symbol", file_path="pkg/utils.py"),

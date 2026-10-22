@@ -22,8 +22,8 @@ from pathlib import Path
 from typing import Any
 
 from questorharness.config.paths import get_config_dir
-from questorharness.utils.file_lock import exclusive_file_lock
-from questorharness.utils.fs import atomic_write_text
+from questorharness.contracts.locking import exclusive_file_lock
+from questorharness.contracts.io import atomic_write_text
 
 log = logging.getLogger(__name__)
 

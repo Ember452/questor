@@ -2,7 +2,7 @@
 
 Used to serialise read-modify-write sequences on shared JSON registries
 (credentials, settings, cron, memory index, swarm mailbox). Pair with
-:func:`questorharness.utils.fs.atomic_write_text` to make each critical section
+:func:`questorharness.contracts.io.atomic_write_text` to make each critical section
 both race-free and crash-safe.
 """
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.services.cron import (
+from questorharness.capabilities.schedule.cron import (
     delete_cron_job,
     get_cron_job,
     load_cron_jobs,
@@ -27,7 +27,7 @@ def _tmp_cron_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     monkeypatch.setattr(
-        "questorharness.services.cron.get_cron_registry_path",
+        "questorharness.capabilities.schedule.cron.get_cron_registry_path",
         lambda: data_dir / "cron_jobs.json",
     )
 
@@ -163,7 +163,7 @@ class TestCorruptData:
         bad_file.parent.mkdir(parents=True, exist_ok=True)
         bad_file.write_text("{not valid json", encoding="utf-8")
         monkeypatch.setattr(
-            "questorharness.services.cron.get_cron_registry_path",
+            "questorharness.capabilities.schedule.cron.get_cron_registry_path",
             lambda: bad_file,
         )
         assert load_cron_jobs() == []
@@ -173,7 +173,7 @@ class TestCorruptData:
         bad_file.parent.mkdir(parents=True, exist_ok=True)
         bad_file.write_text(json.dumps({"not": "a list"}), encoding="utf-8")
         monkeypatch.setattr(
-            "questorharness.services.cron.get_cron_registry_path",
+            "questorharness.capabilities.schedule.cron.get_cron_registry_path",
             lambda: bad_file,
         )
         assert load_cron_jobs() == []

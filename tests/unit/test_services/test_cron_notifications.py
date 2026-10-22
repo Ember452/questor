@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from questorharness.services import cron_scheduler
+from questorharness.capabilities.schedule import cron_scheduler
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
-from questorharness.utils.network_guard import (
+from questorharness.contracts.network import (
     NetworkGuardError,
     fetch_public_http_response,
     validate_http_url,

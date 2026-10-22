@@ -23,6 +23,14 @@ from questorharness.providers.auth.external import (
     claude_oauth_headers,
     get_claude_code_session_id,
 )
+from questorharness.contracts.llm import (
+    ApiMessageCompleteEvent,
+    ApiMessageRequest,
+    ApiRetryEvent,
+    ApiStreamEvent,
+    ApiTextDeltaEvent,
+    SupportsStreamingMessages,
+)
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.contracts.domain.message import ConversationMessage, assistant_message_from_api
 
@@ -34,54 +42,6 @@ BASE_DELAY = 1.0  # 秒
 MAX_DELAY = 30.0
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 529}
 OAUTH_BETA_HEADER = "oauth-2025-04-20"
-
-
-@dataclass(frozen=True)
-class ApiMessageRequest:
-    """Input parameters for a model invocation."""
-
-    model: str
-    messages: list[ConversationMessage]
-    system_prompt: str | None = None
-    max_tokens: int = 4096
-    tools: list[dict[str, Any]] = field(default_factory=list)
-    effort: str | None = None
-
-
-@dataclass(frozen=True)
-class ApiTextDeltaEvent:
-    """Incremental text produced by the model."""
-
-    text: str
-
-
-@dataclass(frozen=True)
-class ApiMessageCompleteEvent:
-    """Terminal event containing the full assistant message."""
-
-    message: ConversationMessage
-    usage: UsageSnapshot
-    stop_reason: str | None = None
-
-
-@dataclass(frozen=True)
-class ApiRetryEvent:
-    """A recoverable upstream failure that will be retried automatically."""
-
-    message: str
-    attempt: int
-    max_attempts: int
-    delay_seconds: float
-
-
-ApiStreamEvent = ApiTextDeltaEvent | ApiMessageCompleteEvent | ApiRetryEvent
-
-
-class SupportsStreamingMessages(Protocol):
-    """Protocol used by the query engine in tests and production."""
-
-    async def stream_message(self, request: ApiMessageRequest) -> AsyncIterator[ApiStreamEvent]:
-        """Yield streamed events for the request."""
 
 
 def _is_retryable(exc: Exception) -> bool:

@@ -302,7 +302,7 @@ async def task_migration_plan_with_memory():
     from questorharness.skills.registry import SkillRegistry
     from questorharness.skills.types import SkillDefinition
     from questorharness.capabilities.memory.manager import add_memory_entry, list_memory_files, remove_memory_entry
-    from questorharness.services.session_storage import save_session_snapshot, export_session_markdown
+    from questorharness.contracts.session_storage import save_session_snapshot, export_session_markdown
     import questorharness.capabilities.memory.paths as mp
     import questorharness.capabilities.memory.manager as mm
 
@@ -665,7 +665,7 @@ async def task_full_pipeline():
 async def task_refactor_with_session():
     """Refactor code across 3 turns, save session, verify it can be loaded."""
 
-    from questorharness.services.session_storage import (
+    from questorharness.contracts.session_storage import (
         save_session_snapshot, load_session_snapshot,
     )
 

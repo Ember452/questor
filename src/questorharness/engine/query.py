@@ -20,6 +20,7 @@ from questorharness.providers.llm.client import (
 )
 from questorharness.providers.llm.provider import is_model_multimodal
 from questorharness.providers.llm.tool_runtime import ProviderLlmToolRuntime
+from questorharness.providers.lsp.runtime import ProviderLspRuntime
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.providers.sandbox.runtime import ProviderSandboxRuntime
 from questorharness.config.paths import get_data_dir
@@ -41,7 +42,7 @@ from questorharness.contracts.domain.events import (
 )
 from questorharness.hooks import HookEvent, HookExecutor
 from questorharness.capabilities.policy.checker import PermissionChecker
-from questorharness.services.tool_outputs import tool_output_inline_chars, tool_output_preview_chars
+from questorharness.contracts.tool_outputs import tool_output_inline_chars, tool_output_preview_chars
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.base import ToolRegistry
 
@@ -53,6 +54,7 @@ log = logging.getLogger(__name__)
 
 _TOOL_SANDBOX_RUNTIME = ProviderSandboxRuntime()
 _TOOL_LLM_RUNTIME = ProviderLlmToolRuntime()
+_TOOL_LSP_RUNTIME = ProviderLspRuntime()
 
 
 PermissionPrompt = Callable[[str, str], Awaitable[bool]]
@@ -648,7 +650,7 @@ async def run_query(
     content) and, if that is not enough, performs a full LLM-based
     summarization of older messages.
     """
-    from questorharness.services.compact import (
+    from questorharness.capabilities.context.compact import (
         AutoCompactState,
         auto_compact_if_needed,
     )
@@ -985,6 +987,7 @@ async def _execute_tool_call(
             hook_executor=context.hook_executor,
             sandbox=_TOOL_SANDBOX_RUNTIME,
             llm=_TOOL_LLM_RUNTIME,
+            lsp=_TOOL_LSP_RUNTIME,
         ),
     )
     elapsed = time.monotonic() - t0

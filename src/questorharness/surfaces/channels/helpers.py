@@ -1,7 +1,7 @@
 """Compatibility helpers shared by channel implementations.
 
 Historically several channel adapters imported small utility functions from
-``questorharness.utils.helpers``.  Keep this module narrow and dependency-free so
+``questorharness.surfaces.channels.helpers``.  Keep this module narrow and dependency-free so
 optional channel imports do not fail in installed packages.
 """
 

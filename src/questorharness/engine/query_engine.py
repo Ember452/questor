@@ -14,7 +14,7 @@ from questorharness.contracts.domain.events import AssistantTurnComplete, Stream
 from questorharness.config.settings import Settings
 from questorharness.hooks import HookEvent, HookExecutor
 from questorharness.capabilities.policy.checker import PermissionChecker
-from questorharness.services.autodream.service import schedule_auto_dream
+from questorharness.capabilities.memory.consolidate.service import schedule_auto_dream
 from questorharness.capabilities.tools.base import ToolRegistry
 
 
@@ -159,7 +159,7 @@ class QueryEngine:
             return
         if not self._settings.memory.enabled:
             return
-        from questorharness.services.session_memory import prepare_session_memory_metadata
+        from questorharness.capabilities.memory.session import prepare_session_memory_metadata
 
         prepare_session_memory_metadata(
             self._cwd,
@@ -174,7 +174,7 @@ class QueryEngine:
             return
         if not self._settings.memory.enabled:
             return
-        from questorharness.services.session_memory import update_session_memory_file
+        from questorharness.capabilities.memory.session import update_session_memory_file
 
         update_session_memory_file(
             self._cwd,
@@ -190,7 +190,7 @@ class QueryEngine:
             return
         if not self._settings.memory.enabled:
             return
-        from questorharness.services.memory_extract import extract_memories_from_turn
+        from questorharness.capabilities.memory.extract import extract_memories_from_turn
 
         try:
             result = await extract_memories_from_turn(

@@ -10,16 +10,18 @@ from questorharness.providers.llm.client import ApiMessageCompleteEvent
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock, ToolResultBlock, ToolUseBlock
 from questorharness.hooks import HookEvent
-from questorharness.services import (
+from questorharness.capabilities.context.compact import (
     build_post_compact_messages,
     compact_conversation,
     compact_messages,
     estimate_conversation_tokens,
-    estimate_message_tokens,
-    estimate_tokens,
     summarize_messages,
 )
-from questorharness.services.compact import (
+from questorharness.contracts.tokens import (
+    estimate_message_tokens,
+    estimate_tokens,
+)
+from questorharness.capabilities.context.compact import (
     AutoCompactState,
     _is_prompt_too_long_error,
     auto_compact_if_needed,
@@ -554,8 +556,8 @@ async def test_compact_post_messages_keep_boundary_summary_recent_then_attachmen
 
 @pytest.mark.asyncio
 async def test_auto_compact_records_richer_checkpoint_metadata(monkeypatch):
-    monkeypatch.setattr("questorharness.services.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
-    monkeypatch.setattr("questorharness.services.compact.should_autocompact", lambda *args, **kwargs: True)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.should_autocompact", lambda *args, **kwargs: True)
     long_text = "alpha " * 50000
     messages = [
         ConversationMessage(role="user", content=[TextBlock(text=long_text)]),
@@ -593,9 +595,9 @@ async def test_auto_compact_if_needed_returns_original_messages_after_timeout(mo
     async def _stall():
         await asyncio.sleep(0.05)
 
-    monkeypatch.setattr("questorharness.services.compact.COMPACT_TIMEOUT_SECONDS", 0.01)
-    monkeypatch.setattr("questorharness.services.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
-    monkeypatch.setattr("questorharness.services.compact.should_autocompact", lambda *args, **kwargs: True)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.COMPACT_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.should_autocompact", lambda *args, **kwargs: True)
     long_text = "alpha " * 50000
     messages = [
         ConversationMessage(role="user", content=[TextBlock(text=long_text)]),

@@ -263,7 +263,7 @@ def test_autopilot_install_default_cron_creates_jobs(tmp_path: Path, monkeypatch
     recorded: list[dict[str, str]] = []
 
     monkeypatch.setattr(
-        "questorharness.services.cron.upsert_cron_job",
+        "questorharness.capabilities.schedule.cron.upsert_cron_job",
         lambda job: recorded.append(job),
     )
 

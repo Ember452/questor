@@ -7,13 +7,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from questorharness.services.lsp import (
-    find_references,
-    go_to_definition,
-    hover,
-    list_document_symbols,
-    workspace_symbol_search,
-)
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
@@ -63,9 +56,12 @@ class LspTool(BaseTool):
         return True
 
     async def execute(self, arguments: LspToolInput, context: ToolExecutionContext) -> ToolResult:
+        lsp = context.lsp
+        if lsp is None:
+            return ToolResult(output="lsp runtime is not configured", is_error=True)
         root = context.cwd.resolve()
         if arguments.operation == "workspace_symbol":
-            results = workspace_symbol_search(root, arguments.query or "")
+            results = lsp.workspace_symbol_search(root, arguments.query or "")
             return ToolResult(output=_format_symbol_locations(results, root))
 
         assert arguments.file_path is not None  # 已在上方校验
@@ -76,10 +72,10 @@ class LspTool(BaseTool):
             return ToolResult(output="The lsp tool currently supports Python files only.", is_error=True)
 
         if arguments.operation == "document_symbol":
-            return ToolResult(output=_format_symbol_locations(list_document_symbols(file_path), root))
+            return ToolResult(output=_format_symbol_locations(lsp.list_document_symbols(file_path), root))
 
         if arguments.operation == "go_to_definition":
-            results = go_to_definition(
+            results = lsp.go_to_definition(
                 root=root,
                 file_path=file_path,
                 symbol=arguments.symbol,
@@ -89,7 +85,7 @@ class LspTool(BaseTool):
             return ToolResult(output=_format_symbol_locations(results, root))
 
         if arguments.operation == "find_references":
-            results = find_references(
+            results = lsp.find_references(
                 root=root,
                 file_path=file_path,
                 symbol=arguments.symbol,
@@ -98,7 +94,7 @@ class LspTool(BaseTool):
             )
             return ToolResult(output=_format_references(results, root))
 
-        result = hover(
+        result = lsp.hover(
             root=root,
             file_path=file_path,
             symbol=arguments.symbol,

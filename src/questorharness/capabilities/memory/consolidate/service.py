@@ -15,15 +15,15 @@ from questorharness.config.settings import (
 )
 from questorharness.capabilities.memory.paths import get_project_memory_dir
 from questorharness.capabilities.memory.usage import find_stale_memory_candidates
-from questorharness.services.autodream.backup import create_memory_backup, diff_memory_dirs
-from questorharness.services.autodream.lock import (
+from questorharness.capabilities.memory.consolidate.backup import create_memory_backup, diff_memory_dirs
+from questorharness.capabilities.memory.consolidate.lock import (
     list_sessions_touched_since,
     read_last_consolidated_at,
     rollback_consolidation_lock,
     try_acquire_consolidation_lock,
 )
-from questorharness.services.autodream.prompt import build_consolidation_prompt
-from questorharness.services.session_storage import get_project_session_dir
+from questorharness.capabilities.memory.consolidate.prompt import build_consolidation_prompt
+from questorharness.contracts.session_storage import get_project_session_dir
 from questorharness.tasks.manager import get_task_manager
 from questorharness.tasks.types import TaskRecord
 

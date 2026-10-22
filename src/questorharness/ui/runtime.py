@@ -39,7 +39,7 @@ from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins import load_plugins
 from questorharness.prompts import build_runtime_system_prompt
 from questorharness.state import AppState, AppStateStore
-from questorharness.services.session_backend import DEFAULT_SESSION_BACKEND, SessionBackend
+from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, SessionBackend
 from questorharness.capabilities.tools import ToolRegistry, create_default_tool_registry
 from questorharness.keybindings import load_keybindings
 

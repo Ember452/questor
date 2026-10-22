@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.services.cron import delete_cron_job
+from questorharness.capabilities.schedule.cron import delete_cron_job
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 

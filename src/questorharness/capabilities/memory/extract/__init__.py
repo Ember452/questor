@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from questorharness.providers.llm.client import ApiMessageCompleteEvent, ApiMessageRequest, SupportsStreamingMessages
+from questorharness.contracts.llm import ApiMessageCompleteEvent, ApiMessageRequest, SupportsStreamingMessages
 from questorharness.contracts.domain.message import ConversationMessage, ToolUseBlock
 from questorharness.capabilities.memory.manager import add_memory_entry
 from questorharness.capabilities.memory.paths import get_project_memory_dir

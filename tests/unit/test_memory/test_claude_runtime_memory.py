@@ -33,13 +33,13 @@ from questorharness.capabilities.memory.team import (
     validate_team_memory_write_path,
 )
 from questorharness.capabilities.policy import PermissionChecker
-from questorharness.services.memory_extract import (
+from questorharness.capabilities.memory.extract import (
     extract_memories_from_turn,
     has_memory_writes_since,
     parse_extraction_records,
     validate_extraction_tool_request,
 )
-from questorharness.services.session_memory import (
+from questorharness.capabilities.memory.session import (
     get_session_memory_content,
     get_session_memory_path,
     update_session_memory_file,

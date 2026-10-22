@@ -11,6 +11,7 @@ import pytest
 from questorharness.tasks.manager import get_task_manager
 from questorharness.capabilities.tools import create_default_tool_registry
 from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.providers.lsp.runtime import ProviderLspRuntime
 
 
 async def _wait_for_terminal_task(task_id: str, *, timeout_seconds: float = 2.0) -> None:
@@ -260,7 +261,11 @@ async def test_notebook_and_cron_flow_across_registry(tmp_path: Path, monkeypatc
 @pytest.mark.asyncio
 async def test_lsp_flow_across_registry(tmp_path: Path):
     registry = create_default_tool_registry()
-    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry})
+    context = ToolExecutionContext(
+        cwd=tmp_path,
+        metadata={"tool_registry": registry},
+        lsp=ProviderLspRuntime(),
+    )
 
     write = registry.get("write_file")
     lsp = registry.get("lsp")

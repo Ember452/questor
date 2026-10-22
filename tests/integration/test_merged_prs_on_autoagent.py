@@ -329,7 +329,7 @@ async def task_session_resume_autoagent():
     print("  Task 4: PR#16 — Research AutoAgent → save → resume → continue")
     print("=" * 70)
 
-    from questorharness.services.session_storage import (
+    from questorharness.contracts.session_storage import (
         save_session_snapshot, load_session_snapshot,
     )
     from questorharness.contracts.domain.message import ConversationMessage
@@ -414,12 +414,12 @@ async def task_cron_autoagent_maintenance():
     print("  Task 5: PR#16 — Cron scheduler for AutoAgent maintenance")
     print("=" * 70)
 
-    from questorharness.services.cron import (
+    from questorharness.capabilities.schedule.cron import (
         load_cron_jobs, upsert_cron_job, delete_cron_job,
         get_cron_job, set_job_enabled,
         mark_job_run, next_run_time,
     )
-    import questorharness.services.cron as cron_mod
+    import questorharness.capabilities.schedule.cron as cron_mod
 
     with tempfile.TemporaryDirectory() as tmpdir:
         registry_path = Path(tmpdir) / "cron_jobs.json"
@@ -505,13 +505,13 @@ async def task_full_dev_workflow():
     from questorharness.capabilities.tools.skill_tool import SkillTool
     from questorharness.capabilities.memory.scan import scan_memory_files
     from questorharness.capabilities.memory.search import find_relevant_memories
-    from questorharness.services.session_storage import save_session_snapshot, load_session_snapshot
-    from questorharness.services.cron import upsert_cron_job, load_cron_jobs, validate_cron_expression
+    from questorharness.contracts.session_storage import save_session_snapshot, load_session_snapshot
+    from questorharness.capabilities.schedule.cron import upsert_cron_job, load_cron_jobs, validate_cron_expression
     from questorharness.contracts.domain.message import ConversationMessage
     import questorharness.capabilities.memory.paths as mp
     import questorharness.capabilities.memory.manager as mm
     import questorharness.capabilities.memory.scan as ms
-    import questorharness.services.cron as cron_mod
+    import questorharness.capabilities.schedule.cron as cron_mod
 
     with tempfile.TemporaryDirectory() as tmpdir:
         mem_dir = Path(tmpdir) / "memory"

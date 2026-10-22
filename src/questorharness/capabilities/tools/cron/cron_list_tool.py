@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from questorharness.services.cron import load_cron_jobs
-from questorharness.services.cron_scheduler import is_scheduler_running
+from questorharness.capabilities.schedule.cron import load_cron_jobs
+from questorharness.capabilities.schedule.cron_scheduler import is_scheduler_running
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 

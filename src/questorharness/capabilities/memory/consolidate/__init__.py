@@ -1,21 +1,21 @@
 """Automatic memory consolidation (auto-dream)."""
 
-from questorharness.services.autodream.backup import (
+from questorharness.capabilities.memory.consolidate.backup import (
     create_memory_backup,
     diff_memory_dirs,
     format_memory_diff,
     latest_memory_backup,
     restore_memory_backup,
 )
-from questorharness.services.autodream.lock import (
+from questorharness.capabilities.memory.consolidate.lock import (
     list_sessions_touched_since,
     read_last_consolidated_at,
     record_consolidation,
     rollback_consolidation_lock,
     try_acquire_consolidation_lock,
 )
-from questorharness.services.autodream.prompt import build_consolidation_prompt
-from questorharness.services.autodream.service import execute_auto_dream, start_dream_now
+from questorharness.capabilities.memory.consolidate.prompt import build_consolidation_prompt
+from questorharness.capabilities.memory.consolidate.service import execute_auto_dream, start_dream_now
 
 __all__ = [
     "build_consolidation_prompt",
