@@ -192,8 +192,8 @@ class RuntimeBundle:
 
 def _resolve_api_client_from_settings(settings) -> SupportsStreamingMessages:
     """Build the appropriate API client for the resolved settings."""
-    # 确保配置档字段（base_url、model、api_format）投影到设置
-    settings = settings.materialize_active_profile()
+    # 保留 CLI/环境变量的 flat 覆盖，再投影到活动配置档
+    settings = settings.sync_active_profile_from_flat_fields().materialize_active_profile()
 
     def _safe_resolve_auth():
         try:

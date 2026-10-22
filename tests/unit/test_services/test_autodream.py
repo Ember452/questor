@@ -192,3 +192,66 @@ async def test_start_dream_now_uses_overrides(tmp_path: Path, monkeypatch) -> No
     assert "--dangerously-skip-permissions" not in captured["argv"]
     assert "Usage-based stale candidates:" in task.prompt
     assert "old.md" in task.prompt
+
+
+async def test_start_dream_now_propagates_transient_provider_settings(tmp_path: Path, monkeypatch) -> None:
+    cwd = tmp_path / "repo"
+    memory_dir = tmp_path / ".questor" / "memory"
+    session_dir = tmp_path / ".questor" / "sessions"
+    cwd.mkdir()
+    memory_dir.mkdir(parents=True)
+    session_dir.mkdir(parents=True)
+    (session_dir / "session-one.json").write_text(json.dumps({"session_id": "one"}), encoding="utf-8")
+
+    captured = {}
+
+    class _Manager:
+        def register_completion_listener(self, listener):
+            return None
+
+        async def create_shell_task(self, **kwargs):
+            from questorharness.tasks.types import TaskRecord
+
+            captured.update(kwargs)
+            return TaskRecord(
+                id="dtest-transient",
+                type="dream",
+                status="running",
+                description=kwargs["description"],
+                cwd=str(kwargs["cwd"]),
+                output_file=tmp_path / "dream.log",
+                argv=kwargs["argv"],
+                env=kwargs["env"],
+            )
+
+    monkeypatch.setattr("questorharness.services.autodream.service.get_task_manager", lambda: _Manager())
+    settings = Settings(
+        provider="openai",
+        api_format="openai",
+        base_url="https://api.deepseek.com",
+        model="deepseek-chat",
+        api_key="test-key",
+        active_profile="claude-api",
+    )
+
+    task = await start_dream_now(
+        cwd=cwd,
+        settings=settings,
+        force=True,
+        memory_dir=memory_dir,
+        session_dir=session_dir,
+        app_label="questor personal memory",
+        runner_module="questor",
+    )
+
+    assert task is not None
+    assert "--profile" not in captured["argv"]
+    assert captured["argv"][captured["argv"].index("--model") + 1] == "deepseek-chat"
+    assert captured["env"]["QUESTORHARNESS_PROVIDER"] == "openai"
+    assert captured["env"]["QUESTORHARNESS_API_FORMAT"] == "openai"
+    assert captured["env"]["QUESTORHARNESS_BASE_URL"] == "https://api.deepseek.com"
+    assert captured["env"]["QUESTORHARNESS_MODEL"] == "deepseek-chat"
+    assert captured["env"]["QUESTORHARNESS_OPENAI_API_KEY"] == "test-key"
+    assert "QUESTORHARNESS_PROFILE" not in captured["env"]
+    assert captured["env"]["PYTHONUTF8"] == "1"
+    assert captured["env"]["PYTHONIOENCODING"] == "utf-8"

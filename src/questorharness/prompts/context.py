@@ -17,6 +17,7 @@ from questorharness.memory.relevance import format_relevant_memories, select_rel
 from questorharness.memory.usage import mark_memory_used
 from questorharness.personalization.rules import load_local_rules
 from questorharness.permissions.modes import PermissionMode
+from questorharness.platforms import get_platform
 from questorharness.prompts.claudemd import load_claude_md_prompt
 from questorharness.prompts.system_prompt import build_system_prompt
 from questorharness.skills.loader import load_skill_registry
@@ -99,6 +100,19 @@ def _build_permission_mode_section(settings: Settings) -> str:
     return f"# Current Permission Mode\n{guidance}"
 
 
+def _build_platform_section() -> str:
+    """Build host-platform guidance for shell and file operations."""
+    if get_platform() != "windows":
+        return ""
+    return (
+        "# Host Platform\n"
+        "This session is running on Windows. Use Windows-compatible commands and paths, "
+        "prefer read_file/write_file/edit_file for file work, and use PowerShell-compatible "
+        "shell commands. Do not use POSIX-only tools such as sed, grep, awk, or `&&` chaining "
+        "unless you have verified they are available."
+    )
+
+
 def build_runtime_system_prompt(
     settings: Settings,
     *,
@@ -118,6 +132,9 @@ def build_runtime_system_prompt(
         sections[0] = build_system_prompt(cwd=str(cwd))
 
     sections.append(_build_permission_mode_section(settings))
+    platform_section = _build_platform_section()
+    if platform_section:
+        sections.append(platform_section)
 
     if settings.fast_mode:
         sections.append(

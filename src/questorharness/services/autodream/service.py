@@ -8,7 +8,11 @@ import sys
 import time
 from pathlib import Path
 
-from questorharness.config.settings import Settings
+from questorharness.config.settings import (
+    Settings,
+    auth_source_env_var_candidates,
+    default_auth_source_for_provider,
+)
 from questorharness.memory.paths import get_project_memory_dir
 from questorharness.memory.usage import find_stale_memory_candidates
 from questorharness.services.autodream.backup import create_memory_backup, diff_memory_dirs
@@ -94,6 +98,21 @@ def _resolve_session_dir(cwd: str | Path, session_dir: str | Path | None) -> Pat
     return Path(session_dir).expanduser().resolve() if session_dir is not None else get_project_session_dir(cwd)
 
 
+def _profile_matches_runtime_settings(settings: Settings) -> bool:
+    """Return whether the active profile already represents the effective runtime settings."""
+    profile_name = (settings.active_profile or "").strip()
+    if not profile_name:
+        return False
+    profile = settings.merged_profiles().get(profile_name)
+    if profile is None:
+        return False
+    return (
+        profile.provider == settings.provider
+        and profile.api_format == settings.api_format
+        and (profile.base_url or None) == (settings.base_url or None)
+    )
+
+
 async def start_dream_now(
     *,
     cwd: str | Path,
@@ -160,13 +179,49 @@ async def start_dream_now(
     prompt = build_consolidation_prompt(resolved_memory_dir, resolved_session_dir, extra, preview=preview)
     src_root = Path(__file__).resolve().parents[3]
     existing_pythonpath = os.environ.get("PYTHONPATH", "")
+    child_model = (model or settings.model or "").strip() or None
     env = {
         _CHILD_ENV: "1",
         "QUESTORHARNESS_AUTODREAM_MEMORY_DIR": str(resolved_memory_dir),
         "QUESTORHARNESS_CONFIG_DIR": str(Path.home() / ".questorharness"),
-        "QUESTORHARNESS_PROFILE": settings.active_profile,
         "PYTHONPATH": str(src_root) + ((os.pathsep + existing_pythonpath) if existing_pythonpath else ""),
+        "PYTHONUTF8": "1",
+        "PYTHONIOENCODING": "utf-8",
     }
+    if settings.active_profile and _profile_matches_runtime_settings(settings):
+        env["QUESTORHARNESS_PROFILE"] = settings.active_profile
+    if settings.provider:
+        env["QUESTORHARNESS_PROVIDER"] = str(settings.provider)
+    if settings.api_format:
+        env["QUESTORHARNESS_API_FORMAT"] = str(settings.api_format)
+    if settings.base_url:
+        env["QUESTORHARNESS_BASE_URL"] = str(settings.base_url)
+    if child_model:
+        env["QUESTORHARNESS_MODEL"] = child_model
+
+    auth_kind = ""
+    auth_value = ""
+    try:
+        if settings.api_key:
+            auth_kind, auth_value = "api_key", settings.api_key
+        else:
+            auth = settings.resolve_auth()
+            auth_kind, auth_value = auth.auth_kind, auth.value
+    except Exception:
+        pass
+
+    if auth_kind == "api_key" and auth_value:
+        auth_source = default_auth_source_for_provider(settings.provider, settings.api_format)
+        candidates = auth_source_env_var_candidates(auth_source)
+        if candidates:
+            env[candidates[0]] = auth_value
+        env.pop("QUESTORHARNESS_API_KEY", None)
+    elif auth_value:
+        env["ANTHROPIC_AUTH_TOKEN"] = auth_value
+        env.pop("ANTHROPIC_API_KEY", None)
+        env.pop("OPENAI_API_KEY", None)
+        env.pop("QUESTORHARNESS_API_KEY", None)
+
     try:
         argv = [
             sys.executable,
@@ -178,28 +233,17 @@ async def start_dream_now(
         if runner_module == "questor":
             workspace = resolved_memory_dir.parent
             argv.extend(["--workspace", str(workspace)])
-            if settings.active_profile:
+            if settings.active_profile and _profile_matches_runtime_settings(settings):
                 argv.extend(["--profile", settings.active_profile])
-        if model:
-            argv.extend(["--model", model])
-        if runner_module == "questorharness" and settings.provider != "anthropic_claude":
+        if child_model:
+            argv.extend(["--model", child_model])
+        if runner_module == "questorharness":
             if settings.base_url:
-                argv.extend(["--base-url", settings.base_url])
+                argv.extend(["--base-url", str(settings.base_url)])
             if settings.api_format:
-                argv.extend(["--api-format", settings.api_format])
-        try:
-            auth = settings.resolve_auth()
-            if runner_module == "questorharness" and auth.auth_kind == "api_key":
-                argv.extend(["--api-key", auth.value])
-            elif runner_module == "questor" and auth.auth_kind == "api_key":
-                env["QUESTORHARNESS_API_KEY"] = auth.value
-            elif auth.value:
-                env["ANTHROPIC_AUTH_TOKEN"] = auth.value
-                env.pop("ANTHROPIC_API_KEY", None)
-                env.pop("OPENAI_API_KEY", None)
-                env.pop("QUESTORHARNESS_API_KEY", None)
-        except Exception:
-            pass
+                argv.extend(["--api-format", str(settings.api_format)])
+            if auth_kind == "api_key" and auth_value:
+                argv.extend(["--api-key", auth_value])
         argv.extend(["--print", prompt])
         task = await get_task_manager().create_shell_task(
             description="dreaming",
