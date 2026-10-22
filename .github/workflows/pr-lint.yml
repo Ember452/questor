@@ -1,0 +1,70 @@
+name: pr-title
+
+# Title-only validation: no checkout, no secrets, read-only token.
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-title:
+    name: pr-title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate pull request title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          title = os.environ.get("PR_TITLE", "").strip()
+          allowed_types = {
+              "build",
+              "chore",
+              "ci",
+              "docs",
+              "feat",
+              "fix",
+              "perf",
+              "refactor",
+              "revert",
+              "spike",
+              "style",
+              "test",
+          }
+          match = re.fullmatch(r"([a-z]+)(?:\([^)]+\))?!?: (.+)", title)
+
+
+          def fail(message: str) -> None:
+              print(f"::error::PR title check failed: {message}")
+              print(f"Actual title: {title!r}")
+              print("Expected: <type>: <lowercase subject>")
+              print(f"Allowed types: {', '.join(sorted(allowed_types))}")
+              print("Example: feat: add repository guards")
+              print("Example: fix(runtime): preserve provider overrides")
+              sys.exit(1)
+
+
+          if match is None:
+              fail("missing or malformed Conventional Commits prefix")
+
+          commit_type, subject = match.groups()
+          if commit_type not in allowed_types:
+              fail(f"unsupported type {commit_type!r}")
+          if not subject:
+              fail("empty subject")
+          if not subject[0].islower():
+              fail("subject must start with a lowercase letter")
+
+          print(f"PR title OK: {commit_type}: {subject}")
+          PY

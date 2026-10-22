@@ -1,86 +1,93 @@
-[project]
-name = "questor"
-version = "0.1.0"
-requires-python = ">=3.13"
-dependencies = [
-    # 下限抬到 2.14.1：不是新需求，而是把声明对齐到 uv.lock 实际锁定并已安装的版本
-    # （supersedes Dependabot PR #15）。
-    "pydantic>=2.14.1",
-    "immutables",
-    "jsonschema",
-    "aiosqlite",
-    "litellm",
-    "fastapi",
-    "sse-starlette",
-    "mcp<2",
-]
-
-[dependency-groups]
-dev = [
-    "pytest",
-    "pytest-asyncio",
-    "pytest-timeout",
-    "ruff",
-    "import-linter",
-    "pytest-cov>=7.1.0",
-    # P3 T14：真 socket SSE after_seq 重连验收（uvicorn 起真服务 + httpx 真客户端重连）。
-    "uvicorn",
-    "httpx",
-]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project]
+name = "questorharness-ai"
+version = "0.1.0"
+description = "QuestorHarness: a local-first AI coding assistant engine"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+
+dependencies = [
+    "anthropic>=0.40.0",
+    "openai>=1.0.0",
+    "rich>=13.0.0",
+    "prompt-toolkit>=3.0.0",
+    "textual>=0.80.0",
+    "typer>=0.12.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.27.0",
+    "websockets>=12.0",
+    "mcp>=1.0.0",
+    "pyperclip>=1.9.0",
+    "pyyaml>=6.0",
+    "questionary>=2.0.1",
+    "watchfiles>=0.20.0",
+    "croniter>=2.0.0",
+    "tzdata; sys_platform == 'win32'",
+    "lark-oapi>=1.5.0",
+    "qq-botpy>=1.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pexpect>=4.9.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
+    "pre-commit>=3.7.0",
+    "import-linter>=2.0.0",
+]
+
+[project.scripts]
+questorharness = "questorharness.cli:app"
+oh = "questorharness.cli:app"
+openh = "questorharness.cli:app"
+questor = "questor.cli:app"
+
+[project.entry-points."questorharness.notification_handlers"]
+questor-feishu = "questor.gateway.notify:register_handlers"
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/questor"]
+packages = ["src/questorharness", "src/questor"]
 
-[[tool.uv.index]]
-url = "https://mirrors.aliyun.com/pypi/simple/"
-default = true
+[tool.hatch.build]
+exclude = [
+    "/.git",
+    "/.venv",
+    "/.questorharness-venv",
+    "/.questorharness",
+    "/.questor",
+    "/.pytest_cache",
+    "/.mypy_cache",
+    "/.ruff_cache",
+    "/build",
+    "/dist",
+]
 
-# ---------------------------------------------------------------------------
-# Lint + layering guards (HARD-CONSTRAINTS C1/C14/C15).
-# import-linter has ZERO adoption across the 12 reference repos (R09), and can't
-# catch dynamic imports — so we treat package/module boundaries as the primary
-# defense and use ruff + a self-written AST checker as mechanical backstops.
-# ---------------------------------------------------------------------------
-[tool.ruff]
-target-version = "py313"
-line-length = 130
-src = ["src", "tests"]
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "TID", "UP", "B"]
-# E501 (hard line length) is a soft guide here; the dataclass-heavy event/state
-# code reads better unwrapped. Semantic rules (F/I/TID/UP/B/E4/E7/E9) stay on.
-ignore = ["E402", "E501"]
-
-[tool.ruff.lint.flake8-tidy-imports]
-# Absolute imports only → makes banned-api layering rules unambiguous.
-ban-relative-imports = "all"
-
-[tool.ruff.lint.flake8-tidy-imports.banned-api]
-# Infra SDKs are reachable only through their Port adapters (C1/C4/C14).
-"litellm".msg = "只在 providers/ 适配器内使用；其余层请走 ProviderPort（C1/C14）。"
-"sqlite3".msg = "只在 providers/ 存储适配器内使用；请走 StorePort（C4）。"
-"openai".msg = "走 ProviderPort/LiteLLM，不要直连供应商 SDK（C1）。"
-
-[tool.ruff.lint.per-file-ignores]
-# The adapter layers are the sanctioned home for infra SDKs.
-"src/questor/providers/*" = ["TID251"]
+[tool.hatch.build.targets.wheel.force-include]
+"frontend/terminal/package.json" = "questorharness/_frontend/package.json"
+"frontend/terminal/tsconfig.json" = "questorharness/_frontend/tsconfig.json"
+"frontend/terminal/src" = "questorharness/_frontend/src"
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["src", "tests"]
-# --timeout：单个测试内部卡住时的限时（tests/conftest.py 的看门狗只管“退出阶段卡死”，两者互补）。
-# 显式固定 thread 方法：signal 方法仅 Unix 可用，不指定的话 Windows 本地与 Linux CI 行为会不一致
-# ——而本次 CI 挂死恰恰是“本地绿、runner 卡死”的平台差异型故障，不能再留一个。
-addopts = "--timeout=60 --timeout-method=thread"
-# P10/ADR-0049 任务级回归网：`eval` 标记的确定性端到端用例（承 DoD-C），可用 `-m eval` 单独选、
-# 挂进独立非阻塞 lane；未标记用例不受影响。承 pitfalls 确定性纪律，绝不用真 key/真网络。
+asyncio_mode = "auto"
+addopts = "-m 'not e2e'"
 markers = [
-    "eval: deterministic task-level regression net (scripted provider, no key/network); selectable via -m eval",
-    "e2e: cross-blade closed-loop acceptance E1-E8 (scripted provider, no key/network); selectable via -m e2e",
+    "unit: fast, isolated tests",
+    "integration: tests that cross process, filesystem, transport, or service boundaries",
+    "e2e: real end-to-end suites requiring external services or a built frontend",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
