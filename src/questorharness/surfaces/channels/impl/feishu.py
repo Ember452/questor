@@ -11,10 +11,10 @@ from dataclasses import dataclass
 from typing import Any
 
 
-from questorharness.channels.bus.events import OutboundMessage
-from questorharness.channels.bus.queue import MessageBus
-from questorharness.channels.impl.base import BaseChannel
-from questorharness.channels.impl.base import resolve_channel_media_dir
+from questorharness.surfaces.channels.bus.events import OutboundMessage
+from questorharness.surfaces.channels.bus.queue import MessageBus
+from questorharness.surfaces.channels.impl.base import BaseChannel
+from questorharness.surfaces.channels.impl.base import resolve_channel_media_dir
 from questorharness.config.schema import FeishuConfig
 from questorharness.utils.helpers import safe_filename
 

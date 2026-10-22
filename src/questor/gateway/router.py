@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from questorharness.channels.bus.events import InboundMessage
+from questorharness.surfaces.channels.bus.events import InboundMessage
 
 
 def session_key_for_message(message: InboundMessage) -> str:

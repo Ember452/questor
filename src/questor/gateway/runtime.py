@@ -12,7 +12,7 @@ import os
 import re
 import string
 
-from questorharness.channels.bus.events import InboundMessage
+from questorharness.surfaces.channels.bus.events import InboundMessage
 from questorharness.commands import CommandContext, CommandResult, lookup_skill_slash_command
 from questorharness.engine.messages import (
     ConversationMessage,

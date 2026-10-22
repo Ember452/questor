@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from questorharness.channels.impl.base import resolve_channel_media_dir
+from questorharness.surfaces.channels.impl.base import resolve_channel_media_dir
 
 
 def test_resolve_channel_media_dir_uses_explicit_media_root(monkeypatch, tmp_path):

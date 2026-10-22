@@ -8,9 +8,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from questorharness.channels.bus.queue import MessageBus
-from questorharness.channels.bus.events import OutboundMessage
-from questorharness.channels.impl.feishu import FeishuChannel, _extract_feishu_mentions, _feishu_mentions_bot
+from questorharness.surfaces.channels.bus.queue import MessageBus
+from questorharness.surfaces.channels.bus.events import OutboundMessage
+from questorharness.surfaces.channels.impl.feishu import FeishuChannel, _extract_feishu_mentions, _feishu_mentions_bot
 from questorharness.config.schema import FeishuConfig
 
 

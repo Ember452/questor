@@ -8,8 +8,8 @@ from collections.abc import Callable
 from typing import Any
 
 
-from questorharness.channels.bus.queue import MessageBus
-from questorharness.channels.impl.base import BaseChannel
+from questorharness.surfaces.channels.bus.queue import MessageBus
+from questorharness.surfaces.channels.impl.base import BaseChannel
 from questorharness.config.schema import Config
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class ChannelManager:
         # 飞书渠道
         if self.config.channels.feishu.enabled:
             try:
-                from questorharness.channels.impl.feishu import FeishuChannel
+                from questorharness.surfaces.channels.impl.feishu import FeishuChannel
                 self.channels["feishu"] = FeishuChannel(
                     self.config.channels.feishu,
                     self.bus,
@@ -58,7 +58,7 @@ class ChannelManager:
         # QQ 渠道
         if self.config.channels.qq.enabled:
             try:
-                from questorharness.channels.impl.qq import QQChannel
+                from questorharness.surfaces.channels.impl.qq import QQChannel
                 self.channels["qq"] = QQChannel(
                     self.config.channels.qq,
                     self.bus,

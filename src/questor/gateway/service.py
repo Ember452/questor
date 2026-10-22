@@ -16,9 +16,9 @@ from pathlib import Path
 if sys.platform == "win32":
     import ctypes
 
-from questorharness.channels.bus.events import OutboundMessage
-from questorharness.channels.bus.queue import MessageBus
-from questorharness.channels.impl.manager import ChannelManager
+from questorharness.surfaces.channels.bus.events import OutboundMessage
+from questorharness.surfaces.channels.bus.queue import MessageBus
+from questorharness.surfaces.channels.impl.manager import ChannelManager
 
 from questor.gateway.bridge import QuestorGatewayBridge
 from questor.gateway.config import build_channel_manager_config, load_gateway_config

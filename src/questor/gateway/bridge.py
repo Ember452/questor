@@ -7,9 +7,9 @@ import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from questorharness.channels.bus.events import InboundMessage
-from questorharness.channels.bus.events import OutboundMessage
-from questorharness.channels.bus.queue import MessageBus
+from questorharness.surfaces.channels.bus.events import InboundMessage
+from questorharness.surfaces.channels.bus.events import OutboundMessage
+from questorharness.surfaces.channels.bus.queue import MessageBus
 
 from questor.group_registry import load_managed_group_record
 from questor.gateway.router import session_key_for_message

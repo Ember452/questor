@@ -2,7 +2,7 @@
 
 import asyncio
 
-from questorharness.channels.bus.events import InboundMessage, OutboundMessage
+from questorharness.surfaces.channels.bus.events import InboundMessage, OutboundMessage
 
 
 class MessageBus:

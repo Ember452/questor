@@ -6,8 +6,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from questorharness.channels.bus.events import InboundMessage, OutboundMessage
-from questorharness.channels.bus.queue import MessageBus
+from questorharness.surfaces.channels.bus.events import InboundMessage, OutboundMessage
+from questorharness.surfaces.channels.bus.queue import MessageBus
 from questorharness.config.paths import get_data_dir
 
 logger = logging.getLogger(__name__)

@@ -6,9 +6,9 @@ from collections import deque
 from typing import TYPE_CHECKING
 
 
-from questorharness.channels.bus.events import OutboundMessage
-from questorharness.channels.bus.queue import MessageBus
-from questorharness.channels.impl.base import BaseChannel
+from questorharness.surfaces.channels.bus.events import OutboundMessage
+from questorharness.surfaces.channels.bus.queue import MessageBus
+from questorharness.surfaces.channels.impl.base import BaseChannel
 from questorharness.config.schema import QQConfig
 
 logger = logging.getLogger(__name__)
