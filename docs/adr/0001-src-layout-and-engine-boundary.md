@@ -47,5 +47,5 @@ and cron notifications.
 ## Verification
 
 - `.importlinter` contract `engine-app-boundary`.
-- `tests/unit/test_import_boundaries.py`.
+- `tests/integration/test_import_boundaries.py`.
 - Full test suite and `uv run lint-imports`.

@@ -118,6 +118,7 @@ async def test_bash_tool_preflights_interactive_scaffold_commands(tmp_path: Path
     assert "non-interactive flags" in result.output
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_bash_tool_timeout_returns_partial_output_for_real_command(tmp_path: Path):
     result = await BashTool().execute(

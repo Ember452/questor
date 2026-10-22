@@ -76,6 +76,7 @@ exclude = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "-m 'not e2e'"
 markers = [
     "unit: fast, isolated tests",
     "integration: tests that cross process, filesystem, transport, or service boundaries",

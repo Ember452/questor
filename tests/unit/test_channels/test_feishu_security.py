@@ -399,6 +399,7 @@ async def test_feishu_group_policy_allows_sdk_message_mention(
     assert forwarded[0]["metadata"]["mentions"][0]["open_id"] == "ou_bot"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_feishu_create_managed_group_builds_expected_request():
     channel = FeishuChannel(FeishuConfig(), MessageBus())
@@ -426,6 +427,7 @@ async def test_feishu_create_managed_group_builds_expected_request():
     assert request.body.chat_type == "private"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_feishu_create_managed_group_reports_api_failure():
     channel = FeishuChannel(FeishuConfig(), MessageBus())

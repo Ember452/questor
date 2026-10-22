@@ -33,7 +33,7 @@ The engine must not import the product app. The product app may import the
 engine.
 
 This boundary is enforced by `.importlinter` and by
-`tests/unit/test_import_boundaries.py`. Run:
+`tests/integration/test_import_boundaries.py`. Run:
 
 ```bash
 uv run lint-imports

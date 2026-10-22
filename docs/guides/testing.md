@@ -37,6 +37,13 @@ Unit plus integration:
 uv run pytest -m "unit or integration"
 ```
 
+The default command runs unit plus integration; `addopts` excludes e2e unless it
+is requested explicitly:
+
+```bash
+uv run pytest
+```
+
 Real end-to-end suites are skipped unless explicitly enabled:
 
 ```bash
@@ -48,12 +55,6 @@ PowerShell:
 ```powershell
 $env:QUESTOR_RUN_E2E = "1"
 uv run pytest -m e2e -v
-```
-
-Full suite:
-
-```bash
-uv run pytest
 ```
 
 ## End-to-end scripts
@@ -69,4 +70,4 @@ uv run lint-imports
 ```
 
 This enforces that `questorharness` does not import `questor`.
-`tests/unit/test_import_boundaries.py` runs the same check inside pytest.
+`tests/integration/test_import_boundaries.py` runs the same check inside pytest.

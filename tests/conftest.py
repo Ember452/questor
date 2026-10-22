@@ -73,8 +73,15 @@ _WINDOWS_ENVIRONMENT_SKIPS = {
 }
 
 
+# Assign tier markers from test paths at collection time so individual test
+# files do not need repetitive decorators and -m filtering stays authoritative.
 def pytest_collection_modifyitems(config, items):
     for item in items:
+        if any(
+            item.get_closest_marker(marker)
+            for marker in ("unit", "integration", "e2e")
+        ):
+            continue
         path_parts = Path(str(item.path)).parts
         if "e2e" in path_parts:
             item.add_marker(pytest.mark.e2e)

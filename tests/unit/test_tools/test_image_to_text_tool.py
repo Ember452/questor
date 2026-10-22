@@ -168,6 +168,7 @@ async def test_execute_no_vision_config(tmp_path: Path) -> None:
     assert "vision model is not configured" in result.output
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_execute_with_image_path(tmp_path: Path) -> None:
     """Tool reads a real image file and attempts to describe it."""
