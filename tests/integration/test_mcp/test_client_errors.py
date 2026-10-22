@@ -17,8 +17,8 @@ except NameError:  # pragma: no cover - Python < 3.11 compatibility
 from questorharness.capabilities.tools.mcp.client import McpClientManager, McpServerNotConnectedError
 from questorharness.capabilities.tools.mcp.types import McpConnectionStatus, McpStdioServerConfig, McpToolInfo
 from questorharness.capabilities.tools.base import ToolExecutionContext
-from questorharness.tools.mcp_tool import McpToolAdapter
-from questorharness.tools.read_mcp_resource_tool import ReadMcpResourceTool
+from questorharness.capabilities.tools.mcp.mcp_tool import McpToolAdapter
+from questorharness.capabilities.tools.mcp.read_mcp_resource_tool import ReadMcpResourceTool
 
 
 class _AsyncContextManager:

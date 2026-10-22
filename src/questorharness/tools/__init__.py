@@ -21,12 +21,12 @@ from questorharness.capabilities.tools.fs.glob_tool import GlobTool
 from questorharness.capabilities.tools.fs.grep_tool import GrepTool
 from questorharness.capabilities.tools.media.image_generation_tool import ImageGenerationTool
 from questorharness.capabilities.tools.media.image_to_text_tool import ImageToTextTool
-from questorharness.tools.list_mcp_resources_tool import ListMcpResourcesTool
+from questorharness.capabilities.tools.mcp.list_mcp_resources_tool import ListMcpResourcesTool
 from questorharness.capabilities.tools.fs.lsp_tool import LspTool
-from questorharness.tools.mcp_auth_tool import McpAuthTool
-from questorharness.tools.mcp_tool import McpToolAdapter
+from questorharness.capabilities.tools.mcp.mcp_auth_tool import McpAuthTool
+from questorharness.capabilities.tools.mcp.mcp_tool import McpToolAdapter
 from questorharness.capabilities.tools.fs.notebook_edit_tool import NotebookEditTool
-from questorharness.tools.read_mcp_resource_tool import ReadMcpResourceTool
+from questorharness.capabilities.tools.mcp.read_mcp_resource_tool import ReadMcpResourceTool
 from questorharness.capabilities.tools.remote_trigger_tool import RemoteTriggerTool
 from questorharness.capabilities.tools.agent.send_message_tool import SendMessageTool
 from questorharness.capabilities.tools.skill_tool import SkillTool
