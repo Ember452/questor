@@ -22,7 +22,7 @@
 | 阶段 | 内容 | 是否改行为 | 出口 |
 |---|---|---|---|
 | **Phase 0** | 文档 + 3 个可落地守卫 + AGENTS 地图 | 否 | 守卫能跑；文档合并 |
-| **Phase 1** | Move-only：**只含 W1/W1b/W2/W2b**（≈99 处 patch）；W3/W3b 移入 Phase 2 | 否 | 基线五项不变 |
+| **Phase 1** | Move-only：**只含 W1/W2/W2b**；W1b/W3/W3b 移入 Phase 2 | 否 | 基线五项不变 |
 | **Phase 2** | Code-shape + 语义归位：拆 god file、config 注入、state 拆分、plugins/skills 拆开、UI 移除 | 否 | 基线不变 + 尺寸阈值达标 |
 | **Phase 3** | Capabilities：profiles、memory provider、Electron、第二模式 | 是 | 新能力半径 ≤1；新模式不改引擎核心 |
 
@@ -75,13 +75,14 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | 波次 | 内容 | patch 目标 | 说明 |
 |---|---|---|---|
 | **W1** | `tools/` 44 个平铺 → `capabilities/tools/` 下 fs / shell / web / task / agent / mcp / media / cron 八个子域 | ≈6 | 唯一 >30 文件的目录；工具彼此独立，失败响亮 |
-| **W1b** | `themes/`、`keybindings/`、`vim/`、`output_styles/` → `surfaces/terminal/presentation/`；`skills/`、`plugins/` → 根 `plugins/` | ≈6 | 表现层与数据包，几乎没人 patch |
-| **W2** | `memory/`(13) → `capabilities/memory/`；`permissions/` → `capabilities/policy/`；`mcp/` → `capabilities/tools/mcp/` + `providers/mcp/`；`prompts/` → `profiles/prompts/`（此时才建 `profiles`） | ≈31 | 领域清晰；`prompts` 有 3 处 patch |
+| **W2** | `memory/`(13) → `capabilities/memory/`；`permissions/` → `capabilities/policy/`；`mcp/` → `capabilities/tools/mcp/`（`providers/mcp/` 拆分属 Phase 2） | ≈31 | 领域清晰；`prompts/` 因文本与 loader 要拆，移出 Phase 1 |
 | **W2b** | `api/` → `providers/llm/`；`auth/` → `providers/auth/`；`sandbox/` → `providers/sandbox/`；`channels/` → `surfaces/channels/` | ≈56 | api 15、auth 19、sandbox 10、channels 少量；`api` 路径引用多但 patch 少 |
 | **W3** | `hooks/` → `runtime/extension/`；`commands/` → `runtime/commands/`；`tasks/` → `runtime/tasks/`；`coordinator/` + `swarm/` → `runtime/delegation/` + `capabilities/policy/`；`state/` → `surfaces/terminal/state/` | ≈30 | 核心编排相关；路径引用要改，但 patch 目标不高 |
 | **W3b** | `services/` 解散（compact / lsp / memory_extract / session_memory / cron / token_estimation / tool_outputs / session_*）；`utils/` 归位；`config/` → `bootstrap/config/` | ≈47 | `services.compact` 11、`utils` 18、`config` 少量；空壳 `oauth` 直接删 |
 | **W4（推到 Phase 2）** | `engine/` → `runtime/turn/`；`ui/` → `surfaces/terminal/`；`autopilot/` → `runtime/autopilot/`；`bridge/` → `surfaces/bridge/` | ≈158 | engine 64、ui 62、autopilot 41、bridge 少量；这几处一动必然大片红，单独排期 |
 | **W5（Phase 1 完全不动）** | 产品包 `questor/gateway/`（拆到 surfaces/ 与产品策略） | 76 + 102 | 单点最贵；且属于产品包，不影响引擎结构收敛 |
+
+**Phase 1 范围 = W1 + W2 + W2b。** `prompts/` 与 UI 目录（`themes/`、`keybindings/`、`vim/`、`output_styles/`）均属 Phase 2：前者是 prompt 文本与 loader 代码要拆的语义改动，后者按 ADR-0005 冻结后移除。
 
 一句话：**W1 用 ~6 处 patch 成本解决你最痛的 44 平铺；W5 用 178 处成本解决一个可有可无的归位——先做前者。**
 
@@ -107,7 +108,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `permissions/` | `capabilities/policy/` | 按 permission / sandbox / approval 拆 |
 | `channels/` | `surfaces/channels/` | 按 channel 拆；`feishu.py` 1115 行拆子目录 |
 | `mcp/` | `capabilities/tools/mcp/` + `providers/mcp/` | 策略与 transport 分离 |
-| `prompts/` | prompt 文本 → `profiles/prompts/`；loader 代码 → `capabilities/context` | 按 profile 拆；`profiles` 保持纯数据 |
+| `prompts/` | **Phase 1 不动**（文本与 loader 要拆，属语义改动） | prompt 文本 → `profiles/prompts/`；loader 代码 → `capabilities/context`；`profiles` 保持纯数据 |
 | `skills/`、`plugins/` | loader/registry → `capabilities/tools/`；`bundled/*.md` → 根 `plugins/` | 代码与数据必须分开 |
 | `state/`（UI store） | **Phase 1 不动**；Phase 2 再拆 | 事实状态层不建（durable 未立项） |
 | `engine/` | **Phase 1 不动**（W4） | `runtime/turn/{loop,tool_cycle,stop}` + `capabilities/context/assemble` |
@@ -132,7 +133,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 - 不拆任何 >800 行的文件（`commands/registry.py`、`cli.py`、`autopilot/service.py`、`services/compact/__init__.py` 全部保持整文件搬迁）；
 - 不改函数签名、不改协议、不改事件/快照类型；
 - 不引入新依赖；
-- 不建 `contracts/`、`kernel/`、`profiles/`（`profiles` 到 W2 装 prompt 文本时才建）；
+- 不建 `contracts/`、`kernel/`、`profiles/`；
 - 不动 `frontend/terminal/`、不建 `apps/desktop` / `apps/web`；
 - 不写 memory provider；ADR-0004 只记录契约，代码到 Phase 3。
 - **不做任何语义归位**（这些都不是 move-only，归 Phase 2）：config 注入、`state/` 拆分、`plugins/skills` 拆代码与数据、`prompts/` 重定位、`ui/` 移除、`utils/` 解散。
@@ -155,7 +156,7 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 - `lint-imports` 绿；
 - `check_layout.py` 只报豁免清单里的已知项，**不新增违规**；
 - 每个已建目录有 `AGENTS.md`；
-- **时间盒**：≤10 PR / ≤2 周；单 PR ≤50 处 patch 改写 + ≤1 个包。超盒时先砍 W2b 的 `channels/`，再砍 W2b 的 `auth/`；W3/W3b/W4/W5 本来就不在本阶段。
+- **时间盒**：Phase 1 收在一个分支上，一包一 commit；单 commit 预算 = 1 个包 + 该包全部 patch 目标（本阶段最大 20，`api/`）。超盒时先砍 W2b 的 `channels/`，再砍 `auth/`；W1b/W3/W3b/W4/W5 本来就不在本阶段。
 
 ---
 
@@ -217,7 +218,7 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 |---|---|
 | durable spine（事件流 / 回放 / upcast / 租约） | 需要 rewind-as-facts、审计重放、跨端同会话续跑中的任一项被真实需求顶穿；**必须先立项 ADR + 预算** |
 | `contracts/` 层 | 出现第一个需要跨层共享的不可变类型（在此之前类型留在各自包里） |
-| `profiles/` | 第一个真实模式差异需要表达（W2 时因 `prompts/` 提前建目录，仅装数据） |
+| `profiles/` | 第一个真实模式差异需要表达 |
 | `MemoryPort` + provider | 第二次要换/接 memory 实现，或 personal 与 coding 记忆策略第一次冲突 |
 | 字段 canonical 守卫 | 统一 domain 词表建好之后 |
 | 事件版本 / wire codegen 守卫 | 事件版本化 / schema 定稿之后 |
