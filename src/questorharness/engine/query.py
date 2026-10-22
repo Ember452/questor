@@ -11,15 +11,15 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable
 from uuid import uuid4
 
-from questorharness.api.client import (
+from questorharness.providers.llm.client import (
     ApiMessageCompleteEvent,
     ApiMessageRequest,
     ApiRetryEvent,
     ApiTextDeltaEvent,
     SupportsStreamingMessages,
 )
-from questorharness.api.provider import is_model_multimodal
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.provider import is_model_multimodal
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.config.paths import get_data_dir
 from questorharness.engine.messages import (
     ConversationMessage,

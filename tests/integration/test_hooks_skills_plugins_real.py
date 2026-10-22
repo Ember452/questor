@@ -63,7 +63,7 @@ async def task_hook_blocks_model_adapts():
     print("  Task 1: Hook blocks bash → model must adapt to glob/grep")
     print("=" * 70)
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.permissions.checker import PermissionChecker
@@ -146,7 +146,7 @@ async def task_model_invokes_skill_tool():
     print("  Task 2: Model invokes skill tool, then follows skill instructions")
     print("=" * 70)
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.permissions.checker import PermissionChecker
@@ -239,7 +239,7 @@ async def task_plugin_skill_in_agent_loop():
     print("  Task 3: Plugin-provided skill used through skill tool in agent loop")
     print("=" * 70)
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.permissions.checker import PermissionChecker
@@ -343,7 +343,7 @@ async def task_hook_gates_writes_skill_guides():
     print("  Task 4: Hook gates file writes + skill guides refactoring workflow")
     print("=" * 70)
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.permissions.checker import PermissionChecker
@@ -498,7 +498,7 @@ async def task_swarm_teammates_use_skills():
     from questorharness.swarm.in_process import start_in_process_teammate, TeammateAbortController
     from questorharness.swarm.types import TeammateSpawnConfig
     from questorharness.engine.query import QueryContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.permissions.checker import PermissionChecker
     from questorharness.permissions.modes import PermissionMode

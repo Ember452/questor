@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.api.provider import is_model_multimodal
+from questorharness.providers.llm.provider import is_model_multimodal
 from questorharness.config.settings import VisionModelConfig
 from questorharness.tools.base import ToolExecutionContext
 from questorharness.tools.image_to_text_tool import ImageToTextTool, ImageToTextToolInput

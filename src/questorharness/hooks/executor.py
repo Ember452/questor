@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from questorharness.api.client import ApiMessageCompleteEvent, ApiMessageRequest, SupportsStreamingMessages
+from questorharness.providers.llm.client import ApiMessageCompleteEvent, ApiMessageRequest, SupportsStreamingMessages
 from questorharness.engine.messages import ConversationMessage
 from questorharness.hooks.events import HookEvent
 from questorharness.hooks.loader import HookRegistry

@@ -11,7 +11,7 @@ from typing import Any, AsyncIterator, Callable, Protocol
 
 from anthropic import APIError, APIStatusError, AsyncAnthropic
 
-from questorharness.api.errors import (
+from questorharness.providers.llm.errors import (
     AuthenticationFailure,
     QuestorHarnessApiError,
     RateLimitFailure,
@@ -23,7 +23,7 @@ from questorharness.providers.auth.external import (
     claude_oauth_headers,
     get_claude_code_session_id,
 )
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.engine.messages import ConversationMessage, assistant_message_from_api
 
 log = logging.getLogger(__name__)

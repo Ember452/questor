@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import AsyncIterator
 
-from questorharness.api.client import SupportsStreamingMessages
+from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.engine.cost_tracker import CostTracker
 from questorharness.coordinator.coordinator_mode import get_coordinator_user_context
 from questorharness.engine.messages import ConversationMessage, TextBlock, ToolResultBlock, sanitize_conversation_messages

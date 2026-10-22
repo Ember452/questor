@@ -35,7 +35,7 @@ RESULTS: dict[str, tuple[bool, float]] = {}
 # ====================================================================
 
 def make_engine(system_prompt, cwd=None, hook_executor=None, max_tokens=4096, max_turns=DEFAULT_MAX_TURNS):
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.permissions.checker import PermissionChecker
@@ -98,7 +98,7 @@ async def task_security_audit_with_hooks():
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
     from questorharness.hooks.executor import HookExecutor, HookExecutionContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
 
@@ -177,7 +177,7 @@ async def task_coordinator_code_review():
     from questorharness.swarm.types import TeammateSpawnConfig
     from questorharness.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
     from questorharness.engine.query import QueryContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.permissions.checker import PermissionChecker
     from questorharness.permissions.modes import PermissionMode
@@ -528,7 +528,7 @@ async def task_full_pipeline():
     )
     from questorharness.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
     from questorharness.engine.query import QueryContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.permissions.checker import PermissionChecker
     from questorharness.permissions.modes import PermissionMode

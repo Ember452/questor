@@ -42,7 +42,7 @@ def _run_oh(*args: str, timeout: int = 90) -> subprocess.CompletedProcess:
 
 async def test_api_retry_config() -> tuple[bool, str]:
     """Test that retry configuration is properly set up."""
-    from questorharness.api.client import MAX_RETRIES, RETRYABLE_STATUS_CODES, _get_retry_delay
+    from questorharness.providers.llm.client import MAX_RETRIES, RETRYABLE_STATUS_CODES, _get_retry_delay
 
     if MAX_RETRIES != 3:
         return False, f"Expected MAX_RETRIES=3, got {MAX_RETRIES}"

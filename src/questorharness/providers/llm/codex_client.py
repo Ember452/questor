@@ -9,15 +9,15 @@ from typing import Any, AsyncIterator
 
 import httpx
 
-from questorharness.api.client import (
+from questorharness.providers.llm.client import (
     ApiMessageCompleteEvent,
     ApiMessageRequest,
     ApiRetryEvent,
     ApiStreamEvent,
     ApiTextDeltaEvent,
 )
-from questorharness.api.errors import AuthenticationFailure, QuestorHarnessApiError, RateLimitFailure, RequestFailure
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.errors import AuthenticationFailure, QuestorHarnessApiError, RateLimitFailure, RequestFailure
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock, ToolResultBlock, ToolUseBlock
 
 DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api"

@@ -16,16 +16,16 @@ from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
-from questorharness.api.client import (
+from questorharness.providers.llm.client import (
     ApiMessageRequest,
     ApiStreamEvent,
 )
-from questorharness.api.copilot_auth import (
+from questorharness.providers.llm.copilot_auth import (
     copilot_api_base,
     load_copilot_auth,
 )
-from questorharness.api.errors import AuthenticationFailure
-from questorharness.api.openai_client import OpenAICompatibleClient
+from questorharness.providers.llm.errors import AuthenticationFailure
+from questorharness.providers.llm.openai_client import OpenAICompatibleClient
 
 log = logging.getLogger(__name__)
 

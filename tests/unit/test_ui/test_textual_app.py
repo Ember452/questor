@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from questorharness.api.client import ApiMessageCompleteEvent
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.client import ApiMessageCompleteEvent
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.engine.messages import ConversationMessage, TextBlock, ToolUseBlock
 from questorharness.ui.textual_app import QuestorHarnessTerminalApp
 

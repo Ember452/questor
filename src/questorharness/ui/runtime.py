@@ -8,11 +8,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterable
 
-from questorharness.api.client import AnthropicApiClient, SupportsStreamingMessages
-from questorharness.api.codex_client import CodexApiClient
-from questorharness.api.copilot_client import CopilotClient
-from questorharness.api.openai_client import OpenAICompatibleClient
-from questorharness.api.provider import auth_status, detect_provider
+from questorharness.providers.llm.client import AnthropicApiClient, SupportsStreamingMessages
+from questorharness.providers.llm.codex_client import CodexApiClient
+from questorharness.providers.llm.copilot_client import CopilotClient
+from questorharness.providers.llm.openai_client import OpenAICompatibleClient
+from questorharness.providers.llm.provider import auth_status, detect_provider
 from questorharness.bridge import get_bridge_manager
 from questorharness.commands import (
     CommandContext,
@@ -203,7 +203,7 @@ def _resolve_api_client_from_settings(settings) -> SupportsStreamingMessages:
             raise SystemExit(1)
 
     if settings.api_format == "copilot":
-        from questorharness.api.copilot_client import COPILOT_DEFAULT_MODEL
+        from questorharness.providers.llm.copilot_client import COPILOT_DEFAULT_MODEL
 
         copilot_model = (
             COPILOT_DEFAULT_MODEL
@@ -785,7 +785,7 @@ async def _render_command_result(
     if result.replay_messages and render_event is not None:
         # 将恢复的对话消息作为转录事件回放
         from questorharness.engine.stream_events import AssistantTextDelta, AssistantTurnComplete
-        from questorharness.api.usage import UsageSnapshot
+        from questorharness.providers.llm.usage import UsageSnapshot
 
         await clear_output()
         await print_system("Session restored:")

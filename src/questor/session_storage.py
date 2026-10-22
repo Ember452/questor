@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.engine.messages import ConversationMessage, sanitize_conversation_messages
 from questorharness.services.session_backend import SessionBackend
 from questorharness.services.session_storage import (

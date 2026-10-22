@@ -58,7 +58,7 @@ def _make_checker():
 
 
 def make_anthropic_engine(system_prompt, extra_tools=None):
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.engine.query_engine import QueryEngine
     api = AnthropicApiClient(api_key=API_KEY, base_url=ANTHROPIC_BASE)
     return QueryEngine(
@@ -69,7 +69,7 @@ def make_anthropic_engine(system_prompt, extra_tools=None):
 
 
 def make_openai_engine(system_prompt, extra_tools=None):
-    from questorharness.api.openai_client import OpenAICompatibleClient
+    from questorharness.providers.llm.openai_client import OpenAICompatibleClient
     from questorharness.engine.query_engine import QueryEngine
     api = OpenAICompatibleClient(api_key=API_KEY, base_url=OPENAI_BASE)
     return QueryEngine(

@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from questorharness.api.client import ApiMessageRequest, ApiMessageCompleteEvent, ApiTextDeltaEvent
-from questorharness.api.codex_client import (
+from questorharness.providers.llm.client import ApiMessageRequest, ApiMessageCompleteEvent, ApiTextDeltaEvent
+from questorharness.providers.llm.codex_client import (
     CodexApiClient,
     _convert_messages_to_codex,
     _format_codex_stream_error,
@@ -182,7 +182,7 @@ async def test_codex_client_streams_text(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "questorharness.api.codex_client.httpx.AsyncClient",
+        "questorharness.providers.llm.codex_client.httpx.AsyncClient",
         lambda *args, **kwargs: _FakeAsyncClient(response, sink),
     )
 
@@ -221,7 +221,7 @@ async def test_codex_client_emits_tool_use(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "questorharness.api.codex_client.httpx.AsyncClient",
+        "questorharness.providers.llm.codex_client.httpx.AsyncClient",
         lambda *args, **kwargs: _FakeAsyncClient(response, sink),
     )
 

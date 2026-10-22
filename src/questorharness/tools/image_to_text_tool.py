@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from questorharness.api.openai_client import OpenAICompatibleClient
+from questorharness.providers.llm.openai_client import OpenAICompatibleClient
 from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 log = logging.getLogger(__name__)
@@ -196,7 +196,7 @@ class ImageToTextTool(BaseTool):
             base_url=base_url or None,
         )
 
-        from questorharness.api.client import ApiMessageRequest
+        from questorharness.providers.llm.client import ApiMessageRequest
         from questorharness.engine.messages import (
             ConversationMessage,
             ImageBlock,
@@ -224,7 +224,7 @@ class ImageToTextTool(BaseTool):
                 tools=[],
             )
         ):
-            from questorharness.api.client import ApiTextDeltaEvent, ApiMessageCompleteEvent
+            from questorharness.providers.llm.client import ApiTextDeltaEvent, ApiMessageCompleteEvent
 
             if isinstance(event, ApiTextDeltaEvent):
                 collected_text += event.text

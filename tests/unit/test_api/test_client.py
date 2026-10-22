@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock
-from questorharness.api.client import AnthropicApiClient, OAUTH_BETA_HEADER
+from questorharness.providers.llm.client import AnthropicApiClient, OAUTH_BETA_HEADER
 
 
 def test_anthropic_client_adds_oauth_beta_header(monkeypatch):
@@ -11,7 +11,7 @@ def test_anthropic_client_adds_oauth_beta_header(monkeypatch):
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    monkeypatch.setattr("questorharness.api.client.AsyncAnthropic", _FakeAsyncAnthropic)
+    monkeypatch.setattr("questorharness.providers.llm.client.AsyncAnthropic", _FakeAsyncAnthropic)
 
     AnthropicApiClient(auth_token="oauth-token")
 
@@ -26,7 +26,7 @@ def test_anthropic_client_uses_api_key_without_oauth_beta(monkeypatch):
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    monkeypatch.setattr("questorharness.api.client.AsyncAnthropic", _FakeAsyncAnthropic)
+    monkeypatch.setattr("questorharness.providers.llm.client.AsyncAnthropic", _FakeAsyncAnthropic)
 
     AnthropicApiClient(api_key="api-key")
 
@@ -41,7 +41,7 @@ def test_anthropic_client_adds_claude_oauth_identity_headers(monkeypatch):
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    monkeypatch.setattr("questorharness.api.client.AsyncAnthropic", _FakeAsyncAnthropic)
+    monkeypatch.setattr("questorharness.providers.llm.client.AsyncAnthropic", _FakeAsyncAnthropic)
     monkeypatch.setattr(
         "questorharness.providers.auth.external.get_claude_code_version",
         lambda: "2.1.92",
@@ -51,11 +51,11 @@ def test_anthropic_client_adds_claude_oauth_identity_headers(monkeypatch):
         lambda: "session-123",
     )
     monkeypatch.setattr(
-        "questorharness.api.client.get_claude_code_session_id",
+        "questorharness.providers.llm.client.get_claude_code_session_id",
         lambda: "session-123",
     )
     monkeypatch.setattr(
-        "questorharness.api.client.claude_attribution_header",
+        "questorharness.providers.llm.client.claude_attribution_header",
         lambda: "x-anthropic-billing-header: cc_version=2.1.92; cc_entrypoint=cli;",
     )
 
@@ -141,17 +141,17 @@ def test_anthropic_client_refreshes_claude_token_on_request(monkeypatch):
             self.beta = _FakeBeta()
             self.messages = _FakeMessages()
 
-    monkeypatch.setattr("questorharness.api.client.AsyncAnthropic", _FakeAsyncAnthropic)
+    monkeypatch.setattr("questorharness.providers.llm.client.AsyncAnthropic", _FakeAsyncAnthropic)
     monkeypatch.setattr(
         "questorharness.providers.auth.external.get_claude_code_session_id",
         lambda: "session-123",
     )
     monkeypatch.setattr(
-        "questorharness.api.client.get_claude_code_session_id",
+        "questorharness.providers.llm.client.get_claude_code_session_id",
         lambda: "session-123",
     )
     monkeypatch.setattr(
-        "questorharness.api.client.claude_attribution_header",
+        "questorharness.providers.llm.client.claude_attribution_header",
         lambda: "x-anthropic-billing-header: cc_version=2.1.92; cc_entrypoint=cli;",
     )
 
@@ -164,7 +164,7 @@ def test_anthropic_client_refreshes_claude_token_on_request(monkeypatch):
     )
     current_token["value"] = "refreshed-token"
 
-    from questorharness.api.client import ApiMessageRequest
+    from questorharness.providers.llm.client import ApiMessageRequest
 
     async def _run():
         events = []

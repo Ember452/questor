@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.api.client import ApiMessageCompleteEvent, ApiRetryEvent, ApiTextDeltaEvent
-from questorharness.api.errors import RequestFailure
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.client import ApiMessageCompleteEvent, ApiRetryEvent, ApiTextDeltaEvent
+from questorharness.providers.llm.errors import RequestFailure
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.config.settings import PermissionSettings, Settings
 from questorharness.engine.messages import ConversationMessage, TextBlock, ToolUseBlock
 from questorharness.engine.query_engine import QueryEngine

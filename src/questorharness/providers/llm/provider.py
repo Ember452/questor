@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from questorharness.providers.auth.external import describe_external_binding
 from questorharness.providers.auth.storage import load_external_binding
-from questorharness.api.registry import detect_provider_from_registry
+from questorharness.providers.llm.registry import detect_provider_from_registry
 from questorharness.config.settings import Settings
 
 _AUTH_KIND: dict[str, str] = {
@@ -97,7 +97,7 @@ def detect_provider(settings: Settings) -> ProviderInfo:
 def auth_status(settings: Settings) -> str:
     """Return a compact auth status string."""
     if settings.api_format == "copilot":
-        from questorharness.api.copilot_auth import load_copilot_auth
+        from questorharness.providers.llm.copilot_auth import load_copilot_auth
 
         auth_info = load_copilot_auth()
         if not auth_info:

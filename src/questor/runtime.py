@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from questorharness.api.client import SupportsStreamingMessages
+from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.engine.stream_events import AssistantTextDelta, AssistantTurnComplete, CompactProgressEvent, ErrorEvent, StatusEvent
 from questorharness.ui.backend_host import run_backend_host
 from questorharness.ui.runtime import build_runtime, close_runtime, handle_line, start_runtime

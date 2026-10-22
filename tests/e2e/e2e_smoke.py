@@ -14,7 +14,7 @@ from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from questorharness.api.client import AnthropicApiClient
+from questorharness.providers.llm.client import AnthropicApiClient
 from questorharness.config.paths import get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import load_settings
 from questorharness.engine import QueryEngine

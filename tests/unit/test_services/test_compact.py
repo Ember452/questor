@@ -6,8 +6,8 @@ import asyncio
 
 import pytest
 
-from questorharness.api.client import ApiMessageCompleteEvent
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.client import ApiMessageCompleteEvent
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock, ToolResultBlock, ToolUseBlock
 from questorharness.hooks import HookEvent
 from questorharness.services import (

@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.api.client import ApiMessageCompleteEvent
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.client import ApiMessageCompleteEvent
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.autopilot.service import RepoAutopilotStore
 from questorharness.bridge import get_bridge_manager
 from questorharness.channels.bus.events import InboundMessage

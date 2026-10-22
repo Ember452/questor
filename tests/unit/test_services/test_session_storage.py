@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.engine.messages import ConversationMessage, TextBlock
 from questorharness.services.session_storage import (
     export_session_markdown,

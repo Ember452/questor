@@ -41,7 +41,7 @@ RESULTS: dict[str, bool] = {}
 # ====================================================================
 
 def make_engine(system_prompt="You are a helpful assistant. Be concise.", cwd=None, tools=None):
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.permissions.checker import PermissionChecker
@@ -121,7 +121,7 @@ async def test_hooks_command_block():
     registry.register(HookEvent.PRE_TOOL_USE, hook)
     print(f"  Registered pre_tool_use hook: {hook}")
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
     ctx = HookExecutionContext(cwd=Path.cwd(), api_client=api, default_model=MODEL)
     executor = HookExecutor(registry, ctx)
@@ -161,7 +161,7 @@ async def test_hooks_post_tool_use():
     )
     registry.register(HookEvent.POST_TOOL_USE, hook)
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
     ctx = HookExecutionContext(cwd=Path.cwd(), api_client=api, default_model=MODEL)
     executor = HookExecutor(registry, ctx)
@@ -182,7 +182,7 @@ async def test_hooks_post_tool_use():
 @pytest.mark.skipif(_SKIP_REAL_API, reason="Needs real API + AutoAgent")
 async def test_hooks_in_agent_loop():
     """Hook that blocks 'rm' commands integrated into real agent loop."""
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query import QueryContext, run_query
     from questorharness.engine.messages import ConversationMessage
@@ -397,7 +397,7 @@ async def test_session_storage():
         list_session_snapshots, export_session_markdown,
     )
     from questorharness.engine.messages import ConversationMessage, TextBlock
-    from questorharness.api.usage import UsageSnapshot
+    from questorharness.providers.llm.usage import UsageSnapshot
 
     with tempfile.TemporaryDirectory() as tmpdir:
         messages = [
@@ -655,7 +655,7 @@ async def test_combined_hooks_skills_agent():
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
     from questorharness.hooks.executor import HookExecutor, HookExecutionContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query import QueryContext, run_query
     from questorharness.engine.messages import ConversationMessage
@@ -724,7 +724,7 @@ async def test_full_swarm_autoagent():
     from questorharness.swarm.in_process import start_in_process_teammate, TeammateAbortController
     from questorharness.swarm.types import TeammateSpawnConfig
     from questorharness.engine.query import QueryContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.permissions.checker import PermissionChecker
     from questorharness.permissions.modes import PermissionMode

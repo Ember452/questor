@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Coroutine
 from uuid import uuid4
 
-from questorharness.api.client import SupportsStreamingMessages
+from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.providers.auth.manager import AuthManager
 from questorharness.commands import MemoryCommandBackend
 from questorharness.config.settings import CLAUDE_MODEL_ALIAS_OPTIONS, resolve_model_setting

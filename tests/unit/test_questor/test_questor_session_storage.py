@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.engine.messages import ConversationMessage
 
 from questor.session_storage import QuestorSessionBackend, get_session_dir

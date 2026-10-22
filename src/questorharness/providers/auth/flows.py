@@ -68,7 +68,7 @@ class DeviceCodeFlow(AuthFlow):
         *,
         progress_callback: Any | None = None,
     ) -> None:
-        from questorharness.api.copilot_auth import COPILOT_CLIENT_ID
+        from questorharness.providers.llm.copilot_auth import COPILOT_CLIENT_ID
 
         self.client_id = client_id or COPILOT_CLIENT_ID
         self.enterprise_url = enterprise_url
@@ -115,7 +115,7 @@ class DeviceCodeFlow(AuthFlow):
         return False
 
     def run(self) -> str:
-        from questorharness.api.copilot_auth import poll_for_access_token, request_device_code
+        from questorharness.providers.llm.copilot_auth import poll_for_access_token, request_device_code
 
         print("Starting GitHub device flow...", flush=True)
         dc = request_device_code(client_id=self.client_id, github_domain=self.github_domain)

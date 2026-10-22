@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.api.client import ApiMessageCompleteEvent
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.client import ApiMessageCompleteEvent
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.commands.registry import CommandContext, create_default_command_registry
 from questorharness.config.settings import Settings
 from questorharness.engine.messages import ConversationMessage, ToolUseBlock

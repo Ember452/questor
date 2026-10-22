@@ -8,7 +8,7 @@ import sys
 
 from questorharness.coordinator.coordinator_mode import is_coordinator_mode
 
-from questorharness.api.client import SupportsStreamingMessages
+from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.engine.stream_events import StreamEvent
 from questorharness.ui.backend_host import run_backend_host
 from questorharness.ui.coordinator_drain import drain_coordinator_async_agents

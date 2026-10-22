@@ -407,7 +407,7 @@ def _build_dry_run_preview(
     permission_mode: str | None,
     effort: str | None = None,
 ) -> dict[str, object]:
-    from questorharness.api.provider import auth_status, detect_provider
+    from questorharness.providers.llm.provider import auth_status, detect_provider
     from questorharness.commands import create_default_command_registry
     from questorharness.config import get_config_file_path, load_settings
     from questorharness.mcp.config import load_mcp_server_configs
@@ -1905,7 +1905,7 @@ def auth_switch(
 
 def _run_copilot_login() -> None:
     """Run the GitHub Copilot device-code flow and persist the result."""
-    from questorharness.api.copilot_auth import save_copilot_auth
+    from questorharness.providers.llm.copilot_auth import save_copilot_auth
     from questorharness.providers.auth.flows import DeviceCodeFlow
 
     print("Select GitHub deployment type:", flush=True)
@@ -1963,7 +1963,7 @@ def auth_claude_login() -> None:
 @auth_app.command("copilot-logout")
 def auth_copilot_logout() -> None:
     """Remove stored GitHub Copilot authentication."""
-    from questorharness.api.copilot_auth import clear_github_token
+    from questorharness.providers.llm.copilot_auth import clear_github_token
 
     clear_github_token()
     print("Copilot authentication cleared.")

@@ -1150,7 +1150,7 @@ async def compact_conversation(
     Returns:
         Structured compaction result that can be rebuilt into post-compact messages.
     """
-    from questorharness.api.client import ApiMessageRequest, ApiMessageCompleteEvent
+    from questorharness.providers.llm.client import ApiMessageRequest, ApiMessageCompleteEvent
 
     if len(messages) <= preserve_recent:
         return _build_passthrough_compaction_result(

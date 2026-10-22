@@ -12,8 +12,8 @@ import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from questorharness.api.codex_client import _build_codex_headers, _resolve_codex_url
-from questorharness.api.openai_client import _normalize_openai_base_url
+from questorharness.providers.llm.codex_client import _build_codex_headers, _resolve_codex_url
+from questorharness.providers.llm.openai_client import _normalize_openai_base_url
 from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 log = logging.getLogger(__name__)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass
 
-from questorharness.api.provider import ProviderInfo
+from questorharness.providers.llm.provider import ProviderInfo
 
 
 @dataclass(frozen=True)

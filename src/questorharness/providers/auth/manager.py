@@ -154,7 +154,7 @@ class AuthManager:
                     state = external_state.state
                     detail = external_state.detail
             elif source == "copilot_oauth":
-                from questorharness.api.copilot_auth import load_copilot_auth
+                from questorharness.providers.llm.copilot_auth import load_copilot_auth
 
                 if load_copilot_auth():
                     configured = True
@@ -235,7 +235,7 @@ class AuthManager:
                     source = "external"
 
             elif provider == "copilot":
-                from questorharness.api.copilot_auth import load_copilot_auth
+                from questorharness.providers.llm.copilot_auth import load_copilot_auth
 
                 if load_copilot_auth():
                     configured = True

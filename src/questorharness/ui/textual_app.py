@@ -14,7 +14,7 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Header, Input, RichLog, Static
 
-from questorharness.api.client import SupportsStreamingMessages
+from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.config.settings import load_settings, save_settings
 from questorharness.coordinator.coordinator_mode import is_coordinator_mode
 from questorharness.engine.stream_events import (

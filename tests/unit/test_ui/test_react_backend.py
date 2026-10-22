@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from questorharness.api.client import ApiMessageCompleteEvent
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.client import ApiMessageCompleteEvent
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.engine.stream_events import CompactProgressEvent
 from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock
 from questorharness.config.settings import Settings, save_settings

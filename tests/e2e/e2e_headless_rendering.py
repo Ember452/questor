@@ -36,7 +36,7 @@ async def test_markdown_render() -> tuple[bool, str]:
     from questorharness.ui.output import OutputRenderer
     from questorharness.engine.stream_events import AssistantTextDelta, AssistantTurnComplete
     from questorharness.engine.messages import ConversationMessage, TextBlock
-    from questorharness.api.usage import UsageSnapshot
+    from questorharness.providers.llm.usage import UsageSnapshot
 
     renderer = OutputRenderer(style_name="default")
     buffer = StringIO()

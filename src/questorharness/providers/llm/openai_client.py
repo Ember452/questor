@@ -12,20 +12,20 @@ from urllib.parse import urlsplit, urlunsplit
 
 from openai import AsyncOpenAI
 
-from questorharness.api.client import (
+from questorharness.providers.llm.client import (
     ApiMessageCompleteEvent,
     ApiMessageRequest,
     ApiRetryEvent,
     ApiStreamEvent,
     ApiTextDeltaEvent,
 )
-from questorharness.api.errors import (
+from questorharness.providers.llm.errors import (
     AuthenticationFailure,
     QuestorHarnessApiError,
     RateLimitFailure,
     RequestFailure,
 )
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.usage import UsageSnapshot
 from questorharness.engine.messages import (
     ConversationMessage,
     ContentBlock,
