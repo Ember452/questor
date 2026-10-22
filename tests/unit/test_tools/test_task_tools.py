@@ -11,9 +11,9 @@ from questorharness.coordinator.coordinator_mode import get_team_registry
 from questorharness.tasks import get_task_manager
 from questorharness.tools.agent_tool import AgentTool, AgentToolInput
 from questorharness.capabilities.tools.base import ToolExecutionContext
-from questorharness.tools.task_create_tool import TaskCreateTool, TaskCreateToolInput
-from questorharness.tools.task_output_tool import TaskOutputTool, TaskOutputToolInput
-from questorharness.tools.task_update_tool import TaskUpdateTool, TaskUpdateToolInput
+from questorharness.capabilities.tools.task.task_create_tool import TaskCreateTool, TaskCreateToolInput
+from questorharness.capabilities.tools.task.task_output_tool import TaskOutputTool, TaskOutputToolInput
+from questorharness.capabilities.tools.task.task_update_tool import TaskUpdateTool, TaskUpdateToolInput
 from questorharness.tools.team_create_tool import TeamCreateTool, TeamCreateToolInput
 
 
