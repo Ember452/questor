@@ -9,12 +9,16 @@ import pytest
 import pytest_asyncio
 
 from questorharness.tasks.manager import shutdown_task_manager
+from scripts.guards.check_thread_leak import arm_exit_watchdog, detect, report, snapshot
 
 
 # Tests whose assumptions are POSIX-only (bash syntax, fcntl, ps output,
 # symlink privileges, interactive Windows console). The project itself keeps
 # its native-Windows shell support; these tests are skipped on Windows so the
 # baseline reflects real failures instead of platform mismatches.
+_THREAD_LEAK_BASELINE: set[int | None] | None = None
+
+
 _WINDOWS_ENVIRONMENT_SKIPS = {
     "tests/unit/test_autopilot/test_verification.py::test_run_verification_end_to_end_without_shell": (
         "argv parsing assumes a POSIX-style executable path without spaces"
@@ -71,6 +75,22 @@ _WINDOWS_ENVIRONMENT_SKIPS = {
         "test assumes bash, but native Windows resolves to cmd.exe or PowerShell"
     ),
 }
+
+
+def pytest_sessionstart(session):
+    global _THREAD_LEAK_BASELINE
+    _THREAD_LEAK_BASELINE = snapshot()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if _THREAD_LEAK_BASELINE is None:
+        return
+    leaked = detect(_THREAD_LEAK_BASELINE, grace_seconds=1.0)
+    if not leaked:
+        return
+    print(report(leaked), file=sys.stderr)
+    arm_exit_watchdog(5.0, exit_code=1)
+    session.exitstatus = 1
 
 
 # Assign tier markers from test paths at collection time so individual test

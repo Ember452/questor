@@ -11,6 +11,10 @@ openh           engine CLI alias
 questor         product app CLI
 ```
 
+## CI
+
+See [CI](ci.md) for the GitHub Actions jobs and the local guard commands.
+
 ## Installation
 
 Use the repository install scripts:

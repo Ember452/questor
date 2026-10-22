@@ -153,6 +153,7 @@ scratch/
 scripts/_*
 # 例外：共用守卫 kit 是入库资产（新守卫必须复用它；不要再靠 `git add -f`）。
 !scripts/_guard_kit.py
+!scripts/__init__.py
 # 本地专用文档（审计提示词库、个人笔记等）一律不入库
 *.local.md
 # 本地 CLI 运行时数据：event-log store（state.db）+ 记忆库（memory.db / memory_store/），均不入库
