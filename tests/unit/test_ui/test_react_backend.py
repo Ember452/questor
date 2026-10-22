@@ -186,8 +186,8 @@ async def test_backend_host_forwards_autodream_context_to_runtime(monkeypatch):
     async def _fake_build_runtime(**kwargs):
         captured.update(kwargs)
         return SimpleNamespace(
-            app_state=SimpleNamespace(get=lambda: {}),
-            commands=SimpleNamespace(list_commands=lambda: []),
+            app_state=SimpleNamespace(get=dict),
+            commands=SimpleNamespace(list_commands=list),
         )
 
     async def _noop(*args, **kwargs):
