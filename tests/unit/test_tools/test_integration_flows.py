@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from questorharness.tasks.manager import get_task_manager
-from questorharness.tools import create_default_tool_registry
+from questorharness.capabilities.tools import create_default_tool_registry
 from questorharness.capabilities.tools.base import ToolExecutionContext
 
 

@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 import questorharness.cli as cli
 from questorharness.config import load_settings
 from questorharness.config.settings import Settings
-from questorharness.capabilities.tools.mcp.types import McpStdioServerConfig
+from questorharness.providers.mcp.types import McpStdioServerConfig
 
 
 app = cli.app
@@ -473,7 +473,7 @@ def test_build_dry_run_preview_recommends_matching_skills_and_tools(monkeypatch,
     monkeypatch.setattr("questorharness.providers.llm.provider.auth_status", lambda settings: "configured")
     monkeypatch.setattr("questorharness.plugins.load_plugins", lambda settings, cwd: [])
     monkeypatch.setattr("questorharness.skills.load_skill_registry", lambda cwd, settings=None: _FakeSkillRegistry())
-    monkeypatch.setattr("questorharness.tools.create_default_tool_registry", lambda: _FakeToolRegistry())
+    monkeypatch.setattr("questorharness.capabilities.tools.create_default_tool_registry", lambda: _FakeToolRegistry())
     monkeypatch.setattr("questorharness.prompts.context.build_runtime_system_prompt", lambda *args, **kwargs: "preview prompt")
     monkeypatch.setattr("questorharness.ui.runtime._resolve_api_client_from_settings", lambda settings: object())
 

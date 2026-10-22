@@ -16,16 +16,16 @@ from questorharness.commands.registry import CommandContext, create_default_comm
 from questorharness.config.settings import Settings, load_settings
 from questorharness.engine.messages import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.capabilities.tools.mcp.client import McpClientManager
-from questorharness.capabilities.tools.mcp.config import load_mcp_server_configs
-from questorharness.capabilities.tools.mcp.types import McpStdioServerConfig
+from questorharness.providers.mcp.client import McpClientManager
+from questorharness.providers.mcp.config import load_mcp_server_configs
+from questorharness.providers.mcp.types import McpStdioServerConfig
 from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins import load_plugins
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin
 from questorharness.state import AppState, AppStateStore
 from questorharness.bridge import build_sdk_url, decode_work_secret, encode_work_secret, spawn_session
 from questorharness.bridge.types import WorkSecret
-from questorharness.tools import create_default_tool_registry
+from questorharness.capabilities.tools import create_default_tool_registry
 from questorharness.capabilities.tools.base import ToolExecutionContext
 
 

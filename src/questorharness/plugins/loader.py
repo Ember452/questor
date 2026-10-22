@@ -681,7 +681,7 @@ def _load_plugin_mcp(path: Path) -> dict[str, object]:
     """Load MCP server configuration from a JSON file."""
     if not path.exists():
         return {}
-    from questorharness.capabilities.tools.mcp.types import McpJsonConfig
+    from questorharness.providers.mcp.types import McpJsonConfig
 
     raw = json.loads(path.read_text(encoding="utf-8"))
     parsed = McpJsonConfig.model_validate(raw)

@@ -44,7 +44,7 @@ from questorharness.services.session_memory import (
     get_session_memory_path,
     update_session_memory_file,
 )
-from questorharness.tools import create_default_tool_registry
+from questorharness.capabilities.tools import create_default_tool_registry
 
 
 class _FakeApiClient:

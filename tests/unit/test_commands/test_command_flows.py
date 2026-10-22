@@ -13,7 +13,7 @@ from questorharness.engine.messages import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine
 from questorharness.capabilities.policy import PermissionChecker
 from questorharness.state import AppState, AppStateStore
-from questorharness.tools import create_default_tool_registry
+from questorharness.capabilities.tools import create_default_tool_registry
 
 
 class FakeApiClient:

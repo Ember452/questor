@@ -13,7 +13,7 @@ from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import CallToolResult, ReadResourceResult
 
-from questorharness.capabilities.tools.mcp.types import (
+from questorharness.providers.mcp.types import (
     McpConnectionStatus,
     McpHttpServerConfig,
     McpResourceInfo,

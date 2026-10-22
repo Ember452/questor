@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from questorharness.capabilities.tools.mcp.client import McpClientManager
+from questorharness.providers.mcp.client import McpClientManager
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 

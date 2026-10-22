@@ -33,14 +33,14 @@ from questorharness.engine.query import MaxTurnsExceeded
 from questorharness.engine.stream_events import StreamEvent
 from questorharness.hooks import HookEvent, HookExecutionContext, HookExecutor, load_hook_registry
 from questorharness.hooks.hot_reload import HookReloader
-from questorharness.capabilities.tools.mcp.client import McpClientManager
-from questorharness.capabilities.tools.mcp.config import load_mcp_server_configs
+from questorharness.providers.mcp.client import McpClientManager
+from questorharness.providers.mcp.config import load_mcp_server_configs
 from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins import load_plugins
 from questorharness.prompts import build_runtime_system_prompt
 from questorharness.state import AppState, AppStateStore
 from questorharness.services.session_backend import DEFAULT_SESSION_BACKEND, SessionBackend
-from questorharness.tools import ToolRegistry, create_default_tool_registry
+from questorharness.capabilities.tools import ToolRegistry, create_default_tool_registry
 from questorharness.keybindings import load_keybindings
 
 PermissionPrompt = Callable[[str, str], Awaitable[bool]]

@@ -410,11 +410,11 @@ def _build_dry_run_preview(
     from questorharness.providers.llm.provider import auth_status, detect_provider
     from questorharness.commands import create_default_command_registry
     from questorharness.config import get_config_file_path, load_settings
-    from questorharness.capabilities.tools.mcp.config import load_mcp_server_configs
+    from questorharness.providers.mcp.config import load_mcp_server_configs
     from questorharness.plugins import load_plugins
     from questorharness.prompts.context import build_runtime_system_prompt
     from questorharness.skills import load_skill_registry
-    from questorharness.tools import create_default_tool_registry
+    from questorharness.capabilities.tools import create_default_tool_registry
     from questorharness.ui.runtime import _resolve_api_client_from_settings
 
     resolved_cwd = str(Path(cwd).expanduser().resolve())
@@ -787,7 +787,7 @@ app.add_typer(autopilot_app)
 def mcp_list() -> None:
     """List configured MCP servers."""
     from questorharness.config import load_settings
-    from questorharness.capabilities.tools.mcp.config import load_mcp_server_configs
+    from questorharness.providers.mcp.config import load_mcp_server_configs
     from questorharness.plugins import load_plugins
 
     settings = load_settings()

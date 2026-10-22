@@ -268,7 +268,7 @@ class TestVisionModelConfig:
 
 def test_tool_registered() -> None:
     """image_to_text tool is registered in the default registry."""
-    from questorharness.tools import create_default_tool_registry
+    from questorharness.capabilities.tools import create_default_tool_registry
 
     registry = create_default_tool_registry()
     tool = registry.get("image_to_text")

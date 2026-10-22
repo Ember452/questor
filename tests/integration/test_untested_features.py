@@ -600,7 +600,7 @@ async def test_worktree_real_git():
 # ====================================================================
 async def test_mcp_types():
     """Test MCP config model validation."""
-    from questorharness.capabilities.tools.mcp.types import McpStdioServerConfig, McpToolInfo, McpConnectionStatus
+    from questorharness.providers.mcp.types import McpStdioServerConfig, McpToolInfo, McpConnectionStatus
 
     # Stdio config
     stdio = McpStdioServerConfig(command="npx", args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"])

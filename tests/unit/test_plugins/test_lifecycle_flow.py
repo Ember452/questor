@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 
 from questorharness.config.settings import Settings, load_settings
-from questorharness.capabilities.tools.mcp.client import McpClientManager
-from questorharness.capabilities.tools.mcp.config import load_mcp_server_configs
+from questorharness.providers.mcp.client import McpClientManager
+from questorharness.providers.mcp.config import load_mcp_server_configs
 from questorharness.plugins import load_plugins
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin
-from questorharness.tools import create_default_tool_registry
+from questorharness.capabilities.tools import create_default_tool_registry
 from questorharness.capabilities.tools.base import ToolExecutionContext
 
 

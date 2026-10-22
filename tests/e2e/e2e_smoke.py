@@ -23,14 +23,14 @@ from questorharness.engine.stream_events import (
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
-from questorharness.capabilities.tools.mcp.client import McpClientManager
-from questorharness.capabilities.tools.mcp.config import load_mcp_server_configs
-from questorharness.capabilities.tools.mcp.types import McpStdioServerConfig
+from questorharness.providers.mcp.client import McpClientManager
+from questorharness.providers.mcp.config import load_mcp_server_configs
+from questorharness.providers.mcp.types import McpStdioServerConfig
 from questorharness.capabilities.memory import add_memory_entry
 from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.plugins import load_plugins
 from questorharness.prompts import build_runtime_system_prompt
-from questorharness.tools import create_default_tool_registry
+from questorharness.capabilities.tools import create_default_tool_registry
 
 
 ScenarioSetup = Callable[[Path, Path], dict[str, object] | None]

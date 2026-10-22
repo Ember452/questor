@@ -6,8 +6,8 @@ import re
 
 from pydantic import BaseModel, Field, create_model
 
-from questorharness.capabilities.tools.mcp.client import McpClientManager, McpServerNotConnectedError
-from questorharness.capabilities.tools.mcp.types import McpToolInfo
+from questorharness.providers.mcp.client import McpClientManager, McpServerNotConnectedError
+from questorharness.providers.mcp.types import McpToolInfo
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
