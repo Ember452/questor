@@ -43,6 +43,7 @@
 ## Verification
 
 - Phase 1 结束时：改动文件不包含 `ui/`、`themes/`、`keybindings/`、`vim/`、`output_styles/`、`frontend/terminal`。
+  - 例外（2026-10-22 实测）：`ui/*.py` 的 **import 行** 必须随被搬包改写（`ui/runtime.py`、`ui/backend_host.py`、`ui/app.py`、`ui/textual_app.py`、`ui/protocol.py` 共 18 行，涉及 api / auth / mcp / permissions / tools / sandbox）。本条的“不包含”指 **不搬迁、不改行为**；只改 import 路径行。
 - Phase 2 移除后：
   - `rg "questorharness\.ui|prompt_toolkit|textual" src` 为 0；
   - `uv run questorharness --help` 与 `uv run python -m questor --help` 输出逐字不变；

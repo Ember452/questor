@@ -74,9 +74,9 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 
 | 波次 | 内容 | patch 目标 | 说明 |
 |---|---|---|---|
-| **W1** | `tools/` 44 个平铺 → `capabilities/tools/` 下 fs / shell / web / task / agent / mcp / media / cron 八个子域 | ≈6 | 唯一 >30 文件的目录；工具彼此独立，失败响亮 |
-| **W2** | `memory/`(13) → `capabilities/memory/`；`permissions/` → `capabilities/policy/`；`mcp/` → `capabilities/tools/mcp/`（`providers/mcp/` 拆分属 Phase 2） | ≈31 | 领域清晰；`prompts/` 因文本与 loader 要拆，移出 Phase 1 |
-| **W2b** | `api/` → `providers/llm/`；`auth/` → `providers/auth/`；`sandbox/` → `providers/sandbox/`；`channels/` → `surfaces/channels/` | ≈56 | api 15、auth 19、sandbox 10、channels 少量；`api` 路径引用多但 patch 少 |
+| **W1** | `tools/` 44 个平铺 → `capabilities/tools/` 下 fs / shell / web / task / agent / mcp / media / cron 八个子域 | 9 | 唯一 >30 文件的目录；工具彼此独立，失败响亮 |
+| **W2** | `memory/`(13) → `capabilities/memory/`；`permissions/` → `capabilities/policy/`；`mcp/` → `providers/mcp/`（transport）+ `capabilities/tools/mcp/`（4 个工具适配器） | 0 | 领域清晰；三包均无字符串 patch 目标（2026-10-22 实测）；`prompts/` 因文本与 loader 要拆，移出 Phase 1 |
+| **W2b** | `api/` → `providers/llm/`；`auth/` → `providers/auth/`；`sandbox/` → `providers/sandbox/`；`channels/` → `surfaces/channels/` | 49 | api 20、auth 19、sandbox 10、channels 0（2026-10-22 实测）；`api` 路径引用多但 patch 少 |
 | **W3** | `hooks/` → `runtime/extension/`；`commands/` → `runtime/commands/`；`tasks/` → `runtime/tasks/`；`coordinator/` + `swarm/` → `runtime/delegation/` + `capabilities/policy/`；`state/` → `surfaces/terminal/state/` | ≈30 | 核心编排相关；路径引用要改，但 patch 目标不高 |
 | **W3b** | `services/` 解散（compact / lsp / memory_extract / session_memory / cron / token_estimation / tool_outputs / session_*）；`utils/` 归位；`config/` → `bootstrap/config/` | ≈47 | `services.compact` 11、`utils` 18、`config` 少量；空壳 `oauth` 直接删 |
 | **W4（推到 Phase 2）** | `engine/` → `runtime/turn/`；`ui/` → `surfaces/terminal/`；`autopilot/` → `runtime/autopilot/`；`bridge/` → `surfaces/bridge/` | ≈158 | engine 64、ui 62、autopilot 41、bridge 少量；这几处一动必然大片红，单独排期 |
@@ -84,7 +84,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 
 **Phase 1 范围 = W1 + W2 + W2b。** `prompts/` 与 UI 目录（`themes/`、`keybindings/`、`vim/`、`output_styles/`）均属 Phase 2：前者是 prompt 文本与 loader 代码要拆的语义改动，后者按 ADR-0005 冻结后移除。
 
-一句话：**W1 用 ~6 处 patch 成本解决你最痛的 44 平铺；W5 用 178 处成本解决一个可有可无的归位——先做前者。**
+一句话：**W1 用 9 处 patch 成本解决你最痛的 44 平铺；W5 用 178 处成本解决一个可有可无的归位——先做前者。** W1 + W2 + W2b 实测合计 **58 处** patch 改写（旧估算 ≈99 偏高）。
 
 ### 3.4 每个包的固定动作
 
@@ -107,7 +107,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `memory/`（13 平铺） | `capabilities/memory/` | 按 recall / write / consolidate / backends 拆 |
 | `permissions/` | `capabilities/policy/` | 按 permission / sandbox / approval 拆 |
 | `channels/` | `surfaces/channels/` | 按 channel 拆；`feishu.py` 1115 行拆子目录 |
-| `mcp/` | `capabilities/tools/mcp/` + `providers/mcp/` | 策略与 transport 分离 |
+| `mcp/` | `providers/mcp/`（client / config / types）+ `capabilities/tools/mcp/`（4 个工具适配器） | 策略与 transport 分离 |
 | `prompts/` | **Phase 1 不动**（文本与 loader 要拆，属语义改动） | prompt 文本 → `profiles/prompts/`；loader 代码 → `capabilities/context`；`profiles` 保持纯数据 |
 | `skills/`、`plugins/` | loader/registry → `capabilities/tools/`；`bundled/*.md` → 根 `plugins/` | 代码与数据必须分开 |
 | `state/`（UI store） | **Phase 1 不动**；Phase 2 再拆 | 事实状态层不建（durable 未立项） |
@@ -126,6 +126,8 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `questor/gateway/` | **Phase 1 不动**（W5） | 协议路由进 `surfaces/gateway/`，产品策略留在产品包 |
 | `frontend/terminal/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `apps/terminal/`；wheel force-include 同步删除 |
 
+> `mcp` 不能整体挂在 eager 的 `capabilities/tools/__init__.py` 之下：`config.settings` 需要 `McpServerConfig`，导入 `capabilities.tools.mcp.types` 会执行整个工具门面，形成 `config → tools → agent_tool → swarm → tasks → config` 循环。Phase 1 实测后改为 transport 落 `providers/mcp/`，工具适配器留 `capabilities/tools/mcp/`；Phase 2 再做瘦身与策略拆分。
+
 `services/` 的 5 个子包都没有独立模块文件，逻辑全在 `__init__.py`：`compact`、`lsp`、`memory_extract`、`session_memory` 整体搬到各自能力域（Phase 2 再拆文件），`oauth` 为空可直接删。
 
 ### 3.6 Phase 1 不做的事
@@ -142,6 +144,7 @@ Phase 1 允许的临时例外（写进 layout 豁免清单，Phase 2 销账）�
 
 ```text
 capabilities/context/compact 的 __init__.py（约 1.5k 行，Phase 2 拆）
+capabilities/tools/__init__.py（108 行，含 `def create_default_tool_registry` 与全量工具 import；Phase 2 拆出门面）
 runtime/commands/registry.py（约 2.6k 行，Phase 2 拆）
 runtime/autopilot/service.py（约 2.1k 行，Phase 2 拆）
 surfaces/gateway/runtime.py（约 1.1k 行，Phase 2 拆）
@@ -157,6 +160,8 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 - `check_layout.py` 只报豁免清单里的已知项，**不新增违规**；
 - 每个已建目录有 `AGENTS.md`；
 - **时间盒**：Phase 1 收在一个分支上，一包一 commit；单 commit 预算 = 1 个包 + 该包全部 patch 目标（本阶段最大 20，`api/`）。超盒时先砍 W2b 的 `channels/`，再砍 `auth/`；W1b/W3/W3b/W4/W5 本来就不在本阶段。
+
+> Phase 1 保持 `tests/` 文件路径不变：`tests/conftest.py` 的 Windows skip 表按 node-id 精确匹配（含 `tests/unit/test_tools/...`），搬测试目录会改变 skipped 计数。只改 import 与 patch 字符串。
 
 ---
 
