@@ -2,11 +2,11 @@
 
 Usage::
 
-    bridge = ChannelBridge(engine=query_engine, bus=message_bus)
+    bridge = ChannelBridge(query_runner=query_engine.submit_message, bus=message_bus)
     asyncio.create_task(bridge.run())
 
-The bridge continuously consumes inbound messages from the bus, feeds them
-to QueryEngine.submit_message(), and publishes the assembled reply as an
+The bridge continuously consumes inbound messages from the bus, feeds them to
+the injected query runner, and publishes the assembled reply as an
 OutboundMessage back to the bus for delivery by ChannelManager.
 """
 
@@ -14,27 +14,27 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 from questorharness.surfaces.channels.bus.events import InboundMessage, OutboundMessage
 from questorharness.surfaces.channels.bus.queue import MessageBus
 from questorharness.contracts.domain.events import AssistantTextDelta, AssistantTurnComplete
 
-if TYPE_CHECKING:
-    from questorharness.engine.query_engine import QueryEngine
+QueryRunner = Callable[[str], AsyncIterator[Any]]
 
 logger = logging.getLogger(__name__)
 
 
 class ChannelBridge:
-    """Bridges inbound channel messages to the QueryEngine and routes replies back.
+    """Bridges inbound channel messages to a query runner and routes replies back.
 
-    One bridge instance should be created per QueryEngine.  It owns the asyncio
+    One bridge instance should be created per query runner.  It owns the asyncio
     loop integration and handles back-pressure through the MessageBus queues.
     """
 
-    def __init__(self, *, engine: "QueryEngine", bus: MessageBus) -> None:
-        self._engine = engine
+    def __init__(self, *, query_runner: QueryRunner, bus: MessageBus) -> None:
+        self._query_runner = query_runner
         self._bus = bus
         self._running = False
         self._task: asyncio.Task | None = None
@@ -97,7 +97,7 @@ class ChannelBridge:
 
         reply_parts: list[str] = []
         try:
-            async for event in self._engine.submit_message(msg.content):
+            async for event in self._query_runner(msg.content):
                 if isinstance(event, AssistantTextDelta):
                     reply_parts.append(event.text)
                 elif isinstance(event, AssistantTurnComplete):

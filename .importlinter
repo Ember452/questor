@@ -74,3 +74,15 @@ forbidden_modules =
     questorharness.runtime
     questorharness.capabilities
 allow_indirect_imports = True
+
+[importlinter:contract:surfaces-are-thin]
+name = Channel surfaces may import contracts only
+type = forbidden
+source_modules =
+    questorharness.surfaces.channels
+forbidden_modules =
+    questorharness.kernel
+    questorharness.runtime
+    questorharness.capabilities
+    questorharness.providers
+allow_indirect_imports = True
