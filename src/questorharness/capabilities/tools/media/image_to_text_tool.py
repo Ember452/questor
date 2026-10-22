@@ -11,11 +11,9 @@ from __future__ import annotations
 import base64
 import logging
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field
 
-from questorharness.providers.llm.openai_client import OpenAICompatibleClient
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 log = logging.getLogger(__name__)
@@ -106,8 +104,13 @@ class ImageToTextTool(BaseTool):
             )
 
         # 3. 调用视觉模型
+        if context.llm is None:
+            return ToolResult(
+                output="image_to_text failed: LLM runtime is not configured",
+                is_error=True,
+            )
         try:
-            description = await self._call_vision_model(
+            description = await context.llm.describe_image(
                 image_data=image_data,
                 media_type=media_type or arguments.media_type,
                 prompt=arguments.prompt,
@@ -178,60 +181,3 @@ class ImageToTextTool(BaseTool):
             return data, media_type
 
         return None, None
-
-    @staticmethod
-    async def _call_vision_model(
-        *,
-        image_data: str,
-        media_type: str,
-        prompt: str,
-        model: str,
-        api_key: str,
-        base_url: str,
-        max_tokens: int,
-    ) -> str:
-        """Call the vision model via OpenAI-compatible API."""
-        client = OpenAICompatibleClient(
-            api_key=api_key,
-            base_url=base_url or None,
-        )
-
-        from questorharness.providers.llm.client import ApiMessageRequest
-        from questorharness.engine.messages import (
-            ConversationMessage,
-            ImageBlock,
-            TextBlock,
-        )
-
-        # 构建包含图像的用户消息
-        user_content: list[Any] = [TextBlock(text=prompt)]
-        user_content.append(
-            ImageBlock(
-                media_type=media_type,
-                data=image_data,
-            )
-        )
-        user_message = ConversationMessage(role="user", content=user_content)
-
-        # 流式读取响应并收集文本
-        collected_text = ""
-        async for event in client.stream_message(
-            ApiMessageRequest(
-                model=model,
-                messages=[user_message],
-                system_prompt="",
-                max_tokens=max_tokens,
-                tools=[],
-            )
-        ):
-            from questorharness.providers.llm.client import ApiTextDeltaEvent, ApiMessageCompleteEvent
-
-            if isinstance(event, ApiTextDeltaEvent):
-                collected_text += event.text
-            elif isinstance(event, ApiMessageCompleteEvent):
-                # 同时从最终消息中提取文本
-                text = event.message.text
-                if text and text not in collected_text:
-                    collected_text = text
-
-        return collected_text.strip() or "(no description returned)"

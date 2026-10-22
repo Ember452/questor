@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from questorharness.state.app_state import AppState
 from questorharness.bridge.manager import BridgeSessionRecord
-from questorharness.providers.mcp.types import McpConnectionStatus
+from questorharness.contracts.mcp import McpConnectionStatus
 from questorharness.tasks.types import TaskRecord
 
 

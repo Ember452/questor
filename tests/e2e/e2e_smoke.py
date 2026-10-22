@@ -25,7 +25,7 @@ from questorharness.engine.stream_events import (
 )
 from questorharness.providers.mcp.client import McpClientManager
 from questorharness.providers.mcp.config import load_mcp_server_configs
-from questorharness.providers.mcp.types import McpStdioServerConfig
+from questorharness.contracts.mcp import McpStdioServerConfig
 from questorharness.capabilities.memory import add_memory_entry
 from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.plugins import load_plugins

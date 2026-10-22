@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
+    from questorharness.capabilities.tools.ports import LlmToolRuntime, SandboxRuntime
     from questorharness.hooks.executor import HookExecutor
 
 
@@ -21,6 +22,8 @@ class ToolExecutionContext:
     cwd: Path
     metadata: dict[str, Any] = field(default_factory=dict)
     hook_executor: HookExecutor | None = None
+    sandbox: SandboxRuntime | None = None
+    llm: LlmToolRuntime | None = None
 
 
 @dataclass(frozen=True)

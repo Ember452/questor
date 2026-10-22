@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from questorharness.providers.mcp.client import McpClientManager
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.ports import McpClientPort
 
 
 class ListMcpResourcesToolInput(BaseModel):
@@ -19,7 +19,7 @@ class ListMcpResourcesTool(BaseTool):
     description = "List MCP resources available from connected servers."
     input_model = ListMcpResourcesToolInput
 
-    def __init__(self, manager: McpClientManager) -> None:
+    def __init__(self, manager: McpClientPort) -> None:
         self._manager = manager
 
     def is_read_only(self, arguments: ListMcpResourcesToolInput) -> bool:

@@ -38,6 +38,8 @@ class GrepTool(BaseTool):
         return True
 
     async def execute(self, arguments: GrepToolInput, context: ToolExecutionContext) -> ToolResult:
+        sandbox = getattr(context, "sandbox", None)
+        session = sandbox.session() if sandbox is not None else None
         root = _resolve_path(context.cwd, arguments.root) if arguments.root else context.cwd
         if not root.exists():
             return ToolResult(
@@ -56,6 +58,7 @@ class GrepTool(BaseTool):
                 limit=arguments.limit,
                 display_base=display_base,
                 timeout_seconds=arguments.timeout_seconds,
+                session=session,
             )
             if matches is not None:
                 return _format_rg_result(matches, arguments.timeout_seconds)
@@ -78,6 +81,7 @@ class GrepTool(BaseTool):
             case_sensitive=arguments.case_sensitive,
             limit=arguments.limit,
             timeout_seconds=arguments.timeout_seconds,
+            session=session,
         )
         if matches is not None:
             return _format_rg_result(matches, arguments.timeout_seconds)
@@ -169,6 +173,7 @@ async def _rg_grep(
     case_sensitive: bool,
     limit: int,
     timeout_seconds: int,
+    session=None,
 ) -> list[str] | None:
     """Return matches using ripgrep, or None if ripgrep is unavailable."""
     rg = shutil.which("rg")
@@ -192,9 +197,6 @@ async def _rg_grep(
     # `--` 确保 `-foo` 这类模式不会被解析为参数。
     cmd.extend(["--", pattern, "."])
 
-    from questorharness.providers.sandbox.session import get_docker_sandbox
-
-    session = get_docker_sandbox()
     if session is not None and session.is_running:
         process = await session.exec_command(
             cmd,
@@ -244,6 +246,7 @@ async def _rg_grep_file(
     limit: int,
     display_base: Path,
     timeout_seconds: int,
+    session=None,
 ) -> list[str] | None:
     rg = shutil.which("rg")
     if not rg:
@@ -260,9 +263,6 @@ async def _rg_grep_file(
         cmd.append("-i")
     cmd.extend(["--", pattern, path.name])
 
-    from questorharness.providers.sandbox.session import get_docker_sandbox
-
-    session = get_docker_sandbox()
     if session is not None and session.is_running:
         process = await session.exec_command(
             cmd,

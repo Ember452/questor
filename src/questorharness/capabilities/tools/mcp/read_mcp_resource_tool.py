@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.providers.mcp.client import McpClientManager, McpServerNotConnectedError
+from questorharness.contracts.errors import McpServerNotConnectedError
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.ports import McpClientPort
 
 
 class ReadMcpResourceToolInput(BaseModel):
@@ -22,7 +23,7 @@ class ReadMcpResourceTool(BaseTool):
     description = "Read an MCP resource by server and URI."
     input_model = ReadMcpResourceToolInput
 
-    def __init__(self, manager: McpClientManager) -> None:
+    def __init__(self, manager: McpClientPort) -> None:
         self._manager = manager
 
     def is_read_only(self, arguments: ReadMcpResourceToolInput) -> bool:

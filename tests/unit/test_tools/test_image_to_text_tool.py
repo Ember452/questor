@@ -10,6 +10,7 @@ from questorharness.providers.llm.provider import is_model_multimodal
 from questorharness.config.settings import VisionModelConfig
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.media.image_to_text_tool import ImageToTextTool, ImageToTextToolInput
+from questorharness.providers.llm.tool_runtime import ProviderLlmToolRuntime
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +199,7 @@ async def test_execute_with_image_path(tmp_path: Path) -> None:
                 "base_url": "",
             }
         },
+        llm=ProviderLlmToolRuntime(),
     )
     result = await tool.execute(
         ImageToTextToolInput(image_path=str(png_path)),

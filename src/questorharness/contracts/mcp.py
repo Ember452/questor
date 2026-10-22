@@ -1,4 +1,7 @@
-"""MCP configuration and state models."""
+"""MCP configuration and state models.
+
+Pure value types shared by providers, capabilities and the UI.
+"""
 
 from __future__ import annotations
 

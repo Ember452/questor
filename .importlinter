@@ -10,3 +10,16 @@ source_modules =
     questorharness
 forbidden_modules =
     questor
+
+[importlinter:contract:capabilities-are-leaf]
+name = Capabilities must not import runtime, kernel or providers
+type = forbidden
+source_modules =
+    questorharness.capabilities
+forbidden_modules =
+    questorharness.kernel
+    questorharness.runtime
+    questorharness.providers
+# utils.shell still re-exports sandbox helpers; W6 moves utils into providers,
+# at which point this contract can drop the indirect allowance.
+allow_indirect_imports = True

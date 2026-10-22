@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from questorharness.coordinator.agent_definitions import AgentDefinition
-from questorharness.providers.mcp.types import McpServerConfig
+from questorharness.contracts.mcp import McpServerConfig
 from questorharness.plugins.schemas import PluginManifest
 from questorharness.skills.types import SkillDefinition
 

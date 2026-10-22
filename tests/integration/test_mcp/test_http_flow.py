@@ -11,7 +11,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 import questorharness.providers.mcp.client as client_module
 from questorharness.providers.mcp.client import McpClientManager
-from questorharness.providers.mcp.types import McpHttpServerConfig
+from questorharness.contracts.mcp import McpHttpServerConfig
 from questorharness.capabilities.tools import create_default_tool_registry
 from questorharness.capabilities.tools.base import ToolExecutionContext
 

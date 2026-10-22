@@ -11,11 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from questorharness.config import Settings, load_settings
+from questorharness.contracts.errors import SandboxUnavailableError
 from questorharness.platforms import get_platform, get_platform_capabilities
-
-
-class SandboxUnavailableError(RuntimeError):
-    """Raised when sandboxing is required but unavailable."""
 
 
 @dataclass(frozen=True)

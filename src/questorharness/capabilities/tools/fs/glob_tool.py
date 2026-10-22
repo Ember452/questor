@@ -35,7 +35,9 @@ class GlobTool(BaseTool):
 
     async def execute(self, arguments: GlobToolInput, context: ToolExecutionContext) -> ToolResult:
         root, pattern = _resolve_glob_request(context.cwd, arguments.root, arguments.pattern)
-        matches = await _glob(root, pattern, limit=arguments.limit)
+        sandbox = getattr(context, "sandbox", None)
+        session = sandbox.session() if sandbox is not None else None
+        matches = await _glob(root, pattern, limit=arguments.limit, session=session)
         if not matches:
             return ToolResult(output="(no matches)")
         return ToolResult(output="\n".join(matches))
@@ -95,7 +97,7 @@ def _looks_like_git_repo(path: Path) -> bool:
 _GLOB_RG_TIMEOUT_SECONDS = 30.0
 
 
-async def _glob(root: Path, pattern: str, *, limit: int) -> list[str]:
+async def _glob(root: Path, pattern: str, *, limit: int, session=None) -> list[str]:
     """Fast glob implementation.
 
     Uses ripgrep's file walker when available (respects .gitignore and can skip
@@ -114,9 +116,6 @@ async def _glob(root: Path, pattern: str, *, limit: int) -> list[str]:
             cmd.append("--hidden")
         cmd.extend(["--glob", pattern, "."])
 
-        from questorharness.providers.sandbox.session import get_docker_sandbox
-
-        session = get_docker_sandbox()
         if session is not None and session.is_running:
             process = await session.exec_command(
                 cmd,

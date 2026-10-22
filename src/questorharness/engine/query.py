@@ -19,7 +19,9 @@ from questorharness.providers.llm.client import (
     SupportsStreamingMessages,
 )
 from questorharness.providers.llm.provider import is_model_multimodal
+from questorharness.providers.llm.tool_runtime import ProviderLlmToolRuntime
 from questorharness.providers.llm.usage import UsageSnapshot
+from questorharness.providers.sandbox.runtime import ProviderSandboxRuntime
 from questorharness.config.paths import get_data_dir
 from questorharness.engine.messages import (
     ConversationMessage,
@@ -48,6 +50,9 @@ REACTIVE_COMPACT_STATUS_MESSAGE = "Prompt too long; compacting conversation memo
 MAX_SAFE_COMPLETION_TOKENS = 128_000
 
 log = logging.getLogger(__name__)
+
+_TOOL_SANDBOX_RUNTIME = ProviderSandboxRuntime()
+_TOOL_LLM_RUNTIME = ProviderLlmToolRuntime()
 
 
 PermissionPrompt = Callable[[str, str], Awaitable[bool]]
@@ -616,6 +621,7 @@ async def _preprocess_images_in_messages(
                 "vision_model_config": vision_config,
                 **(context.tool_metadata or {}),
             },
+            llm=_TOOL_LLM_RUNTIME,
         )
         result = await tool.execute(parsed, exec_context)
         if result.is_error:
@@ -977,6 +983,8 @@ async def _execute_tool_call(
                 **(context.tool_metadata or {}),
             },
             hook_executor=context.hook_executor,
+            sandbox=_TOOL_SANDBOX_RUNTIME,
+            llm=_TOOL_LLM_RUNTIME,
         ),
     )
     elapsed = time.monotonic() - t0

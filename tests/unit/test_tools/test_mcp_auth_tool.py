@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from questorharness.config.settings import Settings, load_settings, save_settings
-from questorharness.providers.mcp.types import McpHttpServerConfig, McpStdioServerConfig
+from questorharness.contracts.mcp import McpHttpServerConfig, McpStdioServerConfig
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.mcp.mcp_auth_tool import McpAuthTool, McpAuthToolInput
 

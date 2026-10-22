@@ -12,9 +12,8 @@ import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from questorharness.providers.llm.codex_client import _build_codex_headers, _resolve_codex_url
-from questorharness.providers.llm.openai_client import _normalize_openai_base_url
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.ports import LlmToolRuntime
 
 log = logging.getLogger(__name__)
 
@@ -89,11 +88,12 @@ class ImageGenerationTool(BaseTool):
         if not isinstance(config, dict):
             config = {}
         provider = _resolve_provider(arguments.provider, config)
+        llm = context.llm
 
         try:
             output_paths = self._resolve_output_paths(arguments, context.cwd)
             if provider == "codex":
-                image_b64, revised_prompt = await self._generate_with_codex(arguments, config)
+                image_b64, revised_prompt = await self._generate_with_codex(arguments, config, llm)
                 written = self._write_images(image_b64, output_paths, overwrite=arguments.overwrite)
                 extra = f"\nRevised prompt: {revised_prompt}" if revised_prompt else ""
                 return ToolResult(
@@ -109,7 +109,7 @@ class ImageGenerationTool(BaseTool):
                     },
                 )
 
-            image_b64 = await self._generate_with_openai(arguments, config)
+            image_b64 = await self._generate_with_openai(arguments, config, llm)
             written = self._write_images(image_b64, output_paths, overwrite=arguments.overwrite)
         except Exception as exc:
             log.exception("image_generation failed")
@@ -125,7 +125,12 @@ class ImageGenerationTool(BaseTool):
             metadata={"paths": [str(path) for path in written], "model": model, "mode": mode, "provider": "openai"},
         )
 
-    async def _generate_with_openai(self, arguments: ImageGenerationToolInput, config: dict[str, object]) -> list[str]:
+    async def _generate_with_openai(
+        self,
+        arguments: ImageGenerationToolInput,
+        config: dict[str, object],
+        llm: LlmToolRuntime | None,
+    ) -> list[str]:
         model = (arguments.model or str(config.get("model") or _DEFAULT_MODEL)).strip()
         api_key = str(config.get("api_key") or "").strip()
         base_url = str(config.get("base_url") or "").strip()
@@ -134,14 +139,18 @@ class ImageGenerationTool(BaseTool):
                 "OpenAI image generation API key is not configured. Set image_generation.api_key "
                 "or QUESTORHARNESS_IMAGE_GENERATION_API_KEY, or choose provider='codex'."
             )
+        normalized_base_url: str | None = base_url
+        if llm is not None:
+            normalized_base_url = llm.normalize_openai_base_url(base_url)
         if arguments.image_paths:
-            return await self._edit_images(arguments, model, api_key, base_url)
-        return await self._generate_images(arguments, model, api_key, base_url)
+            return await self._edit_images(arguments, model, api_key, normalized_base_url)
+        return await self._generate_images(arguments, model, api_key, normalized_base_url)
 
     async def _generate_with_codex(
         self,
         arguments: ImageGenerationToolInput,
         config: dict[str, object],
+        llm: LlmToolRuntime | None,
     ) -> tuple[list[str], str | None]:
         auth_token = str(config.get("codex_auth_token") or "").strip()
         if not auth_token:
@@ -149,6 +158,8 @@ class ImageGenerationTool(BaseTool):
                 "Codex image generation auth is not configured. Run 'oh auth codex-login' "
                 "or use provider='openai' with QUESTORHARNESS_IMAGE_GENERATION_API_KEY."
             )
+        if llm is None:
+            raise RuntimeError("LLM runtime is not configured for image generation")
         model = str(config.get("codex_model") or "gpt-5.4").strip() or "gpt-5.4"
         base_url = str(config.get("codex_base_url") or "").strip()
         prompt = _codex_prompt(arguments)
@@ -163,8 +174,8 @@ class ImageGenerationTool(BaseTool):
             "tool_choice": "auto",
             "parallel_tool_calls": False,
         }
-        headers = _build_codex_headers(auth_token)
-        url = _resolve_codex_url(base_url)
+        headers = llm.build_codex_headers(auth_token)
+        url = llm.resolve_codex_url(base_url)
 
         image_results: list[str] = []
         revised_prompt: str | None = None
@@ -194,20 +205,20 @@ class ImageGenerationTool(BaseTool):
         return image_results, revised_prompt
 
     @staticmethod
-    async def _generate_images(arguments: ImageGenerationToolInput, model: str, api_key: str, base_url: str) -> list[str]:
+    async def _generate_images(arguments: ImageGenerationToolInput, model: str, api_key: str, base_url: str | None) -> list[str]:
         client = AsyncOpenAI(
             api_key=api_key,
-            base_url=_normalize_openai_base_url(base_url),
+            base_url=base_url,
             default_headers={"Authorization": f"Bearer {api_key}"},
         )
         result = await client.images.generate(**_image_payload(arguments, model))
         return _extract_b64_images(result)
 
     @staticmethod
-    async def _edit_images(arguments: ImageGenerationToolInput, model: str, api_key: str, base_url: str) -> list[str]:
+    async def _edit_images(arguments: ImageGenerationToolInput, model: str, api_key: str, base_url: str | None) -> list[str]:
         client = AsyncOpenAI(
             api_key=api_key,
-            base_url=_normalize_openai_base_url(base_url),
+            base_url=base_url,
             default_headers={"Authorization": f"Bearer {api_key}"},
         )
         image_handles = [Path(path).expanduser().resolve().open("rb") for path in arguments.image_paths]

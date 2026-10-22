@@ -32,12 +32,8 @@ class FileWriteTool(BaseTool):
     ) -> ToolResult:
         path = _resolve_path(context.cwd, arguments.path)
 
-        from questorharness.providers.sandbox.session import is_docker_sandbox_active
-
-        if is_docker_sandbox_active():
-            from questorharness.providers.sandbox.path_validator import validate_sandbox_path
-
-            allowed, reason = validate_sandbox_path(path, context.cwd)
+        if context.sandbox is not None and context.sandbox.is_active():
+            allowed, reason = context.sandbox.validate_path(path, context.cwd)
             if not allowed:
                 return ToolResult(output=f"Sandbox: {reason}", is_error=True)
 

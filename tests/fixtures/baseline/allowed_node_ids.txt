@@ -1,2 +1,4 @@
 tests/unit/test_ui/test_react_backend.py::test_run_backend_host_accepts_autodream_context
 tests/unit/test_ui/test_react_backend.py::test_backend_host_forwards_autodream_context_to_runtime
+tests/unit/test_tools/test_tool_ports.py::test_file_read_uses_injected_sandbox
+tests/unit/test_tools/test_tool_ports.py::test_image_to_text_uses_injected_llm_runtime

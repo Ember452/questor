@@ -13,17 +13,14 @@ from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import CallToolResult, ReadResourceResult
 
-from questorharness.providers.mcp.types import (
+from questorharness.contracts.errors import McpServerNotConnectedError
+from questorharness.contracts.mcp import (
     McpConnectionStatus,
     McpHttpServerConfig,
     McpResourceInfo,
     McpStdioServerConfig,
     McpToolInfo,
 )
-
-
-class McpServerNotConnectedError(Exception):
-    """Raised when an MCP server is not connected or its session has been lost."""
 
 
 class McpClientManager:

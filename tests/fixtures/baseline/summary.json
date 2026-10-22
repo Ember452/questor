@@ -1,18 +1,18 @@
 {
-  "allowed_node_id_count": 2,
+  "allowed_node_id_count": 4,
   "cold_import": {
     "exit": 0,
     "output": ""
   },
   "lint": {
     "broken": 0,
-    "kept": 1
+    "kept": 2
   },
   "main_node_id_count": 1166,
-  "node_id_count": 1168,
+  "node_id_count": 1170,
   "pytest": {
     "deselected": 10,
-    "passed": 1139,
+    "passed": 1141,
     "skipped": 29
   },
   "snapshot_messages": 4

@@ -6,15 +6,16 @@ import re
 
 from pydantic import BaseModel, Field, create_model
 
-from questorharness.providers.mcp.client import McpClientManager, McpServerNotConnectedError
-from questorharness.providers.mcp.types import McpToolInfo
+from questorharness.contracts.errors import McpServerNotConnectedError
+from questorharness.contracts.mcp import McpToolInfo
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.ports import McpClientPort
 
 
 class McpToolAdapter(BaseTool):
     """Expose one MCP tool as a normal QuestorHarness tool."""
 
-    def __init__(self, manager: McpClientManager, tool_info: McpToolInfo) -> None:
+    def __init__(self, manager: McpClientPort, tool_info: McpToolInfo) -> None:
         self._manager = manager
         self._tool_info = tool_info
         server_segment = _sanitize_tool_segment(tool_info.server_name)

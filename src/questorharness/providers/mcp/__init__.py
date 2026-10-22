@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from questorharness.providers.mcp.client import McpClientManager, McpServerNotConnectedError
-    from questorharness.providers.mcp.types import (
+    from questorharness.contracts.mcp import (
         McpConnectionStatus,
         McpHttpServerConfig,
         McpJsonConfig,
@@ -55,7 +55,7 @@ def __getattr__(name: str):
         "McpToolInfo",
         "McpWebSocketServerConfig",
     }:
-        from questorharness.providers.mcp.types import (
+        from questorharness.contracts.mcp import (
             McpConnectionStatus,
             McpHttpServerConfig,
             McpJsonConfig,

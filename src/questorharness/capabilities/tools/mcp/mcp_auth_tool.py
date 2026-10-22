@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from questorharness.config.settings import load_settings, save_settings
-from questorharness.providers.mcp.types import McpHttpServerConfig, McpStdioServerConfig, McpWebSocketServerConfig
+from questorharness.contracts.mcp import McpHttpServerConfig, McpStdioServerConfig, McpWebSocketServerConfig
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 

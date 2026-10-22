@@ -15,7 +15,7 @@ except NameError:  # pragma: no cover - Python < 3.11 compatibility
     from exceptiongroup import BaseExceptionGroup
 
 from questorharness.providers.mcp.client import McpClientManager, McpServerNotConnectedError
-from questorharness.providers.mcp.types import McpConnectionStatus, McpStdioServerConfig, McpToolInfo
+from questorharness.contracts.mcp import McpConnectionStatus, McpStdioServerConfig, McpToolInfo
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.mcp.mcp_tool import McpToolAdapter
 from questorharness.capabilities.tools.mcp.read_mcp_resource_tool import ReadMcpResourceTool
@@ -162,7 +162,7 @@ async def test_close_failed_stack_suppresses_base_exception_group_cleanup_error(
 @pytest.mark.asyncio
 async def test_connect_all_marks_http_server_failed_when_initialize_is_cancelled(monkeypatch):
     import questorharness.providers.mcp.client as client_module
-    from questorharness.providers.mcp.types import McpHttpServerConfig
+    from questorharness.contracts.mcp import McpHttpServerConfig
 
     manager = McpClientManager(
         {
