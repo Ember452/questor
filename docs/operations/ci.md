@@ -7,7 +7,7 @@ The workflows are `.github/workflows/ci.yml` and
 
 - `guards` on Ubuntu: pre-commit, guard self-tests, real guards, and
   `lint-imports`.
-- `tests` on Windows: `uv run pytest -m "unit or integration"`.
+- `tests` on Windows: `uv run pytest -m "unit or integration" -ra --tb=long --durations=20`.
 - `pr-title` on pull requests: Conventional Commits type plus a lowercase
   subject.
 
@@ -19,6 +19,17 @@ fix: propagate provider overrides
 ```
 
 The subject after the colon must start with a lowercase letter.
+
+## Failure output
+
+CI is expected to explain its own failures:
+
+- `pr-title` prints the actual title, allowed types, and valid examples.
+- pytest runs with `-ra --tb=long --durations=20` so failures include full
+  tracebacks, skip reasons, and slow-test context.
+- guard scripts print `file:line` violations and fail loudly on empty scans.
+- a `failure()` diagnostics step prints Python/uv versions, platform, and git
+  status for both jobs.
 
 E2E suites are not run by CI by default because they need provider
 credentials, a built frontend, or Docker. Run them explicitly:
@@ -62,6 +73,7 @@ make ci
   hanging the job.
 - `.pre-commit-config.yaml` runs YAML/TOML/JSON syntax checks, critical Ruff
   checks, and the secret/doc guards.
-- `pr-lint.yml` uses `pull_request` with read-only permissions; it does not
-  check out or execute contributor code, and the workflow file is read from the
-  PR branch so the check can run before it is merged to `main`.
+- `pr-lint.yml` uses `pull_request` with read-only permissions and an inline
+  Python validator; it does not check out or execute contributor code, and the
+  workflow file is read from the PR branch so the check can run before it is
+  merged to `main`.
