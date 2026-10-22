@@ -7,9 +7,9 @@
 ## Context
 
 The engine lived under `src/questorharness` while the product app lived in a
-top-level `ohmo/` package. The mixed layout made packaging and imports
-inconsistent, and the engine contained lazy imports of app modules for Feishu
-group policy and cron notifications.
+top-level package. The mixed layout made packaging and imports inconsistent,
+and the engine contained lazy imports of app modules for Feishu group policy
+and cron notifications.
 
 ## Decision
 

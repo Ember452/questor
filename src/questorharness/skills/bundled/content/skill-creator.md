@@ -116,9 +116,10 @@ Important boundaries, verification, and failure handling.
 
    ```bash
    PYTHONPATH=src python - <<'PY'
+   from pathlib import Path
    from questorharness.skills import load_skill_registry
-   from questor.workspace import get_skills_dir
-   for skill in load_skill_registry(extra_skill_dirs=[get_skills_dir()]).list_skills():
+   skills_dir = Path.home() / ".questor" / "agent" / "skills"
+   for skill in load_skill_registry(extra_skill_dirs=[str(skills_dir)]).list_skills():
        print(skill.name, skill.source, skill.path)
    PY
    ```
