@@ -53,12 +53,13 @@ def _write_plugin(source_root: Path, server_script: Path) -> Path:
 
 
 @pytest.mark.asyncio
-async def test_plugin_install_load_and_uninstall_flow(tmp_path: Path, monkeypatch):
+async def test_plugin_install_load_and_uninstall_flow(
+    tmp_path: Path, monkeypatch, fake_mcp_server_path: Path
+):
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path / "config"))
     project = tmp_path / "project"
     project.mkdir()
-    server_script = Path(__file__).resolve().parents[1] / "fixtures" / "fake_mcp_server.py"
-    plugin_source = _write_plugin(tmp_path / "source", server_script)
+    plugin_source = _write_plugin(tmp_path / "source", fake_mcp_server_path)
 
     installed_path = install_plugin_from_path(plugin_source)
     assert installed_path.exists()

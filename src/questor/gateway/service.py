@@ -24,7 +24,9 @@ from questor.gateway.bridge import QuestorGatewayBridge
 from questor.gateway.config import build_channel_manager_config, load_gateway_config
 from questor.gateway.models import GatewayState
 from questor.gateway.runtime import QuestorSessionRuntimePool
+from questor.group_registry import load_managed_group_record
 from questor.workspace import (
+    get_attachments_dir,
     get_gateway_restart_notice_path,
     get_logs_dir,
     get_state_path,
@@ -45,14 +47,30 @@ class QuestorGatewayService:
         os.chdir(self._cwd)
         root = initialize_workspace(self._workspace)
         os.environ["QUESTOR_WORKSPACE"] = str(root)
+        os.environ["QUESTORHARNESS_CHANNEL_MEDIA_DIR"] = str(get_attachments_dir(root))
         self._config = load_gateway_config(self._workspace)
         if self._config.allow_remote_admin_commands and self._config.allowed_remote_admin_commands:
             logger.warning(
                 "questor gateway remote administrative commands enabled commands=%s",
                 ",".join(self._config.allowed_remote_admin_commands),
             )
+        def is_managed_feishu_group(chat_id: str) -> bool:
+            try:
+                return load_managed_group_record(
+                    workspace=str(root),
+                    channel="feishu",
+                    chat_id=chat_id,
+                ) is not None
+            except Exception:
+                logger.exception("Failed to load managed Feishu group metadata chat_id=%s", chat_id)
+                return False
+
         self._bus = MessageBus()
-        self._manager = ChannelManager(build_channel_manager_config(self._config), self._bus)
+        self._manager = ChannelManager(
+            build_channel_manager_config(self._config),
+            self._bus,
+            managed_group_checker=is_managed_feishu_group,
+        )
         self._runtime_pool = QuestorSessionRuntimePool(
             cwd=self._cwd,
             workspace=self._workspace,

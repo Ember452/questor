@@ -40,7 +40,7 @@ def _find_brace_style_logging_calls(path: Path) -> list[str]:
 
 
 def test_logging_format_strings_use_percent_style_placeholders() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     violations: list[str] = []
     for path in _iter_python_files(repo_root):
         violations.extend(_find_brace_style_logging_calls(path))

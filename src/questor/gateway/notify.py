@@ -76,3 +76,29 @@ async def send_feishu_dm(*, user_open_id: str, content: str, workspace: str | Pa
     """Send a proactive Feishu direct message to a user open_id."""
     await asyncio.to_thread(_send_feishu_text_sync, user_open_id=user_open_id, content=content, workspace=workspace)
     logger.info("Sent proactive Feishu DM to open_id=%s", user_open_id)
+
+
+def register_handlers() -> None:
+    """Register Questor's Feishu notification handler with the engine cron scheduler."""
+    from questorharness.services.cron_scheduler import register_notification_handler
+
+    async def send_feishu_notification(
+        _job: dict[str, Any],
+        _entry: dict[str, Any],
+        notify: dict[str, Any],
+        content: str,
+    ) -> None:
+        user_open_id = str(
+            notify.get("user_open_id") or notify.get("open_id") or notify.get("to") or ""
+        ).strip()
+        if not user_open_id:
+            raise ValueError("missing notify.user_open_id")
+        workspace = notify.get("workspace")
+        await send_feishu_dm(
+            user_open_id=user_open_id,
+            content=content,
+            workspace=str(workspace) if workspace else None,
+        )
+
+    register_notification_handler("feishu_dm", send_feishu_notification)
+    register_notification_handler("feishu", send_feishu_notification)

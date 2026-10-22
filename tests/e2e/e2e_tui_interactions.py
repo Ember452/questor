@@ -13,7 +13,7 @@ RED = "\033[91m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = PROJECT_ROOT / "frontend" / "terminal"
 
 

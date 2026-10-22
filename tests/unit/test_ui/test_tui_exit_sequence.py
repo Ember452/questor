@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 def _frontend_index() -> Path:
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     return repo_root / "frontend" / "terminal" / "src" / "index.tsx"
 
 

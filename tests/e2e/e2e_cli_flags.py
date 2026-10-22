@@ -32,7 +32,7 @@ def _run_oh(*args: str, timeout: int = 60) -> subprocess.CompletedProcess:
         text=True,
         timeout=timeout,
         env=_env(),
-        cwd=str(Path(__file__).resolve().parents[1]),
+        cwd=str(Path(__file__).resolve().parents[2]),
     )
 
 

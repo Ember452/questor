@@ -14,13 +14,12 @@ from questorharness.tools.base import ToolExecutionContext
 
 
 @pytest.mark.asyncio
-async def test_stdio_mcp_manager_connects_and_executes_real_server():
-    server_script = Path(__file__).resolve().parents[1] / "fixtures" / "fake_mcp_server.py"
+async def test_stdio_mcp_manager_connects_and_executes_real_server(fake_mcp_server_path: Path):
     manager = McpClientManager(
         {
             "fixture": McpStdioServerConfig(
                 command=sys.executable,
-                args=[str(server_script)],
+                args=[str(fake_mcp_server_path)],
             )
         }
     )

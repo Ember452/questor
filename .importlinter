@@ -1,0 +1,12 @@
+[importlinter]
+root_packages =
+    questorharness
+    questor
+
+[importlinter:contract:engine-app-boundary]
+name = Engine must not import the product app
+type = forbidden
+source_modules =
+    questorharness
+forbidden_modules =
+    questor

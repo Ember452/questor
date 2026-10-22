@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from questorharness.commands.registry import CommandContext, create_default_command_registry
 from questorharness.config.settings import Settings, load_settings
@@ -29,7 +29,7 @@ from questorharness.tools import create_default_tool_registry
 from questorharness.tools.base import ToolExecutionContext
 
 
-FIXTURE_SERVER = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "fake_mcp_server.py"
+FIXTURE_SERVER = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "fake_mcp_server.py"
 
 
 class FakeApiClient:

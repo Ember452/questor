@@ -39,6 +39,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.5.0",
     "mypy>=1.10.0",
+    "import-linter>=2.0.0",
 ]
 
 [project.scripts]
@@ -46,6 +47,9 @@ questorharness = "questorharness.cli:app"
 oh = "questorharness.cli:app"
 openh = "questorharness.cli:app"
 questor = "questor.cli:app"
+
+[project.entry-points."questorharness.notification_handlers"]
+questor-feishu = "questor.gateway.notify:register_handlers"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/questorharness", "src/questor"]
@@ -56,6 +60,7 @@ exclude = [
     "/.venv",
     "/.questorharness-venv",
     "/.questorharness",
+    "/.questor",
     "/.pytest_cache",
     "/.mypy_cache",
     "/.ruff_cache",
@@ -71,6 +76,11 @@ exclude = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "unit: fast, isolated tests",
+    "integration: tests that cross process, filesystem, transport, or service boundaries",
+    "e2e: real end-to-end suites requiring external services or a built frontend",
+]
 
 [tool.ruff]
 line-length = 100

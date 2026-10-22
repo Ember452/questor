@@ -12,7 +12,6 @@ from questorharness.channels.bus.queue import MessageBus
 from questorharness.channels.bus.events import OutboundMessage
 from questorharness.channels.impl.feishu import FeishuChannel, _extract_feishu_mentions, _feishu_mentions_bot
 from questorharness.config.schema import FeishuConfig
-from questor.group_registry import save_managed_group_record
 
 
 @pytest.mark.asyncio
@@ -22,7 +21,7 @@ async def test_feishu_inbound_file_attachment_cannot_escape_media_dir(tmp_path: 
     workspace.mkdir()
     protected_file = workspace / "soul.md"
     protected_file.write_text("ORIGINAL", encoding="utf-8")
-    monkeypatch.setenv("QUESTOR_WORKSPACE", str(workspace))
+    monkeypatch.setenv("QUESTORHARNESS_CHANNEL_MEDIA_DIR", str(workspace / "attachments"))
 
     channel = FeishuChannel(
         FeishuConfig(allow_from=["user-open-id"], react_emoji="eyes"), MessageBus()
@@ -194,12 +193,8 @@ def test_feishu_mention_detection_ignores_other_users():
 
 @pytest.mark.asyncio
 async def test_feishu_group_policy_ignores_unmentioned_unmanaged_group_without_reaction(
-    tmp_path: Path,
     monkeypatch,
 ):
-    workspace = tmp_path / "questor"
-    workspace.mkdir()
-    monkeypatch.setenv("QUESTOR_WORKSPACE", str(workspace))
     channel = FeishuChannel(
         FeishuConfig(
             allow_from=["user-open-id"],
@@ -244,19 +239,8 @@ async def test_feishu_group_policy_ignores_unmentioned_unmanaged_group_without_r
 
 @pytest.mark.asyncio
 async def test_feishu_group_policy_allows_managed_group_without_mention(
-    tmp_path: Path,
     monkeypatch,
 ):
-    workspace = tmp_path / "questor"
-    workspace.mkdir()
-    monkeypatch.setenv("QUESTOR_WORKSPACE", str(workspace))
-    save_managed_group_record(
-        workspace=workspace,
-        channel="feishu",
-        chat_id="oc_managed",
-        owner_open_id="user-open-id",
-        name="Managed Group",
-    )
     channel = FeishuChannel(
         FeishuConfig(
             allow_from=["user-open-id"],
@@ -265,6 +249,7 @@ async def test_feishu_group_policy_allows_managed_group_without_mention(
             bot_names=["questor"],
         ),
         MessageBus(),
+        managed_group_checker=lambda chat_id: chat_id == "oc_managed",
     )
     reactions: list[str] = []
     forwarded: list[dict] = []
@@ -302,12 +287,8 @@ async def test_feishu_group_policy_allows_managed_group_without_mention(
 
 @pytest.mark.asyncio
 async def test_feishu_group_policy_allows_mentioned_unmanaged_group(
-    tmp_path: Path,
     monkeypatch,
 ):
-    workspace = tmp_path / "questor"
-    workspace.mkdir()
-    monkeypatch.setenv("QUESTOR_WORKSPACE", str(workspace))
     channel = FeishuChannel(
         FeishuConfig(
             allow_from=["user-open-id"],
@@ -365,12 +346,8 @@ async def test_feishu_group_policy_allows_mentioned_unmanaged_group(
 
 @pytest.mark.asyncio
 async def test_feishu_group_policy_allows_sdk_message_mention(
-    tmp_path: Path,
     monkeypatch,
 ):
-    workspace = tmp_path / "questor"
-    workspace.mkdir()
-    monkeypatch.setenv("QUESTOR_WORKSPACE", str(workspace))
     channel = FeishuChannel(
         FeishuConfig(
             allow_from=["user-open-id"],

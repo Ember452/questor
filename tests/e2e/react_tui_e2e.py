@@ -15,7 +15,7 @@ import pexpect
 from questorharness.config.settings import load_settings
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _spawn_oh(*, env: dict[str, str] | None = None) -> pexpect.spawn:

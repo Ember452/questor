@@ -3,15 +3,14 @@ from __future__ import annotations
 from questorharness.channels.impl.base import resolve_channel_media_dir
 
 
-def test_resolve_channel_media_dir_uses_questor_workspace(monkeypatch, tmp_path):
-    workspace = tmp_path / ".questor-home"
-    monkeypatch.setenv("QUESTOR_WORKSPACE", str(workspace))
-    monkeypatch.delenv("QUESTORHARNESS_CHANNEL_MEDIA_DIR", raising=False)
+def test_resolve_channel_media_dir_uses_explicit_media_root(monkeypatch, tmp_path):
+    media_root = tmp_path / "media-root"
+    monkeypatch.setenv("QUESTORHARNESS_CHANNEL_MEDIA_DIR", str(media_root))
     monkeypatch.delenv("QUESTORHARNESS_DATA_DIR", raising=False)
 
     media_dir = resolve_channel_media_dir("feishu")
 
-    assert media_dir == workspace / "attachments" / "feishu"
+    assert media_dir == media_root / "feishu"
     assert media_dir.is_dir()
 
 

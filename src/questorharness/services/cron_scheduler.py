@@ -18,10 +18,11 @@ import shlex
 import signal
 import sys
 import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from types import FrameType
-from typing import Any, Callable
+from typing import Any
 
 from questorharness.config.paths import get_data_dir, get_logs_dir
 from questorharness.platforms import get_platform
@@ -33,15 +34,41 @@ from questorharness.services.cron import (
 from questorharness.sandbox import SandboxUnavailableError
 from questorharness.utils.shell import create_shell_subprocess
 
-try:
-    from questor.gateway.config import load_gateway_config
-except Exception:  # pragma: no cover - questor is optional for non-questor cron users
-    load_gateway_config = None  # type: ignore[assignment]
-
-
 NOTIFICATION_OUTPUT_LIMIT = 3500
 
 logger = logging.getLogger(__name__)
+
+NotificationHandler = Callable[
+    [dict[str, Any], dict[str, Any], dict[str, Any], str],
+    Awaitable[None],
+]
+_NOTIFICATION_HANDLERS: dict[str, NotificationHandler] = {}
+_NOTIFICATION_ENTRY_POINTS_LOADED = False
+
+
+def register_notification_handler(notify_type: str, handler: NotificationHandler) -> None:
+    """Register an app-provided handler for a cron notification type."""
+    _NOTIFICATION_HANDLERS[notify_type.strip().lower()] = handler
+
+
+def _load_notification_handlers() -> None:
+    global _NOTIFICATION_ENTRY_POINTS_LOADED
+    if _NOTIFICATION_ENTRY_POINTS_LOADED:
+        return
+    _NOTIFICATION_ENTRY_POINTS_LOADED = True
+    try:
+        from importlib.metadata import entry_points
+
+        handlers = entry_points(group="questorharness.notification_handlers")
+    except Exception:
+        logger.exception("Failed to discover cron notification handlers")
+        return
+    for entry_point in handlers:
+        try:
+            entry_point.load()()
+        except Exception:
+            logger.exception("Failed to load cron notification handler %s", entry_point.name)
+
 
 TICK_INTERVAL_SECONDS = 30
 """How often the scheduler checks for due jobs."""
@@ -255,23 +282,14 @@ async def _notify_job_result(job: dict[str, Any], entry: dict[str, Any]) -> None
     if not isinstance(notify, dict):
         return
     notify_type = str(notify.get("type") or "").strip().lower()
+    _load_notification_handlers()
+    handler = _NOTIFICATION_HANDLERS.get(notify_type)
     try:
-        if notify_type in {"feishu_dm", "feishu"}:
-            from questor.gateway.notify import send_feishu_dm
-
-            user_open_id = str(
-                notify.get("user_open_id") or notify.get("open_id") or notify.get("to") or ""
-            ).strip()
-            if not user_open_id:
-                raise ValueError("missing notify.user_open_id")
-            workspace = notify.get("workspace")
-            await send_feishu_dm(
-                user_open_id=user_open_id,
-                content=_format_notification(job, entry),
-                workspace=str(workspace) if workspace else None,
-            )
-        elif notify_type:
-            raise ValueError(f"unsupported notify.type: {notify_type}")
+        if handler is None:
+            if notify_type:
+                raise ValueError(f"unsupported notify.type: {notify_type}")
+            return
+        await handler(job, entry, notify, _format_notification(job, entry))
     except Exception as exc:
         logger.error("Failed to notify cron job %r result: %s", job.get("name"), exc)
         entry["notification_status"] = "failed"
@@ -293,9 +311,7 @@ def _command_for_job(job: dict[str, Any]) -> str:
         raise ValueError("agent_turn cron job is missing payload.message")
     cwd = str(job.get("cwd") or ".")
     parts = ["questor"]
-    profile = payload.get("profile") or job.get("provider_profile")
-    if profile is None and load_gateway_config is not None:
-        profile = load_gateway_config().provider_profile
+    profile = payload.get("profile") or job.get("provider_profile") or os.environ.get("QUESTOR_PROFILE")
     if profile:
         parts.extend(["--profile", str(profile)])
     parts.extend(
@@ -442,6 +458,7 @@ def _jobs_due(jobs: list[dict[str, Any]], now: datetime) -> list[dict[str, Any]]
 
 async def run_scheduler_loop(*, once: bool = False) -> None:
     """Main scheduler loop.  Runs until SIGTERM or *once* is True (test mode)."""
+    _load_notification_handlers()
     shutdown = asyncio.Event()
 
     loop = asyncio.get_running_loop()

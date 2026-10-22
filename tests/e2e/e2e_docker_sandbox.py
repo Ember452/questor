@@ -6,10 +6,10 @@ lifecycle: image build, container start, command execution, file isolation,
 network isolation, resource limits, and cleanup.
 
 Run directly:
-    python3 scripts/test_docker_sandbox_e2e.py
+    python3 tests/e2e/e2e_docker_sandbox.py
 
 Or via pytest (skipped automatically when Docker is unavailable):
-    uv run pytest scripts/test_docker_sandbox_e2e.py -v
+    QUESTOR_RUN_E2E=1 uv run pytest tests/e2e/test_e2e_suites.py -m e2e -v
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Bootstrap: ensure the src package is importable when run as a script
 # ---------------------------------------------------------------------------
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from questorharness.config.settings import (
     DockerSandboxSettings,

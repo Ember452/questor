@@ -6,6 +6,7 @@ import os
 import re
 import threading
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -165,29 +166,13 @@ def _normalize_feishu_group_policy(value: str | None) -> str:
     return "managed_or_mention"
 
 
-def _is_questor_managed_feishu_group(chat_id: str) -> bool:
-    workspace = os.environ.get("QUESTOR_WORKSPACE")
-    if not workspace:
-        return False
-    try:
-        from questor.group_registry import load_managed_group_record
-
-        return load_managed_group_record(
-            workspace=workspace,
-            channel="feishu",
-            chat_id=chat_id,
-        ) is not None
-    except Exception:
-        logger.exception("Failed to load questor managed Feishu group metadata chat_id=%s", chat_id)
-        return False
-
-
 def _should_process_feishu_group_message(
     *,
     chat_type: str,
     chat_id: str,
     mentions_bot: bool,
     config: FeishuConfig,
+    managed_group_checker: Callable[[str], bool] | None = None,
 ) -> bool:
     if str(chat_type or "").strip().lower() != "group":
         return True
@@ -196,10 +181,11 @@ def _should_process_feishu_group_message(
         return True
     if policy == "mention":
         return mentions_bot
+    is_managed = managed_group_checker(chat_id) if managed_group_checker is not None else False
     if policy == "managed":
-        return _is_questor_managed_feishu_group(chat_id)
+        return is_managed
     if policy == "managed_or_mention":
-        return mentions_bot or _is_questor_managed_feishu_group(chat_id)
+        return mentions_bot or is_managed
     return mentions_bot
 
 
@@ -422,9 +408,15 @@ class FeishuChannel(BaseChannel):
 
     name = "feishu"
 
-    def __init__(self, config: FeishuConfig, bus: MessageBus):
+    def __init__(
+        self,
+        config: FeishuConfig,
+        bus: MessageBus,
+        managed_group_checker: Callable[[str], bool] | None = None,
+    ):
         super().__init__(config, bus)
         self.config: FeishuConfig = config
+        self._managed_group_checker = managed_group_checker
         self._client: Any = None
         self._ws_client: Any = None
         self._ws_thread: threading.Thread | None = None
@@ -1300,6 +1292,7 @@ class FeishuChannel(BaseChannel):
                 chat_id=chat_id,
                 mentions_bot=mentions_bot,
                 config=self.config,
+                managed_group_checker=self._managed_group_checker,
             ):
                 logger.info(
                     "Feishu group message ignored by policy chat_id=%s policy=%s mentions_bot=%s mention_names=%s mention_open_ids=%s",

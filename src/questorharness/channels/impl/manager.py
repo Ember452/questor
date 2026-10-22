@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
 
 
@@ -24,9 +25,15 @@ class ChannelManager:
     - Route outbound messages
     """
 
-    def __init__(self, config: Config, bus: MessageBus):
+    def __init__(
+        self,
+        config: Config,
+        bus: MessageBus,
+        managed_group_checker: Callable[[str], bool] | None = None,
+    ):
         self.config = config
         self.bus = bus
+        self._managed_group_checker = managed_group_checker
         self.channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task | None = None
 
@@ -40,7 +47,9 @@ class ChannelManager:
             try:
                 from questorharness.channels.impl.feishu import FeishuChannel
                 self.channels["feishu"] = FeishuChannel(
-                    self.config.channels.feishu, self.bus
+                    self.config.channels.feishu,
+                    self.bus,
+                    managed_group_checker=self._managed_group_checker,
                 )
                 logger.info("Feishu channel enabled")
             except ImportError as e:
