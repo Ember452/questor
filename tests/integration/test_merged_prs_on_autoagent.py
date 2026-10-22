@@ -36,11 +36,11 @@ RESULTS: dict[str, tuple[bool, float]] = {}
 def _make_registry(extra_tools=None):
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.file_write_tool import FileWriteTool
-    from questorharness.tools.file_edit_tool import FileEditTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
+    from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
 
     reg = ToolRegistry()
     for t in [BashTool(), FileReadTool(), FileWriteTool(), FileEditTool(), GlobTool(), GrepTool()]:

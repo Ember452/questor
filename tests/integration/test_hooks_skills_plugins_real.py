@@ -70,9 +70,9 @@ async def task_hook_blocks_model_adapts():
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.hooks.events import HookEvent
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
@@ -153,9 +153,9 @@ async def task_model_invokes_skill_tool():
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.capabilities.tools.skill_tool import SkillTool
     import questorharness.skills.loader as sl
 
@@ -246,9 +246,9 @@ async def task_plugin_skill_in_agent_loop():
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.capabilities.tools.skill_tool import SkillTool
     import questorharness.skills.loader as sl
 
@@ -350,11 +350,11 @@ async def task_hook_gates_writes_skill_guides():
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.file_write_tool import FileWriteTool
-    from questorharness.tools.file_edit_tool import FileEditTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
+    from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.capabilities.tools.skill_tool import SkillTool
     from questorharness.hooks.events import HookEvent
     from questorharness.hooks.loader import HookRegistry
@@ -504,11 +504,11 @@ async def task_swarm_teammates_use_skills():
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.capabilities.tools.skill_tool import SkillTool
-    from questorharness.tools.file_write_tool import FileWriteTool
+    from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
     import questorharness.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:

@@ -16,13 +16,13 @@ from questorharness.tools.cron_list_tool import CronListTool, CronListToolInput
 from questorharness.capabilities.tools.config_tool import ConfigTool, ConfigToolInput
 from questorharness.capabilities.tools.enter_worktree_tool import EnterWorktreeTool, EnterWorktreeToolInput
 from questorharness.capabilities.tools.exit_worktree_tool import ExitWorktreeTool, ExitWorktreeToolInput
-from questorharness.tools.file_edit_tool import FileEditTool, FileEditToolInput
-from questorharness.tools.file_read_tool import FileReadTool, FileReadToolInput
-from questorharness.tools.file_write_tool import FileWriteTool, FileWriteToolInput
-from questorharness.tools.glob_tool import GlobTool, GlobToolInput
-from questorharness.tools.grep_tool import GrepTool, GrepToolInput
-from questorharness.tools.lsp_tool import LspTool, LspToolInput
-from questorharness.tools.notebook_edit_tool import NotebookEditTool, NotebookEditToolInput
+from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool, FileEditToolInput
+from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool, FileReadToolInput
+from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool, FileWriteToolInput
+from questorharness.capabilities.tools.fs.glob_tool import GlobTool, GlobToolInput
+from questorharness.capabilities.tools.fs.grep_tool import GrepTool, GrepToolInput
+from questorharness.capabilities.tools.fs.lsp_tool import LspTool, LspToolInput
+from questorharness.capabilities.tools.fs.notebook_edit_tool import NotebookEditTool, NotebookEditToolInput
 from questorharness.capabilities.tools.remote_trigger_tool import RemoteTriggerTool, RemoteTriggerToolInput
 from questorharness.capabilities.tools.skill_tool import SkillTool, SkillToolInput
 from questorharness.capabilities.tools.todo_write_tool import TodoWriteTool, TodoWriteToolInput
@@ -154,7 +154,7 @@ async def test_glob_and_grep(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_glob_tool_accepts_absolute_patterns(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr("questorharness.tools.glob_tool.shutil.which", lambda _: None)
+    monkeypatch.setattr("questorharness.capabilities.tools.fs.glob_tool.shutil.which", lambda _: None)
     context = ToolExecutionContext(cwd=tmp_path.parent)
     nested = tmp_path / "pkg"
     nested.mkdir()
