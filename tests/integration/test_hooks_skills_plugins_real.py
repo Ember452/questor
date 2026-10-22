@@ -66,8 +66,8 @@ async def task_hook_blocks_model_adapts():
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
@@ -149,8 +149,8 @@ async def task_model_invokes_skill_tool():
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
@@ -242,8 +242,8 @@ async def task_plugin_skill_in_agent_loop():
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
@@ -346,8 +346,8 @@ async def task_hook_gates_writes_skill_guides():
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
@@ -500,8 +500,8 @@ async def task_swarm_teammates_use_skills():
     from questorharness.engine.query import QueryContext
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool

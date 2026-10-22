@@ -19,7 +19,7 @@ from questorharness.engine.query_engine import QueryEngine
 from questorharness.mcp.client import McpClientManager
 from questorharness.mcp.config import load_mcp_server_configs
 from questorharness.mcp.types import McpStdioServerConfig
-from questorharness.permissions import PermissionChecker
+from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins import load_plugins
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin
 from questorharness.state import AppState, AppStateStore

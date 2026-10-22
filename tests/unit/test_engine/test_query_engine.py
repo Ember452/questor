@@ -24,7 +24,7 @@ from questorharness.engine.stream_events import (
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
-from questorharness.permissions import PermissionChecker, PermissionMode
+from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.tasks import get_task_manager
 from questorharness.tools import create_default_tool_registry
 from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult

@@ -44,8 +44,8 @@ def make_engine(system_prompt="You are a helpful assistant. Be concise.", cwd=No
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
@@ -187,8 +187,8 @@ async def test_hooks_in_agent_loop():
     from questorharness.engine.query import QueryContext, run_query
     from questorharness.engine.messages import ConversationMessage
     from questorharness.engine.stream_events import AssistantTextDelta, ToolExecutionStarted, ToolExecutionCompleted
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.hooks.events import HookEvent
@@ -660,8 +660,8 @@ async def test_combined_hooks_skills_agent():
     from questorharness.engine.query import QueryContext, run_query
     from questorharness.engine.messages import ConversationMessage
     from questorharness.engine.stream_events import AssistantTextDelta, ToolExecutionStarted
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
@@ -726,8 +726,8 @@ async def test_full_swarm_autoagent():
     from questorharness.engine.query import QueryContext
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool

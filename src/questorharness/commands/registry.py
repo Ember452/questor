@@ -62,7 +62,7 @@ from questorharness.capabilities.memory.team import (
     get_team_memory_dir,
 )
 from questorharness.output_styles import load_output_styles
-from questorharness.permissions import PermissionChecker, PermissionMode
+from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.plugins import load_plugins
 from questorharness.prompts import build_runtime_system_prompt
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin

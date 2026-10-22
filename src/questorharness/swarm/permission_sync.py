@@ -45,7 +45,7 @@ from questorharness.swarm.mailbox import (
 )
 
 if TYPE_CHECKING:
-    from questorharness.permissions.checker import PermissionChecker
+    from questorharness.capabilities.policy.checker import PermissionChecker
 
 
 # ---------------------------------------------------------------------------
@@ -1092,7 +1092,7 @@ async def handle_permission_request(
 
     Args:
         request: The incoming permission request from a worker.
-        checker: An already-configured :class:`~questorharness.permissions.checker.PermissionChecker`.
+        checker: An already-configured :class:`~questorharness.capabilities.policy.checker.PermissionChecker`.
 
     Returns:
         A :class:`SwarmPermissionResponse` with the decision.

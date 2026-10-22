@@ -32,7 +32,7 @@ from questorharness.capabilities.memory.team import (
     ensure_team_memory_vault,
     validate_team_memory_write_path,
 )
-from questorharness.permissions import PermissionChecker
+from questorharness.capabilities.policy import PermissionChecker
 from questorharness.services.memory_extract import (
     extract_memories_from_turn,
     has_memory_writes_since,

@@ -154,9 +154,9 @@ async def test_parallel_tools_code() -> tuple[bool, str]:
 
 async def test_path_permissions_deny() -> tuple[bool, str]:
     """Test that path-level deny rules work."""
-    from questorharness.permissions.checker import PermissionChecker
+    from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.config.settings import PermissionSettings, PathRuleConfig
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.modes import PermissionMode
 
     settings = PermissionSettings(
         mode=PermissionMode.FULL_AUTO,
@@ -179,9 +179,9 @@ async def test_path_permissions_deny() -> tuple[bool, str]:
 
 async def test_command_deny_pattern() -> tuple[bool, str]:
     """Test that command deny patterns work."""
-    from questorharness.permissions.checker import PermissionChecker
+    from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.config.settings import PermissionSettings
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.modes import PermissionMode
 
     settings = PermissionSettings(
         mode=PermissionMode.FULL_AUTO,

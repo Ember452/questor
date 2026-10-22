@@ -11,7 +11,7 @@ from questorharness.commands.registry import CommandContext, create_default_comm
 from questorharness.config.settings import load_settings
 from questorharness.engine.messages import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.permissions import PermissionChecker
+from questorharness.capabilities.policy import PermissionChecker
 from questorharness.state import AppState, AppStateStore
 from questorharness.tools import create_default_tool_registry
 

@@ -27,7 +27,7 @@ from questorharness.mcp.client import McpClientManager
 from questorharness.mcp.config import load_mcp_server_configs
 from questorharness.mcp.types import McpStdioServerConfig
 from questorharness.capabilities.memory import add_memory_entry
-from questorharness.permissions import PermissionChecker, PermissionMode
+from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.plugins import load_plugins
 from questorharness.prompts import build_runtime_system_prompt
 from questorharness.tools import create_default_tool_registry

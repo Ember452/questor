@@ -31,7 +31,7 @@ from questorharness.engine.stream_events import (
 )
 from questorharness.capabilities.memory import add_memory_entry as add_project_memory_entry
 from questorharness.capabilities.memory import list_memory_files as list_project_memory_files
-from questorharness.permissions import PermissionChecker, PermissionMode
+from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.tasks.manager import get_task_manager
 from questorharness.tools.base import ToolExecutionContext, ToolRegistry
 

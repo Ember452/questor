@@ -38,7 +38,7 @@ from questorharness.engine.stream_events import (
     ToolExecutionStarted,
 )
 from questorharness.hooks import HookEvent, HookExecutor
-from questorharness.permissions.checker import PermissionChecker
+from questorharness.capabilities.policy.checker import PermissionChecker
 from questorharness.services.tool_outputs import tool_output_inline_chars, tool_output_preview_chars
 from questorharness.tools.base import ToolExecutionContext
 from questorharness.tools.base import ToolRegistry

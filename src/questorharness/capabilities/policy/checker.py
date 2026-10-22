@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 
 from questorharness.config.settings import PermissionSettings
-from questorharness.permissions.modes import PermissionMode
+from questorharness.capabilities.policy.modes import PermissionMode
 
 log = logging.getLogger(__name__)
 
