@@ -1,0 +1,69 @@
+{
+  "session_id": "fixture000001",
+  "cwd": "D:\\questor-baseline",
+  "model": "fixture/model",
+  "system_prompt": "Fixture system prompt for the v2 layout baseline.",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "List the files in this repository."
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "I will check the workspace."
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_fixture_0001",
+          "name": "ls",
+          "input": {
+            "path": "."
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_fixture_0001",
+          "content": "README.md\nsrc\n",
+          "is_error": false,
+          "result_metadata": {}
+        },
+        {
+          "type": "text",
+          "text": "continue"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "The repository contains README.md and src."
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 10,
+    "output_tokens": 5
+  },
+  "tool_metadata": {
+    "permission_mode": "default"
+  },
+  "created_at": 1792670318.078292,
+  "summary": "List the files in this repository.",
+  "message_count": 4
+}
