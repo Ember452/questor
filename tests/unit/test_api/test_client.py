@@ -43,11 +43,11 @@ def test_anthropic_client_adds_claude_oauth_identity_headers(monkeypatch):
 
     monkeypatch.setattr("questorharness.api.client.AsyncAnthropic", _FakeAsyncAnthropic)
     monkeypatch.setattr(
-        "questorharness.auth.external.get_claude_code_version",
+        "questorharness.providers.auth.external.get_claude_code_version",
         lambda: "2.1.92",
     )
     monkeypatch.setattr(
-        "questorharness.auth.external.get_claude_code_session_id",
+        "questorharness.providers.auth.external.get_claude_code_session_id",
         lambda: "session-123",
     )
     monkeypatch.setattr(
@@ -143,7 +143,7 @@ def test_anthropic_client_refreshes_claude_token_on_request(monkeypatch):
 
     monkeypatch.setattr("questorharness.api.client.AsyncAnthropic", _FakeAsyncAnthropic)
     monkeypatch.setattr(
-        "questorharness.auth.external.get_claude_code_session_id",
+        "questorharness.providers.auth.external.get_claude_code_session_id",
         lambda: "session-123",
     )
     monkeypatch.setattr(

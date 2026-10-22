@@ -15,7 +15,7 @@ from questorharness.config.settings import (
     display_label_for_profile,
     display_model_setting,
 )
-from questorharness.auth.storage import (
+from questorharness.providers.auth.storage import (
     clear_provider_credentials,
     load_external_binding,
     load_credential,
@@ -71,7 +71,7 @@ _PROFILE_BY_PROVIDER = {
 class AuthManager:
     """Central authority for provider authentication state.
 
-    Reads/writes credentials via :mod:`questorharness.auth.storage` and keeps
+    Reads/writes credentials via :mod:`questorharness.providers.auth.storage` and keeps
     track of the currently active provider via settings.
     """
 
@@ -117,7 +117,7 @@ class AuthManager:
         """Return auth source configuration status."""
         import os
 
-        from questorharness.auth.external import describe_external_binding
+        from questorharness.providers.auth.external import describe_external_binding
 
         active_profile_name, active_profile = self.settings.resolve_profile()
         result: dict[str, Any] = {}

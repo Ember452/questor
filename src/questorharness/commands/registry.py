@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable, Literal, get_args, Iterab
 import pyperclip
 
 from questorharness.autopilot import RepoAutopilotStore
-from questorharness.auth.manager import AuthManager
+from questorharness.providers.auth.manager import AuthManager
 from questorharness.config.paths import (
     get_config_dir,
     get_data_dir,

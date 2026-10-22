@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from questorharness.auth.storage import ExternalAuthBinding
+from questorharness.providers.auth.storage import ExternalAuthBinding
 from questorharness.utils.fs import atomic_write_text
 
 CODEX_PROVIDER = "openai_codex"

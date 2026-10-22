@@ -771,11 +771,11 @@ class Settings(BaseModel):
                     source="env:ANTHROPIC_AUTH_TOKEN",
                     state="configured",
                 )
-            from questorharness.auth.external import (
+            from questorharness.providers.auth.external import (
                 is_third_party_anthropic_endpoint,
                 load_external_credential,
             )
-            from questorharness.auth.storage import load_external_binding
+            from questorharness.providers.auth.storage import load_external_binding
 
             if auth_source == "claude_subscription" and is_third_party_anthropic_endpoint(profile.base_url):
                 raise ValueError(
@@ -811,7 +811,7 @@ class Settings(BaseModel):
 
         storage_provider = auth_source_provider_name(auth_source)
 
-        from questorharness.auth.storage import load_credential
+        from questorharness.providers.auth.storage import load_credential
 
         if profile.credential_slot:
             scoped_storage_provider = f"profile:{profile.credential_slot}"

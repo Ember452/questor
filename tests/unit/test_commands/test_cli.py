@@ -97,8 +97,8 @@ def test_setup_flow_existing_api_key_profile_can_update_secret(tmp_path: Path, m
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    from questorharness.auth.manager import AuthManager
-    from questorharness.auth.storage import load_credential
+    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.storage import load_credential
 
     manager = AuthManager()
     manager.store_profile_credential("openai-compatible", "api_key", "old-key")
@@ -107,7 +107,7 @@ def test_setup_flow_existing_api_key_profile_can_update_secret(tmp_path: Path, m
     monkeypatch.setattr("questorharness.cli._select_setup_workflow", lambda *args, **kwargs: next(selections))
     monkeypatch.setattr("questorharness.cli._select_from_menu", lambda *args, **kwargs: next(selections))
     monkeypatch.setattr("questorharness.cli._confirm_prompt", lambda *args, **kwargs: True)
-    monkeypatch.setattr("questorharness.auth.flows.ApiKeyFlow.run", lambda self: "new-key")
+    monkeypatch.setattr("questorharness.providers.auth.flows.ApiKeyFlow.run", lambda self: "new-key")
     monkeypatch.setattr("questorharness.cli._prompt_model_for_profile", lambda profile: "gpt-4.1")
 
     result = runner.invoke(app, ["setup"])
@@ -135,7 +135,7 @@ def test_setup_flow_creates_kimi_profile_with_profile_scoped_key(tmp_path: Path,
     monkeypatch.setattr("questorharness.cli._select_setup_workflow", lambda *args, **kwargs: next(selections))
     monkeypatch.setattr("questorharness.cli._select_from_menu", lambda *args, **kwargs: next(selections))
     monkeypatch.setattr("questorharness.cli._text_prompt", lambda *args, **kwargs: next(prompts))
-    monkeypatch.setattr("questorharness.auth.flows.ApiKeyFlow.run", lambda self: "sk-kimi-test")
+    monkeypatch.setattr("questorharness.providers.auth.flows.ApiKeyFlow.run", lambda self: "sk-kimi-test")
 
     result = runner.invoke(app, ["setup"])
     assert result.exit_code == 0
@@ -149,7 +149,7 @@ def test_setup_flow_creates_kimi_profile_with_profile_scoped_key(tmp_path: Path,
     assert profile.credential_slot == "kimi-anthropic"
     assert profile.allowed_models == ["kimi-k2.5"]
 
-    from questorharness.auth.storage import load_credential
+    from questorharness.providers.auth.storage import load_credential
 
     assert load_credential("profile:kimi-anthropic", "api_key") == "sk-kimi-test"
 
@@ -158,7 +158,7 @@ def test_provider_add_can_store_profile_api_key(tmp_path: Path, monkeypatch):
     runner = CliRunner()
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path))
 
-    from questorharness.auth.storage import load_credential
+    from questorharness.providers.auth.storage import load_credential
 
     result = runner.invoke(
         app,
@@ -193,8 +193,8 @@ def test_provider_edit_can_replace_profile_api_key(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    from questorharness.auth.manager import AuthManager
-    from questorharness.auth.storage import load_credential
+    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.storage import load_credential
 
     manager = AuthManager()
     manager.store_profile_credential("openai-compatible", "api_key", "old-key")

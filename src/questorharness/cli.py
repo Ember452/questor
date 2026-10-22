@@ -1620,7 +1620,7 @@ def _specialize_setup_target(manager, target: str) -> str:
 
 
 def _ensure_profile_auth(manager, profile_name: str) -> None:
-    from questorharness.auth.flows import ApiKeyFlow
+    from questorharness.providers.auth.flows import ApiKeyFlow
     from questorharness.config.settings import auth_source_provider_name, auth_source_uses_api_key
 
     profile = manager.list_profiles()[profile_name]
@@ -1656,7 +1656,7 @@ def _maybe_update_profile_auth(manager, profile_name: str) -> bool:
 
 def _maybe_update_default_model_for_provider(provider: str) -> None:
     """Keep the active model in-family after switching auth providers."""
-    from questorharness.auth.manager import AuthManager
+    from questorharness.providers.auth.manager import AuthManager
 
     manager = AuthManager()
     profile_name = {
@@ -1679,8 +1679,8 @@ def _maybe_update_default_model_for_provider(provider: str) -> None:
 
 def _bind_external_provider(provider: str) -> None:
     """Bind a provider to credentials managed by an external CLI."""
-    from questorharness.auth.external import default_binding_for_provider, load_external_credential
-    from questorharness.auth.storage import store_external_binding
+    from questorharness.providers.auth.external import default_binding_for_provider, load_external_credential
+    from questorharness.providers.auth.storage import store_external_binding
 
     binding = default_binding_for_provider(provider)
     try:
@@ -1715,9 +1715,9 @@ def _bind_external_provider(provider: str) -> None:
 
 def _login_provider(provider: str) -> None:
     """Authenticate or bind the given provider."""
-    from questorharness.auth.flows import ApiKeyFlow
-    from questorharness.auth.manager import AuthManager
-    from questorharness.auth.storage import store_credential
+    from questorharness.providers.auth.flows import ApiKeyFlow
+    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.storage import store_credential
 
     manager = AuthManager()
 
@@ -1754,7 +1754,7 @@ def setup_cmd(
     profile: str | None = typer.Argument(None, help="Provider profile name to configure"),
 ) -> None:
     """Unified setup flow: choose workflow, authenticate if needed, then set the model."""
-    from questorharness.auth.manager import AuthManager
+    from questorharness.providers.auth.manager import AuthManager
     from questorharness.config.settings import display_model_setting
 
     manager = AuthManager()
@@ -1839,7 +1839,7 @@ def auth_login(
 @auth_app.command("status")
 def auth_status_cmd() -> None:
     """Show authentication source and provider profile status."""
-    from questorharness.auth.manager import AuthManager
+    from questorharness.providers.auth.manager import AuthManager
 
     manager = AuthManager()
     auth_sources = manager.get_auth_source_statuses()
@@ -1870,7 +1870,7 @@ def auth_logout(
     provider: Optional[str] = typer.Argument(None, help="Provider to log out (default: active provider)"),
 ) -> None:
     """Clear stored authentication for a provider."""
-    from questorharness.auth.manager import AuthManager
+    from questorharness.providers.auth.manager import AuthManager
 
     manager = AuthManager()
     if provider is None:
@@ -1887,7 +1887,7 @@ def auth_switch(
     provider: str = typer.Argument(..., help="Auth source or profile to activate"),
 ) -> None:
     """Switch the auth source for the active profile, or use a profile by name."""
-    from questorharness.auth.manager import AuthManager
+    from questorharness.providers.auth.manager import AuthManager
 
     manager = AuthManager()
     try:
@@ -1906,7 +1906,7 @@ def auth_switch(
 def _run_copilot_login() -> None:
     """Run the GitHub Copilot device-code flow and persist the result."""
     from questorharness.api.copilot_auth import save_copilot_auth
-    from questorharness.auth.flows import DeviceCodeFlow
+    from questorharness.providers.auth.flows import DeviceCodeFlow
 
     print("Select GitHub deployment type:", flush=True)
     print("  1. GitHub.com (public)", flush=True)
@@ -2041,7 +2041,7 @@ def config_set(
 @provider_app.command("list")
 def provider_list() -> None:
     """List configured provider profiles."""
-    from questorharness.auth.manager import AuthManager
+    from questorharness.providers.auth.manager import AuthManager
 
     statuses = AuthManager().get_profile_statuses()
     for name, info in statuses.items():
@@ -2057,7 +2057,7 @@ def provider_use(
     name: str = typer.Argument(..., help="Provider profile name"),
 ) -> None:
     """Activate a provider profile."""
-    from questorharness.auth.manager import AuthManager
+    from questorharness.providers.auth.manager import AuthManager
 
     manager = AuthManager()
     try:
@@ -2084,7 +2084,7 @@ def provider_add(
     auto_compact_threshold_tokens: int | None = typer.Option(None, "--auto-compact-threshold-tokens", help="Optional explicit auto-compact threshold override"),
 ) -> None:
     """Create a provider profile."""
-    from questorharness.auth.manager import AuthManager
+    from questorharness.providers.auth.manager import AuthManager
     from questorharness.config.settings import ProviderProfile
 
     manager = AuthManager()
@@ -2128,7 +2128,7 @@ def provider_edit(
     auto_compact_threshold_tokens: int | None = typer.Option(None, "--auto-compact-threshold-tokens", help="Optional explicit auto-compact threshold override"),
 ) -> None:
     """Edit a provider profile."""
-    from questorharness.auth.manager import AuthManager
+    from questorharness.providers.auth.manager import AuthManager
 
     manager = AuthManager()
     try:
@@ -2163,7 +2163,7 @@ def provider_remove(
     name: str = typer.Argument(..., help="Provider profile name"),
 ) -> None:
     """Remove a provider profile."""
-    from questorharness.auth.manager import AuthManager
+    from questorharness.providers.auth.manager import AuthManager
 
     manager = AuthManager()
     try:

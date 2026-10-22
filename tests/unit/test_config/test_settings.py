@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.auth.storage import store_credential
+from questorharness.providers.auth.storage import store_credential
 from questorharness.config.settings import (
     ProviderProfile,
     Settings,

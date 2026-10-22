@@ -32,7 +32,7 @@ class AuthFlow(ABC):
 
 
 class ApiKeyFlow(AuthFlow):
-    """Prompt the user for an API key and persist it via :mod:`questorharness.auth.storage`."""
+    """Prompt the user for an API key and persist it via :mod:`questorharness.providers.auth.storage`."""
 
     def __init__(self, provider: str, prompt_text: str | None = None) -> None:
         self.provider = provider

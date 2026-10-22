@@ -17,7 +17,7 @@ from questorharness.api.errors import (
     RateLimitFailure,
     RequestFailure,
 )
-from questorharness.auth.external import (
+from questorharness.providers.auth.external import (
     claude_attribution_header,
     claude_oauth_betas,
     claude_oauth_headers,

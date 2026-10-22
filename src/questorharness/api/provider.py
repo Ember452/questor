@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from questorharness.auth.external import describe_external_binding
-from questorharness.auth.storage import load_external_binding
+from questorharness.providers.auth.external import describe_external_binding
+from questorharness.providers.auth.storage import load_external_binding
 from questorharness.api.registry import detect_provider_from_registry
 from questorharness.config.settings import Settings
 
