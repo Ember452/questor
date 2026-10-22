@@ -8,7 +8,7 @@ The workflows are `.github/workflows/ci.yml` and
 - `guards` on Ubuntu: pre-commit, guard self-tests, real guards, and
   `lint-imports`.
 - `tests` on Windows: `uv run pytest -m "unit or integration"`.
-- `PR title` on pull requests: Conventional Commits type plus a lowercase
+- `pr-title` on pull requests: Conventional Commits type plus a lowercase
   subject.
 
 PR titles must look like:
@@ -62,5 +62,6 @@ make ci
   hanging the job.
 - `.pre-commit-config.yaml` runs YAML/TOML/JSON syntax checks, critical Ruff
   checks, and the secret/doc guards.
-- `pr-lint.yml` uses `pull_request_target` with read-only PR permissions; it
-  does not check out or execute contributor code.
+- `pr-lint.yml` uses `pull_request` with read-only permissions; it does not
+  check out or execute contributor code, and the workflow file is read from the
+  PR branch so the check can run before it is merged to `main`.

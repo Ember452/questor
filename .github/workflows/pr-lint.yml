@@ -1,7 +1,8 @@
-name: PR title
+name: pr-title
 
+# Title-only validation: no checkout, no secrets, read-only token.
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - edited
@@ -9,11 +10,12 @@ on:
       - reopened
 
 permissions:
+  contents: read
   pull-requests: read
 
 jobs:
-  conventional-title:
-    name: Conventional Commits and lowercase subject
+  pr-title:
+    name: pr-title
     runs-on: ubuntu-latest
     steps:
       - name: Validate pull request title
