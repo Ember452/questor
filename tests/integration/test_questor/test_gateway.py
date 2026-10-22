@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from questorharness.providers.llm.client import ApiMessageCompleteEvent
-from questorharness.providers.llm.usage import UsageSnapshot
+from questorharness.contracts.usage import UsageSnapshot
 from questorharness.autopilot.service import RepoAutopilotStore
 from questorharness.bridge import get_bridge_manager
 from questorharness.surfaces.channels.bus.events import InboundMessage
@@ -20,9 +20,9 @@ from questorharness.commands import CommandResult
 from questorharness.commands.registry import SlashCommand, create_default_command_registry
 from questorharness.config.paths import get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import PermissionSettings, ProviderProfile, Settings
-from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock, ToolUseBlock
+from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock, ToolUseBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.engine.stream_events import (
+from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     CompactProgressEvent,
     ErrorEvent,

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from questorharness.providers.llm.client import ApiMessageCompleteEvent, ApiMessageRequest, SupportsStreamingMessages
-from questorharness.engine.messages import ConversationMessage, ToolUseBlock
+from questorharness.contracts.domain.message import ConversationMessage, ToolUseBlock
 from questorharness.capabilities.memory.manager import add_memory_entry
 from questorharness.capabilities.memory.paths import get_project_memory_dir
 from questorharness.capabilities.memory.relevance import build_memory_manifest

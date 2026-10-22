@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from questorharness.surfaces.channels.bus.events import InboundMessage, OutboundMessage
 from questorharness.surfaces.channels.bus.queue import MessageBus
-from questorharness.engine.stream_events import AssistantTextDelta, AssistantTurnComplete
+from questorharness.contracts.domain.events import AssistantTextDelta, AssistantTurnComplete
 
 if TYPE_CHECKING:
     from questorharness.engine.query_engine import QueryEngine

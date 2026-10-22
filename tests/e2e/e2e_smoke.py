@@ -18,7 +18,7 @@ from questorharness.providers.llm.client import AnthropicApiClient
 from questorharness.config.paths import get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import load_settings
 from questorharness.engine import QueryEngine
-from questorharness.engine.stream_events import (
+from questorharness.contracts.domain.events import (
     AssistantTurnComplete,
     ToolExecutionCompleted,
     ToolExecutionStarted,

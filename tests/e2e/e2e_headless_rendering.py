@@ -34,9 +34,9 @@ async def test_markdown_render() -> tuple[bool, str]:
     from rich.console import Console
 
     from questorharness.ui.output import OutputRenderer
-    from questorharness.engine.stream_events import AssistantTextDelta, AssistantTurnComplete
-    from questorharness.engine.messages import ConversationMessage, TextBlock
-    from questorharness.providers.llm.usage import UsageSnapshot
+    from questorharness.contracts.domain.events import AssistantTextDelta, AssistantTurnComplete
+    from questorharness.contracts.domain.message import ConversationMessage, TextBlock
+    from questorharness.contracts.usage import UsageSnapshot
 
     renderer = OutputRenderer(style_name="default")
     buffer = StringIO()
@@ -62,7 +62,7 @@ async def test_tool_output_format() -> tuple[bool, str]:
     from rich.console import Console
 
     from questorharness.ui.output import OutputRenderer
-    from questorharness.engine.stream_events import ToolExecutionStarted, ToolExecutionCompleted
+    from questorharness.contracts.domain.events import ToolExecutionStarted, ToolExecutionCompleted
 
     renderer = OutputRenderer(style_name="default")
     buffer = StringIO()
@@ -90,7 +90,7 @@ async def test_spinner_display() -> tuple[bool, str]:
     from rich.console import Console
 
     from questorharness.ui.output import OutputRenderer
-    from questorharness.engine.stream_events import ToolExecutionStarted, ToolExecutionCompleted
+    from questorharness.contracts.domain.events import ToolExecutionStarted, ToolExecutionCompleted
 
     renderer = OutputRenderer(style_name="default")
     buffer = StringIO()

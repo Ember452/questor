@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock
+from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock
 from questorharness.providers.llm.client import (
     ApiMessageCompleteEvent,
     ApiMessageRequest,

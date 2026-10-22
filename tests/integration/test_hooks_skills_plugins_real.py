@@ -32,7 +32,7 @@ RESULTS: dict[str, tuple[bool, float]] = {}
 
 
 def collect(events):
-    from questorharness.engine.stream_events import (
+    from questorharness.contracts.domain.events import (
         AssistantTextDelta, AssistantTurnComplete,
         ToolExecutionStarted, ToolExecutionCompleted,
     )

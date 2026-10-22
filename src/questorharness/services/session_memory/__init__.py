@@ -6,7 +6,7 @@ from hashlib import sha1
 from pathlib import Path
 
 from questorharness.config.paths import get_data_dir
-from questorharness.engine.messages import ConversationMessage, ToolResultBlock
+from questorharness.contracts.domain.message import ConversationMessage, ToolResultBlock
 from questorharness.services.token_estimation import estimate_tokens
 from questorharness.utils.fs import atomic_write_text
 

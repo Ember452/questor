@@ -6,8 +6,8 @@ import pytest
 from types import SimpleNamespace
 
 from questorharness.ui.app import run_print_mode, run_repl, run_task_worker
-from questorharness.engine.stream_events import AssistantTurnComplete
-from questorharness.engine.messages import ConversationMessage, TextBlock
+from questorharness.contracts.domain.events import AssistantTurnComplete
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 from questorharness.ui.react_launcher import build_backend_command
 
 

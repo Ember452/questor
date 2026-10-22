@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 
 from questorharness.providers.llm.client import ApiMessageCompleteEvent, ApiMessageRequest, SupportsStreamingMessages
-from questorharness.engine.messages import ConversationMessage
+from questorharness.contracts.domain.message import ConversationMessage
 from questorharness.hooks.events import HookEvent
 from questorharness.hooks.loader import HookRegistry
 from questorharness.hooks.schemas import (

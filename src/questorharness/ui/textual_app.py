@@ -17,7 +17,7 @@ from textual.widgets import Button, Footer, Header, Input, RichLog, Static
 from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.config.settings import load_settings, save_settings
 from questorharness.coordinator.coordinator_mode import is_coordinator_mode
-from questorharness.engine.stream_events import (
+from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     AssistantTurnComplete,
     CompactProgressEvent,

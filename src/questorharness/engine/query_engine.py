@@ -8,9 +8,9 @@ from typing import AsyncIterator
 from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.engine.cost_tracker import CostTracker
 from questorharness.coordinator.coordinator_mode import get_coordinator_user_context
-from questorharness.engine.messages import ConversationMessage, TextBlock, ToolResultBlock, sanitize_conversation_messages
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock, ToolResultBlock, sanitize_conversation_messages
 from questorharness.engine.query import AskUserPrompt, PermissionPrompt, QueryContext, remember_user_goal, run_query
-from questorharness.engine.stream_events import AssistantTurnComplete, StreamEvent
+from questorharness.contracts.domain.events import AssistantTurnComplete, StreamEvent
 from questorharness.config.settings import Settings
 from questorharness.hooks import HookEvent, HookExecutor
 from questorharness.capabilities.policy.checker import PermissionChecker

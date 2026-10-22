@@ -9,7 +9,7 @@ import pytest
 
 from questorharness.commands.registry import CommandContext, create_default_command_registry
 from questorharness.config.settings import load_settings
-from questorharness.engine.messages import ConversationMessage, TextBlock
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine
 from questorharness.capabilities.policy import PermissionChecker
 from questorharness.state import AppState, AppStateStore

@@ -63,3 +63,14 @@ forbidden_modules =
     questorharness.cli
 # The facade re-exports these modules; only direct product imports are forbidden.
 allow_indirect_imports = True
+
+[importlinter:contract:providers-are-adapters]
+name = Providers must not import runtime, kernel or capabilities
+type = forbidden
+source_modules =
+    questorharness.providers
+forbidden_modules =
+    questorharness.kernel
+    questorharness.runtime
+    questorharness.capabilities
+allow_indirect_imports = True

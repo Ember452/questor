@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from questorharness.providers.llm.usage import UsageSnapshot
-from questorharness.engine.messages import ConversationMessage
+from questorharness.contracts.usage import UsageSnapshot
+from questorharness.contracts.domain.message import ConversationMessage
 
 
 @dataclass(frozen=True)

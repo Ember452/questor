@@ -42,7 +42,7 @@ def test_import_linter_contracts_pass() -> None:
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "Engine must not import the product app KEPT" in output
-    assert "Contracts: 3 kept, 0 broken." in output
+    assert "Contracts: 4 kept, 0 broken." in output
     assert "BROKEN" not in output
 
 

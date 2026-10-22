@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from questorharness.commands.registry import CommandContext, create_default_command_registry
 from questorharness.config.settings import Settings, load_settings
-from questorharness.engine.messages import ConversationMessage, TextBlock
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine
 from questorharness.providers.mcp.client import McpClientManager
 from questorharness.providers.mcp.config import load_mcp_server_configs

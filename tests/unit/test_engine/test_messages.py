@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from questorharness.engine.messages import (
+from questorharness.contracts.domain.message import (
     ConversationMessage,
     TextBlock,
     ToolResultBlock,

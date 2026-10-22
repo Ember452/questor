@@ -30,7 +30,7 @@ from questorharness.bridge.types import WorkSecret
 from questorharness.bridge.work_secret import build_sdk_url, decode_work_secret, encode_work_secret
 from questorharness.providers.llm.provider import auth_status, detect_provider
 from questorharness.config.settings import Settings, display_model_setting, load_settings, save_settings
-from questorharness.engine.messages import ConversationMessage, sanitize_conversation_messages
+from questorharness.contracts.domain.message import ConversationMessage, sanitize_conversation_messages
 from questorharness.engine.query_engine import QueryEngine
 from questorharness.capabilities.memory import (
     add_memory_entry,

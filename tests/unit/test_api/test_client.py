@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock
+from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock
 from questorharness.providers.llm.client import AnthropicApiClient, OAUTH_BETA_HEADER
 
 

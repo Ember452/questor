@@ -9,7 +9,7 @@ from questorharness.config.paths import (
     get_project_issue_file,
     get_project_pr_comments_file,
 )
-from questorharness.engine.messages import ConversationMessage, TextBlock
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 from questorharness.personalization import rules as personalization_rules
 from questorharness.personalization.session_hook import update_rules_from_session
 from questorharness.prompts import build_runtime_system_prompt, discover_claude_md_files, load_claude_md_prompt

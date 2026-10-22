@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from questorharness.engine.messages import ConversationMessage
+from questorharness.contracts.domain.message import ConversationMessage
 from questorharness.personalization.extractor import (
     extract_facts_from_text,
     facts_to_rules_markdown,

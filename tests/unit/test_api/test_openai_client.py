@@ -18,7 +18,7 @@ from questorharness.providers.llm.openai_client import (
     _strip_think_blocks,
     _token_limit_param_for_model,
 )
-from questorharness.engine.messages import (
+from questorharness.contracts.domain.message import (
     ConversationMessage,
     ImageBlock,
     TextBlock,

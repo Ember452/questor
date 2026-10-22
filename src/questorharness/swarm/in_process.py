@@ -348,7 +348,7 @@ async def _run_query_loop(
     """
     # 延迟导入，避免模块加载时循环依赖。
     from questorharness.engine.query import run_query
-    from questorharness.engine.messages import ConversationMessage
+    from questorharness.contracts.domain.message import ConversationMessage
 
     messages: list[ConversationMessage] = [
         ConversationMessage.from_user_text(config.prompt)

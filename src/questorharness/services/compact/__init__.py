@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal
 from uuid import uuid4
 
-from questorharness.engine.messages import (
+from questorharness.contracts.domain.message import (
     ConversationMessage,
     ContentBlock,
     ImageBlock,
@@ -27,7 +27,7 @@ from questorharness.engine.messages import (
     ToolUseBlock,
     sanitize_conversation_messages,
 )
-from questorharness.engine.stream_events import CompactProgressEvent
+from questorharness.contracts.domain.events import CompactProgressEvent
 from questorharness.hooks import HookEvent, HookExecutor
 from questorharness.services.tool_outputs import is_microcompactable_tool_result
 from questorharness.services.token_estimation import estimate_tokens

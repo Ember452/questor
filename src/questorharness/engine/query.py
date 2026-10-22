@@ -20,16 +20,16 @@ from questorharness.providers.llm.client import (
 )
 from questorharness.providers.llm.provider import is_model_multimodal
 from questorharness.providers.llm.tool_runtime import ProviderLlmToolRuntime
-from questorharness.providers.llm.usage import UsageSnapshot
+from questorharness.contracts.usage import UsageSnapshot
 from questorharness.providers.sandbox.runtime import ProviderSandboxRuntime
 from questorharness.config.paths import get_data_dir
-from questorharness.engine.messages import (
+from questorharness.contracts.domain.message import (
     ConversationMessage,
     ImageBlock,
     TextBlock,
     ToolResultBlock,
 )
-from questorharness.engine.stream_events import (
+from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     AssistantTurnComplete,
     CompactProgressEvent,

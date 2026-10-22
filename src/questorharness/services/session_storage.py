@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from questorharness.providers.llm.usage import UsageSnapshot
+from questorharness.contracts.usage import UsageSnapshot
 from questorharness.config.paths import get_sessions_dir
-from questorharness.engine.messages import ConversationMessage, sanitize_conversation_messages
+from questorharness.contracts.domain.message import ConversationMessage, sanitize_conversation_messages
 from questorharness.utils.fs import atomic_write_text
 
 

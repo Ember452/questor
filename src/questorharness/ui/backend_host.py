@@ -19,9 +19,9 @@ from questorharness.commands import MemoryCommandBackend
 from questorharness.config.settings import CLAUDE_MODEL_ALIAS_OPTIONS, resolve_model_setting
 from questorharness.bridge import get_bridge_manager
 from questorharness.coordinator.coordinator_mode import is_coordinator_mode
-from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock
+from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock
 from questorharness.themes import list_themes
-from questorharness.engine.stream_events import (
+from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     AssistantTurnComplete,
     CompactProgressEvent,

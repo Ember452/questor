@@ -33,14 +33,14 @@ from questorharness.commands import (
 )
 from questorharness.config import load_settings
 from questorharness.config.schema import Config
-from questorharness.engine.messages import (
+from questorharness.contracts.domain.message import (
     ConversationMessage,
     ImageBlock,
     TextBlock,
     sanitize_conversation_messages,
 )
 from questorharness.engine.query import MaxTurnsExceeded
-from questorharness.engine.stream_events import (
+from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     AssistantTurnComplete,
     CompactProgressEvent,
@@ -53,7 +53,7 @@ from questorharness.prompts import build_runtime_system_prompt
 from questorharness.prompts.system_prompt import get_base_system_prompt
 from questorharness.providers.auth.manager import AuthManager
 from questorharness.providers.llm.client import SupportsStreamingMessages
-from questorharness.providers.llm.usage import UsageSnapshot
+from questorharness.contracts.usage import UsageSnapshot
 from questorharness.services.cron_scheduler import register_notification_handler
 from questorharness.services.session_backend import SessionBackend
 from questorharness.services.session_storage import (

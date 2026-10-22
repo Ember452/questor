@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from questorharness.engine.messages import (
+    from questorharness.contracts.domain.message import (
         ConversationMessage,
         ImageBlock,
         TextBlock,
@@ -13,7 +13,7 @@ if TYPE_CHECKING:  # pragma: no cover
         ToolUseBlock,
     )
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.engine.stream_events import (
+    from questorharness.contracts.domain.events import (
         AssistantTextDelta,
         AssistantTurnComplete,
         ToolExecutionCompleted,
@@ -36,7 +36,7 @@ __all__ = [
 
 def __getattr__(name: str):
     if name in {"ConversationMessage", "ImageBlock", "TextBlock", "ToolResultBlock", "ToolUseBlock"}:
-        from questorharness.engine.messages import (
+        from questorharness.contracts.domain.message import (
             ConversationMessage,
             ImageBlock,
             TextBlock,
@@ -63,7 +63,7 @@ def __getattr__(name: str):
         "ToolExecutionCompleted",
         "ToolExecutionStarted",
     }:
-        from questorharness.engine.stream_events import (
+        from questorharness.contracts.domain.events import (
             AssistantTextDelta,
             AssistantTurnComplete,
             ToolExecutionCompleted,

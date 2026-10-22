@@ -10,12 +10,12 @@ import pytest
 
 from questorharness.providers.llm.client import ApiMessageCompleteEvent, ApiRetryEvent, ApiTextDeltaEvent
 from questorharness.providers.llm.errors import RequestFailure
-from questorharness.providers.llm.usage import UsageSnapshot
+from questorharness.contracts.usage import UsageSnapshot
 from questorharness.config.settings import PermissionSettings, Settings
-from questorharness.engine.messages import ConversationMessage, TextBlock, ToolUseBlock
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock, ToolUseBlock
 from questorharness.engine.query_engine import QueryEngine
 from questorharness.prompts.context import build_runtime_system_prompt
-from questorharness.engine.stream_events import (
+from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     AssistantTurnComplete,
     CompactProgressEvent,
@@ -31,7 +31,7 @@ from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContex
 from questorharness.capabilities.tools.fs.glob_tool import GlobTool
 from questorharness.capabilities.tools.fs.grep_tool import GrepTool
 from pydantic import BaseModel
-from questorharness.engine.messages import ToolResultBlock
+from questorharness.contracts.domain.message import ToolResultBlock
 from questorharness.hooks import HookExecutionContext, HookExecutor, HookEvent
 from questorharness.hooks.loader import HookRegistry
 from questorharness.hooks.schemas import PromptHookDefinition

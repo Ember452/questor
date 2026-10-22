@@ -17,7 +17,7 @@ from questorharness.commands.registry import (
 from questorharness.autopilot import RepoVerificationStep
 from questorharness.config.paths import get_feedback_log_path, get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import load_settings, save_settings, Settings
-from questorharness.engine.messages import ConversationMessage, TextBlock
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine
 from questorharness.capabilities.memory.paths import get_project_memory_dir
 from questorharness.contracts.mcp import McpHttpServerConfig, McpStdioServerConfig

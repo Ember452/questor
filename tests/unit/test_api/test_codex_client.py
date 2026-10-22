@@ -12,7 +12,7 @@ from questorharness.providers.llm.codex_client import (
     _format_codex_stream_error,
     _resolve_codex_url,
 )
-from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock, ToolResultBlock, ToolUseBlock
+from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock, ToolResultBlock, ToolUseBlock
 
 
 class _FakeStreamResponse:

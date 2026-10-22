@@ -17,8 +17,8 @@ from questorharness.providers.llm.client import (
     ApiTextDeltaEvent,
 )
 from questorharness.providers.llm.errors import AuthenticationFailure, QuestorHarnessApiError, RateLimitFailure, RequestFailure
-from questorharness.providers.llm.usage import UsageSnapshot
-from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock, ToolResultBlock, ToolUseBlock
+from questorharness.contracts.usage import UsageSnapshot
+from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock, ToolResultBlock, ToolUseBlock
 
 DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api"
 JWT_CLAIM_PATH = "https://api.openai.com/auth"

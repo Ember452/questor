@@ -66,7 +66,7 @@ def make_engine(system_prompt="You are a helpful assistant. Be concise.", cwd=No
 
 
 def collect(events):
-    from questorharness.engine.stream_events import (
+    from questorharness.contracts.domain.events import (
         AssistantTextDelta, AssistantTurnComplete,
         ToolExecutionStarted, ToolExecutionCompleted,
     )
@@ -185,8 +185,8 @@ async def test_hooks_in_agent_loop():
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query import QueryContext, run_query
-    from questorharness.engine.messages import ConversationMessage
-    from questorharness.engine.stream_events import AssistantTextDelta, ToolExecutionStarted, ToolExecutionCompleted
+    from questorharness.contracts.domain.message import ConversationMessage
+    from questorharness.contracts.domain.events import AssistantTextDelta, ToolExecutionStarted, ToolExecutionCompleted
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
@@ -396,8 +396,8 @@ async def test_session_storage():
         save_session_snapshot, load_session_snapshot,
         list_session_snapshots, export_session_markdown,
     )
-    from questorharness.engine.messages import ConversationMessage, TextBlock
-    from questorharness.providers.llm.usage import UsageSnapshot
+    from questorharness.contracts.domain.message import ConversationMessage, TextBlock
+    from questorharness.contracts.usage import UsageSnapshot
 
     with tempfile.TemporaryDirectory() as tmpdir:
         messages = [
@@ -658,8 +658,8 @@ async def test_combined_hooks_skills_agent():
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query import QueryContext, run_query
-    from questorharness.engine.messages import ConversationMessage
-    from questorharness.engine.stream_events import AssistantTextDelta, ToolExecutionStarted
+    from questorharness.contracts.domain.message import ConversationMessage
+    from questorharness.contracts.domain.events import AssistantTextDelta, ToolExecutionStarted
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry

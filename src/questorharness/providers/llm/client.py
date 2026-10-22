@@ -23,8 +23,8 @@ from questorharness.providers.auth.external import (
     claude_oauth_headers,
     get_claude_code_session_id,
 )
-from questorharness.providers.llm.usage import UsageSnapshot
-from questorharness.engine.messages import ConversationMessage, assistant_message_from_api
+from questorharness.contracts.usage import UsageSnapshot
+from questorharness.contracts.domain.message import ConversationMessage, assistant_message_from_api
 
 log = logging.getLogger(__name__)
 

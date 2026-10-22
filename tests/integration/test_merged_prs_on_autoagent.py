@@ -80,7 +80,7 @@ def make_openai_engine(system_prompt, extra_tools=None):
 
 
 def collect(events):
-    from questorharness.engine.stream_events import (
+    from questorharness.contracts.domain.events import (
         AssistantTextDelta, AssistantTurnComplete,
         ToolExecutionStarted, ToolExecutionCompleted,
     )
@@ -332,7 +332,7 @@ async def task_session_resume_autoagent():
     from questorharness.services.session_storage import (
         save_session_snapshot, load_session_snapshot,
     )
-    from questorharness.engine.messages import ConversationMessage
+    from questorharness.contracts.domain.message import ConversationMessage
 
     with tempfile.TemporaryDirectory() as session_dir:
         # Phase 1: Original 3-turn research session
@@ -507,7 +507,7 @@ async def task_full_dev_workflow():
     from questorharness.capabilities.memory.search import find_relevant_memories
     from questorharness.services.session_storage import save_session_snapshot, load_session_snapshot
     from questorharness.services.cron import upsert_cron_job, load_cron_jobs, validate_cron_expression
-    from questorharness.engine.messages import ConversationMessage
+    from questorharness.contracts.domain.message import ConversationMessage
     import questorharness.capabilities.memory.paths as mp
     import questorharness.capabilities.memory.manager as mm
     import questorharness.capabilities.memory.scan as ms

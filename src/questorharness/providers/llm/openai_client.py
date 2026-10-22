@@ -25,8 +25,8 @@ from questorharness.providers.llm.errors import (
     RateLimitFailure,
     RequestFailure,
 )
-from questorharness.providers.llm.usage import UsageSnapshot
-from questorharness.engine.messages import (
+from questorharness.contracts.usage import UsageSnapshot
+from questorharness.contracts.domain.message import (
     ConversationMessage,
     ContentBlock,
     ImageBlock,

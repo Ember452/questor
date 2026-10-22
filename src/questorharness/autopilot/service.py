@@ -36,7 +36,7 @@ from questorharness.config.paths import (
     get_project_repo_journal_path,
     get_project_verification_policy_path,
 )
-from questorharness.engine.stream_events import AssistantTextDelta, AssistantTurnComplete, ErrorEvent
+from questorharness.contracts.domain.events import AssistantTextDelta, AssistantTurnComplete, ErrorEvent
 from questorharness.swarm.worktree import WorktreeManager
 from questorharness.utils.fs import atomic_write_text
 

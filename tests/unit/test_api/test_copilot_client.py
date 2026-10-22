@@ -18,8 +18,8 @@ from questorharness.providers.llm.copilot_auth import (
 )
 from questorharness.providers.llm.copilot_client import CopilotClient
 from questorharness.providers.llm.errors import AuthenticationFailure
-from questorharness.providers.llm.usage import UsageSnapshot
-from questorharness.engine.messages import ConversationMessage, TextBlock
+from questorharness.contracts.usage import UsageSnapshot
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 
 
 # ---------------------------------------------------------------------------

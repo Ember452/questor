@@ -63,7 +63,7 @@ def make_engine(system_prompt, cwd=None, hook_executor=None, max_tokens=4096, ma
 
 
 def collect(events):
-    from questorharness.engine.stream_events import (
+    from questorharness.contracts.domain.events import (
         AssistantTextDelta, AssistantTurnComplete,
         ToolExecutionStarted, ToolExecutionCompleted,
     )

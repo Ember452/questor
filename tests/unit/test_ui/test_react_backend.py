@@ -10,9 +10,9 @@ from types import SimpleNamespace
 import pytest
 
 from questorharness.providers.llm.client import ApiMessageCompleteEvent
-from questorharness.providers.llm.usage import UsageSnapshot
-from questorharness.engine.stream_events import CompactProgressEvent
-from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock
+from questorharness.contracts.usage import UsageSnapshot
+from questorharness.contracts.domain.events import CompactProgressEvent
+from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock
 from questorharness.config.settings import Settings, save_settings
 from questorharness.ui.backend_host import (
     BackendHostConfig,

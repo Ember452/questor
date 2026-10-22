@@ -23,14 +23,14 @@ from questorharness.commands import (
 )
 from questorharness.config import get_config_file_path, load_settings
 from questorharness.engine import QueryEngine
-from questorharness.engine.messages import (
+from questorharness.contracts.domain.message import (
     ConversationMessage,
     ToolResultBlock,
     ToolUseBlock,
     sanitize_conversation_messages,
 )
 from questorharness.engine.query import MaxTurnsExceeded
-from questorharness.engine.stream_events import StreamEvent
+from questorharness.contracts.domain.events import StreamEvent
 from questorharness.hooks import HookEvent, HookExecutionContext, HookExecutor, load_hook_registry
 from questorharness.hooks.hot_reload import HookReloader
 from questorharness.providers.mcp.client import McpClientManager
@@ -784,8 +784,8 @@ async def _render_command_result(
         await clear_output()
     if result.replay_messages and render_event is not None:
         # 将恢复的对话消息作为转录事件回放
-        from questorharness.engine.stream_events import AssistantTextDelta, AssistantTurnComplete
-        from questorharness.providers.llm.usage import UsageSnapshot
+        from questorharness.contracts.domain.events import AssistantTextDelta, AssistantTurnComplete
+        from questorharness.contracts.usage import UsageSnapshot
 
         await clear_output()
         await print_system("Session restored:")

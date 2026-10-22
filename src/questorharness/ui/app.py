@@ -9,7 +9,7 @@ import sys
 from questorharness.coordinator.coordinator_mode import is_coordinator_mode
 
 from questorharness.providers.llm.client import SupportsStreamingMessages
-from questorharness.engine.stream_events import StreamEvent
+from questorharness.contracts.domain.events import StreamEvent
 from questorharness.ui.backend_host import run_backend_host
 from questorharness.ui.coordinator_drain import drain_coordinator_async_agents
 from questorharness.ui.react_launcher import launch_react_tui
@@ -119,7 +119,7 @@ async def run_task_worker(
         print(message, flush=True)
 
     async def _render_event(event: StreamEvent) -> None:
-        from questorharness.engine.stream_events import AssistantTextDelta, AssistantTurnComplete, ErrorEvent, StatusEvent
+        from questorharness.contracts.domain.events import AssistantTextDelta, AssistantTurnComplete, ErrorEvent, StatusEvent
 
         if isinstance(event, AssistantTextDelta):
             sys.stdout.write(event.text)
@@ -191,7 +191,7 @@ async def run_print_mode(
     max_turns: int | None = None,
 ) -> None:
     """Non-interactive mode: submit prompt, stream output, exit."""
-    from questorharness.engine.stream_events import (
+    from questorharness.contracts.domain.events import (
         AssistantTextDelta,
         AssistantTurnComplete,
         CompactProgressEvent,

@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 
 from questorharness.providers.llm.client import ApiMessageCompleteEvent
-from questorharness.providers.llm.usage import UsageSnapshot
+from questorharness.contracts.usage import UsageSnapshot
 from questorharness.commands.registry import CommandContext, create_default_command_registry
 from questorharness.config.settings import Settings
-from questorharness.engine.messages import ConversationMessage, ToolUseBlock
+from questorharness.contracts.domain.message import ConversationMessage, ToolUseBlock
 from questorharness.engine.query_engine import QueryEngine
 from questorharness.capabilities.memory import add_memory_entry, get_project_memory_dir
 from questorharness.capabilities.memory.agent import (
