@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from re import sub
 
-from questorharness.memory.paths import get_memory_entrypoint, get_project_memory_dir
-from questorharness.memory.scan import scan_memory_files
-from questorharness.memory.schema import (
+from questorharness.capabilities.memory.paths import get_memory_entrypoint, get_project_memory_dir
+from questorharness.capabilities.memory.scan import scan_memory_files
+from questorharness.capabilities.memory.schema import (
     DEFAULT_MEMORY_SCOPE,
     DEFAULT_MEMORY_TYPE,
     MemoryScope,
@@ -48,7 +48,7 @@ def add_memory_entry(
 ) -> Path:
     """Create or refresh a memory file and append it to MEMORY.md."""
     if scope == "team":
-        from questorharness.memory.team import check_team_memory_secrets, ensure_team_memory_vault
+        from questorharness.capabilities.memory.team import check_team_memory_secrets, ensure_team_memory_vault
 
         secret_error = check_team_memory_secrets(content)
         if secret_error:

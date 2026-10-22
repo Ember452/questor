@@ -7,10 +7,10 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from questorharness.memory.paths import get_project_memory_dir
-from questorharness.memory.scan import scan_memory_files
-from questorharness.memory.schema import format_datetime, parse_datetime, utc_now
-from questorharness.memory.types import MemoryHeader
+from questorharness.capabilities.memory.paths import get_project_memory_dir
+from questorharness.capabilities.memory.scan import scan_memory_files
+from questorharness.capabilities.memory.schema import format_datetime, parse_datetime, utc_now
+from questorharness.capabilities.memory.types import MemoryHeader
 from questorharness.utils.file_lock import exclusive_file_lock
 from questorharness.utils.fs import atomic_write_text
 

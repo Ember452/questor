@@ -6,10 +6,10 @@ import re
 from datetime import timedelta
 from pathlib import Path
 
-from questorharness.memory.scan import scan_memory_files
-from questorharness.memory.schema import parse_datetime, utc_now
-from questorharness.memory.types import MemoryHeader
-from questorharness.memory.usage import get_memory_usage
+from questorharness.capabilities.memory.scan import scan_memory_files
+from questorharness.capabilities.memory.schema import parse_datetime, utc_now
+from questorharness.capabilities.memory.types import MemoryHeader
+from questorharness.capabilities.memory.usage import get_memory_usage
 
 
 def find_relevant_memories(

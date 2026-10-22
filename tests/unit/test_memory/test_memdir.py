@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.memory import (
+from questorharness.capabilities.memory import (
     add_memory_entry,
     find_relevant_memories,
     get_memory_entrypoint,
@@ -13,8 +13,8 @@ from questorharness.memory import (
     migrate_memory,
     remove_memory_entry,
 )
-from questorharness.memory.scan import _parse_memory_file, scan_memory_files
-from questorharness.memory.usage import find_stale_memory_candidates, load_usage_index, mark_memory_used
+from questorharness.capabilities.memory.scan import _parse_memory_file, scan_memory_files
+from questorharness.capabilities.memory.usage import find_stale_memory_candidates, load_usage_index, mark_memory_used
 
 
 def test_memory_paths_are_stable(tmp_path: Path, monkeypatch):

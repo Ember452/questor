@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.memory import load_memory_prompt as load_project_memory_prompt
+from questorharness.capabilities.memory import load_memory_prompt as load_project_memory_prompt
 from questorharness.prompts.system_prompt import get_base_system_prompt
 
 from questor.memory import load_memory_prompt as load_questor_memory_prompt

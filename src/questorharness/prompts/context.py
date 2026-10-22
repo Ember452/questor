@@ -12,9 +12,9 @@ from questorharness.config.paths import (
 )
 from questorharness.config.settings import Settings
 from questorharness.coordinator.coordinator_mode import get_coordinator_system_prompt, is_coordinator_mode
-from questorharness.memory import load_memory_prompt
-from questorharness.memory.relevance import format_relevant_memories, select_relevant_memories
-from questorharness.memory.usage import mark_memory_used
+from questorharness.capabilities.memory import load_memory_prompt
+from questorharness.capabilities.memory.relevance import format_relevant_memories, select_relevant_memories
+from questorharness.capabilities.memory.usage import mark_memory_used
 from questorharness.personalization.rules import load_local_rules
 from questorharness.permissions.modes import PermissionMode
 from questorharness.platforms import get_platform

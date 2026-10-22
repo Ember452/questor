@@ -155,11 +155,11 @@ async def task_memory_research_autoagent():
     print("  Task 2: PR#12 — Research AutoAgent → save to memory → search → use")
     print("=" * 70)
 
-    from questorharness.memory.search import find_relevant_memories
-    from questorharness.memory.scan import scan_memory_files
-    import questorharness.memory.paths as mp
-    import questorharness.memory.manager as mm
-    import questorharness.memory.scan as ms
+    from questorharness.capabilities.memory.search import find_relevant_memories
+    from questorharness.capabilities.memory.scan import scan_memory_files
+    import questorharness.capabilities.memory.paths as mp
+    import questorharness.capabilities.memory.manager as mm
+    import questorharness.capabilities.memory.scan as ms
 
     with tempfile.TemporaryDirectory() as tmpdir:
         mem_dir = Path(tmpdir) / "memory"
@@ -503,14 +503,14 @@ async def task_full_dev_workflow():
     print("=" * 70)
 
     from questorharness.tools.skill_tool import SkillTool
-    from questorharness.memory.scan import scan_memory_files
-    from questorharness.memory.search import find_relevant_memories
+    from questorharness.capabilities.memory.scan import scan_memory_files
+    from questorharness.capabilities.memory.search import find_relevant_memories
     from questorharness.services.session_storage import save_session_snapshot, load_session_snapshot
     from questorharness.services.cron import upsert_cron_job, load_cron_jobs, validate_cron_expression
     from questorharness.engine.messages import ConversationMessage
-    import questorharness.memory.paths as mp
-    import questorharness.memory.manager as mm
-    import questorharness.memory.scan as ms
+    import questorharness.capabilities.memory.paths as mp
+    import questorharness.capabilities.memory.manager as mm
+    import questorharness.capabilities.memory.scan as ms
     import questorharness.services.cron as cron_mod
 
     with tempfile.TemporaryDirectory() as tmpdir:

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from questorharness.config.paths import get_data_dir
-from questorharness.memory.paths import get_project_memory_dir
+from questorharness.capabilities.memory.paths import get_project_memory_dir
 
 AgentMemoryScope = Literal["user", "project", "local"]
 

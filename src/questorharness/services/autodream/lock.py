@@ -7,7 +7,7 @@ import os
 import time
 from pathlib import Path
 
-from questorharness.memory.paths import get_project_memory_dir
+from questorharness.capabilities.memory.paths import get_project_memory_dir
 from questorharness.services.session_storage import get_project_session_dir
 from questorharness.utils.fs import atomic_write_text
 

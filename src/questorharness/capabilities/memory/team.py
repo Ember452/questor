@@ -6,8 +6,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from questorharness.memory.paths import get_project_memory_dir
-from questorharness.memory.schema import path_is_relative_to
+from questorharness.capabilities.memory.paths import get_project_memory_dir
+from questorharness.capabilities.memory.schema import path_is_relative_to
 
 TEAM_DIR_NAME = "team"
 MEMORY_INDEX = "MEMORY.md"

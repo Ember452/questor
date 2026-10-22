@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.memory.paths import get_project_memory_dir
-from questorharness.memory.schema import (
+from questorharness.capabilities.memory.paths import get_project_memory_dir
+from questorharness.capabilities.memory.schema import (
     coerce_bool,
     coerce_int,
     coerce_optional_int,
@@ -14,7 +14,7 @@ from questorharness.memory.schema import (
     is_memory_expired,
     split_memory_file,
 )
-from questorharness.memory.types import MemoryHeader
+from questorharness.capabilities.memory.types import MemoryHeader
 
 
 def scan_memory_files(

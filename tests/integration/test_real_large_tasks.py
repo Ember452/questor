@@ -301,10 +301,10 @@ async def task_migration_plan_with_memory():
     from questorharness.coordinator.agent_definitions import get_agent_definition
     from questorharness.skills.registry import SkillRegistry
     from questorharness.skills.types import SkillDefinition
-    from questorharness.memory.manager import add_memory_entry, list_memory_files, remove_memory_entry
+    from questorharness.capabilities.memory.manager import add_memory_entry, list_memory_files, remove_memory_entry
     from questorharness.services.session_storage import save_session_snapshot, export_session_markdown
-    import questorharness.memory.paths as mp
-    import questorharness.memory.manager as mm
+    import questorharness.capabilities.memory.paths as mp
+    import questorharness.capabilities.memory.manager as mm
 
     with tempfile.TemporaryDirectory() as tmpdir:
         mem_dir = Path(tmpdir) / "memory"

@@ -339,20 +339,20 @@ Build and deploy the app to production.
 # ====================================================================
 async def test_memory_lifecycle():
     """Test full memory lifecycle: add → list → search → remove."""
-    from questorharness.memory.manager import list_memory_files, add_memory_entry, remove_memory_entry
-    from questorharness.memory.search import find_relevant_memories
-    from questorharness.memory.scan import scan_memory_files
+    from questorharness.capabilities.memory.manager import list_memory_files, add_memory_entry, remove_memory_entry
+    from questorharness.capabilities.memory.search import find_relevant_memories
+    from questorharness.capabilities.memory.scan import scan_memory_files
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Monkey-patch memory dir
-        import questorharness.memory.paths as mp
+        import questorharness.capabilities.memory.paths as mp
         orig = mp.get_project_memory_dir
         mem_dir = Path(tmpdir) / ".questorharness" / "memory"
         mem_dir.mkdir(parents=True, exist_ok=True)
         mp.get_project_memory_dir = lambda cwd: mem_dir
 
         # Also patch entrypoint
-        import questorharness.memory.manager as mm
+        import questorharness.capabilities.memory.manager as mm
         orig_ep = mm.get_memory_entrypoint
         mm.get_memory_entrypoint = lambda cwd: mem_dir / "MEMORY.md"
 

@@ -10,11 +10,11 @@ from typing import Any
 
 from questorharness.providers.llm.client import ApiMessageCompleteEvent, ApiMessageRequest, SupportsStreamingMessages
 from questorharness.engine.messages import ConversationMessage, ToolUseBlock
-from questorharness.memory.manager import add_memory_entry
-from questorharness.memory.paths import get_project_memory_dir
-from questorharness.memory.relevance import build_memory_manifest
-from questorharness.memory.scan import scan_memory_files
-from questorharness.memory.schema import (
+from questorharness.capabilities.memory.manager import add_memory_entry
+from questorharness.capabilities.memory.paths import get_project_memory_dir
+from questorharness.capabilities.memory.relevance import build_memory_manifest
+from questorharness.capabilities.memory.scan import scan_memory_files
+from questorharness.capabilities.memory.schema import (
     DEFAULT_MEMORY_SCOPE,
     DEFAULT_MEMORY_TYPE,
     MemoryScope,
@@ -22,7 +22,7 @@ from questorharness.memory.schema import (
     parse_memory_scope,
     parse_memory_type,
 )
-from questorharness.memory.team import check_team_memory_secrets, validate_team_memory_write_path
+from questorharness.capabilities.memory.team import check_team_memory_secrets, validate_team_memory_write_path
 
 log = logging.getLogger(__name__)
 

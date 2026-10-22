@@ -8,8 +8,8 @@ import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from questorharness.memory.paths import get_project_memory_dir
-from questorharness.memory.schema import (
+from questorharness.capabilities.memory.paths import get_project_memory_dir
+from questorharness.capabilities.memory.schema import (
     memory_metadata_from_path,
     render_memory_file,
     split_memory_file,

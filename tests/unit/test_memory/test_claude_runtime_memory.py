@@ -14,20 +14,20 @@ from questorharness.commands.registry import CommandContext, create_default_comm
 from questorharness.config.settings import Settings
 from questorharness.engine.messages import ConversationMessage, ToolUseBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.memory import add_memory_entry, get_project_memory_dir
-from questorharness.memory.agent import (
+from questorharness.capabilities.memory import add_memory_entry, get_project_memory_dir
+from questorharness.capabilities.memory.agent import (
     ensure_agent_memory_vault,
     get_agent_memory_entrypoint,
     initialize_agent_memory_from_snapshot,
 )
-from questorharness.memory.relevance import format_relevant_memories, select_relevant_memories
-from questorharness.memory.schema import (
+from questorharness.capabilities.memory.relevance import format_relevant_memories, select_relevant_memories
+from questorharness.capabilities.memory.schema import (
     memory_freshness_text,
     parse_memory_scope,
     parse_memory_type,
     truncate_entrypoint_content,
 )
-from questorharness.memory.team import (
+from questorharness.capabilities.memory.team import (
     check_team_memory_secrets,
     ensure_team_memory_vault,
     validate_team_memory_write_path,

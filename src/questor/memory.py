@@ -6,8 +6,8 @@ from pathlib import Path
 from re import sub
 
 from questorharness.commands import MemoryCommandBackend
-from questorharness.memory.scan import scan_memory_files
-from questorharness.memory.schema import (
+from questorharness.capabilities.memory.scan import scan_memory_files
+from questorharness.capabilities.memory.schema import (
     SCHEMA_VERSION,
     coerce_int,
     compute_memory_signature,

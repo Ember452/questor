@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-from questorharness.memory.scan import scan_memory_files
-from questorharness.memory.schema import memory_age_label, memory_freshness_text
-from questorharness.memory.search import find_relevant_memories
-from questorharness.memory.types import MemoryHeader
+from questorharness.capabilities.memory.scan import scan_memory_files
+from questorharness.capabilities.memory.schema import memory_age_label, memory_freshness_text
+from questorharness.capabilities.memory.search import find_relevant_memories
+from questorharness.capabilities.memory.types import MemoryHeader
 
 
 @dataclass(frozen=True)

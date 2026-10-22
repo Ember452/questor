@@ -13,8 +13,8 @@ from questorharness.config.settings import (
     auth_source_env_var_candidates,
     default_auth_source_for_provider,
 )
-from questorharness.memory.paths import get_project_memory_dir
-from questorharness.memory.usage import find_stale_memory_candidates
+from questorharness.capabilities.memory.paths import get_project_memory_dir
+from questorharness.capabilities.memory.usage import find_stale_memory_candidates
 from questorharness.services.autodream.backup import create_memory_backup, diff_memory_dirs
 from questorharness.services.autodream.lock import (
     list_sessions_touched_since,

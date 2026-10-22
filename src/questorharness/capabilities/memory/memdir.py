@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.memory.paths import get_memory_entrypoint, get_project_memory_dir
-from questorharness.memory.schema import (
+from questorharness.capabilities.memory.paths import get_memory_entrypoint, get_project_memory_dir
+from questorharness.capabilities.memory.schema import (
     MAX_ENTRYPOINT_BYTES,
     MEMORY_POLICY_LINES,
     truncate_entrypoint_content,

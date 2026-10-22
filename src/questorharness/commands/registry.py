@@ -32,7 +32,7 @@ from questorharness.providers.llm.provider import auth_status, detect_provider
 from questorharness.config.settings import Settings, display_model_setting, load_settings, save_settings
 from questorharness.engine.messages import ConversationMessage, sanitize_conversation_messages
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.memory import (
+from questorharness.capabilities.memory import (
     add_memory_entry,
     get_memory_entrypoint,
     get_project_memory_dir,
@@ -41,12 +41,12 @@ from questorharness.memory import (
     remove_memory_entry,
     scan_memory_files,
 )
-from questorharness.memory.agent import (
+from questorharness.capabilities.memory.agent import (
     ensure_agent_memory_vault,
     get_agent_memory_entrypoint,
     initialize_agent_memory_from_snapshot,
 )
-from questorharness.memory.schema import (
+from questorharness.capabilities.memory.schema import (
     DEFAULT_MEMORY_SCOPE,
     DEFAULT_MEMORY_TYPE,
     MEMORY_TYPES,
@@ -56,7 +56,7 @@ from questorharness.memory.schema import (
     parse_memory_type,
     split_memory_file,
 )
-from questorharness.memory.team import (
+from questorharness.capabilities.memory.team import (
     check_team_memory_secrets,
     ensure_team_memory_vault,
     get_team_memory_dir,
