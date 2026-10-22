@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from questorharness.config import Settings
-    from questorharness.sandbox.docker_backend import DockerSandboxSession
+    from questorharness.providers.sandbox.docker_backend import DockerSandboxSession
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +34,12 @@ async def start_docker_sandbox(
     """Start a Docker sandbox session for the current QuestorHarness session."""
     global _active_session  # noqa: PLW0603
 
-    from questorharness.sandbox.docker_backend import DockerSandboxSession, get_docker_availability
+    from questorharness.providers.sandbox.docker_backend import DockerSandboxSession, get_docker_availability
 
     availability = get_docker_availability(settings)
     if not availability.available:
         if settings.sandbox.fail_if_unavailable:
-            from questorharness.sandbox.adapter import SandboxUnavailableError
+            from questorharness.providers.sandbox.adapter import SandboxUnavailableError
 
             raise SandboxUnavailableError(
                 availability.reason or "Docker sandbox is unavailable"

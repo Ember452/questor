@@ -11,7 +11,7 @@ from pathlib import Path
 
 from questorharness.config import Settings
 from questorharness.platforms import get_platform, get_platform_capabilities
-from questorharness.sandbox.adapter import SandboxAvailability, SandboxUnavailableError
+from questorharness.providers.sandbox.adapter import SandboxAvailability, SandboxUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ class DockerSandboxSession:
 
     async def start(self) -> None:
         """Create and start the sandbox container."""
-        from questorharness.sandbox.docker_image import ensure_image_available
+        from questorharness.providers.sandbox.docker_image import ensure_image_available
 
         docker_cfg = self.settings.sandbox.docker
         available = await ensure_image_available(

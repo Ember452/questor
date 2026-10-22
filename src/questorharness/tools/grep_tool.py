@@ -192,7 +192,7 @@ async def _rg_grep(
     # `--` 确保 `-foo` 这类模式不会被解析为参数。
     cmd.extend(["--", pattern, "."])
 
-    from questorharness.sandbox.session import get_docker_sandbox
+    from questorharness.providers.sandbox.session import get_docker_sandbox
 
     session = get_docker_sandbox()
     if session is not None and session.is_running:
@@ -260,7 +260,7 @@ async def _rg_grep_file(
         cmd.append("-i")
     cmd.extend(["--", pattern, path.name])
 
-    from questorharness.sandbox.session import get_docker_sandbox
+    from questorharness.providers.sandbox.session import get_docker_sandbox
 
     session = get_docker_sandbox()
     if session is not None and session.is_running:

@@ -34,8 +34,8 @@ from questorharness.config.settings import (
     SandboxSettings,
     Settings,
 )
-from questorharness.sandbox.docker_backend import DockerSandboxSession, get_docker_availability
-from questorharness.sandbox.docker_image import ensure_image_available
+from questorharness.providers.sandbox.docker_backend import DockerSandboxSession, get_docker_availability
+from questorharness.providers.sandbox.docker_image import ensure_image_available
 
 # ---------------------------------------------------------------------------
 # Skip condition: Docker daemon must be reachable
@@ -517,7 +517,7 @@ class TestResourceLimits:
 class TestSessionIntegration:
     def test_session_lifecycle(self, e2e_image, project_dir):
         """start_docker_sandbox / stop_docker_sandbox should manage the global session."""
-        from questorharness.sandbox.session import (
+        from questorharness.providers.sandbox.session import (
             get_docker_sandbox,
             is_docker_sandbox_active,
             start_docker_sandbox,
@@ -555,7 +555,7 @@ class TestSessionIntegration:
 class TestShellIntegration:
     def test_create_shell_subprocess_routes_through_docker(self, e2e_image, project_dir):
         """When Docker sandbox is active, create_shell_subprocess should exec inside container."""
-        from questorharness.sandbox.session import (
+        from questorharness.providers.sandbox.session import (
             start_docker_sandbox,
             stop_docker_sandbox,
         )

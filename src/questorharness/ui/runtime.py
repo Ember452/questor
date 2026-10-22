@@ -438,7 +438,7 @@ async def build_runtime(
 
     # 如已配置则启动 Docker 沙箱
     if settings.sandbox.enabled and settings.sandbox.backend == "docker":
-        from questorharness.sandbox.session import start_docker_sandbox
+        from questorharness.providers.sandbox.session import start_docker_sandbox
 
         await start_docker_sandbox(settings, session_id, Path(cwd))
 
@@ -481,7 +481,7 @@ async def start_runtime(bundle: RuntimeBundle) -> None:
 
 async def close_runtime(bundle: RuntimeBundle) -> None:
     """Close runtime-owned resources."""
-    from questorharness.sandbox.session import stop_docker_sandbox
+    from questorharness.providers.sandbox.session import stop_docker_sandbox
 
     await stop_docker_sandbox()
     # 关闭会话前提取本地环境规则

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from questorharness.config import Settings, load_settings
 from questorharness.platforms import PlatformName, get_platform
-from questorharness.sandbox import wrap_command_for_sandbox
+from questorharness.providers.sandbox import wrap_command_for_sandbox
 
 
 def resolve_shell_command(
@@ -64,7 +64,7 @@ async def create_shell_subprocess(
 
     # Docker 后端：通过 docker exec 执行
     if resolved_settings.sandbox.enabled and resolved_settings.sandbox.backend == "docker":
-        from questorharness.sandbox.session import get_docker_sandbox
+        from questorharness.providers.sandbox.session import get_docker_sandbox
 
         session = get_docker_sandbox()
         if session is not None and session.is_running:
@@ -78,7 +78,7 @@ async def create_shell_subprocess(
                 env=dict(env) if env is not None else None,
             )
         if resolved_settings.sandbox.fail_if_unavailable:
-            from questorharness.sandbox import SandboxUnavailableError
+            from questorharness.providers.sandbox import SandboxUnavailableError
 
             raise SandboxUnavailableError("Docker sandbox session is not running")
 

@@ -114,7 +114,7 @@ async def _glob(root: Path, pattern: str, *, limit: int) -> list[str]:
             cmd.append("--hidden")
         cmd.extend(["--glob", pattern, "."])
 
-        from questorharness.sandbox.session import get_docker_sandbox
+        from questorharness.providers.sandbox.session import get_docker_sandbox
 
         session = get_docker_sandbox()
         if session is not None and session.is_running:

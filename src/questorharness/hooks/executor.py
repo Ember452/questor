@@ -25,7 +25,7 @@ from questorharness.hooks.schemas import (
     PromptHookDefinition,
 )
 from questorharness.hooks.types import AggregatedHookResult, HookResult
-from questorharness.sandbox import SandboxUnavailableError
+from questorharness.providers.sandbox import SandboxUnavailableError
 from questorharness.utils.shell import create_shell_subprocess
 
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from questorharness.services.cron import get_cron_job
 from questorharness.services.cron_scheduler import _command_for_job
-from questorharness.sandbox import SandboxUnavailableError
+from questorharness.providers.sandbox import SandboxUnavailableError
 from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
 from questorharness.utils.shell import create_shell_subprocess
 

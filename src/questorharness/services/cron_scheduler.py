@@ -31,7 +31,7 @@ from questorharness.services.cron import (
     mark_job_run,
     validate_cron_expression,
 )
-from questorharness.sandbox import SandboxUnavailableError
+from questorharness.providers.sandbox import SandboxUnavailableError
 from questorharness.utils.shell import create_shell_subprocess
 
 NOTIFICATION_OUTPUT_LIMIT = 3500
