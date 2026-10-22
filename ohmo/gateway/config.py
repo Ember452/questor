@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from questorharness.config.schema import Config
 
 from ohmo.gateway.models import GatewayConfig
 from ohmo.workspace import get_gateway_config_path
+
+logger = logging.getLogger(__name__)
 
 
 def load_gateway_config(workspace: str | Path | None = None) -> GatewayConfig:
@@ -33,6 +36,7 @@ def build_channel_manager_config(config: GatewayConfig) -> Config:
     root.channels.send_tool_hints = config.send_tool_hints
     for name in config.enabled_channels:
         if not hasattr(root.channels, name):
+            logger.warning("Ignoring unsupported channel in gateway config: %s", name)
             continue
         channel_config = getattr(root.channels, name).model_copy(
             update={"enabled": True, **config.channel_configs.get(name, {})}
