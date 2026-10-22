@@ -543,7 +543,7 @@ async def test_commands_registry():
 @pytest.mark.skipif(_SKIP_REAL_API, reason="Needs real API + AutoAgent")
 async def test_web_fetch_real():
     """Agent fetches a real URL and summarizes it."""
-    from questorharness.tools.web_fetch_tool import WebFetchTool
+    from questorharness.capabilities.tools.web.web_fetch_tool import WebFetchTool
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
 
     engine = make_engine(

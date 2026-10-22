@@ -41,8 +41,8 @@ from questorharness.tools.team_create_tool import TeamCreateTool
 from questorharness.tools.team_delete_tool import TeamDeleteTool
 from questorharness.capabilities.tools.todo_write_tool import TodoWriteTool
 from questorharness.tools.tool_search_tool import ToolSearchTool
-from questorharness.tools.web_fetch_tool import WebFetchTool
-from questorharness.tools.web_search_tool import WebSearchTool
+from questorharness.capabilities.tools.web.web_fetch_tool import WebFetchTool
+from questorharness.capabilities.tools.web.web_search_tool import WebSearchTool
 
 
 def create_default_tool_registry(mcp_manager=None) -> ToolRegistry:
