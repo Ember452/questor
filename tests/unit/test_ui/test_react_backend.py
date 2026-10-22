@@ -161,6 +161,63 @@ async def test_run_backend_host_accepts_permission_mode(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_run_backend_host_accepts_autodream_context(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def _fake_run(self):
+        captured["autodream_context"] = self._config.autodream_context
+        return 0
+
+    monkeypatch.setattr("questorharness.ui.backend_host.ReactBackendHost.run", _fake_run)
+
+    result = await run_backend_host(
+        api_client=StaticApiClient("unused"),
+        autodream_context={"app_label": "test", "memory_dir": "/tmp/memory"},
+    )
+
+    assert result == 0
+    assert captured["autodream_context"] == {"app_label": "test", "memory_dir": "/tmp/memory"}
+
+
+@pytest.mark.asyncio
+async def test_backend_host_forwards_autodream_context_to_runtime(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def _fake_build_runtime(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            app_state=SimpleNamespace(get=lambda: {}),
+            commands=SimpleNamespace(list_commands=lambda: []),
+        )
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("questorharness.ui.backend_host.build_runtime", _fake_build_runtime)
+    monkeypatch.setattr("questorharness.ui.backend_host.start_runtime", _noop)
+    monkeypatch.setattr("questorharness.ui.backend_host.close_runtime", _noop)
+    monkeypatch.setattr(
+        "questorharness.ui.backend_host.BackendEvent.ready",
+        staticmethod(lambda *args, **kwargs: BackendEvent(type="ready")),
+    )
+    monkeypatch.setattr(ReactBackendHost, "_read_requests", _noop)
+    monkeypatch.setattr(ReactBackendHost, "_emit", _noop)
+    monkeypatch.setattr(
+        ReactBackendHost,
+        "_status_snapshot",
+        lambda self: BackendEvent(type="state_snapshot"),
+    )
+
+    host = ReactBackendHost(BackendHostConfig(autodream_context={"app_label": "test"}))
+    host._request_queue.put_nowait(FrontendRequest(type="shutdown"))
+
+    result = await host.run()
+
+    assert result == 0
+    assert captured["autodream_context"] == {"app_label": "test"}
+
+
+@pytest.mark.asyncio
 async def test_read_requests_resolves_permission_response_without_queueing(monkeypatch):
     host = ReactBackendHost(BackendHostConfig(api_client=StaticApiClient("unused")))
     fut = asyncio.get_running_loop().create_future()
