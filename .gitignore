@@ -75,6 +75,12 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# ruff
+.ruff_cache/
+
+# 前端依赖
+node_modules/
+
 # Pyre type checker
 .pyre/
 
@@ -151,3 +157,4 @@ scripts/_*
 *.local.md
 # 本地 CLI 运行时数据：event-log store（state.db）+ 记忆库（memory.db / memory_store/），均不入库
 .questor/
+.questorharness/
