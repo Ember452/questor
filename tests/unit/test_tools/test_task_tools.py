@@ -9,12 +9,12 @@ import pytest
 
 from questorharness.coordinator.coordinator_mode import get_team_registry
 from questorharness.tasks import get_task_manager
-from questorharness.tools.agent_tool import AgentTool, AgentToolInput
+from questorharness.capabilities.tools.agent.agent_tool import AgentTool, AgentToolInput
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.task.task_create_tool import TaskCreateTool, TaskCreateToolInput
 from questorharness.capabilities.tools.task.task_output_tool import TaskOutputTool, TaskOutputToolInput
 from questorharness.capabilities.tools.task.task_update_tool import TaskUpdateTool, TaskUpdateToolInput
-from questorharness.tools.team_create_tool import TeamCreateTool, TeamCreateToolInput
+from questorharness.capabilities.tools.agent.team_create_tool import TeamCreateTool, TeamCreateToolInput
 
 
 async def _wait_for_terminal_task(task_id: str, *, timeout_seconds: float = 2.0) -> None:
@@ -172,7 +172,7 @@ async def test_send_message_swarm_path_uses_subprocess_backend(
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
     context = ToolExecutionContext(cwd=tmp_path)
 
-    from questorharness.tools.send_message_tool import SendMessageTool
+    from questorharness.capabilities.tools.agent.send_message_tool import SendMessageTool
 
     with patch(
         "questorharness.swarm.subprocess_backend.SubprocessBackend.send_message",
@@ -180,7 +180,7 @@ async def test_send_message_swarm_path_uses_subprocess_backend(
     ) as mock_send:
         await SendMessageTool().execute(
             __import__(
-                "questorharness.tools.send_message_tool",
+                "questorharness.capabilities.tools.agent.send_message_tool",
                 fromlist=["SendMessageToolInput"],
             ).SendMessageToolInput(
                 task_id="worker@default",

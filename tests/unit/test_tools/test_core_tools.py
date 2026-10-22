@@ -26,7 +26,7 @@ from questorharness.capabilities.tools.fs.notebook_edit_tool import NotebookEdit
 from questorharness.capabilities.tools.remote_trigger_tool import RemoteTriggerTool, RemoteTriggerToolInput
 from questorharness.capabilities.tools.skill_tool import SkillTool, SkillToolInput
 from questorharness.capabilities.tools.todo_write_tool import TodoWriteTool, TodoWriteToolInput
-from questorharness.tools.tool_search_tool import ToolSearchTool, ToolSearchToolInput
+from questorharness.capabilities.tools.agent.tool_search_tool import ToolSearchTool, ToolSearchToolInput
 from questorharness.tools import create_default_tool_registry
 
 

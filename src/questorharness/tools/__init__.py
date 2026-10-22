@@ -1,7 +1,7 @@
 """Built-in tool registration."""
 
-from questorharness.tools.ask_user_question_tool import AskUserQuestionTool
-from questorharness.tools.agent_tool import AgentTool
+from questorharness.capabilities.tools.agent.ask_user_question_tool import AskUserQuestionTool
+from questorharness.capabilities.tools.agent.agent_tool import AgentTool
 from questorharness.capabilities.tools.shell.bash_tool import BashTool
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult
 from questorharness.capabilities.tools.brief_tool import BriefTool
@@ -28,7 +28,7 @@ from questorharness.tools.mcp_tool import McpToolAdapter
 from questorharness.capabilities.tools.fs.notebook_edit_tool import NotebookEditTool
 from questorharness.tools.read_mcp_resource_tool import ReadMcpResourceTool
 from questorharness.capabilities.tools.remote_trigger_tool import RemoteTriggerTool
-from questorharness.tools.send_message_tool import SendMessageTool
+from questorharness.capabilities.tools.agent.send_message_tool import SendMessageTool
 from questorharness.capabilities.tools.skill_tool import SkillTool
 from questorharness.capabilities.tools.shell.sleep_tool import SleepTool
 from questorharness.capabilities.tools.task.task_create_tool import TaskCreateTool
@@ -37,10 +37,10 @@ from questorharness.capabilities.tools.task.task_list_tool import TaskListTool
 from questorharness.capabilities.tools.task.task_output_tool import TaskOutputTool
 from questorharness.capabilities.tools.task.task_stop_tool import TaskStopTool
 from questorharness.capabilities.tools.task.task_update_tool import TaskUpdateTool
-from questorharness.tools.team_create_tool import TeamCreateTool
-from questorharness.tools.team_delete_tool import TeamDeleteTool
+from questorharness.capabilities.tools.agent.team_create_tool import TeamCreateTool
+from questorharness.capabilities.tools.agent.team_delete_tool import TeamDeleteTool
 from questorharness.capabilities.tools.todo_write_tool import TodoWriteTool
-from questorharness.tools.tool_search_tool import ToolSearchTool
+from questorharness.capabilities.tools.agent.tool_search_tool import ToolSearchTool
 from questorharness.capabilities.tools.web.web_fetch_tool import WebFetchTool
 from questorharness.capabilities.tools.web.web_search_tool import WebSearchTool
 
