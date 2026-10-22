@@ -9,7 +9,7 @@ import pytest
 from questorharness.providers.llm.provider import is_model_multimodal
 from questorharness.config.settings import VisionModelConfig
 from questorharness.capabilities.tools.base import ToolExecutionContext
-from questorharness.tools.image_to_text_tool import ImageToTextTool, ImageToTextToolInput
+from questorharness.capabilities.tools.media.image_to_text_tool import ImageToTextTool, ImageToTextToolInput
 
 
 # ---------------------------------------------------------------------------
@@ -276,4 +276,4 @@ def test_tool_registered() -> None:
     assert tool.name == "image_to_text"
     assert "vision" in tool.description.lower()
     assert tool.input_model.__name__ == "ImageToTextToolInput"
-    assert tool.input_model.__module__ == "questorharness.tools.image_to_text_tool"
+    assert tool.input_model.__module__ == "questorharness.capabilities.tools.media.image_to_text_tool"

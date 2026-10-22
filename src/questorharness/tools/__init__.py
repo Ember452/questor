@@ -19,8 +19,8 @@ from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
 from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
 from questorharness.capabilities.tools.fs.glob_tool import GlobTool
 from questorharness.capabilities.tools.fs.grep_tool import GrepTool
-from questorharness.tools.image_generation_tool import ImageGenerationTool
-from questorharness.tools.image_to_text_tool import ImageToTextTool
+from questorharness.capabilities.tools.media.image_generation_tool import ImageGenerationTool
+from questorharness.capabilities.tools.media.image_to_text_tool import ImageToTextTool
 from questorharness.tools.list_mcp_resources_tool import ListMcpResourcesTool
 from questorharness.capabilities.tools.fs.lsp_tool import LspTool
 from questorharness.tools.mcp_auth_tool import McpAuthTool

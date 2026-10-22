@@ -11,7 +11,7 @@ import pytest
 
 from questorharness.config.settings import ImageGenerationConfig
 from questorharness.capabilities.tools.base import ToolExecutionContext
-from questorharness.tools.image_generation_tool import ImageGenerationTool, ImageGenerationToolInput
+from questorharness.capabilities.tools.media.image_generation_tool import ImageGenerationTool, ImageGenerationToolInput
 
 
 class _FakeStreamResponse:
@@ -118,7 +118,7 @@ async def test_execute_codex_hosted_generation(monkeypatch: pytest.MonkeyPatch, 
         ]
     )
     monkeypatch.setattr(
-        "questorharness.tools.image_generation_tool.httpx.AsyncClient",
+        "questorharness.capabilities.tools.media.image_generation_tool.httpx.AsyncClient",
         lambda *args, **kwargs: _FakeAsyncClient(response, sink),
     )
 
