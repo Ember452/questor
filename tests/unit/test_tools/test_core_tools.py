@@ -10,9 +10,9 @@ import pytest
 from questorharness.capabilities.tools.shell.bash_tool import BashTool, BashToolInput
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.brief_tool import BriefTool, BriefToolInput
-from questorharness.tools.cron_create_tool import CronCreateTool, CronCreateToolInput
-from questorharness.tools.cron_delete_tool import CronDeleteTool, CronDeleteToolInput
-from questorharness.tools.cron_list_tool import CronListTool, CronListToolInput
+from questorharness.capabilities.tools.cron.cron_create_tool import CronCreateTool, CronCreateToolInput
+from questorharness.capabilities.tools.cron.cron_delete_tool import CronDeleteTool, CronDeleteToolInput
+from questorharness.capabilities.tools.cron.cron_list_tool import CronListTool, CronListToolInput
 from questorharness.capabilities.tools.config_tool import ConfigTool, ConfigToolInput
 from questorharness.capabilities.tools.enter_worktree_tool import EnterWorktreeTool, EnterWorktreeToolInput
 from questorharness.capabilities.tools.exit_worktree_tool import ExitWorktreeTool, ExitWorktreeToolInput

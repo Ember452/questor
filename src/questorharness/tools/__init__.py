@@ -6,10 +6,10 @@ from questorharness.capabilities.tools.shell.bash_tool import BashTool
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult
 from questorharness.capabilities.tools.brief_tool import BriefTool
 from questorharness.capabilities.tools.config_tool import ConfigTool
-from questorharness.tools.cron_create_tool import CronCreateTool
-from questorharness.tools.cron_delete_tool import CronDeleteTool
-from questorharness.tools.cron_list_tool import CronListTool
-from questorharness.tools.cron_toggle_tool import CronToggleTool
+from questorharness.capabilities.tools.cron.cron_create_tool import CronCreateTool
+from questorharness.capabilities.tools.cron.cron_delete_tool import CronDeleteTool
+from questorharness.capabilities.tools.cron.cron_list_tool import CronListTool
+from questorharness.capabilities.tools.cron.cron_toggle_tool import CronToggleTool
 from questorharness.capabilities.tools.enter_plan_mode_tool import EnterPlanModeTool
 from questorharness.capabilities.tools.enter_worktree_tool import EnterWorktreeTool
 from questorharness.capabilities.tools.exit_plan_mode_tool import ExitPlanModeTool
