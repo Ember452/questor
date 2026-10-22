@@ -690,7 +690,7 @@ def _load_plugin_mcp(path: Path) -> dict[str, object]:
 
 def _load_plugin_tools(path: Path, manifest: PluginManifest) -> list:
     """Discover and instantiate BaseTool subclasses from a plugin's tools/ directory."""
-    from questorharness.tools.base import BaseTool
+    from questorharness.capabilities.tools.base import BaseTool
 
     tools_dir = path / manifest.tools_dir
     if not tools_dir.is_dir():

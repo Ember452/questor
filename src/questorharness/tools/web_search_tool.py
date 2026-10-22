@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import httpx
 from pydantic import BaseModel, Field
 
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 from questorharness.utils.network_guard import NetworkGuardError, fetch_public_http_response
 
 

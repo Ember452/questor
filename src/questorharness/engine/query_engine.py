@@ -15,7 +15,7 @@ from questorharness.config.settings import Settings
 from questorharness.hooks import HookEvent, HookExecutor
 from questorharness.capabilities.policy.checker import PermissionChecker
 from questorharness.services.autodream.service import schedule_auto_dream
-from questorharness.tools.base import ToolRegistry
+from questorharness.capabilities.tools.base import ToolRegistry
 
 
 class QueryEngine:

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 from questor.group_registry import normalize_group_name, save_managed_group_record
 

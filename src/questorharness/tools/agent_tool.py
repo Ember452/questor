@@ -12,7 +12,7 @@ from questorharness.hooks import HookEvent
 from questorharness.swarm.registry import get_backend_registry
 from questorharness.swarm.types import TeammateSpawnConfig
 from questorharness.tasks import get_task_manager
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 logger = logging.getLogger(__name__)
 

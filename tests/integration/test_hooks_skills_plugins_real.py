@@ -68,7 +68,7 @@ async def task_hook_blocks_model_adapts():
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.glob_tool import GlobTool
@@ -151,12 +151,12 @@ async def task_model_invokes_skill_tool():
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.glob_tool import GlobTool
     from questorharness.tools.grep_tool import GrepTool
-    from questorharness.tools.skill_tool import SkillTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
     import questorharness.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -244,12 +244,12 @@ async def task_plugin_skill_in_agent_loop():
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.glob_tool import GlobTool
     from questorharness.tools.grep_tool import GrepTool
-    from questorharness.tools.skill_tool import SkillTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
     import questorharness.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -348,14 +348,14 @@ async def task_hook_gates_writes_skill_guides():
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.file_write_tool import FileWriteTool
     from questorharness.tools.file_edit_tool import FileEditTool
     from questorharness.tools.glob_tool import GlobTool
     from questorharness.tools.grep_tool import GrepTool
-    from questorharness.tools.skill_tool import SkillTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
     from questorharness.hooks.events import HookEvent
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
@@ -502,12 +502,12 @@ async def task_swarm_teammates_use_skills():
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.glob_tool import GlobTool
     from questorharness.tools.grep_tool import GrepTool
-    from questorharness.tools.skill_tool import SkillTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
     from questorharness.tools.file_write_tool import FileWriteTool
     import questorharness.skills.loader as sl
 

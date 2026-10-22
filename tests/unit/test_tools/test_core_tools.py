@@ -8,14 +8,14 @@ from pathlib import Path
 import pytest
 
 from questorharness.tools.bash_tool import BashTool, BashToolInput
-from questorharness.tools.base import ToolExecutionContext
-from questorharness.tools.brief_tool import BriefTool, BriefToolInput
+from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.brief_tool import BriefTool, BriefToolInput
 from questorharness.tools.cron_create_tool import CronCreateTool, CronCreateToolInput
 from questorharness.tools.cron_delete_tool import CronDeleteTool, CronDeleteToolInput
 from questorharness.tools.cron_list_tool import CronListTool, CronListToolInput
-from questorharness.tools.config_tool import ConfigTool, ConfigToolInput
-from questorharness.tools.enter_worktree_tool import EnterWorktreeTool, EnterWorktreeToolInput
-from questorharness.tools.exit_worktree_tool import ExitWorktreeTool, ExitWorktreeToolInput
+from questorharness.capabilities.tools.config_tool import ConfigTool, ConfigToolInput
+from questorharness.capabilities.tools.enter_worktree_tool import EnterWorktreeTool, EnterWorktreeToolInput
+from questorharness.capabilities.tools.exit_worktree_tool import ExitWorktreeTool, ExitWorktreeToolInput
 from questorharness.tools.file_edit_tool import FileEditTool, FileEditToolInput
 from questorharness.tools.file_read_tool import FileReadTool, FileReadToolInput
 from questorharness.tools.file_write_tool import FileWriteTool, FileWriteToolInput
@@ -23,9 +23,9 @@ from questorharness.tools.glob_tool import GlobTool, GlobToolInput
 from questorharness.tools.grep_tool import GrepTool, GrepToolInput
 from questorharness.tools.lsp_tool import LspTool, LspToolInput
 from questorharness.tools.notebook_edit_tool import NotebookEditTool, NotebookEditToolInput
-from questorharness.tools.remote_trigger_tool import RemoteTriggerTool, RemoteTriggerToolInput
-from questorharness.tools.skill_tool import SkillTool, SkillToolInput
-from questorharness.tools.todo_write_tool import TodoWriteTool, TodoWriteToolInput
+from questorharness.capabilities.tools.remote_trigger_tool import RemoteTriggerTool, RemoteTriggerToolInput
+from questorharness.capabilities.tools.skill_tool import SkillTool, SkillToolInput
+from questorharness.capabilities.tools.todo_write_tool import TodoWriteTool, TodoWriteToolInput
 from questorharness.tools.tool_search_tool import ToolSearchTool, ToolSearchToolInput
 from questorharness.tools import create_default_tool_registry
 

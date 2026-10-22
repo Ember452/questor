@@ -8,7 +8,7 @@ import re
 
 from pydantic import BaseModel, Field
 
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
 class EnterWorktreeToolInput(BaseModel):

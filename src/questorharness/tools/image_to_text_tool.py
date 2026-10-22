@@ -16,7 +16,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from questorharness.providers.llm.openai_client import OpenAICompatibleClient
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 log = logging.getLogger(__name__)
 

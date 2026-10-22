@@ -13,7 +13,7 @@ import questorharness.capabilities.tools.mcp.client as client_module
 from questorharness.capabilities.tools.mcp.client import McpClientManager
 from questorharness.capabilities.tools.mcp.types import McpHttpServerConfig
 from questorharness.tools import create_default_tool_registry
-from questorharness.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.base import ToolExecutionContext
 
 
 @pytest.mark.asyncio

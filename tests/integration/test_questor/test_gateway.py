@@ -33,7 +33,7 @@ from questorharness.capabilities.memory import add_memory_entry as add_project_m
 from questorharness.capabilities.memory import list_memory_files as list_project_memory_files
 from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.tasks.manager import get_task_manager
-from questorharness.tools.base import ToolExecutionContext, ToolRegistry
+from questorharness.capabilities.tools.base import ToolExecutionContext, ToolRegistry
 
 from questor.gateway.bridge import QuestorGatewayBridge, _format_gateway_error
 from questor.gateway.config import load_gateway_config, save_gateway_config

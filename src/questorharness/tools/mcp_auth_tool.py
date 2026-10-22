@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from questorharness.config.settings import load_settings, save_settings
 from questorharness.capabilities.tools.mcp.types import McpHttpServerConfig, McpStdioServerConfig, McpWebSocketServerConfig
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
 class McpAuthToolInput(BaseModel):

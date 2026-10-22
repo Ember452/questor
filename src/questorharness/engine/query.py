@@ -40,8 +40,8 @@ from questorharness.engine.stream_events import (
 from questorharness.hooks import HookEvent, HookExecutor
 from questorharness.capabilities.policy.checker import PermissionChecker
 from questorharness.services.tool_outputs import tool_output_inline_chars, tool_output_preview_chars
-from questorharness.tools.base import ToolExecutionContext
-from questorharness.tools.base import ToolRegistry
+from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.base import ToolRegistry
 
 AUTO_COMPACT_STATUS_MESSAGE = "Auto-compacting conversation memory to keep things fast and focused."
 REACTIVE_COMPACT_STATUS_MESSAGE = "Prompt too long; compacting conversation memory and retrying."

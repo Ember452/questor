@@ -40,7 +40,7 @@ def make_engine(system_prompt, cwd=None, hook_executor=None, max_tokens=4096, ma
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.file_write_tool import FileWriteTool
@@ -181,7 +181,7 @@ async def task_coordinator_code_review():
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.glob_tool import GlobTool
@@ -532,7 +532,7 @@ async def task_full_pipeline():
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.glob_tool import GlobTool

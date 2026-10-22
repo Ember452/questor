@@ -9,7 +9,7 @@ from typing import Iterable
 from pydantic import BaseModel, Field
 
 from questorharness.providers.sandbox import SandboxUnavailableError
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 from questorharness.utils.shell import create_shell_subprocess
 
 

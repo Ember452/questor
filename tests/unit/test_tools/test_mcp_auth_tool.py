@@ -8,7 +8,7 @@ import pytest
 
 from questorharness.config.settings import Settings, load_settings, save_settings
 from questorharness.capabilities.tools.mcp.types import McpHttpServerConfig, McpStdioServerConfig
-from questorharness.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.tools.mcp_auth_tool import McpAuthTool, McpAuthToolInput
 
 

@@ -14,7 +14,7 @@ from questorharness.capabilities.tools.mcp.config import load_mcp_server_configs
 from questorharness.plugins import load_plugins
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin
 from questorharness.tools import create_default_tool_registry
-from questorharness.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.base import ToolExecutionContext
 
 
 def _write_plugin(source_root: Path, server_script: Path) -> Path:

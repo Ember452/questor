@@ -107,8 +107,8 @@ async def test_skills_in_system_prompt() -> tuple[bool, str]:
 
 async def test_skill_tool_invocation() -> tuple[bool, str]:
     """Test that SkillTool can load a skill's content."""
-    from questorharness.tools.skill_tool import SkillTool, SkillToolInput
-    from questorharness.tools.base import ToolExecutionContext
+    from questorharness.capabilities.tools.skill_tool import SkillTool, SkillToolInput
+    from questorharness.capabilities.tools.base import ToolExecutionContext
 
     tool = SkillTool()
     result = await tool.execute(

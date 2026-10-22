@@ -34,7 +34,7 @@ RESULTS: dict[str, tuple[bool, float]] = {}
 # ==================================================================
 
 def _make_registry(extra_tools=None):
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.file_write_tool import FileWriteTool
@@ -113,7 +113,7 @@ async def task_diagnose_autoagent():
     print("  Task 1: PR#17 — Use diagnose skill to investigate AutoAgent tests")
     print("=" * 70)
 
-    from questorharness.tools.skill_tool import SkillTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
 
     engine = make_anthropic_engine(
         "You are a debugger. Start by loading the 'diagnose' skill to get "
@@ -502,7 +502,7 @@ async def task_full_dev_workflow():
     print("  Task 6: ALL PRs — Full development workflow on AutoAgent")
     print("=" * 70)
 
-    from questorharness.tools.skill_tool import SkillTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
     from questorharness.capabilities.memory.scan import scan_memory_files
     from questorharness.capabilities.memory.search import find_relevant_memories
     from questorharness.services.session_storage import save_session_snapshot, load_session_snapshot

@@ -26,7 +26,7 @@ from questorharness.state import AppState, AppStateStore
 from questorharness.bridge import build_sdk_url, decode_work_secret, encode_work_secret, spawn_session
 from questorharness.bridge.types import WorkSecret
 from questorharness.tools import create_default_tool_registry
-from questorharness.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.base import ToolExecutionContext
 
 
 FIXTURE_SERVER = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "fake_mcp_server.py"

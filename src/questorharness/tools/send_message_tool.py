@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from questorharness.swarm.registry import get_backend_registry
 from questorharness.swarm.types import TeammateMessage
 from questorharness.tasks.manager import get_task_manager
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 logger = logging.getLogger(__name__)
 

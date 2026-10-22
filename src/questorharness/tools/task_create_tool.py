@@ -7,7 +7,7 @@ import os
 from pydantic import BaseModel, Field
 
 from questorharness.tasks.manager import get_task_manager
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
 class TaskCreateToolInput(BaseModel):

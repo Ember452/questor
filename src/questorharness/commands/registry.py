@@ -96,7 +96,7 @@ from questorharness.plugins.types import PluginCommandDefinition
 if TYPE_CHECKING:
     from questorharness.config.settings import ProviderProfile
     from questorharness.state import AppStateStore
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
 
 
 @dataclass

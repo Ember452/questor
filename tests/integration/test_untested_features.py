@@ -46,7 +46,7 @@ def make_engine(system_prompt="You are a helpful assistant. Be concise.", cwd=No
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.file_write_tool import FileWriteTool
@@ -189,7 +189,7 @@ async def test_hooks_in_agent_loop():
     from questorharness.engine.stream_events import AssistantTextDelta, ToolExecutionStarted, ToolExecutionCompleted
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.hooks.events import HookEvent
     from questorharness.hooks.loader import HookRegistry
@@ -662,7 +662,7 @@ async def test_combined_hooks_skills_agent():
     from questorharness.engine.stream_events import AssistantTextDelta, ToolExecutionStarted
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.glob_tool import GlobTool
@@ -728,7 +728,7 @@ async def test_full_swarm_autoagent():
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.capabilities.policy.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.tools.bash_tool import BashTool
     from questorharness.tools.file_read_tool import FileReadTool
     from questorharness.tools.glob_tool import GlobTool

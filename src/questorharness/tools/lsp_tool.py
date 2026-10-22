@@ -14,7 +14,7 @@ from questorharness.services.lsp import (
     list_document_symbols,
     workspace_symbol_search,
 )
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
 class LspToolInput(BaseModel):

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from questorharness.config.settings import load_settings, save_settings
 from questorharness.capabilities.policy import PermissionMode
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
 class ExitPlanModeToolInput(BaseModel):

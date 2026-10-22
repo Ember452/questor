@@ -27,7 +27,7 @@ from questorharness.engine.stream_events import (
 from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.tasks import get_task_manager
 from questorharness.tools import create_default_tool_registry
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult
 from questorharness.tools.glob_tool import GlobTool
 from questorharness.tools.grep_tool import GrepTool
 from pydantic import BaseModel
