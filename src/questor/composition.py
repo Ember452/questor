@@ -15,6 +15,7 @@ surfaces 层自身只持 ``StorePort``/``MemoryStorePort`` 抽象（C4/C14）。
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -142,66 +143,88 @@ async def build_app(spec: AssembleSpec | None = None) -> App:
     """
     spec = spec or AssembleSpec()
     path = store_path()
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    store = spec.store if spec.store is not None else await SQLiteStore(path).connect()
-    # 向量能力在**构造 store 之前**定下来：store 侧（写入/`sync` 重建索引）与 recall 侧（query 向量）
-    # 必须共用同一个实例，否则就是“半接”状态（比不接更槽，且无测试会红）。
-    embedder = spec.embedder if spec.embedder is not None else embedder_from_env()
-    memory = (
-        spec.memory
-        if spec.memory is not None
-        else await SQLiteMemoryStore(db_path=memory_db_path(), memory_root=memory_root(), embedder=embedder).connect()
-    )
-    # exec 三件套：内容寻址归档 + 平台 sandbox 探测 + 受控进程执行器（#154）。
-    data_root = Path(store_path()).parent
-    artifact_store = spec.artifact if spec.artifact is not None else FileSystemArtifactStore(data_root / "artifacts")
-    if spec.artifact is None:
-        await artifact_store.connect()
-    sandbox = spec.sandbox if spec.sandbox is not None else select_sandbox(spec.sandbox_backend)
-    process_runner = SandboxedProcessRunner(sandbox, artifact_store=artifact_store, data_root=data_root)
-    if spec.surface is None:
-        provider = (
-            spec.provider_factory()
-            if spec.provider_factory is not None
-            else provider_from_env(payload_preview=payload_preview_from_env())
+    store: StorePort | None = None
+    memory: MemoryStorePort | None = None
+    artifact_store = None
+    # 记录本根**自己打开**的句柄（spec 传入的归调用方所有，失败回滚不得关别人的）。
+    owns_store = owns_memory = owns_artifact = False
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        store = spec.store if spec.store is not None else await SQLiteStore(path).connect()
+        owns_store = spec.store is None
+        # 向量能力在**构造 store 之前**定下来：store 侧（写入/`sync` 重建索引）与 recall 侧（query 向量）
+        # 必须共用同一个实例，否则就是“半接”状态（比不接更槽，且无测试会红）。
+        embedder = spec.embedder if spec.embedder is not None else embedder_from_env()
+        memory = (
+            spec.memory
+            if spec.memory is not None
+            else await SQLiteMemoryStore(db_path=memory_db_path(), memory_root=memory_root(), embedder=embedder).connect()
         )
-        # B8 `[behavior]`：生产入口默认开自动召回（直接构造 CliSurface 仍默认无召回）。
-        # 但**向量通道只在真拿到 embedding 实现时才开**：本仓没有 embedding 适配器，所以生产默认
-        # 是 keyword + structured 开、向量关（不再拿 `FakeEmbedder` 顶位——那是“看起来完成、
-        # 实际未验证”的典型，且与 store 侧向量不同空间时会把排序变成噪声）。测试/离线演示想验
-        # 向量通道，请显式构造 `MemoryRecall(..., embedder=FakeEmbedder())`（或注 `spec.embedder`）。
-        recall = spec.recall if spec.recall is not None else MemoryRecall(memory, embedder=shared_embedder(memory, embedder), enabled=True)
-        # B10 `[behavior]`：生产入口默认开可恢复压缩。翻的是**默认值**而不是**开关能力**：
-        # 显式 QUESTOR_COMPACTION=off 仍逐字关；直接构造 CliSurface 的路径不读这个口径（不变）。
-        model = model_from_env()
-        surface = CliSurface(
-            store=store,
-            memory_store=memory,
-            provider=provider,
-            model=model,
-            skills_dir=Path(skills_dir_from_env()),
-            mcp_json_path=Path(mcp_json_from_env()),
-            log_dir=Path(log_dir_from_env()),
-            process_runner=process_runner,
-            artifact_store=artifact_store,
-            sandbox=sandbox,
-            context_assembler=spec.context_assembler,
-            # B7 `[behavior]`：生产入口默认开档1 记忆索引注入（直接构造 CliSurface 仍默认关）。
-            memory_index_enabled=True,
-            recall=recall,
-            compaction=production_compaction_from_env(model),
-            # B15 [behavior]：生产入口才追加 ask_user（直接构造 CliSurface 的名册不变）。
-            extra_tools=(AskUserTool(),)
+        owns_memory = spec.memory is None
+        # exec 三件套：内容寻址归档 + 平台 sandbox 探测 + 受控进程执行器（#154）。
+        data_root = Path(store_path()).parent
+        artifact_store = spec.artifact if spec.artifact is not None else FileSystemArtifactStore(data_root / "artifacts")
+        if spec.artifact is None:
+            await artifact_store.connect()
+            owns_artifact = True
+        sandbox = spec.sandbox if spec.sandbox is not None else select_sandbox(spec.sandbox_backend)
+        process_runner = SandboxedProcessRunner(sandbox, artifact_store=artifact_store, data_root=data_root)
+        if spec.surface is None:
+            provider = (
+                spec.provider_factory()
+                if spec.provider_factory is not None
+                else provider_from_env(payload_preview=payload_preview_from_env())
+            )
+            # B8 `[behavior]`：生产入口默认开自动召回（直接构造 CliSurface 仍默认无召回）。
+            # 但**向量通道只在真拿到 embedding 实现时才开**：本仓没有 embedding 适配器，所以生产默认
+            # 是 keyword + structured 开、向量关（不再拿 `FakeEmbedder` 顶位——那是“看起来完成、
+            # 实际未验证”的典型，且与 store 侧向量不同空间时会把排序变成噪声）。测试/离线演示想验
+            # 向量通道，请显式构造 `MemoryRecall(..., embedder=FakeEmbedder())`（或注 `spec.embedder`）。
+            recall = spec.recall if spec.recall is not None else MemoryRecall(memory, embedder=shared_embedder(memory, embedder), enabled=True)
+            # B10 `[behavior]`：生产入口默认开可恢复压缩。翻的是**默认值**而不是**开关能力**：
+            # 显式 QUESTOR_COMPACTION=off 仍逐字关；直接构造 CliSurface 的路径不读这个口径（不变）。
+            model = model_from_env()
+            surface = CliSurface(
+                store=store,
+                memory_store=memory,
+                provider=provider,
+                model=model,
+                skills_dir=Path(skills_dir_from_env()),
+                mcp_json_path=Path(mcp_json_from_env()),
+                log_dir=Path(log_dir_from_env()),
+                process_runner=process_runner,
+                artifact_store=artifact_store,
+                sandbox=sandbox,
+                context_assembler=spec.context_assembler,
+                # B7 `[behavior]`：生产入口默认开档1 记忆索引注入（直接构造 CliSurface 仍默认关）。
+                memory_index_enabled=True,
+                recall=recall,
+                compaction=production_compaction_from_env(model),
+                # B15 [behavior]：生产入口才追加 ask_user（直接构造 CliSurface 的名册不变）。
+                extra_tools=(AskUserTool(),)
+            )
+        else:
+            surface = spec.surface
+        _LOG.info(
+            "composition root ready store=%s memory_db=%s sandbox=%s",
+            path,
+            memory_db_path(),
+            sandbox.describe().backend.value,
         )
-    else:
-        surface = spec.surface
-    _LOG.info(
-        "composition root ready store=%s memory_db=%s sandbox=%s",
-        path,
-        memory_db_path(),
-        sandbox.describe().backend.value,
-    )
-    return App(store=store, memory=memory, artifact_store=artifact_store, sandbox=sandbox, process_runner=process_runner, surface=surface)
+        return App(store=store, memory=memory, artifact_store=artifact_store, sandbox=sandbox, process_runner=process_runner, surface=surface)
+    except BaseException:
+        # W1-002：connect 之后任一步失败，必须回滚本根已开的句柄，否则非守护 aiosqlite worker 阻塞解释器退出（挂死）。
+        # 逆序关闭（与 close_app 同序）：artifact → memory → store。spec 传入的句柄不归本根，不动。
+        if owns_artifact and artifact_store is not None:
+            with contextlib.suppress(Exception):
+                await artifact_store.close()
+        if owns_memory and memory is not None:
+            with contextlib.suppress(Exception):
+                await memory.close()
+        if owns_store and store is not None:
+            with contextlib.suppress(Exception):
+                await store.close()
+        raise
 
 
 async def close_app(app: App) -> None:

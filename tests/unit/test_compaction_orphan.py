@@ -15,7 +15,7 @@ from questor.contracts.events import AppendAssistantMessage, RecordToolResult, S
 from questor.contracts.policy import CompactionConfig
 from questor.contracts.state_schema import ContentBlock, Message, Role
 from questor.kernel.compaction import legal_evict_end, plan_compaction
-from questor.state.checkpoint import closed_prefix, orphan_tool_result_ids, tool_result_pairing
+from questor.state.checkpoint import closed_prefix, open_tool_use_ids, orphan_tool_result_ids, tool_result_pairing
 from questor.state.domain_state import Context, Run
 from questor.state.reduce import reduce
 
@@ -101,6 +101,26 @@ def test_property_no_orphan_head_for_every_shape(keep_head: int, keep_tail: int)
     retained = run.context.items[: plan.evict_start] + run.context.items[plan.evict_end :]
     assert orphan_tool_result_ids(retained) == ()
     assert plan.evict_end <= closed_prefix(run.context.items)  # C19 双向都守
+
+
+def test_head_pair_split_does_not_leave_open_tool_use() -> None:
+    """WF-003：keep_head 正好切在 tool_use 与其 result 之间时，头边界必须推进，
+    保留头区不得留下悬空 tool_use（否则下一轮 provider 前 _ensure_paired_history 判失败）。"""
+    run = _run_with(
+        SubmitMessage(run_id="r", content=_user("q1", 0)),
+        AppendAssistantMessage(run_id="r", turn=1, message=_tool_use("tc1", 1)),
+        RecordToolResult(run_id="r", tool_call_id="tc1", status="success", result="body"),
+        AppendAssistantMessage(run_id="r", turn=1, message=_assistant("a1", 2)),
+        SubmitMessage(run_id="r", content=_user("q2", 3)),
+        AppendAssistantMessage(run_id="r", turn=2, message=_assistant("a2", 4)),
+    )
+    items = run.context.items
+    # 切在 keep_head=2：items[:2] = [user, tool_use(tc1)]——tc1 的 result 在 index 2（落在逐出窗）→头区悬空
+    cfg = CompactionConfig(keep_head=2, keep_tail=1, trigger_tokens=1)
+    plan = plan_compaction(run, cfg, total_tokens=9999)
+    assert plan is not None, "此形状应能左界推进后安全压缩"
+    assert plan.evict_start > 2, f"左界未推进，头区仍裂开 tc1：evict_start={plan.evict_start}"
+    assert open_tool_use_ids(items[: plan.evict_start]) == ()
 
 
 def test_nothing_safe_to_evict_returns_none() -> None:

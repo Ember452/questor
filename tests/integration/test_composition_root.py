@@ -8,10 +8,13 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from pathlib import Path
 
+import pytest
+
 import questor.surfaces.cli as cli_mod
-from questor.composition import build_app, close_app
+from questor.composition import AssembleSpec, build_app, close_app
 from questor.kernel.events import InProcessEventBus
 
 
@@ -40,6 +43,22 @@ async def test_build_app_wires_exec_trio_into_surface(monkeypatch, tmp_path: Pat
         assert loop.sandbox is not None
     finally:
         await close_app(app)
+
+
+async def test_build_app_rolls_back_handles_on_failure(monkeypatch, tmp_path: Path) -> None:  # noqa: ANN001
+    """W1-002：build_app 中途失败必须回滚已连的句柄，不留非守护 aiosqlite worker 挂死进程。"""
+    _point_env_to_tmp(monkeypatch, tmp_path)
+    baseline = set(threading.enumerate())
+
+    def boom():
+        raise RuntimeError("provider factory boom")
+
+    with pytest.raises(RuntimeError):
+        await build_app(AssembleSpec(provider_factory=boom))
+    await asyncio.sleep(0.2)  # 让被回滚的 worker 线程真正退出
+    # 只拦非守护的连接 worker（挂死主因，如 aiosqlite 的 Thread-N）；asyncio_ 默认执行器线程不算。
+    leaked = [t.name for t in threading.enumerate() if t not in baseline and t.is_alive() and not t.name.startswith("asyncio_")]
+    assert not leaked, f"失败回滚后仍有残留 worker 线程: {leaked}"
 
 
 def test_cli_main_uses_shared_composition_root(monkeypatch, tmp_path: Path) -> None:  # noqa: ANN001

@@ -33,6 +33,18 @@ _log = logging.getLogger("questor.serve")
 _LOOPBACK = "127.0.0.1"
 
 
+def _restrict_bootstrap_permissions(path: Path) -> None:
+    """收紧 bootstrap 文件权限，防同机其他用户读会话 token（W6-008）。
+
+    POSIX：`0o600` 仅属主读写（配合创建时 mode 已私有）。
+    Windows 的 per-user DACL 收紧需 `icacls`/win32 子进程，属 L5 关注点，不得进 surfaces
+    （T20 层界约束）；此处仅做平台无关的 chmod，Windows per-user ACL 作为已知残留由组合根
+    注入的 provider 助手完成（见 #206 W6-008 跟进）。尽力而为、不因平台差异阻断服务启动。
+    """
+    with contextlib.suppress(OSError):
+        os.chmod(path, 0o600)
+
+
 def make_loopback_socket() -> tuple[socket.socket, int]:
     """绑一个 `127.0.0.1:0` 的 OS 临时口，返回 (已 bind 的 socket, 实际端口)。
 
@@ -58,7 +70,11 @@ def write_bootstrap(path: Path, *, host: str, port: int, generation: int, pid: i
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data), encoding="utf-8")
+    # 私有创建（O_CREAT mode 0o600）：避免 write→chmod 之间 token 以默认 0644 暴露（W6-008）。
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(data))
+    _restrict_bootstrap_permissions(tmp)
     tmp.replace(path)
     return data
 
@@ -108,5 +124,8 @@ async def serve(server: EventServer, *, generation: int, bootstrap_path: Path, s
             scheduler_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await scheduler_task
+        # W5-005：在调用方（_amain finally 的 close_app）关 store 之前，先取消并等待在途 run 驱动任务，
+        # 让它们的 finally 能在打开的 store 上释放单写者租约，否则遗留 300s 租约。
+        await server.cancel_active_drives()
         sock.close()
     return boot

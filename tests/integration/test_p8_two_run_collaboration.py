@@ -103,3 +103,8 @@ async def test_two_runs_collaborate_parent_observes_child_terminal(tmp_path: Pat
     # 父 task_tree 节点被绑定且回填终态（经 ReportChildTerminal 回灌，非直写）。
     node = next(n for n in result.task_tree.nodes if n.kind is TaskKind.SUBAGENT)
     assert node.assigned_run_id == child_run_id and node.status is TaskStatus.DONE
+    # W5-017：子完成后编排表必须回收（不留 _child_tasks/_depth/空父集）。
+    await asyncio.sleep(0)
+    assert orchestrator._child_tasks == {}, f"子任务表未回收：{orchestrator._child_tasks}"
+    assert orchestrator._depth == {}, f"深度表未回收：{orchestrator._depth}"
+    assert orchestrator._children == {}, f"父孩子集未剪空：{orchestrator._children}"

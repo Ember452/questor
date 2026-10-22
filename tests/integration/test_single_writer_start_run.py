@@ -11,6 +11,9 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
+from fastapi import HTTPException
+
 from questor.contracts.ports import StreamChunk
 from questor.providers.store_sqlite import SQLiteStore
 from questor.surfaces.cli import CliSurface
@@ -52,4 +55,81 @@ async def test_start_run_holds_single_writer_lease(tmp_path: Path) -> None:
         assert after is True, "run 完成后租约应已释放"
         await store.release_lease(run_id, "foreign-driver", 1)
     finally:
+        await store.close()
+
+
+async def test_run_once_holds_single_writer_lease(tmp_path: Path) -> None:
+    """W5-003：run_once 驱动期间也必须持单写者租约，外部 acquire_lease 同 run 必拒。"""
+    store = await SQLiteStore(str(tmp_path / "db.sqlite")).connect()
+    try:
+        provider = _BlockingProvider()
+        surface = CliSurface(workspace_root=tmp_path, store=store, provider=provider)  # type: ignore[arg-type]
+        task = asyncio.create_task(surface.run_once("hi"))
+        run_id = ""
+        for _ in range(200):  # 等 run_once 起来并进入驱动（run_started 落库=已取租约）
+            ids = await store.list_unfinished_runs()
+            if ids:
+                run_id = ids[0]
+                break
+            await asyncio.sleep(0.02)
+        assert run_id, "run_once 未起 run"
+        assert await store.acquire_lease(run_id, "x", 1, ttl_seconds=300.0) is False, "run_once 未持租约（W5-003）"
+        provider.release.set()
+        await task
+        assert await store.acquire_lease(run_id, "x", 1, ttl_seconds=300.0) is True
+        await store.release_lease(run_id, "x", 1)
+    finally:
+        await store.close()
+
+
+async def test_rejected_start_does_not_rebind_session(tmp_path: Path) -> None:
+    """W5-007：租约被他人持有时 start_run 必须先拒（409），不得先把 run 绑到新 session 撕裂历史。"""
+    store = await SQLiteStore(str(tmp_path / "db.sqlite")).connect()
+    try:
+        surface = CliSurface(workspace_root=tmp_path, store=store, provider=_BlockingProvider())  # type: ignore[arg-type]
+        server = EventServer(surface, store)
+        assert await store.acquire_lease("run-R", "foreign", 1, ttl_seconds=300.0) is True
+        with pytest.raises(HTTPException) as ei:
+            await server.start_run("x", run_id="run-R", session_id="S2")
+        assert ei.value.status_code == 409
+        assert await store.run_session("run-R") is None  # _prepare_session 未执行 → 未绑 S2
+    finally:
+        await store.close()
+
+
+async def test_cancel_during_blocked_provider_ends_cancelled(tmp_path: Path) -> None:
+    """W5-002：provider 阻塞时用户 /cancel，provider 释放后 run 必须落 cancelled，不得谎报 completed。"""
+    store = await SQLiteStore(str(tmp_path / "db.sqlite")).connect()
+    try:
+        provider = _BlockingProvider()
+        surface = CliSurface(workspace_root=tmp_path, store=store, provider=provider)  # type: ignore[arg-type]
+        server = EventServer(surface, store)
+        run_id = await server.start_run("hi")
+        active = server.registry._runs.get(run_id)
+        assert active is not None and active.task is not None
+        task = active.task
+        await asyncio.sleep(0.05)  # 确保已进入 provider 阻塞
+        receipt = await server.cancel(run_id)
+        assert receipt.accepted
+        provider.release.set()
+        await task
+        types = {e["type"] for e in await store.replay(run_id, 0)}
+        assert "run_cancelled" in types and "run_completed" not in types, f"取消被谎报为完成：{types}"
+    finally:
+        await store.close()
+
+
+async def test_cancel_active_drives_releases_lease(tmp_path: Path) -> None:
+    """W5-005：关闭收尾取消在途驱动，其 finally 在 store 仍开时释放租约（不再遗留 300s）。"""
+    store = await SQLiteStore(str(tmp_path / "db.sqlite")).connect()
+    try:
+        provider = _BlockingProvider()
+        surface = CliSurface(workspace_root=tmp_path, store=store, provider=provider)  # type: ignore[arg-type]
+        server = EventServer(surface, store)
+        run_id = await server.start_run("hi")
+        assert await store.acquire_lease(run_id, "x", 1, ttl_seconds=300.0) is False  # 驱动中，租约被持
+        await asyncio.wait_for(server.cancel_active_drives(), timeout=5)  # 取消并等待驱动任务
+        assert await store.acquire_lease(run_id, "x", 1, ttl_seconds=300.0) is True, "收尾后租约应已释放"
+    finally:
+        provider.release.set()
         await store.close()

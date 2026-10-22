@@ -21,6 +21,7 @@ from typing import Protocol
 
 from questor.contracts.common import JsonObject, require_aware, utc_now
 from questor.contracts.memory import MemoryStorePort
+from questor.memory.write_policy import prepare_write
 
 _EMPTY_SENTINELS = frozenset({"", "无", "none", "n/a"})
 _DAILY_DATE = re.compile(r"memory/(\d{4}-\d{2}-\d{2})\.md")
@@ -138,10 +139,16 @@ async def flush_run_to_daily(
     require_aware(now, "flush_run_to_daily.now")
     if _is_empty(summary_text):
         return {"wrote": False, "reason": "empty-summary"}
+    # W6-006：episodic→daily 落盘必须先过与常规写同一的写纪律（媒体占位 + 脱敏），
+    # 否则模型输出里的 secret/base64 媒体会明文进 memory/<date>.md 并经 recall 回喂 provider。
+    try:
+        scrubbed = prepare_write(summary_text).text
+    except ValueError:
+        return {"wrote": False, "reason": "empty-after-discipline"}
     date = now.strftime("%Y-%m-%d")
     receipt = await store.append_memory_text(
         f"memory/{date}.md",
-        f"\n## [daily] {now.isoformat()} run={run_id}\n\n{summary_text.strip()}\n",
+        f"\n## [daily] {now.isoformat()} run={run_id}\n\n{scrubbed}\n",
         idempotency_key=f"flush:{run_id}",
     )
     await store.sync()

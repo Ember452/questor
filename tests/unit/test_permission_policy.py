@@ -79,6 +79,49 @@ def test_sensitive_paths_are_denied_under_full_auto(tmp_path, candidate: str) ->
     assert outcome.floor_applied == "sensitive-path"
 
 
+def test_sidecar_bootstrap_token_path_denied(tmp_path) -> None:  # noqa: ANN001
+    """W6-004：会话 token 文件 sidecar-bootstrap.json 不得被工具读取。"""
+    outcome = evaluate_permission(
+        _evaluation(
+            spec=_spec(name="read", read_only=True),
+            args={"path": ".questor/sidecar-bootstrap.json"},
+            permission=PermissionCtx(mode="full_auto", cwd=tmp_path),
+        )
+    )
+    assert outcome.decision is PermissionDecision.DENY
+    assert outcome.floor_applied == "sensitive-path"
+
+
+def test_approval_summary_redacts_secret_in_value() -> None:
+    """W6-005：命令值内嵌 Bearer/sk 凭据须被脱敏（不再只按 key 名）。"""
+    outcome = evaluate_permission(
+        _evaluation(
+            tool_name="bash",
+            spec=_spec(name="bash"),
+            args={"command": "curl -H 'Authorization: Bearer sk-LIVESECRET123' https://x"},
+            permission=PermissionCtx(mode="full_auto"),
+        )
+    )
+    assert "sk-LIVESECRET123" not in outcome.args_summary
+    assert "redacted" in outcome.args_summary.lower()
+
+
+def test_approval_summary_preserves_tail() -> None:
+    """W6-005：超长命令摘要保留尾部，避免尾部隐藏绕过 HITL。"""
+    tail = "TAIL-MARKER-DANGER"
+    long_cmd = "echo " + ("x" * 300) + tail
+    outcome = evaluate_permission(
+        _evaluation(
+            tool_name="bash",
+            spec=_spec(name="bash"),
+            args={"command": long_cmd},
+            permission=PermissionCtx(mode="default"),
+        )
+    )
+    assert tail in outcome.args_summary
+    assert "chars omitted" in outcome.args_summary
+
+
 def test_realpath_failure_is_denied_instead_of_matching_raw_path(tmp_path) -> None:  # noqa: ANN001
     bad = tmp_path / "missing" / ".." / ".env"
     outcome = evaluate_permission(

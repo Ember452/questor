@@ -618,6 +618,11 @@ class SQLiteMemoryStore(MemoryStorePort):
 
     async def read_memory_text(self, rel_path: str) -> str:
         full = self._abs(rel_path)
+        # W5-016：大文件（百 MB）同步 read 会阻塞事件循环（ticker gap≈elapsed），下沉线程。
+        return await asyncio.to_thread(self._read_text_sync, full)
+
+    @staticmethod
+    def _read_text_sync(full: str) -> str:
         if not os.path.exists(full):
             return ""
         with open(full, encoding="utf-8") as fh:
@@ -680,7 +685,7 @@ class SQLiteMemoryStore(MemoryStorePort):
                 if await cur.fetchone() is not None:
                     await db.execute("COMMIT")
                     return {"path": rel_path, "idempotent": True}
-                _atomic_write_text(full, content)
+                await asyncio.to_thread(_atomic_write_text, full, content)  # W5-016：大文件写不阻塞 loop
                 await db.execute(
                     "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,0,0,0,?)",
                     (idempotency_key, _rel(self.memory_root, full), utc_now().isoformat()),
@@ -706,10 +711,9 @@ class SQLiteMemoryStore(MemoryStorePort):
                     return {"path": rel_path, "idempotent": True}
                 existing = ""
                 if os.path.exists(full):
-                    with open(full, encoding="utf-8") as fh:
-                        existing = fh.read()
+                    existing = await asyncio.to_thread(self._read_text_sync, full)  # W5-016
                 sep = "" if (not existing or existing.endswith("\n")) else "\n"
-                _atomic_write_text(full, existing + sep + content)
+                await asyncio.to_thread(_atomic_write_text, full, existing + sep + content)  # W5-016
                 await db.execute(
                     "INSERT INTO write_ledger (idempotency_key, path, start_line, end_line, chunk_count, ts) VALUES (?,?,0,0,0,?)",
                     (idempotency_key, _rel(self.memory_root, full), utc_now().isoformat()),

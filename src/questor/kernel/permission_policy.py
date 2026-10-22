@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -55,8 +56,14 @@ class PermissionEvaluation:
 
 
 _SENSITIVE_DIRS = {".ssh", ".aws", ".gnupg", ".docker", ".kube", ".azure", ".config/gcloud"}
-_SENSITIVE_BASENAMES = {".env", ".netrc", ".npmrc", ".pypirc", ".git-credentials", "credentials", "config", "id_rsa", "id_ed25519"}
+_SENSITIVE_BASENAMES = {".env", ".netrc", ".npmrc", ".pypirc", ".git-credentials", "credentials", "config", "id_rsa", "id_ed25519", "sidecar-bootstrap.json"}
 _SENSITIVE_SUFFIXES = {".pem", ".key", ".p12", ".pfx"}
+
+# 值内嵌凭据形态（与 key 名无关）：`Bearer sk-...`、`ghp_`、`AKIA`、`AIza`、`xox[baprs]-`、
+# `api_key=/token=/secret=/password=` 等。审批摘要必须对值也脱敏（W6-005）。
+_SECRET_IN_VALUE = re.compile(
+    r"(?i)(sk-[A-Za-z0-9_\-]{3,}|bearer\s+[A-Za-z0-9._\-]{3,}|gh[pousr]_[A-Za-z0-9]{3,}|AKIA[A-Z0-9]{6,}|AIza[0-9A-Za-z_\-]{4,}|xox[baprs]-[0-9A-Za-z\-]{3,}|(?:api[_-]?key|token|secret|password)[=:]\S{3,})"
+)
 
 
 def _path_matches(raw: str, cwd: Path) -> tuple[bool, bool]:
@@ -139,20 +146,30 @@ def _matches(rule_pattern: str, value: str) -> bool:
     return fnmatch.fnmatch(value.lower(), rule_pattern.lower())
 
 
+def _bounded_head_tail(rendered: str, *, head: int, tail: int) -> str:
+    """超长值保留首尾、明示中间省略量，避免“尾部隐藏内容”绕过 HITL（W6-005）。"""
+    if len(rendered) <= head + tail:
+        return rendered
+    omitted = len(rendered) - (head + tail)
+    return f"{rendered[:head]}...[{omitted} chars omitted]...{rendered[-tail:]}"
+
+
 def _redact_value(key: str, value: Any) -> str:
     lowered = key.lower()
     if any(token in lowered for token in ("key", "token", "secret", "password", "credential")):
         return "[redacted]"
-    rendered = str(value)
-    return rendered if len(rendered) <= 160 else rendered[:157] + "..."
+    # 值本身可能内嵌凭据（如 command="curl -H 'Authorization: Bearer sk-...'"），即便 key 名不敏感也须脱敏。
+    masked = _SECRET_IN_VALUE.sub("[redacted]", str(value))
+    return _bounded_head_tail(masked, head=100, tail=60)
 
 
 def _summarize_arguments(evaluation: PermissionEvaluation) -> str:
     """有界且脱敏的 args 摘要，供审批事件/日志使用。"""
     if evaluation.raw_args_summary and evaluation.args_status is not ToolArgsStatus.VALID:
-        return evaluation.raw_args_summary[:512]
+        return _bounded_head_tail(evaluation.raw_args_summary, head=400, tail=112)
     parts = [f"{key}={_redact_value(key, value)}" for key, value in sorted(evaluation.arguments.items())]
-    return ", ".join(parts)[:512] or evaluation.tool_name
+    joined = _bounded_head_tail(", ".join(parts), head=400, tail=112)
+    return joined or evaluation.tool_name
 
 
 def _never_downgrade(outcome: PermissionOutcome, permission: PermissionCtx) -> PermissionOutcome:

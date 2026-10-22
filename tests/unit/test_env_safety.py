@@ -64,3 +64,19 @@ def test_broadly_named_credentials_are_scrubbed() -> None:
     got = set(names)
     assert {"AWS_ACCESS_KEY_ID", "GH_PAT", "STRIPE_KEY", "DB_PASSWORD", "MY_TLS_CLIENT_SECRET"} <= got, f"漏擦：{got}"
     assert not ({"MONKEY", "PATHOGEN", "REPEAT_COUNT"} & got), f"误伤普通词：{got}"
+
+
+def test_plural_credential_keys_are_scrubbed() -> None:
+    """W6-003：复数命名的凭据键（..._API_KEYS / ..._TOKENS）必须被擦，且不误伤普通复数词。"""
+    _scrubbed, names = scrub_environment(
+        {
+            "QUESTOR_OPENAI_API_KEYS": "a,b",
+            "MY_ACCESS_TOKENS": "t",
+            "MONKEYS": "keep-me",
+            "SYSTEMS": "keep-me",
+        }
+    )
+    got = set(names)
+    assert "QUESTOR_OPENAI_API_KEYS" in got, f"复数键漏擦：{got}"
+    assert "MY_ACCESS_TOKENS" in got, f"复数 TOKENS 漏擦：{got}"
+    assert not ({"MONKEYS", "SYSTEMS"} & got), f"误伤普通词：{got}"

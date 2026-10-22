@@ -38,6 +38,41 @@ class _BoomStore:
         raise OSError("disk full")
 
 
+class _CountingBoomStore:
+    """append 必抛且计数调用次数（W5-012）。"""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def append(self, run_id: str, rows) -> None:  # noqa: ANN001
+        self.calls += 1
+        raise OSError("disk full")
+
+
+async def test_terminal_persist_failure_not_swallowed_on_retry() -> None:
+    """W5-012：append 失败不得把 run 记进 _closed，否则重投的终态在入口被静默吞。"""
+    store = _CountingBoomStore()
+    bus = InProcessEventBus(store=store)  # type: ignore[arg-type]
+    for _ in range(2):
+        with pytest.raises(OSError):
+            await bus.emit(_env("run-poison", 1))
+    assert store.calls == 2, f"后续终态被静默吞（append 只调用 {store.calls} 次）"
+    assert "run-poison" not in bus._closed
+
+
+async def test_closed_set_is_bounded() -> None:
+    """W5-012：_closed 有界 FIFO，不随 run 数无界增长。"""
+
+    class _OkStore:
+        async def append(self, run_id: str, rows) -> None:  # noqa: ANN001
+            return None
+
+    bus = InProcessEventBus(store=_OkStore())  # type: ignore[arg-type]
+    for i in range(bus._CLOSED_MAX + 500):
+        await bus.emit(_env(f"run-{i}", 1))
+    assert len(bus._closed) <= bus._CLOSED_MAX
+
+
 async def test_persist_failure_is_voiced_then_reraised(caplog: pytest.LogCaptureFixture) -> None:
     bus = InProcessEventBus(store=_BoomStore())  # type: ignore[arg-type]
     with caplog.at_level(logging.WARNING, logger="questor.bus"):

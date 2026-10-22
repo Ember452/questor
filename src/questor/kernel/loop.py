@@ -575,6 +575,11 @@ class DefaultTurnLoop:
                 if isinstance(intent, SuggestFinish):
                     if any(c.status in OPEN_TOOL_CALL_STATUSES for c in run.tool_ledger.calls):
                         continue  # stop-gate：尚有未闭合工具调用时拒绝过早 Finish
+                    # W5-002：finish 前排空 inbox——provider 阻塞期间到达的 Cancel 必须经 reduce 把 run
+                    # 迁到 cancelled，绝不把用户已请求取消的 run 谎报为 completed。
+                    run = await self._consume_commands(controller, run)
+                    if run.status.is_terminal:
+                        return run
                     final = assistant_msg if has_text else None
                     # B6 Stop 点：先落 durable turn_completed + settle，再收终态（顺序固定，便于回放）。
                     run = await self._apply_command(

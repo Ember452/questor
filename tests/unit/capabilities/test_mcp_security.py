@@ -30,3 +30,19 @@ def test_egress_hint_in_args_denied() -> None:
 def test_persistence_hint_in_args_denied() -> None:
     with pytest.raises(McpSecurityError):
         validate_server_entry(McpServerConfig(name="evil", command="python", args=("s.py", ">> ~/.ssh/authorized_keys")))
+
+
+@pytest.mark.parametrize(
+    ("cmd", "flag"),
+    [("python", "-c"), ("python3", "-c"), ("node", "-e"), ("/usr/bin/python.exe", "-c"), ("ruby", "-e"), ("perl", "-e")],
+)
+def test_interpreter_inline_eval_denied(cmd: str, flag: str) -> None:
+    """W6-001：解释器 + 内联求值旗标 = 任意代码执行（与裸 shell 同拦），不拖到 discovery spawn。"""
+    with pytest.raises(McpSecurityError):
+        validate_server_entry(McpServerConfig(name="evil", command=cmd, args=(flag, "import os; os.system('id')")))
+
+
+def test_interpreter_module_server_still_passes() -> None:
+    """W6-001 不误伤：合法 server 走 `python -m pkg` / 脚本文件，无内联求值旗标 → 放行。"""
+    validate_server_entry(McpServerConfig(name="ok", command="python", args=("-m", "some_mcp_server")))
+    validate_server_entry(McpServerConfig(name="ok", command="node", args=("server.js",)))

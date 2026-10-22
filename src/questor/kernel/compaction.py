@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from questor.contracts.memory import RecoveryPointer
 from questor.contracts.policy import COMPACTABLE_TOOLS, CompactionConfig
 from questor.contracts.state_schema import Message
-from questor.state.checkpoint import closed_prefix, tool_result_pairing
+from questor.state.checkpoint import closed_prefix, open_tool_use_ids, tool_result_pairing
 from questor.state.domain_state import Run
 
 #: 摘要文本的字符上限（有界，承 C18；超限截断——完整原文靠 `recovery_pointers`→`event_log` 回读）。
@@ -137,6 +137,9 @@ def evict_window(
         return None
     cut = closed_prefix(items)
     evict_start = config.keep_head
+    # 头边界必须落在“前缀 items[:start] 内每个 tool_use 都已应答”处，否则保留头区会留悬空
+    # tool_use，下一轮 provider 前 _ensure_paired_history 判失败（WF-003）。
+    evict_start = legal_evict_start(items, evict_start, min(cut, n - config.keep_tail))
     evict_end = min(cut, n - config.keep_tail)
     if evict_end <= evict_start:
         return None  # cut 落在头保护区内、或尾保护区内有未闭合调用 → 无安全可压窗口
@@ -187,6 +190,19 @@ def _whitelist_cut(run: Run, config: CompactionConfig, items: Sequence[Message],
 def _tool_names(run: Run) -> dict[str, str]:
     """``tool_use_id`` → 工具名（写侧只有 ledger 知道是谁 produced 这条结果）。"""
     return {call.tool_call_id: call.name for call in run.tool_ledger.calls if call.tool_call_id}
+
+
+def legal_evict_start(items: Sequence[Message], evict_start: int, ceiling: int) -> int:
+    """把左界推进到“保留头区 items[:start] 无悬空 tool_use”的位置（§7.2 WF-003）。
+
+    `closed_prefix`/`legal_evict_end` 只防住尾部孤儿 `tool_result`；头侧对称缺陷——头区里某
+    `tool_use` 的 `tool_result` 落在被逐出窗内——会使保留历史头部悬空。左界每前进一步重算一次
+    （多逐出一些反而使配对完整），推进到 `ceiling` 仍不闭合则交给上层“无安全窗口→不压”。
+    """
+    start = evict_start
+    while start < ceiling and open_tool_use_ids(tuple(items[:start])):
+        start += 1
+    return start
 
 
 def legal_evict_end(items: Sequence[Message], evict_start: int, evict_end: int) -> int:

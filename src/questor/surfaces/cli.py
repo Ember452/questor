@@ -368,6 +368,14 @@ class CliSurface:
         approver_queue = bus.add_subscriber(run.run_id)
         printer = asyncio.create_task(self._stream(printer_queue, on_delta))
         approver = asyncio.create_task(self._approve(approver_queue, registry, run.run_id))
+        holder = f"cli:{new_id('drv')}"
+        lease_acquired = False
+        if self.store is not None and callable(getattr(self.store, "acquire_lease", None)):
+            # W5-003：run_once 也持单写者租约（同 resume），驱动期间外部 acquire_lease 同 run 必失败→防双驱。
+            if not await self.store.acquire_lease(run.run_id, holder, 1, ttl_seconds=_RUN_LEASE_TTL_SECONDS):
+                raise RuntimeError(f"run {run.run_id} lease held by another driver (single-writer)")
+            lease_acquired = True
+        renew_task = asyncio.create_task(self._renew_lease_loop(run.run_id, holder)) if lease_acquired else None
         try:
             if seed_message is not None:
                 await registry.submit(
@@ -385,13 +393,19 @@ class CliSurface:
             )
             final = await loop.drive_controller(controller)
         finally:
+            if renew_task is not None:
+                renew_task.cancel()
             # 两个消费者都会自然收到终态帧并退出（queue 里已有 terminal）；超时才强收。
             _, still_pending = await asyncio.wait({printer, approver}, timeout=2.0)
             for task in still_pending:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
-            await mcp_teardown()  # per-run MCP 连接与 stderr 句柄收尾（不留悬空子进程/文件）
+            try:
+                await mcp_teardown()  # per-run MCP 连接与 stderr 句柄收尾（不留悬空子进程/文件）
+            finally:
+                if lease_acquired:  # W5-003/W5-009：teardown 抛错仍释放租约
+                    await self.store.release_lease(run.run_id, holder, 1)
         return final
 
     async def _prepare_session(self, run_id: str, session_id: str | None) -> tuple[str, bool]:

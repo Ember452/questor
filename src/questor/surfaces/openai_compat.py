@@ -162,6 +162,9 @@ def mount_openai_routes(app: FastAPI, server: EventServer, *, api_keys: list[str
     密钥比对不存不日（C20）；非文本/语音入站经 :func:`extract_last_user_text` 归一拒绝（400、不起 run）。
     本函数仅在配置了 ``api_keys`` 时挂载（鉴权外部 lane）；桌面 sidecar loopback 面不走此路。"""
     keyset = frozenset(api_keys)
+    # W6-010：会话归属登记——session_id 首次由哪个 API key 创建就绑定该 key；其他 key 拿同一
+    # session_id 作 seed 会读到他人最近 transcript（跨 key 信息泄露），一律 403 拒。
+    session_owner: dict[str, str] = {}
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request) -> Any:
@@ -178,9 +181,15 @@ def mount_openai_routes(app: FastAPI, server: EventServer, *, api_keys: list[str
         model = body.get("model", default_model)
         completion_id = new_id("chatcmpl")
         created = int(time.time())
+        session_id = body.get("session_id")
+        if session_id is not None:
+            owner = session_owner.get(session_id)
+            if owner is not None and owner != token:
+                return JSONResponse(status_code=403, content=error_object("forbidden", "session_id belongs to a different API key", param="session_id"))
+            session_owner.setdefault(session_id, token)
         try:
             run_id = await server.start_run(
-                text, session_id=body.get("session_id"), seed_refs=body.get("seed_refs")
+                text, session_id=session_id, seed_refs=body.get("seed_refs")
             )  # SubmitMessage 经 inbox（C16）；起一个独立 run。
         except SeedRejected as exc:
             return JSONResponse(status_code=400, content=error_object("seed_rejected", str(exc), param="seed_refs"))

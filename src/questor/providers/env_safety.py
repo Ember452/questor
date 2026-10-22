@@ -11,9 +11,10 @@ import os
 import re
 
 # 凭据形状：涵盖常见厂商/命名（AWS_ACCESS_KEY_ID、GH_PAT、STRIPE_KEY、*_PRIVATE 等）。
-# 均以 `(?:^|_)...(?:$|_)` 边界匹配，不误伤 MONKEY/PATH/REPEAT 等普通词。
+# 均以 `(?:^|_)...(?:S)?(?:$|_)` 边界匹配，不误伤 MONKEY/PATH/REPEAT 等普通词；`(?:S)?` 允许复数
+# （如 QUESTOR_OPENAI_API_KEYS 的 KEYS），否则复数键会绕过擦除（W6-003）。
 _CREDENTIAL_SHAPE = re.compile(
-    r"(?:^|_)(?:API_?KEY|ACCESS_KEY|ACCESS_TOKEN|AUTH_TOKEN|AUTH|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE_KEY|PRIVATE|TOKEN|PAT|KEY)(?:$|_)",
+    r"(?:^|_)(?:API_?KEY|ACCESS_KEY|ACCESS_TOKEN|AUTH_TOKEN|AUTH|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE_KEY|PRIVATE|TOKEN|PAT|KEY)S?(?:$|_)",
     re.IGNORECASE,
 )
 _PROVIDER_EXACT = frozenset(
