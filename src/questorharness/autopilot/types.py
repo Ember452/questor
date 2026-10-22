@@ -22,7 +22,7 @@ RepoTaskStatus = Literal[
     "superseded",
 ]
 RepoTaskSource = Literal[
-    "ohmo_request",
+    "questor_request",
     "manual_idea",
     "github_issue",
     "github_pr",

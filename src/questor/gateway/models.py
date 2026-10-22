@@ -1,4 +1,4 @@
-"""Gateway models for ohmo."""
+"""Gateway models for questor."""
 
 from __future__ import annotations
 

@@ -4,10 +4,10 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from ohmo.cli import _build_gateway_logging_handlers, app
+from questor.cli import _build_gateway_logging_handlers, app
 
 
-def test_ohmo_help():
+def test_questor_help():
     runner = CliRunner()
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
@@ -15,34 +15,34 @@ def test_ohmo_help():
     assert "config" in result.output
 
 
-def test_ohmo_init_and_doctor(tmp_path: Path):
+def test_questor_init_and_doctor(tmp_path: Path):
     runner = CliRunner()
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     result = runner.invoke(app, ["init", "--workspace", str(workspace), "--no-interactive"])
     assert result.exit_code == 0
     assert str(workspace) in result.output
 
     doctor = runner.invoke(app, ["doctor", "--cwd", str(tmp_path), "--workspace", str(workspace)])
     assert doctor.exit_code == 0
-    assert "ohmo doctor:" in doctor.output
+    assert "questor doctor:" in doctor.output
     assert "workspace: ok" in doctor.output
 
 
-def test_ohmo_init_existing_workspace_points_to_config(tmp_path: Path):
+def test_questor_init_existing_workspace_points_to_config(tmp_path: Path):
     runner = CliRunner()
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     first = runner.invoke(app, ["init", "--workspace", str(workspace), "--no-interactive"])
     assert first.exit_code == 0
 
     second = runner.invoke(app, ["init", "--workspace", str(workspace), "--no-interactive"])
     assert second.exit_code == 0
-    assert "ohmo workspace already exists." in second.output
-    assert "Use `ohmo config`" in second.output
+    assert "questor workspace already exists." in second.output
+    assert "Use `questor config`" in second.output
 
 
-def test_ohmo_init_noninteractive_defaults_to_deny_all_remote_access(tmp_path: Path):
+def test_questor_init_noninteractive_defaults_to_deny_all_remote_access(tmp_path: Path):
     runner = CliRunner()
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     result = runner.invoke(app, ["init", "--workspace", str(workspace), "--no-interactive"])
     assert result.exit_code == 0
     config = json.loads((workspace / "gateway.json").read_text(encoding="utf-8"))
@@ -50,7 +50,7 @@ def test_ohmo_init_noninteractive_defaults_to_deny_all_remote_access(tmp_path: P
 
 
 def test_gateway_logging_handlers_write_gateway_log_file(tmp_path: Path):
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     runner = CliRunner()
     result = runner.invoke(app, ["init", "--workspace", str(workspace), "--no-interactive"])
     assert result.exit_code == 0
@@ -67,7 +67,7 @@ def test_gateway_logging_handlers_write_gateway_log_file(tmp_path: Path):
         assert len(console_handlers) == 1
 
         record = logging.LogRecord(
-            name="ohmo.gateway.test",
+            name="questor.gateway.test",
             level=logging.INFO,
             pathname=__file__,
             lineno=1,
@@ -85,9 +85,9 @@ def test_gateway_logging_handlers_write_gateway_log_file(tmp_path: Path):
             handler.close()
 
 
-def test_ohmo_init_interactive_writes_gateway_config(tmp_path: Path, monkeypatch):
+def test_questor_init_interactive_writes_gateway_config(tmp_path: Path, monkeypatch):
     runner = CliRunner()
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
     user_input = "\n".join(
@@ -114,9 +114,9 @@ def test_ohmo_init_interactive_writes_gateway_config(tmp_path: Path, monkeypatch
     assert config["channel_configs"]["qq"]["allow_from"] == ["123456"]
 
 
-def test_ohmo_init_interactive_allows_blank_allow_from_for_secure_default(tmp_path: Path, monkeypatch):
+def test_questor_init_interactive_allows_blank_allow_from_for_secure_default(tmp_path: Path, monkeypatch):
     runner = CliRunner()
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
     user_input = "\n".join(
@@ -140,9 +140,9 @@ def test_ohmo_init_interactive_allows_blank_allow_from_for_secure_default(tmp_pa
     assert "Remote access denied until allow_from is configured for: qq" in result.output
 
 
-def test_ohmo_init_interactive_writes_feishu_gateway_config(tmp_path: Path, monkeypatch):
+def test_questor_init_interactive_writes_feishu_gateway_config(tmp_path: Path, monkeypatch):
     runner = CliRunner()
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
     user_input = "\n".join(
@@ -157,7 +157,7 @@ def test_ohmo_init_interactive_writes_feishu_gateway_config(tmp_path: Path, monk
             "verify_me", # verification_token
             "OK",        # react_emoji
             "1",         # group_policy -> managed_or_mention
-            "ohmo,openclaw", # bot_names
+            "questor,openclaw", # bot_names
             "",          # bot_open_id
             "n",         # qq
             "y",         # send_progress
@@ -176,18 +176,18 @@ def test_ohmo_init_interactive_writes_feishu_gateway_config(tmp_path: Path, monk
     assert config["channel_configs"]["feishu"]["verification_token"] == "verify_me"
     assert config["channel_configs"]["feishu"]["react_emoji"] == "OK"
     assert config["channel_configs"]["feishu"]["group_policy"] == "managed_or_mention"
-    assert config["channel_configs"]["feishu"]["bot_names"] == ["ohmo", "openclaw"]
+    assert config["channel_configs"]["feishu"]["bot_names"] == ["questor", "openclaw"]
 
 
-def test_ohmo_config_interactive_can_restart_gateway(tmp_path: Path, monkeypatch):
+def test_questor_config_interactive_can_restart_gateway(tmp_path: Path, monkeypatch):
     runner = CliRunner()
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     runner.invoke(app, ["init", "--workspace", str(workspace), "--no-interactive"])
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
-    monkeypatch.setattr("ohmo.cli.gateway_status", lambda cwd, workspace: type("State", (), {"running": True})())
-    monkeypatch.setattr("ohmo.cli.stop_gateway_process", lambda cwd, workspace: True)
-    monkeypatch.setattr("ohmo.cli.start_gateway_process", lambda cwd, workspace: 4321)
+    monkeypatch.setattr("questor.cli.gateway_status", lambda cwd, workspace: type("State", (), {"running": True})())
+    monkeypatch.setattr("questor.cli.stop_gateway_process", lambda cwd, workspace: True)
+    monkeypatch.setattr("questor.cli.start_gateway_process", lambda cwd, workspace: 4321)
     user_input = "\n".join(
         [
             "4",          # provider profile -> codex
@@ -200,7 +200,7 @@ def test_ohmo_config_interactive_can_restart_gateway(tmp_path: Path, monkeypatch
             "verify_me",  # verification_token
             "OK",         # react_emoji
             "1",          # group_policy -> managed_or_mention
-            "ohmo,openclaw", # bot_names
+            "questor,openclaw", # bot_names
             "",           # bot_open_id
             "n",          # qq
             "y",          # send_progress
@@ -211,16 +211,16 @@ def test_ohmo_config_interactive_can_restart_gateway(tmp_path: Path, monkeypatch
     )
     result = runner.invoke(app, ["config", "--workspace", str(workspace)], input=user_input)
     assert result.exit_code == 0
-    assert "ohmo gateway restarted (pid=4321)" in result.output
+    assert "questor gateway restarted (pid=4321)" in result.output
     config = json.loads((workspace / "gateway.json").read_text(encoding="utf-8"))
     assert config["provider_profile"] == "codex"
     assert config["enabled_channels"] == ["feishu"]
     assert config["channel_configs"]["feishu"]["domain"] == "https://open.larksuite.com"
 
 
-def test_ohmo_config_keeps_existing_channel_when_not_reconfigured(tmp_path: Path, monkeypatch):
+def test_questor_config_keeps_existing_channel_when_not_reconfigured(tmp_path: Path, monkeypatch):
     runner = CliRunner()
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     runner.invoke(app, ["init", "--workspace", str(workspace), "--no-interactive"])
     gateway_path = workspace / "gateway.json"
     config = json.loads(gateway_path.read_text(encoding="utf-8"))
@@ -237,7 +237,7 @@ def test_ohmo_config_keeps_existing_channel_when_not_reconfigured(tmp_path: Path
 
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
-    monkeypatch.setattr("ohmo.cli.gateway_status", lambda cwd, workspace: type("State", (), {"running": False})())
+    monkeypatch.setattr("questor.cli.gateway_status", lambda cwd, workspace: type("State", (), {"running": False})())
     user_input = "\n".join(
         [
             "4",  # provider profile -> codex

@@ -1,4 +1,4 @@
-"""Workspace helpers for the ohmo personal-agent app."""
+"""Workspace helpers for the questor personal-agent app."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ import json
 import os
 from pathlib import Path
 
-WORKSPACE_DIRNAME = ".ohmo"
+WORKSPACE_DIRNAME = ".questor"
 
 SOUL_TEMPLATE = """# SOUL.md - Who You Are
 
-You are ohmo, a personal agent built on top of QuestorHarness.
+You are questor, a personal agent built on top of QuestorHarness.
 
 You are not trying to sound like a generic assistant. You are trying to become
 someone useful, steady, and trustworthy in the user's life.
@@ -92,7 +92,7 @@ Learn the person you are helping. Keep this useful, respectful, and current.
 
 ## Relationship notes
 
-How should ohmo show up for this user over time?
+How should questor show up for this user over time?
 What kind of assistant relationship feels right: terse operator, thoughtful
 partner, organized chief of staff, calm technical companion, or something else?
 
@@ -106,13 +106,13 @@ Remember: learn enough to help well, not to build a dossier.
 
 IDENTITY_TEMPLATE = """# IDENTITY.md - Your Shape
 
-- Name: ohmo
+- Name: questor
 - Kind: personal agent
 - Vibe: calm, capable, warm when useful
 - Signature: 
 
 Keep this short and concrete. Update it when the user and the agent have a
-clearer shared sense of who ohmo is.
+clearer shared sense of who questor is.
 """
 
 BOOTSTRAP_TEMPLATE = """# BOOTSTRAP.md - First Contact
@@ -161,14 +161,14 @@ MEMORY_INDEX_TEMPLATE = """# Memory Index
 
 
 def get_workspace_root(workspace: str | Path | None = None) -> Path:
-    """Return the ohmo workspace root.
+    """Return the questor workspace root.
 
     Resolution order:
     1. Explicit ``workspace`` argument
-    2. ``OHMO_WORKSPACE`` environment variable
-    3. ``~/.ohmo``
+    2. ``QUESTOR_WORKSPACE`` environment variable
+    3. ``~/.questor``
     """
-    explicit = workspace or os.environ.get("OHMO_WORKSPACE")
+    explicit = workspace or os.environ.get("QUESTOR_WORKSPACE")
     if explicit:
         path = Path(explicit).expanduser().resolve()
         return path if path.name == WORKSPACE_DIRNAME else path
@@ -262,14 +262,14 @@ def initialize_workspace(workspace: str | Path | None = None) -> Path:
         if not path.exists():
             path.write_text(content.strip() + "\n", encoding="utf-8")
     state_path = get_state_path(root)
-    state_data = {"app": "ohmo", "workspace": str(root.resolve())}
+    state_data = {"app": "questor", "workspace": str(root.resolve())}
     if not state_path.exists():
         state_path.write_text(json.dumps(state_data, indent=2) + "\n", encoding="utf-8")
     else:
         try:
             state_data = json.loads(state_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
-            state_data = {"app": "ohmo", "workspace": str(root.resolve())}
+            state_data = {"app": "questor", "workspace": str(root.resolve())}
     bootstrap_path = get_bootstrap_path(root)
     if not state_data.get("bootstrap_seeded"):
         state_data["bootstrap_seeded"] = True

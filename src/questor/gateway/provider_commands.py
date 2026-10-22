@@ -1,4 +1,4 @@
-"""ohmo gateway-scoped provider and model commands."""
+"""questor gateway-scoped provider and model commands."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ from pathlib import Path
 from questorharness.auth.manager import AuthManager
 from questorharness.config import load_settings
 
-from ohmo.gateway.config import load_gateway_config, save_gateway_config
+from questor.gateway.config import load_gateway_config, save_gateway_config
 
 
 def handle_gateway_provider_command(args: str, *, workspace: str | Path | None) -> tuple[str, bool]:
-    """Handle ``/provider`` against the ohmo gateway config."""
+    """Handle ``/provider`` against the questor gateway config."""
     tokens = args.split()
     statuses = AuthManager(load_settings()).get_profile_statuses()
     config = load_gateway_config(workspace)
@@ -19,9 +19,9 @@ def handle_gateway_provider_command(args: str, *, workspace: str | Path | None) 
     if not tokens or tokens[0] == "show":
         info = statuses.get(active)
         if info is None:
-            return f"ohmo gateway provider_profile: {active}\nStatus: unknown profile", False
+            return f"questor gateway provider_profile: {active}\nStatus: unknown profile", False
         return (
-            f"ohmo gateway provider_profile: {active}\n"
+            f"questor gateway provider_profile: {active}\n"
             f"Label: {info['label']}\n"
             f"Configured: {'yes' if info['configured'] else 'no'}\n"
             f"Base URL: {info['base_url'] or '(default)'}\n"
@@ -29,7 +29,7 @@ def handle_gateway_provider_command(args: str, *, workspace: str | Path | None) 
             False,
         )
     if tokens[0] == "list":
-        lines = ["ohmo gateway provider profiles:"]
+        lines = ["questor gateway provider profiles:"]
         for name, info in statuses.items():
             marker = "*" if name == active else " "
             configured = "ready" if info["configured"] else "missing auth"
@@ -41,19 +41,19 @@ def handle_gateway_provider_command(args: str, *, workspace: str | Path | None) 
     if target not in statuses:
         return f"Unknown provider profile: {target}", False
     if target == active:
-        return f"ohmo gateway already uses provider_profile={target}.", False
+        return f"questor gateway already uses provider_profile={target}.", False
     save_gateway_config(config.model_copy(update={"provider_profile": target}), workspace)
     info = statuses[target]
     configured = "ready" if info["configured"] else "missing auth"
     return (
-        f"ohmo gateway provider_profile set to {target} ({info['label']}, {configured}).\n"
-        "Refreshing the current ohmo runtime to apply it.",
+        f"questor gateway provider_profile set to {target} ({info['label']}, {configured}).\n"
+        "Refreshing the current questor runtime to apply it.",
         True,
     )
 
 
 def handle_gateway_model_command(args: str, *, workspace: str | Path | None) -> tuple[str, bool]:
-    """Handle ``/model`` against the profile selected by ohmo gateway."""
+    """Handle ``/model`` against the profile selected by questor gateway."""
     settings = load_settings()
     manager = AuthManager(settings)
     config = load_gateway_config(workspace)
@@ -61,7 +61,7 @@ def handle_gateway_model_command(args: str, *, workspace: str | Path | None) -> 
     profiles = manager.list_profiles()
     profile = profiles.get(profile_name)
     if profile is None:
-        return f"ohmo gateway provider_profile is unknown: {profile_name}", False
+        return f"questor gateway provider_profile is unknown: {profile_name}", False
 
     tokens = args.split(maxsplit=1)
     if not tokens or tokens[0] == "show":
@@ -69,7 +69,7 @@ def handle_gateway_model_command(args: str, *, workspace: str | Path | None) -> 
     if tokens[0] == "list":
         if profile.allowed_models:
             return (
-                f"Switchable models for ohmo gateway profile '{profile_name}':\n"
+                f"Switchable models for questor gateway profile '{profile_name}':\n"
                 + "\n".join(f"- {model}" for model in profile.allowed_models)
             ), False
         return (
@@ -81,38 +81,38 @@ def handle_gateway_model_command(args: str, *, workspace: str | Path | None) -> 
         if not model_name:
             return "Usage: /model add MODEL", False
         manager.update_profile(profile_name, allowed_models=_dedupe([*_seed_models(profile), model_name]))
-        return f"Added model '{model_name}' to ohmo gateway profile '{profile_name}'.", False
+        return f"Added model '{model_name}' to questor gateway profile '{profile_name}'.", False
     if tokens[0] == "add":
         return "Usage: /model add MODEL", False
     if tokens[0] in {"remove", "rm"} and len(tokens) == 2:
         model_name = tokens[1].strip()
         models = [model for model in _dedupe(profile.allowed_models) if model != model_name]
         if len(models) == len(_dedupe(profile.allowed_models)):
-            return f"Model '{model_name}' is not pinned for ohmo gateway profile '{profile_name}'.", False
+            return f"Model '{model_name}' is not pinned for questor gateway profile '{profile_name}'.", False
         reset_current = (profile.last_model or "").strip() == model_name
         manager.update_profile(profile_name, allowed_models=models, last_model="" if reset_current else None)
-        return f"Removed model '{model_name}' from ohmo gateway profile '{profile_name}'.", True
+        return f"Removed model '{model_name}' from questor gateway profile '{profile_name}'.", True
     if tokens[0] in {"remove", "rm"}:
         return "Usage: /model remove MODEL", False
     if tokens[0] == "clear":
         manager.update_profile(profile_name, allowed_models=[])
-        return f"Cleared pinned models for ohmo gateway profile '{profile_name}'.", False
+        return f"Cleared pinned models for questor gateway profile '{profile_name}'.", False
     model_name = tokens[1].strip() if tokens[0] == "set" and len(tokens) == 2 else args.strip()
     if not model_name:
         return "Usage: /model [show|list|add MODEL|remove MODEL|clear|MODEL]", False
     if profile.allowed_models and model_name.lower() != "default" and model_name not in profile.allowed_models:
         allowed = ", ".join(profile.allowed_models)
-        return f"Model '{model_name}' is not allowed for ohmo gateway profile '{profile_name}'. Allowed models: {allowed}", False
+        return f"Model '{model_name}' is not allowed for questor gateway profile '{profile_name}'. Allowed models: {allowed}", False
     if model_name.lower() == "default":
         manager.update_profile(profile_name, last_model="")
-        return f"ohmo gateway model reset to default for profile '{profile_name}'. Refreshing runtime to apply it.", True
+        return f"questor gateway model reset to default for profile '{profile_name}'. Refreshing runtime to apply it.", True
     manager.update_profile(profile_name, last_model=model_name)
-    return f"ohmo gateway model set to {model_name} for profile '{profile_name}'. Refreshing runtime to apply it.", True
+    return f"questor gateway model set to {model_name} for profile '{profile_name}'. Refreshing runtime to apply it.", True
 
 
 def _format_model_status(profile_name, profile) -> str:
     lines = [
-        f"ohmo gateway model: {profile.resolved_model}",
+        f"questor gateway model: {profile.resolved_model}",
         f"Profile: {profile_name}",
     ]
     if profile.allowed_models:

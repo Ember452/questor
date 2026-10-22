@@ -1,4 +1,4 @@
-"""Session-aware runtime pool for ohmo gateway."""
+"""Session-aware runtime pool for questor gateway."""
 
 from __future__ import annotations
 
@@ -33,14 +33,14 @@ from questorharness.engine.stream_events import (
 from questorharness.prompts import build_runtime_system_prompt
 from questorharness.ui.runtime import RuntimeBundle, _last_user_text, build_runtime, close_runtime, start_runtime
 
-from ohmo.gateway.config import load_gateway_config
-from ohmo.gateway.group_tool import CreateFeishuGroup, OhmoCreateFeishuGroupTool, PublishGroupWelcome
-from ohmo.gateway.provider_commands import handle_gateway_model_command, handle_gateway_provider_command
-from ohmo.group_registry import load_managed_group_record, normalize_cwd
-from ohmo.memory import create_memory_command_backend
-from ohmo.prompts import build_ohmo_system_prompt
-from ohmo.session_storage import OhmoSessionBackend
-from ohmo.workspace import get_memory_dir, get_plugins_dir, get_sessions_dir, get_skills_dir, initialize_workspace
+from questor.gateway.config import load_gateway_config
+from questor.gateway.group_tool import CreateFeishuGroup, QuestorCreateFeishuGroupTool, PublishGroupWelcome
+from questor.gateway.provider_commands import handle_gateway_model_command, handle_gateway_provider_command
+from questor.group_registry import load_managed_group_record, normalize_cwd
+from questor.memory import create_memory_command_backend
+from questor.prompts import build_questor_system_prompt
+from questor.session_storage import QuestorSessionBackend
+from questor.workspace import get_memory_dir, get_plugins_dir, get_sessions_dir, get_skills_dir, initialize_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ _IMAGE_FALLBACK_NOTE = (
     "Use the attachment paths and summaries above if needed.]"
 )
 _NO_GROUP_REQUEST = object()
-_GROUP_TOOL_NAME = "ohmo_create_feishu_group"
+_GROUP_TOOL_NAME = "questor_create_feishu_group"
 _GROUP_AGENT_PROMPT_PREFIX = "The user invoked `/group` from a Feishu private chat."
 _GROUP_AGENT_PROMPT_REQUEST_MARKER = "User /group request:"
 _GROUP_METADATA_KEYS = (
@@ -94,7 +94,7 @@ class GatewayStreamUpdate:
     media: list[str] | None = None
 
 
-class OhmoSessionRuntimePool:
+class QuestorSessionRuntimePool:
     """Maintain one runtime bundle per chat/thread session."""
 
     def __init__(
@@ -117,7 +117,7 @@ class OhmoSessionRuntimePool:
         self._publish_group_welcome = publish_group_welcome
         self._workspace = initialize_workspace(workspace)
         self._gateway_config = load_gateway_config(self._workspace)
-        self._session_backend = OhmoSessionBackend(self._workspace)
+        self._session_backend = QuestorSessionBackend(self._workspace)
         self._bundles: dict[str, RuntimeBundle] = {}
 
     @property
@@ -162,7 +162,7 @@ class OhmoSessionRuntimePool:
             bundle_cwd = str(Path(getattr(bundle, "cwd", self._cwd)).resolve())
             if bundle_cwd != session_cwd:
                 logger.info(
-                    "ohmo runtime recreating session for cwd change session_key=%s old_cwd=%s new_cwd=%s",
+                    "questor runtime recreating session for cwd change session_key=%s old_cwd=%s new_cwd=%s",
                     session_key,
                     bundle_cwd,
                     session_cwd,
@@ -171,7 +171,7 @@ class OhmoSessionRuntimePool:
                 self._bundles.pop(session_key, None)
             else:
                 logger.info(
-                    "ohmo runtime reusing session session_key=%s session_id=%s prompt=%r",
+                    "questor runtime reusing session session_key=%s session_id=%s prompt=%r",
                     session_key,
                     bundle.session_id,
                     _content_snippet(latest_user_prompt or ""),
@@ -181,7 +181,7 @@ class OhmoSessionRuntimePool:
 
         snapshot = self._session_backend.load_latest_for_session_key(session_key)
         logger.info(
-            "ohmo runtime creating session session_key=%s restored=%s prompt=%r",
+            "questor runtime creating session session_key=%s restored=%s prompt=%r",
             session_key,
             bool(snapshot),
             _content_snippet(latest_user_prompt or ""),
@@ -190,7 +190,7 @@ class OhmoSessionRuntimePool:
             cwd=session_cwd,
             model=self._model,
             max_turns=self._max_turns,
-            system_prompt=build_ohmo_system_prompt(session_cwd, workspace=self._workspace, extra_prompt=None),
+            system_prompt=build_questor_system_prompt(session_cwd, workspace=self._workspace, extra_prompt=None),
             active_profile=self._provider_profile,
             session_backend=self._session_backend,
             enforce_max_turns=self._max_turns is not None,
@@ -203,8 +203,8 @@ class OhmoSessionRuntimePool:
             autodream_context={
                 "memory_dir": str(get_memory_dir(self._workspace)),
                 "session_dir": str(get_sessions_dir(self._workspace)),
-                "app_label": "ohmo personal memory",
-                "runner_module": "ohmo",
+                "app_label": "questor personal memory",
+                "runner_module": "questor",
             },
         )
         if snapshot and snapshot.get("session_id"):
@@ -213,7 +213,7 @@ class OhmoSessionRuntimePool:
         await start_runtime(bundle)
         bundle.engine.set_system_prompt(self._runtime_system_prompt(bundle, latest_user_prompt))
         logger.info(
-            "ohmo runtime started session_key=%s session_id=%s restored_messages=%s",
+            "questor runtime started session_key=%s session_id=%s restored_messages=%s",
             session_key,
             bundle.session_id,
             len(snapshot.get("messages") or []) if snapshot else 0,
@@ -229,7 +229,7 @@ class OhmoSessionRuntimePool:
         session_cwd = self._cwd_for_message(message)
         bundle = await self.get_bundle(session_key, latest_user_prompt=user_prompt, cwd=session_cwd)
         logger.info(
-            "ohmo runtime processing start channel=%s chat_id=%s session_key=%s session_id=%s content=%r",
+            "questor runtime processing start channel=%s chat_id=%s session_key=%s session_id=%s content=%r",
             message.channel,
             message.chat_id,
             session_key,
@@ -269,7 +269,7 @@ class OhmoSessionRuntimePool:
             if not remote_allowed and self._remote_admin_allowed(command):
                 remote_allowed = True
                 logger.warning(
-                    "ohmo gateway remote administrative command accepted channel=%s chat_id=%s sender_id=%s command=%s",
+                    "questor gateway remote administrative command accepted channel=%s chat_id=%s sender_id=%s command=%s",
                     message.channel,
                     message.chat_id,
                     message.sender_id,
@@ -430,7 +430,7 @@ class OhmoSessionRuntimePool:
                     bundle.engine.messages,
                 ):
                     logger.warning(
-                        "ohmo runtime image input rejected; retrying without image blocks session_key=%s session_id=%s message=%r",
+                        "questor runtime image input rejected; retrying without image blocks session_key=%s session_id=%s message=%r",
                         session_key,
                         bundle.session_id,
                         _content_snippet(event.message),
@@ -486,7 +486,7 @@ class OhmoSessionRuntimePool:
         reply = "".join(reply_parts).strip()
         if reply:
             logger.info(
-                "ohmo runtime processing complete session_key=%s session_id=%s reply=%r",
+                "questor runtime processing complete session_key=%s session_id=%s reply=%r",
                 session_key,
                 bundle.session_id,
                 _content_snippet(reply),
@@ -517,7 +517,7 @@ class OhmoSessionRuntimePool:
             return
         if isinstance(event, CompactProgressEvent):
             logger.info(
-                "ohmo runtime compact progress session_key=%s session_id=%s phase=%s trigger=%s attempt=%s",
+                "questor runtime compact progress session_key=%s session_id=%s phase=%s trigger=%s attempt=%s",
                 session_key,
                 bundle.session_id,
                 event.phase,
@@ -543,7 +543,7 @@ class OhmoSessionRuntimePool:
             return
         if isinstance(event, StatusEvent):
             logger.info(
-                "ohmo runtime status session_key=%s session_id=%s message=%r",
+                "questor runtime status session_key=%s session_id=%s message=%r",
                 session_key,
                 bundle.session_id,
                 _content_snippet(event.message),
@@ -563,7 +563,7 @@ class OhmoSessionRuntimePool:
         if isinstance(event, ToolExecutionStarted):
             summary = _summarize_tool_input(event.tool_name, event.tool_input)
             logger.info(
-                "ohmo runtime tool start session_key=%s session_id=%s tool=%s summary=%r",
+                "questor runtime tool start session_key=%s session_id=%s tool=%s summary=%r",
                 session_key,
                 bundle.session_id,
                 event.tool_name,
@@ -590,7 +590,7 @@ class OhmoSessionRuntimePool:
             return
         if isinstance(event, ToolExecutionCompleted):
             logger.info(
-                "ohmo runtime tool complete session_key=%s session_id=%s tool=%s",
+                "questor runtime tool complete session_key=%s session_id=%s tool=%s",
                 session_key,
                 bundle.session_id,
                 event.tool_name,
@@ -606,7 +606,7 @@ class OhmoSessionRuntimePool:
             return
         if isinstance(event, ErrorEvent):
             logger.error(
-                "ohmo runtime error session_key=%s session_id=%s message=%r",
+                "questor runtime error session_key=%s session_id=%s message=%r",
                 session_key,
                 bundle.session_id,
                 _content_snippet(event.message),
@@ -641,7 +641,7 @@ class OhmoSessionRuntimePool:
             tool_metadata=tool_metadata,
         )
         logger.info(
-            "ohmo runtime saved snapshot session_key=%s session_id=%s message_count=%s",
+            "questor runtime saved snapshot session_key=%s session_id=%s message_count=%s",
             session_key,
             bundle.session_id,
             len(bundle.engine.messages),
@@ -661,7 +661,7 @@ class OhmoSessionRuntimePool:
             cwd=bundle_cwd,
             model=self._model,
             max_turns=self._max_turns,
-            system_prompt=build_ohmo_system_prompt(bundle_cwd, workspace=self._workspace, extra_prompt=None),
+            system_prompt=build_questor_system_prompt(bundle_cwd, workspace=self._workspace, extra_prompt=None),
             active_profile=self._provider_profile,
             session_backend=self._session_backend,
             enforce_max_turns=self._max_turns is not None,
@@ -674,8 +674,8 @@ class OhmoSessionRuntimePool:
             autodream_context={
                 "memory_dir": str(get_memory_dir(self._workspace)),
                 "session_dir": str(get_sessions_dir(self._workspace)),
-                "app_label": "ohmo personal memory",
-                "runner_module": "ohmo",
+                "app_label": "questor personal memory",
+                "runner_module": "questor",
             },
         )
         refreshed.session_id = prior_session_id
@@ -684,7 +684,7 @@ class OhmoSessionRuntimePool:
         refreshed.engine.set_system_prompt(self._runtime_system_prompt(refreshed, latest_user_prompt))
         self._bundles[session_key] = refreshed
         logger.info(
-            "ohmo runtime refreshed session_key=%s session_id=%s message_count=%s",
+            "questor runtime refreshed session_key=%s session_id=%s message_count=%s",
             session_key,
             refreshed.session_id,
             len(refreshed.engine.messages),
@@ -694,10 +694,10 @@ class OhmoSessionRuntimePool:
     def _runtime_system_prompt(self, bundle: RuntimeBundle, latest_user_prompt: str | None) -> str:
         bundle_cwd = str(Path(getattr(bundle, "cwd", self._cwd)).resolve())
         if not hasattr(bundle, "current_settings"):
-            return build_ohmo_system_prompt(bundle_cwd, workspace=self._workspace, extra_prompt=None)
+            return build_questor_system_prompt(bundle_cwd, workspace=self._workspace, extra_prompt=None)
         settings = bundle.current_settings()
         if not hasattr(settings, "system_prompt"):
-            return build_ohmo_system_prompt(bundle_cwd, workspace=self._workspace, extra_prompt=None)
+            return build_questor_system_prompt(bundle_cwd, workspace=self._workspace, extra_prompt=None)
         return build_runtime_system_prompt(
             settings,
             cwd=bundle_cwd,
@@ -719,7 +719,7 @@ class OhmoSessionRuntimePool:
         normalized = normalize_cwd(str(cwd))
         if not Path(normalized).is_dir():
             logger.warning(
-                "ohmo managed group cwd does not exist channel=%s chat_id=%s cwd=%s",
+                "questor managed group cwd does not exist channel=%s chat_id=%s cwd=%s",
                 message.channel,
                 message.chat_id,
                 normalized,
@@ -736,7 +736,7 @@ class OhmoSessionRuntimePool:
         if bundle.tool_registry is None or bundle.tool_registry.get(_GROUP_TOOL_NAME) is not None:
             return
         bundle.tool_registry.register(
-            OhmoCreateFeishuGroupTool(
+            QuestorCreateFeishuGroupTool(
                 workspace=self._workspace,
                 create_group=self._create_feishu_group,
                 publish_group_welcome=self._publish_group_welcome,
@@ -757,22 +757,22 @@ class OhmoSessionRuntimePool:
         session_key: str,
     ) -> object:
         metadata = getattr(bundle.engine, "tool_metadata", {})
-        previous = metadata.get("ohmo_group_request", _NO_GROUP_REQUEST)
-        if not message.metadata.get("_ohmo_group_command"):
-            metadata.pop("ohmo_group_request", None)
+        previous = metadata.get("questor_group_request", _NO_GROUP_REQUEST)
+        if not message.metadata.get("_questor_group_command"):
+            metadata.pop("questor_group_request", None)
             metadata.pop("_suppress_next_user_goal", None)
             self._unregister_group_tool(bundle)
             return _NO_GROUP_REQUEST
         self._register_group_tool(bundle)
         metadata["_suppress_next_user_goal"] = True
-        metadata["ohmo_group_request"] = {
+        metadata["questor_group_request"] = {
             "channel": message.channel,
             "chat_type": str(message.metadata.get("chat_type") or "").strip().lower(),
             "sender_id": str(message.sender_id),
             "source_chat_id": str(message.chat_id),
             "source_session_key": session_key,
             "sender_display_name": message.metadata.get("sender_display_name"),
-            "raw_request": message.metadata.get("_ohmo_group_raw_request") or "",
+            "raw_request": message.metadata.get("_questor_group_raw_request") or "",
             "used": False,
         }
         return previous
@@ -781,9 +781,9 @@ class OhmoSessionRuntimePool:
     def _restore_group_request_context(bundle: RuntimeBundle, previous: object) -> None:
         metadata = getattr(bundle.engine, "tool_metadata", {})
         del previous
-        metadata.pop("ohmo_group_request", None)
+        metadata.pop("questor_group_request", None)
         metadata.pop("_suppress_next_user_goal", None)
-        OhmoSessionRuntimePool._unregister_group_tool(bundle)
+        QuestorSessionRuntimePool._unregister_group_tool(bundle)
 
 
 def _content_snippet(text: str, *, limit: int = 160) -> str:
@@ -795,7 +795,7 @@ def _content_snippet(text: str, *, limit: int = 160) -> str:
 
 
 def _sanitize_snapshot_messages(raw_messages: object) -> list[dict[str, object]] | None:
-    """Validate and sanitize restored messages from persisted ohmo snapshots."""
+    """Validate and sanitize restored messages from persisted questor snapshots."""
     if not raw_messages or not isinstance(raw_messages, list):
         return None
     messages: list[ConversationMessage] = []
@@ -803,7 +803,7 @@ def _sanitize_snapshot_messages(raw_messages: object) -> list[dict[str, object]]
         try:
             messages.append(ConversationMessage.model_validate(raw))
         except Exception:
-            logger.warning("ohmo runtime skipped invalid restored message while sanitizing snapshot")
+            logger.warning("questor runtime skipped invalid restored message while sanitizing snapshot")
     return [message.model_dump(mode="json") for message in _sanitize_group_command_prompts(messages)]
 
 
@@ -910,7 +910,7 @@ def _format_group_command_history_note(prompt: str) -> str:
     if _GROUP_AGENT_PROMPT_REQUEST_MARKER in prompt:
         raw_request = prompt.split(_GROUP_AGENT_PROMPT_REQUEST_MARKER, 1)[1].strip()
     raw_request = raw_request.strip() or "(empty request)"
-    return f"[Handled /group request]\nThe user asked ohmo to create a Feishu group:\n{raw_request}"
+    return f"[Handled /group request]\nThe user asked questor to create a Feishu group:\n{raw_request}"
 
 
 def _sanitize_group_command_metadata(raw_metadata: object) -> object:
@@ -1052,7 +1052,7 @@ def _build_inbound_user_message(message: InboundMessage) -> ConversationMessage:
         try:
             content.append(ImageBlock.from_path(media_path))
         except Exception:
-            logger.exception("ohmo runtime failed to encode image attachment path=%s", media_path)
+            logger.exception("questor runtime failed to encode image attachment path=%s", media_path)
 
     return ConversationMessage.from_user_content(content)
 

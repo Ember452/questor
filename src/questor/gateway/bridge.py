@@ -1,4 +1,4 @@
-"""Gateway bridge connecting channel bus traffic to ohmo runtimes."""
+"""Gateway bridge connecting channel bus traffic to questor runtimes."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from questorharness.channels.bus.events import InboundMessage
 from questorharness.channels.bus.events import OutboundMessage
 from questorharness.channels.bus.queue import MessageBus
 
-from ohmo.group_registry import load_managed_group_record
-from ohmo.gateway.router import session_key_for_message
-from ohmo.gateway.runtime import OhmoSessionRuntimePool
+from questor.group_registry import load_managed_group_record
+from questor.gateway.router import session_key_for_message
+from questor.gateway.runtime import QuestorSessionRuntimePool
 
 logger = logging.getLogger(__name__)
 
@@ -32,35 +32,35 @@ def _format_gateway_error(exc: Exception) -> str:
     lowered = message.lower()
     if "claude oauth refresh failed" in lowered:
         return (
-            "[ohmo gateway error] Claude subscription auth refresh failed. "
+            "[questor gateway error] Claude subscription auth refresh failed. "
             "Run `oh auth claude-login` again or switch the gateway profile."
         )
     if "claude oauth refresh token is invalid or expired" in lowered:
         return (
-            "[ohmo gateway error] Claude subscription token is expired. "
+            "[questor gateway error] Claude subscription token is expired. "
             "Run `claude auth login`, then `oh auth claude-login`, or switch the gateway profile."
         )
     if "auth source not found" in lowered or "access token" in lowered:
         return (
-            "[ohmo gateway error] Authentication is not configured for the current "
-            "gateway profile. Run `oh setup` or `ohmo config`."
+            "[questor gateway error] Authentication is not configured for the current "
+            "gateway profile. Run `oh setup` or `questor config`."
         )
     if "api key" in lowered or "auth" in lowered or "credential" in lowered:
         return (
-            "[ohmo gateway error] Authentication failed for the current gateway "
-            "profile. Check `oh auth status` and `ohmo config`."
+            "[questor gateway error] Authentication failed for the current gateway "
+            "profile. Check `oh auth status` and `questor config`."
         )
-    return f"[ohmo gateway error] {message}"
+    return f"[questor gateway error] {message}"
 
 
-class OhmoGatewayBridge:
+class QuestorGatewayBridge:
     """Consume inbound messages and publish assistant replies."""
 
     def __init__(
         self,
         *,
         bus: MessageBus,
-        runtime_pool: OhmoSessionRuntimePool,
+        runtime_pool: QuestorSessionRuntimePool,
         restart_gateway: Callable[[object, str], Awaitable[None] | None] | None = None,
         workspace: str | Path | None = None,
         feishu_group_policy: str = "open",
@@ -86,7 +86,7 @@ class OhmoGatewayBridge:
 
             if not self._should_process_message(message):
                 logger.info(
-                    "ohmo inbound ignored channel=%s chat_id=%s sender_id=%s reason=feishu_group_policy policy=%s content=%r",
+                    "questor inbound ignored channel=%s chat_id=%s sender_id=%s reason=feishu_group_policy policy=%s content=%r",
                     message.channel,
                     message.chat_id,
                     message.sender_id,
@@ -97,7 +97,7 @@ class OhmoGatewayBridge:
 
             session_key = session_key_for_message(message)
             logger.info(
-                "ohmo inbound received channel=%s chat_id=%s sender_id=%s session_key=%s content=%r",
+                "questor inbound received channel=%s chat_id=%s sender_id=%s session_key=%s content=%r",
                 message.channel,
                 message.chat_id,
                 message.sender_id,
@@ -129,7 +129,7 @@ class OhmoGatewayBridge:
             )
             task = asyncio.create_task(
                 self._process_message(message, session_key),
-                name=f"ohmo-session:{session_key}",
+                name=f"questor-session:{session_key}",
             )
             self._session_tasks[session_key] = task
             task.add_done_callback(lambda finished, key=session_key: self._cleanup_task(key, finished))
@@ -196,13 +196,13 @@ class OhmoGatewayBridge:
             await self._publish_command_reply(
                 message,
                 session_key,
-                "请在和 ohmo 的私聊里使用 /group 创建新群。\nUse /group in a private chat with ohmo to create a new group.",
+                "请在和 questor 的私聊里使用 /group 创建新群。\nUse /group in a private chat with questor to create a new group.",
             )
             return None
 
         metadata = dict(message.metadata)
-        metadata["_ohmo_group_command"] = True
-        metadata["_ohmo_group_raw_request"] = args
+        metadata["_questor_group_command"] = True
+        metadata["_questor_group_raw_request"] = args
         prompt = _build_group_agent_prompt(args)
         return InboundMessage(
             channel=message.channel,
@@ -268,7 +268,7 @@ class OhmoGatewayBridge:
                 if not update.text:
                     continue
                 logger.info(
-                    "ohmo outbound update channel=%s chat_id=%s session_key=%s kind=%s content=%r",
+                    "questor outbound update channel=%s chat_id=%s session_key=%s kind=%s content=%r",
                     message.channel,
                     message.chat_id,
                     session_key,
@@ -286,7 +286,7 @@ class OhmoGatewayBridge:
                 )
         except asyncio.CancelledError:
             logger.info(
-                "ohmo session interrupted channel=%s chat_id=%s session_key=%s reason=%s",
+                "questor session interrupted channel=%s chat_id=%s session_key=%s reason=%s",
                 message.channel,
                 message.chat_id,
                 session_key,
@@ -295,7 +295,7 @@ class OhmoGatewayBridge:
             raise
         except Exception as exc:  # pragma: no cover - gateway failure path
             logger.exception(
-                "ohmo gateway failed to process inbound message channel=%s chat_id=%s sender_id=%s session_key=%s content=%r",
+                "questor gateway failed to process inbound message channel=%s chat_id=%s sender_id=%s session_key=%s content=%r",
                 message.channel,
                 message.chat_id,
                 message.sender_id,
@@ -305,14 +305,14 @@ class OhmoGatewayBridge:
             reply = _format_gateway_error(exc)
         if not reply:
             logger.info(
-                "ohmo inbound finished without final reply channel=%s chat_id=%s session_key=%s",
+                "questor inbound finished without final reply channel=%s chat_id=%s session_key=%s",
                 message.channel,
                 message.chat_id,
                 session_key,
             )
             return
         logger.info(
-            "ohmo outbound final channel=%s chat_id=%s session_key=%s content=%r",
+            "questor outbound final channel=%s chat_id=%s session_key=%s content=%r",
             message.channel,
             message.chat_id,
             session_key,
@@ -360,7 +360,7 @@ class OhmoGatewayBridge:
                 chat_id=chat_id,
             ) is not None
         except Exception:
-            logger.exception("failed to load ohmo managed group metadata chat_id=%s", chat_id)
+            logger.exception("failed to load questor managed group metadata chat_id=%s", chat_id)
             return False
 
 
@@ -379,7 +379,7 @@ def _build_group_agent_prompt(raw_request: str) -> str:
     return (
         "The user invoked `/group` from a Feishu private chat.\n"
         "Your task is to create a dedicated Feishu group for this request.\n\n"
-        "Use the `ohmo_create_feishu_group` tool exactly once if you can infer a safe group name. "
+        "Use the `questor_create_feishu_group` tool exactly once if you can infer a safe group name. "
         "You, the model, must decide the final `name`, optional `repo`, and optional `cwd` from the user's "
         "natural-language request and available local context. If the cwd is not obvious, inspect the filesystem "
         "before calling the tool. If there is not enough information to choose safely, ask one concise clarification "

@@ -1,4 +1,4 @@
-"""Session routing for ohmo gateway."""
+"""Session routing for questor gateway."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ def session_key_for_message(message: InboundMessage) -> str:
     """Route sessions by chat, isolating shared chats by thread/sender.
 
     Private chats keep the original ``channel:chat_id`` key so existing long
-    ohmo sessions remain resumable. Group/shared chats include sender identity
+    questor sessions remain resumable. Group/shared chats include sender identity
     to avoid multiple people sharing one agent memory.
     """
     if message.session_key_override:

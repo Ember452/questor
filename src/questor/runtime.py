@@ -1,4 +1,4 @@
-"""Runtime helpers for ohmo."""
+"""Runtime helpers for questor."""
 
 from __future__ import annotations
 
@@ -14,18 +14,18 @@ from questorharness.ui.backend_host import run_backend_host
 from questorharness.ui.runtime import build_runtime, close_runtime, handle_line, start_runtime
 from questorharness.ui.react_launcher import _resolve_npm, _resolve_tsx, get_frontend_dir
 
-from ohmo.memory import create_memory_command_backend
-from ohmo.prompts import build_ohmo_system_prompt
-from ohmo.session_storage import OhmoSessionBackend
-from ohmo.workspace import get_memory_dir, get_plugins_dir, get_sessions_dir, get_skills_dir, initialize_workspace
+from questor.memory import create_memory_command_backend
+from questor.prompts import build_questor_system_prompt
+from questor.session_storage import QuestorSessionBackend
+from questor.workspace import get_memory_dir, get_plugins_dir, get_sessions_dir, get_skills_dir, initialize_workspace
 
 
-def _ohmo_extra_roots(workspace: str | Path | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def _questor_extra_roots(workspace: str | Path | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
     root = initialize_workspace(workspace)
     return ((str(get_skills_dir(root)),), (str(get_plugins_dir(root)),))
 
 
-async def run_ohmo_backend(
+async def run_questor_backend(
     *,
     cwd: str | None = None,
     workspace: str | Path | None = None,
@@ -37,22 +37,22 @@ async def run_ohmo_backend(
     restore_tool_metadata: dict[str, object] | None = None,
     backend_only: bool = True,
 ) -> int:
-    """Run the shared React backend host with ohmo workspace semantics."""
+    """Run the shared React backend host with questor workspace semantics."""
     del backend_only
     cwd_path = str(Path(cwd or Path.cwd()).resolve())
     workspace_root = initialize_workspace(workspace)
-    extra_skill_dirs, extra_plugin_roots = _ohmo_extra_roots(workspace_root)
+    extra_skill_dirs, extra_plugin_roots = _questor_extra_roots(workspace_root)
     return await run_backend_host(
         cwd=cwd_path,
         model=model,
         max_turns=max_turns,
-        system_prompt=build_ohmo_system_prompt(cwd_path, workspace=workspace_root),
+        system_prompt=build_questor_system_prompt(cwd_path, workspace=workspace_root),
         active_profile=provider_profile,
         api_client=api_client,
         restore_messages=restore_messages,
         restore_tool_metadata=restore_tool_metadata,
         enforce_max_turns=max_turns is not None,
-        session_backend=OhmoSessionBackend(workspace_root),
+        session_backend=QuestorSessionBackend(workspace_root),
         extra_skill_dirs=extra_skill_dirs,
         extra_plugin_roots=extra_plugin_roots,
         memory_backend=create_memory_command_backend(workspace_root),
@@ -60,13 +60,13 @@ async def run_ohmo_backend(
         autodream_context={
             "memory_dir": str(get_memory_dir(workspace_root)),
             "session_dir": str(get_sessions_dir(workspace_root)),
-            "app_label": "ohmo personal memory",
-            "runner_module": "ohmo",
+            "app_label": "questor personal memory",
+            "runner_module": "questor",
         },
     )
 
 
-def build_ohmo_backend_command(
+def build_questor_backend_command(
     *,
     cwd: str | None = None,
     workspace: str | Path | None = None,
@@ -75,7 +75,7 @@ def build_ohmo_backend_command(
     provider_profile: str | None = None,
 ) -> list[str]:
     """Return the backend command for the React terminal UI."""
-    command = [sys.executable, "-m", "ohmo", "--backend-only"]
+    command = [sys.executable, "-m", "questor", "--backend-only"]
     if cwd:
         command.extend(["--cwd", cwd])
     if workspace:
@@ -89,7 +89,7 @@ def build_ohmo_backend_command(
     return command
 
 
-async def launch_ohmo_react_tui(
+async def launch_questor_react_tui(
     *,
     cwd: str | None = None,
     workspace: str | Path | None = None,
@@ -97,7 +97,7 @@ async def launch_ohmo_react_tui(
     max_turns: int | None = None,
     provider_profile: str | None = None,
 ) -> int:
-    """Launch the shared React terminal UI with an ohmo backend."""
+    """Launch the shared React terminal UI with an questor backend."""
     frontend_dir = get_frontend_dir()
     package_json = frontend_dir / "package.json"
     if not package_json.exists():
@@ -120,7 +120,7 @@ async def launch_ohmo_react_tui(
     env = os.environ.copy()
     env["QUESTORHARNESS_FRONTEND_CONFIG"] = json.dumps(
         {
-            "backend_command": build_ohmo_backend_command(
+            "backend_command": build_questor_backend_command(
                 cwd=cwd_path,
                 workspace=workspace_root,
                 model=model,
@@ -144,7 +144,7 @@ async def launch_ohmo_react_tui(
     return await process.wait()
 
 
-async def run_ohmo_print_mode(
+async def run_questor_print_mode(
     *,
     prompt: str,
     cwd: str | None = None,
@@ -153,19 +153,19 @@ async def run_ohmo_print_mode(
     max_turns: int | None = None,
     provider_profile: str | None = None,
 ) -> int:
-    """Run a single ohmo prompt and print the assistant output."""
+    """Run a single questor prompt and print the assistant output."""
     cwd_path = str(Path(cwd or Path.cwd()).resolve())
     workspace_root = initialize_workspace(workspace)
-    extra_skill_dirs, extra_plugin_roots = _ohmo_extra_roots(workspace_root)
+    extra_skill_dirs, extra_plugin_roots = _questor_extra_roots(workspace_root)
     previous_cwd = Path.cwd()
     os.chdir(cwd_path)
     try:
         bundle = await build_runtime(
             model=model,
             max_turns=max_turns,
-            system_prompt=build_ohmo_system_prompt(cwd_path, workspace=workspace_root),
+            system_prompt=build_questor_system_prompt(cwd_path, workspace=workspace_root),
             active_profile=provider_profile,
-            session_backend=OhmoSessionBackend(workspace_root),
+            session_backend=QuestorSessionBackend(workspace_root),
             enforce_max_turns=max_turns is not None,
             extra_skill_dirs=extra_skill_dirs,
             extra_plugin_roots=extra_plugin_roots,
@@ -174,8 +174,8 @@ async def run_ohmo_print_mode(
             autodream_context={
                 "memory_dir": str(get_memory_dir(workspace_root)),
                 "session_dir": str(get_sessions_dir(workspace_root)),
-                "app_label": "ohmo personal memory",
-                "runner_module": "ohmo",
+                "app_label": "questor personal memory",
+                "runner_module": "questor",
             },
         )
         await start_runtime(bundle)

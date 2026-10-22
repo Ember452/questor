@@ -399,7 +399,7 @@ def lookup_skill_slash_command(raw_input: str, context: CommandContext) -> tuple
     """Resolve a user-invocable skill slash command for the active context.
 
     This is a runtime fallback for skills that are only visible after the
-    active cwd, ohmo workspace, or plugin roots are known. Unknown slash
+    active cwd, questor workspace, or plugin roots are known. Unknown slash
     commands still fall through to the normal agent prompt path.
     """
     if not raw_input.startswith("/"):
@@ -426,7 +426,7 @@ def _register_user_invocable_skill_commands(registry: CommandRegistry) -> None:
     """Register loaded skills as slash commands.
 
     Skills are loaded at command execution time because the active command
-    context supplies cwd, ohmo extra skill dirs, and plugin roots.
+    context supplies cwd, questor extra skill dirs, and plugin roots.
     """
 
     for skill in load_skill_registry().list_skills():
@@ -590,7 +590,7 @@ def create_default_command_registry(
         memory_dir = backend.get_memory_dir() if backend is not None else get_project_memory_dir(context.cwd)
         session_dir = context.session_backend.get_session_dir(context.cwd)
         app_label = backend.label if backend is not None else "questorharness project memory"
-        runner_module = "ohmo" if backend is not None and "ohmo" in backend.label.lower() else "questorharness"
+        runner_module = "questor" if backend is not None and "questor" in backend.label.lower() else "questorharness"
         if action == "status":
             last_at = read_last_consolidated_at(context.cwd, memory_dir=memory_dir)
             last = "never" if last_at <= 0 else datetime.fromtimestamp(last_at).isoformat(timespec="seconds")
@@ -1339,7 +1339,7 @@ def create_default_command_registry(
             message=(
                 "No active turn is running in this command handler. "
                 "While the TUI is running, type /stop or press Esc/Ctrl+C to interrupt the current turn. "
-                "In ohmo remote channels, send /stop."
+                "In questor remote channels, send /stop."
             )
         )
 
@@ -2157,14 +2157,14 @@ def create_default_command_registry(
                 return CommandResult(
                     message=(
                         "Usage: /autopilot add "
-                        "[idea|ohmo|issue|pr|claude] TITLE :: DETAILS"
+                        "[idea|questor|issue|pr|claude] TITLE :: DETAILS"
                     )
                 )
             source_kind = "manual_idea"
             source_map = {
                 "idea": "manual_idea",
                 "manual": "manual_idea",
-                "ohmo": "ohmo_request",
+                "questor": "questor_request",
                 "issue": "github_issue",
                 "pr": "github_pr",
                 "claude": "claude_code_candidate",
@@ -2180,7 +2180,7 @@ def create_default_command_registry(
                 return CommandResult(
                     message=(
                         "Usage: /autopilot add "
-                        "[idea|ohmo|issue|pr|claude] TITLE :: DETAILS"
+                        "[idea|questor|issue|pr|claude] TITLE :: DETAILS"
                     )
                 )
             card, created = store.enqueue_card(
@@ -2286,7 +2286,7 @@ def create_default_command_registry(
             message=(
                 "Usage: /autopilot "
                 "[status|list [STATUS]|show ID|next|context|journal [LIMIT]|"
-                "add [idea|ohmo|issue|pr|claude] TITLE :: DETAILS|"
+                "add [idea|questor|issue|pr|claude] TITLE :: DETAILS|"
                 "accept ID|start ID|complete ID [NOTE]|fail ID [NOTE]|reject ID [NOTE]|"
                 "run-next|tick|install-cron|export-dashboard [OUTPUT]|"
                 "scan [issues|prs|claude-code|all] [LIMIT]]"
@@ -2302,7 +2302,7 @@ def create_default_command_registry(
             return CommandResult(message="Usage: /ship TITLE :: DETAILS")
         store = RepoAutopilotStore(context.cwd)
         card, _ = store.enqueue_card(
-            source_kind="ohmo_request",
+            source_kind="questor_request",
             title=title.strip(),
             body=body.strip(),
         )
@@ -2449,7 +2449,7 @@ def create_default_command_registry(
     registry.register(SlashCommand("passes", "Show or update reasoning pass count", _passes_handler))
     registry.register(SlashCommand("turns", "Show or update maximum agentic turn count", _turns_handler))
     registry.register(SlashCommand("continue", "Continue the previous tool loop if it was interrupted", _continue_handler))
-    registry.register(SlashCommand("stop", "Interrupt the running turn from TUI/ohmo channels", _stop_handler))
+    registry.register(SlashCommand("stop", "Interrupt the running turn from TUI/questor channels", _stop_handler))
     registry.register(
         SlashCommand(
             "provider",
@@ -2538,7 +2538,7 @@ def create_default_command_registry(
     registry.register(
         SlashCommand(
             "ship",
-            "Queue and execute an ohmo-driven repo task",
+            "Queue and execute an questor-driven repo task",
             _ship_handler,
             remote_invocable=False,
             remote_admin_opt_in=True,

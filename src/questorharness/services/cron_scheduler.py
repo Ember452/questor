@@ -34,8 +34,8 @@ from questorharness.sandbox import SandboxUnavailableError
 from questorharness.utils.shell import create_shell_subprocess
 
 try:
-    from ohmo.gateway.config import load_gateway_config
-except Exception:  # pragma: no cover - ohmo is optional for non-ohmo cron users
+    from questor.gateway.config import load_gateway_config
+except Exception:  # pragma: no cover - questor is optional for non-questor cron users
     load_gateway_config = None  # type: ignore[assignment]
 
 
@@ -257,7 +257,7 @@ async def _notify_job_result(job: dict[str, Any], entry: dict[str, Any]) -> None
     notify_type = str(notify.get("type") or "").strip().lower()
     try:
         if notify_type in {"feishu_dm", "feishu"}:
-            from ohmo.gateway.notify import send_feishu_dm
+            from questor.gateway.notify import send_feishu_dm
 
             user_open_id = str(
                 notify.get("user_open_id") or notify.get("open_id") or notify.get("to") or ""
@@ -292,7 +292,7 @@ def _command_for_job(job: dict[str, Any]) -> str:
     if not message:
         raise ValueError("agent_turn cron job is missing payload.message")
     cwd = str(job.get("cwd") or ".")
-    parts = ["ohmo"]
+    parts = ["questor"]
     profile = payload.get("profile") or job.get("provider_profile")
     if profile is None and load_gateway_config is not None:
         profile = load_gateway_config().provider_profile

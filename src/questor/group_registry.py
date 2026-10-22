@@ -1,4 +1,4 @@
-"""Persistent metadata for ohmo-managed chat groups."""
+"""Persistent metadata for questor-managed chat groups."""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ohmo.workspace import get_groups_dir
+from questor.workspace import get_groups_dir
 
 
 @dataclass(frozen=True)
 class ManagedGroupRecord:
-    """Metadata for a chat group created and managed by ohmo."""
+    """Metadata for a chat group created and managed by questor."""
 
     channel: str
     chat_id: str
@@ -59,7 +59,7 @@ def save_managed_group_record(
     binding_status: str = "pending_agent",
     metadata: dict[str, Any] | None = None,
 ) -> Path:
-    """Persist metadata for an ohmo-managed group and return the path."""
+    """Persist metadata for an questor-managed group and return the path."""
     record = ManagedGroupRecord(
         channel=channel,
         chat_id=chat_id,
@@ -83,7 +83,7 @@ def load_managed_group_record(
     channel: str,
     chat_id: str,
 ) -> dict[str, Any] | None:
-    """Load metadata for an ohmo-managed group if present."""
+    """Load metadata for an questor-managed group if present."""
     path = group_record_path(workspace=workspace, channel=channel, chat_id=chat_id)
     if not path.exists():
         return None

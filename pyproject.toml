@@ -45,10 +45,10 @@ dev = [
 questorharness = "questorharness.cli:app"
 oh = "questorharness.cli:app"
 openh = "questorharness.cli:app"
-ohmo = "ohmo.cli:app"
+questor = "questor.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/questorharness", "ohmo"]
+packages = ["src/questorharness", "src/questor"]
 
 [tool.hatch.build]
 exclude = [

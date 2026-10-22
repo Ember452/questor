@@ -1,4 +1,4 @@
-"""Prompt assembly for ohmo persona and workspace context."""
+"""Prompt assembly for questor persona and workspace context."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 from questorharness.memory import load_memory_prompt as load_project_memory_prompt
 from questorharness.prompts.system_prompt import get_base_system_prompt
 
-from ohmo.memory import load_memory_prompt as load_ohmo_memory_prompt
-from ohmo.workspace import (
+from questor.memory import load_memory_prompt as load_questor_memory_prompt
+from questor.workspace import (
     get_bootstrap_path,
     get_identity_path,
     get_soul_path,
@@ -24,14 +24,14 @@ def _read_text(path: Path) -> str | None:
     return content or None
 
 
-def build_ohmo_system_prompt(
+def build_questor_system_prompt(
     cwd: str | Path,
     *,
     workspace: str | Path | None = None,
     extra_prompt: str | None = None,
     include_project_memory: bool = False,
 ) -> str:
-    """Build the custom base prompt for ohmo sessions."""
+    """Build the custom base prompt for questor sessions."""
     root = get_workspace_root(workspace)
     sections = [get_base_system_prompt()]
 
@@ -40,11 +40,11 @@ def build_ohmo_system_prompt(
 
     soul = _read_text(get_soul_path(root))
     if soul:
-        sections.extend(["# ohmo Soul", soul])
+        sections.extend(["# questor Soul", soul])
 
     identity = _read_text(get_identity_path(root))
     if identity:
-        sections.extend(["# ohmo Identity", identity])
+        sections.extend(["# questor Identity", identity])
 
     user = _read_text(get_user_path(root))
     if user:
@@ -56,15 +56,15 @@ def build_ohmo_system_prompt(
 
     sections.extend(
         [
-            "# ohmo Workspace",
+            "# questor Workspace",
             f"- Personal workspace root: {root}",
-            "- Personal memory and sessions live under the shared ohmo workspace root.",
-            "- Resume only within ohmo sessions; do not assume interoperability with plain QuestorHarness sessions.",
+            "- Personal memory and sessions live under the shared questor workspace root.",
+            "- Resume only within questor sessions; do not assume interoperability with plain QuestorHarness sessions.",
         ]
     )
 
-    if ohmo_memory := load_ohmo_memory_prompt(root):
-        sections.append(ohmo_memory)
+    if questor_memory := load_questor_memory_prompt(root):
+        sections.append(questor_memory)
 
     if include_project_memory:
         project_memory = load_project_memory_prompt(cwd)

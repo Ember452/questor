@@ -740,7 +740,7 @@ async def test_bundled_user_invocable_skill_registers_as_slash_command(tmp_path:
 @pytest.mark.asyncio
 async def test_context_skill_slash_command_uses_folder_name(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path / "config"))
-    extra_root = tmp_path / "ohmo-skills"
+    extra_root = tmp_path / "questor-skills"
     skill_dir = extra_root / "pikastream-video-meeting"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(

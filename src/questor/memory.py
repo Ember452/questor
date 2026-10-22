@@ -1,4 +1,4 @@
-"""Personal memory helpers for ``.ohmo``."""
+"""Personal memory helpers for ``.questor``."""
 
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ from questorharness.memory.schema import (
 from questorharness.utils.file_lock import exclusive_file_lock
 from questorharness.utils.fs import atomic_write_text
 
-from ohmo.workspace import get_memory_dir, get_memory_index_path
+from questor.workspace import get_memory_dir, get_memory_index_path
 
 
 def list_memory_files(workspace: str | Path | None = None) -> list[Path]:
-    """List ``.ohmo`` memory markdown files."""
+    """List ``.questor`` memory markdown files."""
     memory_dir = get_memory_dir(workspace)
     return sorted(
         header.path
@@ -158,7 +158,7 @@ def load_memory_prompt(workspace: str | Path | None = None, *, max_files: int = 
     memory_dir = get_memory_dir(workspace)
     index_path = get_memory_index_path(workspace)
     lines = [
-        "# ohmo Memory",
+        "# questor Memory",
         f"- Personal memory directory: {memory_dir}",
         "- Use this memory for stable user preferences and durable personal context.",
     ]
@@ -177,10 +177,10 @@ def load_memory_prompt(workspace: str | Path | None = None, *, max_files: int = 
 
 
 def create_memory_command_backend(workspace: str | Path | None = None) -> MemoryCommandBackend:
-    """Return a ``/memory`` backend bound to ohmo's personal memory store."""
+    """Return a ``/memory`` backend bound to questor's personal memory store."""
 
     return MemoryCommandBackend(
-        label="ohmo personal memory",
+        label="questor personal memory",
         default_type="personal",
         default_category="preference",
         get_memory_dir=lambda: get_memory_dir(workspace),

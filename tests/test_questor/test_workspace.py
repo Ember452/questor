@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ohmo.workspace import (
+from questor.workspace import (
     get_bootstrap_path,
     get_gateway_config_path,
     get_identity_path,
@@ -13,7 +13,7 @@ from ohmo.workspace import (
 
 
 def test_initialize_workspace_creates_expected_files(tmp_path: Path):
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     root = initialize_workspace(workspace)
     assert root == workspace
     assert get_soul_path(workspace).exists()
@@ -34,5 +34,5 @@ def test_initialize_workspace_creates_expected_files(tmp_path: Path):
     assert "Remember that access is intimacy." in soul_text
     assert "Relationship notes" in user_text
     assert "learn enough to help well, not to build a dossier" in user_text
-    assert "Name: ohmo" in identity_text
+    assert "Name: questor" in identity_text
     assert "first conversation" in bootstrap_text

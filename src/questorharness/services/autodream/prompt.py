@@ -24,7 +24,7 @@ def build_consolidation_prompt(
     write_mode = "PREVIEW MODE: do not write files; propose a concise patch plan only." if preview else "APPLY MODE: update memory files directly when changes are clearly warranted."
     return f"""# Dream: Memory Consolidation
 
-You are performing a dream — a reflective pass over QuestorHarness/ohmo memory files. Synthesize recent signal into durable, well-organized memories so future sessions can orient quickly.
+You are performing a dream — a reflective pass over QuestorHarness/questor memory files. Synthesize recent signal into durable, well-organized memories so future sessions can orient quickly.
 
 Current date: {date.today().isoformat()}
 Memory directory: `{memory_root}`

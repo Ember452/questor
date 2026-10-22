@@ -27,7 +27,7 @@ _WINDOWS_ENVIRONMENT_SKIPS = {
     "tests/test_hooks/test_priority.py::test_executor_runs_hooks_in_priority_order": (
         "hook commands use POSIX printf, unavailable in the native Windows shell"
     ),
-    "tests/test_ohmo/test_gateway.py::test_stop_gateway_process_kills_matching_workspace_processes": (
+    "tests/test_questor/test_gateway.py::test_stop_gateway_process_kills_matching_workspace_processes": (
         "gateway process discovery parses POSIX ps output"
     ),
     "tests/test_sandbox/test_path_validator.py::test_symlink_escape_blocked": (

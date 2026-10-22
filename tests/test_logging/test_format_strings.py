@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 LOGGER_METHODS = {"debug", "info", "warning", "error", "exception", "critical"}
-SCAN_ROOTS = ("src/questorharness", "ohmo", "scripts")
+SCAN_ROOTS = ("src/questorharness", "questor", "scripts")
 
 
 def _iter_python_files(repo_root: Path) -> list[Path]:

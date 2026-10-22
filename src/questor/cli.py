@@ -1,4 +1,4 @@
-"""CLI entry point for the ohmo personal-agent app."""
+"""CLI entry point for the questor personal-agent app."""
 
 from __future__ import annotations
 
@@ -12,18 +12,18 @@ import typer
 from questorharness.auth.manager import AuthManager
 from questorharness.config import load_settings
 
-from ohmo.gateway.config import load_gateway_config, save_gateway_config
-from ohmo.gateway.models import GatewayConfig
-from ohmo.gateway.service import (
-    OhmoGatewayService,
+from questor.gateway.config import load_gateway_config, save_gateway_config
+from questor.gateway.models import GatewayConfig
+from questor.gateway.service import (
+    QuestorGatewayService,
     gateway_status,
     start_gateway_process,
     stop_gateway_process,
 )
-from ohmo.memory import add_memory_entry, list_memory_files, remove_memory_entry
-from ohmo.runtime import launch_ohmo_react_tui, run_ohmo_backend, run_ohmo_print_mode
-from ohmo.session_storage import OhmoSessionBackend
-from ohmo.workspace import (
+from questor.memory import add_memory_entry, list_memory_files, remove_memory_entry
+from questor.runtime import launch_questor_react_tui, run_questor_backend, run_questor_print_mode
+from questor.session_storage import QuestorSessionBackend
+from questor.workspace import (
     get_gateway_config_path,
     get_logs_dir,
     get_workspace_root,
@@ -36,15 +36,15 @@ from ohmo.workspace import (
 
 
 app = typer.Typer(
-    name="ohmo",
-    help="ohmo: a personal-agent app built on top of QuestorHarness.",
+    name="questor",
+    help="questor: a personal-agent app built on top of QuestorHarness.",
     invoke_without_command=True,
     add_completion=False,
 )
-memory_app = typer.Typer(name="memory", help="Manage .ohmo memory")
+memory_app = typer.Typer(name="memory", help="Manage .questor memory")
 soul_app = typer.Typer(name="soul", help="Inspect or edit soul.md")
 user_app = typer.Typer(name="user", help="Inspect or edit user.md")
-gateway_app = typer.Typer(name="gateway", help="Run the ohmo gateway")
+gateway_app = typer.Typer(name="gateway", help="Run the questor gateway")
 
 app.add_typer(memory_app)
 app.add_typer(soul_app)
@@ -52,7 +52,7 @@ app.add_typer(user_app)
 app.add_typer(gateway_app)
 
 _INTERACTIVE_CHANNELS = ("feishu", "qq")
-_WORKSPACE_HELP = "Path to the ohmo workspace (defaults to ~/.ohmo)"
+_WORKSPACE_HELP = "Path to the questor workspace (defaults to ~/.questor)"
 
 
 def _can_use_questionary() -> bool:
@@ -173,7 +173,7 @@ def _prompt_provider_profile(workspace: str | Path) -> str:
                 if missing:
                     title.extend([("", "  "), ("fg:#d3869b", missing.strip())])
             choices.append(questionary.Choice(title=title, value=name, checked=(name == default_value)))
-        result = questionary.select("Choose provider profile for ohmo:", choices=choices, default=default_value).ask()
+        result = questionary.select("Choose provider profile for questor:", choices=choices, default=default_value).ask()
         if result is None:
             raise typer.Abort()
         return str(result)
@@ -186,7 +186,7 @@ def _prompt_provider_profile(workspace: str | Path) -> str:
             label = f"{label} ({hint[0]})"
         options.append((name, label))
     return _select_from_menu(
-        "Choose provider profile for ohmo:",
+        "Choose provider profile for questor:",
         options,
         default_value=default_value,
     )
@@ -195,7 +195,7 @@ def _prompt_provider_profile(workspace: str | Path) -> str:
 def _prompt_channels(existing: GatewayConfig) -> tuple[list[str], dict[str, dict]]:
     enabled: list[str] = []
     configs: dict[str, dict] = {}
-    print("Configure channels for ohmo gateway:")
+    print("Configure channels for questor gateway:")
     for channel in _INTERACTIVE_CHANNELS:
         current = channel in existing.enabled_channels
         prior = dict(existing.channel_configs.get(channel, {}))
@@ -252,7 +252,7 @@ def _prompt_channels(existing: GatewayConfig) -> tuple[list[str], dict[str, dict
                 ],
                 default_value=str(prior.get("group_policy", "managed_or_mention")),
             )
-            prior_bot_names = prior.get("bot_names", ["ohmo", "openclaw", "questorharness"])
+            prior_bot_names = prior.get("bot_names", ["questor", "openclaw", "questorharness"])
             if isinstance(prior_bot_names, str):
                 prior_bot_names_default = prior_bot_names
             else:
@@ -359,11 +359,11 @@ def _maybe_restart_gateway(*, cwd: str | Path, workspace: str | Path) -> None:
     if not state.running:
         return
     if not _confirm_prompt("Gateway is running. Restart now to apply changes?", default=True):
-        print("Configuration saved. Restart later with `ohmo gateway restart`.")
+        print("Configuration saved. Restart later with `questor gateway restart`.")
         return
     stop_gateway_process(cwd, workspace)
     pid = start_gateway_process(cwd, workspace)
-    print(f"ohmo gateway restarted (pid={pid})")
+    print(f"questor gateway restarted (pid={pid})")
 
 
 def _configure_gateway_logging(
@@ -412,29 +412,29 @@ def main(
     max_turns: int | None = typer.Option(None, "--max-turns", help="Override max turns"),
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Working directory"),
     backend_only: bool = typer.Option(False, "--backend-only", hidden=True),
-    resume: str | None = typer.Option(None, "--resume", help="Resume an ohmo session by id"),
-    continue_session: bool = typer.Option(False, "--continue", help="Continue the latest ohmo session"),
+    resume: str | None = typer.Option(None, "--resume", help="Resume an questor session by id"),
+    continue_session: bool = typer.Option(False, "--continue", help="Continue the latest questor session"),
 ) -> None:
-    """Launch the ohmo app or invoke a subcommand."""
+    """Launch the questor app or invoke a subcommand."""
     if ctx.invoked_subcommand is not None:
         return
 
     cwd_path = str(Path(cwd).resolve())
     workspace_root = initialize_workspace(workspace)
-    backend = OhmoSessionBackend(workspace_root)
+    backend = QuestorSessionBackend(workspace_root)
     restore_messages = None
     restore_tool_metadata = None
     if continue_session:
         latest = backend.load_latest(cwd_path)
         if latest is None:
-            print("No previous ohmo session found in this directory.", file=sys.stderr)
+            print("No previous questor session found in this directory.", file=sys.stderr)
             raise typer.Exit(1)
         restore_messages = latest.get("messages")
         restore_tool_metadata = latest.get("tool_metadata")
     elif resume:
         snapshot = backend.load_by_id(cwd_path, resume)
         if snapshot is None:
-            print(f"ohmo session not found: {resume}", file=sys.stderr)
+            print(f"questor session not found: {resume}", file=sys.stderr)
             raise typer.Exit(1)
         restore_messages = snapshot.get("messages")
         restore_tool_metadata = snapshot.get("tool_metadata")
@@ -442,7 +442,7 @@ def main(
     if backend_only:
         raise SystemExit(
             asyncio.run(
-                run_ohmo_backend(
+                run_questor_backend(
                     cwd=cwd_path,
                     workspace=workspace_root,
                     model=model,
@@ -457,7 +457,7 @@ def main(
     if print_mode is not None:
         raise SystemExit(
             asyncio.run(
-                run_ohmo_print_mode(
+                run_questor_print_mode(
                     prompt=print_mode,
                     cwd=cwd_path,
                     workspace=workspace_root,
@@ -470,7 +470,7 @@ def main(
 
     raise SystemExit(
         asyncio.run(
-            launch_ohmo_react_tui(
+            launch_questor_react_tui(
                 cwd=cwd_path,
                 workspace=workspace_root,
                 model=model,
@@ -491,18 +491,18 @@ def init_cmd(
         help="Run the provider/channel setup wizard when attached to a terminal",
     ),
 ) -> None:
-    """Initialize the .ohmo workspace."""
+    """Initialize the .questor workspace."""
     root_path = get_workspace_root(workspace)
     already_exists = root_path.exists()
     root = initialize_workspace(root_path)
-    print(f"Initialized ohmo workspace at {root}")
+    print(f"Initialized questor workspace at {root}")
     if already_exists:
-        print("ohmo workspace already exists.")
+        print("questor workspace already exists.")
         if not interactive:
-            print("Use `ohmo config` to update provider and channel settings.")
+            print("Use `questor config` to update provider and channel settings.")
             return
         if not _confirm_prompt("Open configuration now?", default=True):
-            print("Use `ohmo config` when you want to change provider or channel settings.")
+            print("Use `questor config` when you want to change provider or channel settings.")
             return
     if interactive:
         config = _run_gateway_config_wizard(root)
@@ -529,13 +529,13 @@ def doctor_cmd(
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Project working directory"),
     workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP),
 ) -> None:
-    """Check .ohmo workspace and provider readiness."""
+    """Check .questor workspace and provider readiness."""
     cwd_path = str(Path(cwd).resolve())
     workspace_root = initialize_workspace(workspace)
     health = workspace_health(workspace_root)
     settings = load_settings()
     statuses = AuthManager(settings).get_profile_statuses()
-    lines = ["ohmo doctor:"]
+    lines = ["questor doctor:"]
     for name, ok in health.items():
         lines.append(f"- {name}: {'ok' if ok else 'missing'}")
     lines.append(f"- project_cwd: {cwd_path}")
@@ -623,9 +623,9 @@ def gateway_run_cmd(
     console_log: bool = typer.Option(True, "--console-log/--no-console-log", hidden=True),
     log_file: bool = typer.Option(True, "--log-file/--no-log-file", hidden=True),
 ) -> None:
-    """Run the ohmo gateway in the foreground."""
+    """Run the questor gateway in the foreground."""
     _configure_gateway_logging(workspace, console=console_log, log_file=log_file)
-    service = OhmoGatewayService(cwd, workspace)
+    service = QuestorGatewayService(cwd, workspace)
     raise SystemExit(asyncio.run(service.run_foreground()))
 
 
@@ -635,7 +635,7 @@ def gateway_start_cmd(
     workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP),
 ) -> None:
     pid = start_gateway_process(cwd, workspace)
-    print(f"ohmo gateway started (pid={pid})")
+    print(f"questor gateway started (pid={pid})")
 
 
 @gateway_app.command("stop")
@@ -644,9 +644,9 @@ def gateway_stop_cmd(
     workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP),
 ) -> None:
     if stop_gateway_process(cwd, workspace):
-        print("ohmo gateway stopped.")
+        print("questor gateway stopped.")
         return
-    print("ohmo gateway is not running.")
+    print("questor gateway is not running.")
 
 
 @gateway_app.command("restart")
@@ -656,7 +656,7 @@ def gateway_restart_cmd(
 ) -> None:
     stop_gateway_process(cwd, workspace)
     pid = start_gateway_process(cwd, workspace)
-    print(f"ohmo gateway restarted (pid={pid})")
+    print(f"questor gateway restarted (pid={pid})")
 
 
 @gateway_app.command("status")

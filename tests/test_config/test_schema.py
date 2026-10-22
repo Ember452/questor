@@ -13,7 +13,7 @@ class TestFeishuConfig:
         assert config.allow_from == []
         assert config.domain == "https://open.feishu.cn"
         assert config.group_policy == "managed_or_mention"
-        assert config.bot_names == ["ohmo", "openclaw", "questorharness"]
+        assert config.bot_names == ["questor", "openclaw", "questorharness"]
 
     def test_extra_fields_are_tolerated(self):
         config = FeishuConfig.model_validate({"app_id": "cli_app", "custom": "value"})

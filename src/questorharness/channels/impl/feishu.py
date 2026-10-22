@@ -56,7 +56,7 @@ def _configured_bot_names(config: FeishuConfig) -> set[str]:
     else:
         items = [str(item).strip() for item in raw_names]
     names = {_normalize_mention_name(item) for item in items if item.strip()}
-    return names or {"ohmo"}
+    return names or {"questor"}
 
 
 def _mention_value(raw: Any, key: str) -> Any:
@@ -165,12 +165,12 @@ def _normalize_feishu_group_policy(value: str | None) -> str:
     return "managed_or_mention"
 
 
-def _is_ohmo_managed_feishu_group(chat_id: str) -> bool:
-    workspace = os.environ.get("OHMO_WORKSPACE")
+def _is_questor_managed_feishu_group(chat_id: str) -> bool:
+    workspace = os.environ.get("QUESTOR_WORKSPACE")
     if not workspace:
         return False
     try:
-        from ohmo.group_registry import load_managed_group_record
+        from questor.group_registry import load_managed_group_record
 
         return load_managed_group_record(
             workspace=workspace,
@@ -178,7 +178,7 @@ def _is_ohmo_managed_feishu_group(chat_id: str) -> bool:
             chat_id=chat_id,
         ) is not None
     except Exception:
-        logger.exception("Failed to load ohmo managed Feishu group metadata chat_id=%s", chat_id)
+        logger.exception("Failed to load questor managed Feishu group metadata chat_id=%s", chat_id)
         return False
 
 
@@ -197,9 +197,9 @@ def _should_process_feishu_group_message(
     if policy == "mention":
         return mentions_bot
     if policy == "managed":
-        return _is_ohmo_managed_feishu_group(chat_id)
+        return _is_questor_managed_feishu_group(chat_id)
     if policy == "managed_or_mention":
-        return mentions_bot or _is_ohmo_managed_feishu_group(chat_id)
+        return mentions_bot or _is_questor_managed_feishu_group(chat_id)
     return mentions_bot
 
 
@@ -1034,7 +1034,7 @@ class FeishuChannel(BaseChannel):
         return str(chat_id)
 
     async def create_managed_group(self, *, user_open_id: str, name: str) -> str:
-        """Create a Feishu group for a single user and the ohmo bot."""
+        """Create a Feishu group for a single user and the questor bot."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._create_managed_group_sync, user_open_id, name)
 

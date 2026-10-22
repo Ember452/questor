@@ -1,4 +1,4 @@
-"""Gateway service lifecycle for ohmo."""
+"""Gateway service lifecycle for questor."""
 
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ from questorharness.channels.bus.events import OutboundMessage
 from questorharness.channels.bus.queue import MessageBus
 from questorharness.channels.impl.manager import ChannelManager
 
-from ohmo.gateway.bridge import OhmoGatewayBridge
-from ohmo.gateway.config import build_channel_manager_config, load_gateway_config
-from ohmo.gateway.models import GatewayState
-from ohmo.gateway.runtime import OhmoSessionRuntimePool
-from ohmo.workspace import (
+from questor.gateway.bridge import QuestorGatewayBridge
+from questor.gateway.config import build_channel_manager_config, load_gateway_config
+from questor.gateway.models import GatewayState
+from questor.gateway.runtime import QuestorSessionRuntimePool
+from questor.workspace import (
     get_gateway_restart_notice_path,
     get_logs_dir,
     get_state_path,
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-class OhmoGatewayService:
+class QuestorGatewayService:
     """Foreground/background service wrapper for the personal gateway."""
 
     def __init__(self, cwd: str | Path | None = None, workspace: str | Path | None = None) -> None:
@@ -44,16 +44,16 @@ class OhmoGatewayService:
         self._workspace = workspace
         os.chdir(self._cwd)
         root = initialize_workspace(self._workspace)
-        os.environ["OHMO_WORKSPACE"] = str(root)
+        os.environ["QUESTOR_WORKSPACE"] = str(root)
         self._config = load_gateway_config(self._workspace)
         if self._config.allow_remote_admin_commands and self._config.allowed_remote_admin_commands:
             logger.warning(
-                "ohmo gateway remote administrative commands enabled commands=%s",
+                "questor gateway remote administrative commands enabled commands=%s",
                 ",".join(self._config.allowed_remote_admin_commands),
             )
         self._bus = MessageBus()
         self._manager = ChannelManager(build_channel_manager_config(self._config), self._bus)
-        self._runtime_pool = OhmoSessionRuntimePool(
+        self._runtime_pool = QuestorSessionRuntimePool(
             cwd=self._cwd,
             workspace=self._workspace,
             provider_profile=self._config.provider_profile,
@@ -62,7 +62,7 @@ class OhmoGatewayService:
         )
         self._stop_event: asyncio.Event | None = None
         self._restart_requested = False
-        self._bridge = OhmoGatewayBridge(
+        self._bridge = QuestorGatewayBridge(
             bus=self._bus,
             runtime_pool=self._runtime_pool,
             restart_gateway=self.request_restart,
@@ -154,7 +154,7 @@ class OhmoGatewayService:
         argv = [
             sys.executable,
             "-m",
-            "ohmo",
+            "questor",
             "gateway",
             "run",
             "--cwd",
@@ -162,7 +162,7 @@ class OhmoGatewayService:
             "--workspace",
             root,
         ]
-        logger.info("ohmo gateway restarting in-place argv=%s", argv)
+        logger.info("questor gateway restarting in-place argv=%s", argv)
         os.execv(sys.executable, argv)
 
     async def _publish_pending_restart_notice(self) -> None:
@@ -187,7 +187,7 @@ class OhmoGatewayService:
                 )
             )
             logger.info(
-                "ohmo gateway published restart confirmation channel=%s chat_id=%s session_key=%s",
+                "questor gateway published restart confirmation channel=%s chat_id=%s session_key=%s",
                 channel,
                 chat_id,
                 session_key,
@@ -198,11 +198,11 @@ class OhmoGatewayService:
     async def run_foreground(self) -> int:
         self.pid_file.write_text(str(os.getpid()), encoding="utf-8")
         self.write_state(running=True)
-        bridge_task = asyncio.create_task(self._bridge.run(), name="ohmo-gateway-bridge")
-        manager_task = asyncio.create_task(self._manager.start_all(), name="ohmo-gateway-channels")
+        bridge_task = asyncio.create_task(self._bridge.run(), name="questor-gateway-bridge")
+        manager_task = asyncio.create_task(self._manager.start_all(), name="questor-gateway-channels")
         restart_notice_task = asyncio.create_task(
             self._publish_pending_restart_notice(),
-            name="ohmo-gateway-restart-notice",
+            name="questor-gateway-restart-notice",
         )
         stop_event = asyncio.Event()
         self._stop_event = stop_event
@@ -221,7 +221,7 @@ class OhmoGatewayService:
                 self.write_state(running=True)
                 await asyncio.sleep(5.0)
 
-        state_task = asyncio.create_task(_state_heartbeat(), name="ohmo-gateway-state")
+        state_task = asyncio.create_task(_state_heartbeat(), name="questor-gateway-state")
 
         try:
             await stop_event.wait()
@@ -255,7 +255,7 @@ class OhmoGatewayService:
 
 def start_gateway_process(cwd: str | Path | None = None, workspace: str | Path | None = None) -> int:
     """Start the gateway as a detached subprocess."""
-    service = OhmoGatewayService(cwd, workspace)
+    service = QuestorGatewayService(cwd, workspace)
     service.log_file.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     pythonpath_entries = [str(_REPO_ROOT)]
@@ -283,7 +283,7 @@ def start_gateway_process(cwd: str | Path | None = None, workspace: str | Path |
             [
                 sys.executable,
                 "-m",
-                "ohmo",
+                "questor",
                 "gateway",
                 "run",
                 "--cwd",
@@ -325,7 +325,7 @@ def _iter_workspace_gateway_pids(workspace: str | Path | None = None) -> list[in
         try:
             result = subprocess.run(
                 ["wmic", "process", "where",
-                 f"commandline like '%-m ohmo gateway run%' and commandline like '%--workspace {root}%'",
+                 f"commandline like '%-m questor gateway run%' and commandline like '%--workspace {root}%'",
                  "get", "processid"],
                 capture_output=True, text=True, check=True,
             )
@@ -370,7 +370,7 @@ def _iter_workspace_gateway_pids(workspace: str | Path | None = None) -> list[in
                 continue
             if pid == current_pid:
                 continue
-            if "-m ohmo gateway run" not in args:
+            if "-m questor gateway run" not in args:
                 continue
             if f"--workspace {root}" not in args:
                 continue
@@ -381,7 +381,7 @@ def _iter_workspace_gateway_pids(workspace: str | Path | None = None) -> list[in
 
 def stop_gateway_process(cwd: str | Path | None = None, workspace: str | Path | None = None) -> bool:
     """Stop the background gateway process if present."""
-    service = OhmoGatewayService(cwd, workspace)
+    service = QuestorGatewayService(cwd, workspace)
     pids: list[int] = []
     if service.pid_file.exists():
         try:
@@ -415,7 +415,7 @@ def stop_gateway_process(cwd: str | Path | None = None, workspace: str | Path | 
 
 def gateway_status(cwd: str | Path | None = None, workspace: str | Path | None = None) -> GatewayState:
     """Load the last known gateway state."""
-    service = OhmoGatewayService(cwd, workspace)
+    service = QuestorGatewayService(cwd, workspace)
     live_pid: int | None = None
     if service.pid_file.exists():
         try:

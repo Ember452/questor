@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 
-from ohmo.gateway.config import build_channel_manager_config
-from ohmo.gateway.models import GatewayConfig
+from questor.gateway.config import build_channel_manager_config
+from questor.gateway.models import GatewayConfig
 
 
 def test_build_channel_manager_config_ignores_unsupported_channels(caplog):

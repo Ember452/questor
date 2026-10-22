@@ -1,4 +1,4 @@
-"""ohmo-only Feishu group management tool."""
+"""questor-only Feishu group management tool."""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ from pydantic import BaseModel, Field
 
 from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
-from ohmo.group_registry import normalize_group_name, save_managed_group_record
+from questor.group_registry import normalize_group_name, save_managed_group_record
 
 
 CreateFeishuGroup = Callable[[str, str], Awaitable[str] | str]
 PublishGroupWelcome = Callable[[str, str, str], Awaitable[None] | None]
 
 
-class OhmoCreateFeishuGroupInput(BaseModel):
+class QuestorCreateFeishuGroupInput(BaseModel):
     """Arguments selected by the model for creating a Feishu group."""
 
     name: str = Field(description="Final Feishu group name to create.")
@@ -35,16 +35,16 @@ class OhmoCreateFeishuGroupInput(BaseModel):
     )
 
 
-class OhmoCreateFeishuGroupTool(BaseTool):
-    """Create a Feishu group for the current ohmo private-chat requester."""
+class QuestorCreateFeishuGroupTool(BaseTool):
+    """Create a Feishu group for the current questor private-chat requester."""
 
-    name = "ohmo_create_feishu_group"
+    name = "questor_create_feishu_group"
     description = (
         "Create a Feishu group for the current private-chat /group request and bind optional cwd/repo metadata. "
         "Only use this after the user explicitly invokes /group. Infer name, cwd, and repo from the user's "
         "natural-language request and the local workspace context; inspect files first if needed."
     )
-    input_model = OhmoCreateFeishuGroupInput
+    input_model = QuestorCreateFeishuGroupInput
 
     def __init__(
         self,
@@ -57,18 +57,18 @@ class OhmoCreateFeishuGroupTool(BaseTool):
         self._create_group = create_group
         self._publish_group_welcome = publish_group_welcome
 
-    def is_read_only(self, arguments: OhmoCreateFeishuGroupInput) -> bool:
+    def is_read_only(self, arguments: QuestorCreateFeishuGroupInput) -> bool:
         # Permission is enforced by the slash-command context guard below. This
-        # tool is only registered inside ohmo gateway sessions and cannot run
+        # tool is only registered inside questor gateway sessions and cannot run
         # unless the current inbound message was a private Feishu /group request.
         del arguments
         return True
 
-    async def execute(self, arguments: OhmoCreateFeishuGroupInput, context: ToolExecutionContext) -> ToolResult:
-        request = context.metadata.get("ohmo_group_request")
+    async def execute(self, arguments: QuestorCreateFeishuGroupInput, context: ToolExecutionContext) -> ToolResult:
+        request = context.metadata.get("questor_group_request")
         if not isinstance(request, dict):
             return ToolResult(
-                output="ohmo_create_feishu_group can only run immediately after a Feishu private /group request.",
+                output="questor_create_feishu_group can only run immediately after a Feishu private /group request.",
                 is_error=True,
             )
         if request.get("used"):
@@ -129,7 +129,7 @@ class OhmoCreateFeishuGroupTool(BaseTool):
             "这个群已经创建好。"
             + (f"\n已绑定工作目录：{cwd}" if cwd else "")
             + (f"\n关联仓库：{arguments.repo}" if arguments.repo else "")
-            + "\n这个 ohmo 管理的群默认可以不用 @ 直接和我说话；普通群仍建议 @ohmo 触发。"
+            + "\n这个 questor 管理的群默认可以不用 @ 直接和我说话；普通群仍建议 @questor 触发。"
             + "\n如果我没有响应，请确认飞书应用已开通接收群聊所有消息的权限。"
         )
         if self._publish_group_welcome is not None:

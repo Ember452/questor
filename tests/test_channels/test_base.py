@@ -3,9 +3,9 @@ from __future__ import annotations
 from questorharness.channels.impl.base import resolve_channel_media_dir
 
 
-def test_resolve_channel_media_dir_uses_ohmo_workspace(monkeypatch, tmp_path):
-    workspace = tmp_path / ".ohmo-home"
-    monkeypatch.setenv("OHMO_WORKSPACE", str(workspace))
+def test_resolve_channel_media_dir_uses_questor_workspace(monkeypatch, tmp_path):
+    workspace = tmp_path / ".questor-home"
+    monkeypatch.setenv("QUESTOR_WORKSPACE", str(workspace))
     monkeypatch.delenv("QUESTORHARNESS_CHANNEL_MEDIA_DIR", raising=False)
     monkeypatch.delenv("QUESTORHARNESS_DATA_DIR", raising=False)
 
@@ -17,7 +17,7 @@ def test_resolve_channel_media_dir_uses_ohmo_workspace(monkeypatch, tmp_path):
 
 def test_resolve_channel_media_dir_uses_questorharness_data_dir(monkeypatch, tmp_path):
     data_dir = tmp_path / ".questorharness-data"
-    monkeypatch.delenv("OHMO_WORKSPACE", raising=False)
+    monkeypatch.delenv("QUESTOR_WORKSPACE", raising=False)
     monkeypatch.delenv("QUESTORHARNESS_CHANNEL_MEDIA_DIR", raising=False)
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(data_dir))
 

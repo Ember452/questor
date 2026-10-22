@@ -41,7 +41,7 @@ from questorharness.swarm.worktree import WorktreeManager
 from questorharness.utils.fs import atomic_write_text
 
 _SOURCE_BASE_SCORES: dict[RepoTaskSource, int] = {
-    "ohmo_request": 100,
+    "questor_request": 100,
     "manual_idea": 80,
     "github_issue": 75,
     "github_pr": 85,
@@ -1954,7 +1954,7 @@ class RepoAutopilotStore:
             if str(card.metadata.get("review_decision", "")).upper() == "APPROVED":
                 score += 20
                 reasons.append("approved review state")
-        if card.source_kind in {"ohmo_request", "manual_idea"}:
+        if card.source_kind in {"questor_request", "manual_idea"}:
             score += 10
             reasons.append("direct user-driven input")
         if any(hint in text for hint in _URGENT_HINTS) or labels.intersection(

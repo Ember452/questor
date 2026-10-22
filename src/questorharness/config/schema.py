@@ -36,11 +36,11 @@ class FeishuConfig(BaseChannelConfig):
     app_secret: str = ""
     encrypt_key: str = ""
     verification_token: str = ""
-    # 群回复策略由 ohmo 网关执行，因为托管群
+    # 群回复策略由 questor 网关执行，因为托管群
     # 元数据位于通用飞书渠道适配器之外。
     group_policy: str = "managed_or_mention"
     bot_open_id: str = ""
-    bot_names: list[str] = Field(default_factory=lambda: ["ohmo", "openclaw", "questorharness"])
+    bot_names: list[str] = Field(default_factory=lambda: ["questor", "openclaw", "questorharness"])
     domain: str = "https://open.feishu.cn"  # Lark 国际版请使用 https://open.larksuite.com
 
 

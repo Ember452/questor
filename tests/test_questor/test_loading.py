@@ -6,8 +6,8 @@ from questorharness.config.settings import load_settings
 from questorharness.plugins import load_plugins
 from questorharness.skills import load_skill_registry
 
-from ohmo.runtime import run_ohmo_backend
-from ohmo.workspace import get_plugins_dir, get_skills_dir, initialize_workspace
+from questor.runtime import run_questor_backend
+from questor.workspace import get_plugins_dir, get_skills_dir, initialize_workspace
 
 
 def _write_plugin(root: Path, name: str, skill_name: str) -> None:
@@ -62,10 +62,10 @@ def _write_plugin_with_skill_dir(root: Path, name: str, skill_dir_name: str) -> 
     )
 
 
-def test_ohmo_loaders_merge_shared_and_private_skills_and_plugins(tmp_path, monkeypatch):
+def test_questor_loaders_merge_shared_and_private_skills_and_plugins(tmp_path, monkeypatch):
     config_dir = tmp_path / ".questorharness"
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(config_dir))
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     initialize_workspace(workspace)
 
     shared_skills = config_dir / "skills"
@@ -75,7 +75,7 @@ def test_ohmo_loaders_merge_shared_and_private_skills_and_plugins(tmp_path, monk
     (shared_skill_dir / "SKILL.md").write_text("# shared skill\n\nFrom shared config.\n", encoding="utf-8")
     private_skill_dir = get_skills_dir(workspace) / "private_skill"
     private_skill_dir.mkdir(parents=True)
-    (private_skill_dir / "SKILL.md").write_text("# private skill\n\nFrom ohmo workspace.\n", encoding="utf-8")
+    (private_skill_dir / "SKILL.md").write_text("# private skill\n\nFrom questor workspace.\n", encoding="utf-8")
 
     shared_plugins = config_dir / "plugins"
     shared_plugins.mkdir(parents=True)
@@ -101,10 +101,10 @@ def test_ohmo_loaders_merge_shared_and_private_skills_and_plugins(tmp_path, monk
     assert "private_plugin" in plugin_names
 
 
-def test_ohmo_private_skill_directory_with_skill_md_is_loaded(tmp_path, monkeypatch):
+def test_questor_private_skill_directory_with_skill_md_is_loaded(tmp_path, monkeypatch):
     config_dir = tmp_path / ".questorharness"
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(config_dir))
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     initialize_workspace(workspace)
 
     skill_dir = get_skills_dir(workspace) / "pikastream-video-meeting"
@@ -127,8 +127,8 @@ def test_ohmo_private_skill_directory_with_skill_md_is_loaded(tmp_path, monkeypa
     assert "PikaStream Video Meeting" in skill.content
 
 
-def test_run_ohmo_backend_passes_private_skill_and_plugin_roots(tmp_path, monkeypatch):
-    workspace = tmp_path / ".ohmo-home"
+def test_run_questor_backend_passes_private_skill_and_plugin_roots(tmp_path, monkeypatch):
+    workspace = tmp_path / ".questor-home"
     initialize_workspace(workspace)
     captured: dict[str, object] = {}
 
@@ -136,10 +136,10 @@ def test_run_ohmo_backend_passes_private_skill_and_plugin_roots(tmp_path, monkey
         captured.update(kwargs)
         return 0
 
-    monkeypatch.setattr("ohmo.runtime.run_backend_host", fake_run_backend_host)
+    monkeypatch.setattr("questor.runtime.run_backend_host", fake_run_backend_host)
 
     result = asyncio.run(
-        run_ohmo_backend(cwd=tmp_path, workspace=workspace, provider_profile="codex")
+        run_questor_backend(cwd=tmp_path, workspace=workspace, provider_profile="codex")
     )
     assert result == 0
     assert captured["extra_skill_dirs"] == (str(get_skills_dir(workspace)),)
@@ -149,7 +149,7 @@ def test_run_ohmo_backend_passes_private_skill_and_plugin_roots(tmp_path, monkey
 def test_plugin_loader_supports_directory_skill_layout(tmp_path, monkeypatch):
     config_dir = tmp_path / ".questorharness"
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(config_dir))
-    workspace = tmp_path / ".ohmo-home"
+    workspace = tmp_path / ".questor-home"
     initialize_workspace(workspace)
 
     _write_plugin_with_skill_dir(get_plugins_dir(workspace), "pika_plugin", "pikastream-video-meeting")

@@ -46,7 +46,7 @@ def test_autopilot_pick_next_prefers_highest_score(tmp_path: Path) -> None:
         body="candidate",
     )
     store.enqueue_card(
-        source_kind="ohmo_request",
+        source_kind="questor_request",
         title="Fix production issue",
         body="urgent bug in channel bridge",
     )
@@ -54,7 +54,7 @@ def test_autopilot_pick_next_prefers_highest_score(tmp_path: Path) -> None:
     next_card = store.pick_next_card()
 
     assert next_card is not None
-    assert next_card.source_kind == "ohmo_request"
+    assert next_card.source_kind == "questor_request"
 
 
 def test_autopilot_scan_claude_code_candidates(tmp_path: Path) -> None:

@@ -1,4 +1,4 @@
-"""Session persistence for ``ohmo``."""
+"""Session persistence for ``questor``."""
 
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ from questorharness.services.session_storage import (
 )
 from questorharness.utils.fs import atomic_write_text
 
-from ohmo.workspace import get_sessions_dir
+from questor.workspace import get_sessions_dir
 
 
 def get_session_dir(workspace: str | Path | None = None) -> Path:
-    """Return the ohmo sessions directory."""
+    """Return the questor sessions directory."""
     session_dir = get_sessions_dir(workspace)
     session_dir.mkdir(parents=True, exist_ok=True)
     return session_dir
@@ -50,7 +50,7 @@ def save_session_snapshot(
     session_key: str | None = None,
     tool_metadata: dict[str, object] | None = None,
 ) -> Path:
-    """Persist the latest ohmo session snapshot."""
+    """Persist the latest questor session snapshot."""
     session_dir = get_session_dir(workspace)
     sid = session_id or uuid4().hex[:12]
     now = time.time()
@@ -62,7 +62,7 @@ def save_session_snapshot(
             break
 
     payload = {
-        "app": "ohmo",
+        "app": "questor",
         "session_id": sid,
         "session_key": session_key,
         "cwd": str(Path(cwd).resolve()),
@@ -138,7 +138,7 @@ def export_session_markdown(
     messages: list[ConversationMessage],
 ) -> Path:
     path = get_session_dir(workspace) / "transcript.md"
-    parts = ["# ohmo Session Transcript"]
+    parts = ["# questor Session Transcript"]
     for message in messages:
         parts.append(f"\n## {message.role.capitalize()}\n")
         text = message.text.strip()
@@ -148,8 +148,8 @@ def export_session_markdown(
     return path
 
 
-class OhmoSessionBackend(SessionBackend):
-    """Session backend rooted in ``.ohmo/sessions``."""
+class QuestorSessionBackend(SessionBackend):
+    """Session backend rooted in ``.questor/sessions``."""
 
     def __init__(self, workspace: str | Path | None = None) -> None:
         self._workspace = workspace

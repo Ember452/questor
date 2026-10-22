@@ -4,15 +4,15 @@ from pathlib import Path
 from questorharness.api.usage import UsageSnapshot
 from questorharness.engine.messages import ConversationMessage
 
-from ohmo.session_storage import OhmoSessionBackend, get_session_dir
-from ohmo.workspace import initialize_workspace
+from questor.session_storage import QuestorSessionBackend, get_session_dir
+from questor.workspace import initialize_workspace
 
 
-def test_ohmo_session_backend_uses_workspace_sessions(tmp_path: Path):
-    workspace = tmp_path / ".ohmo-home"
+def test_questor_session_backend_uses_workspace_sessions(tmp_path: Path):
+    workspace = tmp_path / ".questor-home"
     initialize_workspace(workspace)
-    backend = OhmoSessionBackend(workspace)
-    message = ConversationMessage.from_user_text("hello ohmo")
+    backend = QuestorSessionBackend(workspace)
+    message = ConversationMessage.from_user_text("hello questor")
     backend.save_snapshot(
         cwd=tmp_path,
         model="gpt-5.4",
@@ -28,10 +28,10 @@ def test_ohmo_session_backend_uses_workspace_sessions(tmp_path: Path):
     assert backend.load_by_id(tmp_path, "abc123") is not None
 
 
-def test_ohmo_session_backend_loads_latest_for_session_key(tmp_path: Path):
-    workspace = tmp_path / ".ohmo-home"
+def test_questor_session_backend_loads_latest_for_session_key(tmp_path: Path):
+    workspace = tmp_path / ".questor-home"
     initialize_workspace(workspace)
-    backend = OhmoSessionBackend(workspace)
+    backend = QuestorSessionBackend(workspace)
     message = ConversationMessage.from_user_text("hello thread")
     backend.save_snapshot(
         cwd=tmp_path,
@@ -54,15 +54,15 @@ def test_ohmo_session_backend_loads_latest_for_session_key(tmp_path: Path):
     assert loaded["tool_metadata"]["task_focus_state"]["goal"] == "Continue the same Feishu task"
 
 
-def test_ohmo_session_backend_sanitizes_legacy_empty_assistant_messages(tmp_path: Path):
-    workspace = tmp_path / ".ohmo-home"
+def test_questor_session_backend_sanitizes_legacy_empty_assistant_messages(tmp_path: Path):
+    workspace = tmp_path / ".questor-home"
     initialize_workspace(workspace)
-    backend = OhmoSessionBackend(workspace)
+    backend = QuestorSessionBackend(workspace)
     session_dir = get_session_dir(workspace)
     (session_dir / "latest.json").write_text(
         json.dumps(
             {
-                "app": "ohmo",
+                "app": "questor",
                 "session_id": "abc123",
                 "session_key": "feishu:chat-1",
                 "cwd": str(tmp_path),

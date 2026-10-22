@@ -14,9 +14,9 @@ def default_backup_root(memory_dir: str | Path, *, app_label: str = "questorharn
     """Return the backup root for a memory directory."""
 
     memory_dir = Path(memory_dir).expanduser().resolve()
-    if ".ohmo" in memory_dir.parts:
+    if ".questor" in memory_dir.parts:
         try:
-            idx = memory_dir.parts.index(".ohmo")
+            idx = memory_dir.parts.index(".questor")
             return Path(*memory_dir.parts[: idx + 1]) / "backups"
         except ValueError:
             pass

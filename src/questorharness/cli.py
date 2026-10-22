@@ -1064,7 +1064,7 @@ def autopilot_list_cmd(
 
 @autopilot_app.command("add")
 def autopilot_add_cmd(
-    source: str = typer.Argument("manual_idea", help="Source kind: idea, ohmo, issue, pr, claude"),
+    source: str = typer.Argument("manual_idea", help="Source kind: idea, questor, issue, pr, claude"),
     title: str = typer.Argument(..., help="Task title"),
     body: str = typer.Option("", "--body", help="Task body/details"),
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Repository root"),
@@ -1076,8 +1076,8 @@ def autopilot_add_cmd(
         "idea": "manual_idea",
         "manual": "manual_idea",
         "manual_idea": "manual_idea",
-        "ohmo": "ohmo_request",
-        "ohmo_request": "ohmo_request",
+        "questor": "questor_request",
+        "questor_request": "questor_request",
         "issue": "github_issue",
         "github_issue": "github_issue",
         "pr": "github_pr",

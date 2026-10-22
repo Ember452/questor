@@ -175,7 +175,7 @@ async def start_dream_now(
         ]
         if runner_module == "questorharness":
             argv.append("--dangerously-skip-permissions")
-        if runner_module == "ohmo":
+        if runner_module == "questor":
             workspace = resolved_memory_dir.parent
             argv.extend(["--workspace", str(workspace)])
             if settings.active_profile:
@@ -191,7 +191,7 @@ async def start_dream_now(
             auth = settings.resolve_auth()
             if runner_module == "questorharness" and auth.auth_kind == "api_key":
                 argv.extend(["--api-key", auth.value])
-            elif runner_module == "ohmo" and auth.auth_kind == "api_key":
+            elif runner_module == "questor" and auth.auth_kind == "api_key":
                 env["QUESTORHARNESS_API_KEY"] = auth.value
             elif auth.value:
                 env["ANTHROPIC_AUTH_TOKEN"] = auth.value
