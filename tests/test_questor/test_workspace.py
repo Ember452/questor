@@ -7,9 +7,23 @@ from questor.workspace import (
     get_memory_index_path,
     get_soul_path,
     get_user_path,
+    get_workspace_root,
     initialize_workspace,
     workspace_health,
 )
+
+
+def test_default_workspace_is_isolated_from_legacy_questor_data(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("QUESTOR_WORKSPACE", raising=False)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+
+    assert get_workspace_root() == (tmp_path / ".questor" / "agent").resolve()
+
+
+def test_explicit_workspace_is_used_as_is(tmp_path: Path):
+    target = tmp_path / "custom-workspace"
+
+    assert get_workspace_root(target) == target.resolve()
 
 
 def test_initialize_workspace_creates_expected_files(tmp_path: Path):

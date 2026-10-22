@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 WORKSPACE_DIRNAME = ".questor"
+WORKSPACE_SUBDIR = "agent"
 
 SOUL_TEMPLATE = """# SOUL.md - Who You Are
 
@@ -166,13 +167,12 @@ def get_workspace_root(workspace: str | Path | None = None) -> Path:
     Resolution order:
     1. Explicit ``workspace`` argument
     2. ``QUESTOR_WORKSPACE`` environment variable
-    3. ``~/.questor``
+    3. ``~/.questor/agent``
     """
     explicit = workspace or os.environ.get("QUESTOR_WORKSPACE")
     if explicit:
-        path = Path(explicit).expanduser().resolve()
-        return path if path.name == WORKSPACE_DIRNAME else path
-    return (Path.home() / WORKSPACE_DIRNAME).resolve()
+        return Path(explicit).expanduser().resolve()
+    return (Path.home() / WORKSPACE_DIRNAME / WORKSPACE_SUBDIR).resolve()
 
 
 def get_soul_path(workspace: str | Path | None = None) -> Path:

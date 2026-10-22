@@ -1,4 +1,4 @@
-"""Personal memory helpers for ``.questor``."""
+"""Personal memory helpers for the questor workspace."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from questor.workspace import get_memory_dir, get_memory_index_path
 
 
 def list_memory_files(workspace: str | Path | None = None) -> list[Path]:
-    """List ``.questor`` memory markdown files."""
+    """List questor memory markdown files."""
     memory_dir = get_memory_dir(workspace)
     return sorted(
         header.path

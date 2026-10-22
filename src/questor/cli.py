@@ -41,7 +41,7 @@ app = typer.Typer(
     invoke_without_command=True,
     add_completion=False,
 )
-memory_app = typer.Typer(name="memory", help="Manage .questor memory")
+memory_app = typer.Typer(name="memory", help="Manage questor memory")
 soul_app = typer.Typer(name="soul", help="Inspect or edit soul.md")
 user_app = typer.Typer(name="user", help="Inspect or edit user.md")
 gateway_app = typer.Typer(name="gateway", help="Run the questor gateway")
@@ -52,7 +52,7 @@ app.add_typer(user_app)
 app.add_typer(gateway_app)
 
 _INTERACTIVE_CHANNELS = ("feishu", "qq")
-_WORKSPACE_HELP = "Path to the questor workspace (defaults to ~/.questor)"
+_WORKSPACE_HELP = "Path to the questor workspace (defaults to ~/.questor/agent)"
 
 
 def _can_use_questionary() -> bool:
@@ -491,7 +491,7 @@ def init_cmd(
         help="Run the provider/channel setup wizard when attached to a terminal",
     ),
 ) -> None:
-    """Initialize the .questor workspace."""
+    """Initialize the questor workspace."""
     root_path = get_workspace_root(workspace)
     already_exists = root_path.exists()
     root = initialize_workspace(root_path)
@@ -529,7 +529,7 @@ def doctor_cmd(
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Project working directory"),
     workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP),
 ) -> None:
-    """Check .questor workspace and provider readiness."""
+    """Check questor workspace and provider readiness."""
     cwd_path = str(Path(cwd).resolve())
     workspace_root = initialize_workspace(workspace)
     health = workspace_health(workspace_root)

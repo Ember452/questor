@@ -149,7 +149,7 @@ def export_session_markdown(
 
 
 class QuestorSessionBackend(SessionBackend):
-    """Session backend rooted in ``.questor/sessions``."""
+    """Session backend rooted in the questor workspace ``sessions`` directory."""
 
     def __init__(self, workspace: str | Path | None = None) -> None:
         self._workspace = workspace

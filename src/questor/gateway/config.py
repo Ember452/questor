@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_gateway_config(workspace: str | Path | None = None) -> GatewayConfig:
-    """Load ``.questor/gateway.json``."""
+    """Load ``gateway.json`` from the questor workspace."""
     path = get_gateway_config_path(workspace)
     if path.exists():
         return GatewayConfig.model_validate_json(path.read_text(encoding="utf-8"))
@@ -22,7 +22,7 @@ def load_gateway_config(workspace: str | Path | None = None) -> GatewayConfig:
 
 
 def save_gateway_config(config: GatewayConfig, workspace: str | Path | None = None) -> Path:
-    """Persist ``.questor/gateway.json``."""
+    """Persist ``gateway.json`` in the questor workspace."""
     path = get_gateway_config_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(config.model_dump_json(indent=2) + "\n", encoding="utf-8")
