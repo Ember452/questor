@@ -9,8 +9,8 @@ from pathlib import Path
 
 import typer
 
-from questorharness.providers.auth.manager import AuthManager
-from questorharness.config import load_settings
+from questorharness.api import AuthManager
+from questorharness.api import load_settings
 
 from questor.gateway.config import load_gateway_config, save_gateway_config
 from questor.gateway.models import GatewayConfig

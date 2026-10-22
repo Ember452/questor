@@ -12,16 +12,16 @@ import os
 import re
 import string
 
-from questorharness.surfaces.channels.bus.events import InboundMessage
-from questorharness.commands import CommandContext, CommandResult, lookup_skill_slash_command
-from questorharness.engine.messages import (
+from questorharness.api import InboundMessage
+from questorharness.api import CommandContext, CommandResult, lookup_skill_slash_command
+from questorharness.api import (
     ConversationMessage,
     ImageBlock,
     TextBlock,
     sanitize_conversation_messages,
 )
-from questorharness.engine.query import MaxTurnsExceeded
-from questorharness.engine.stream_events import (
+from questorharness.api import MaxTurnsExceeded
+from questorharness.api import (
     AssistantTextDelta,
     AssistantTurnComplete,
     CompactProgressEvent,
@@ -30,8 +30,8 @@ from questorharness.engine.stream_events import (
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
-from questorharness.prompts import build_runtime_system_prompt
-from questorharness.ui.runtime import RuntimeBundle, _last_user_text, build_runtime, close_runtime, start_runtime
+from questorharness.api import build_runtime_system_prompt
+from questorharness.api import RuntimeBundle, _last_user_text, build_runtime, close_runtime, start_runtime
 
 from questor.gateway.config import load_gateway_config
 from questor.gateway.group_tool import CreateFeishuGroup, QuestorCreateFeishuGroupTool, PublishGroupWelcome

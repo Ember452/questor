@@ -23,3 +23,43 @@ forbidden_modules =
 # utils.shell still re-exports sandbox helpers; W6 moves utils into providers,
 # at which point this contract can drop the indirect allowance.
 allow_indirect_imports = True
+
+[importlinter:contract:product-uses-public-face]
+name = Product imports the public engine face only
+type = forbidden
+source_modules =
+    questor
+forbidden_modules =
+    questorharness.contracts
+    questorharness.kernel
+    questorharness.runtime
+    questorharness.capabilities
+    questorharness.providers
+    questorharness.surfaces
+    questorharness.profiles
+    questorharness.engine
+    questorharness.commands
+    questorharness.coordinator
+    questorharness.swarm
+    questorharness.tasks
+    questorharness.hooks
+    questorharness.autopilot
+    questorharness.bridge
+    questorharness.services
+    questorharness.utils
+    questorharness.config
+    questorharness.state
+    questorharness.prompts
+    questorharness.skills
+    questorharness.plugins
+    questorharness.ui
+    questorharness.themes
+    questorharness.keybindings
+    questorharness.vim
+    questorharness.output_styles
+    questorharness.voice
+    questorharness.personalization
+    questorharness.platforms
+    questorharness.cli
+# The facade re-exports these modules; only direct product imports are forbidden.
+allow_indirect_imports = True

@@ -8,11 +8,11 @@ import os
 import sys
 from pathlib import Path
 
-from questorharness.providers.llm.client import SupportsStreamingMessages
-from questorharness.engine.stream_events import AssistantTextDelta, AssistantTurnComplete, CompactProgressEvent, ErrorEvent, StatusEvent
-from questorharness.ui.backend_host import run_backend_host
-from questorharness.ui.runtime import build_runtime, close_runtime, handle_line, start_runtime
-from questorharness.ui.react_launcher import _resolve_npm, _resolve_tsx, get_frontend_dir
+from questorharness.api import SupportsStreamingMessages
+from questorharness.api import AssistantTextDelta, AssistantTurnComplete, CompactProgressEvent, ErrorEvent, StatusEvent
+from questorharness.api import run_backend_host
+from questorharness.api import build_runtime, close_runtime, handle_line, start_runtime
+from questorharness.api import _resolve_npm, _resolve_tsx, get_frontend_dir
 
 from questor.memory import create_memory_command_backend
 from questor.prompts import build_questor_system_prompt

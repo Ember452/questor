@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from questorharness.config.schema import Config
+from questorharness.api import Config
 
 from questor.gateway.models import GatewayConfig
 from questor.workspace import get_gateway_config_path
