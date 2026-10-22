@@ -161,7 +161,7 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 - 每个已建目录有 `AGENTS.md`；
 - **时间盒**：Phase 1 收在一个分支上，一包一 commit；单 commit 预算 = 1 个包 + 该包全部 patch 目标（本阶段最大 20，`api/`）。超盒时先砍 W2b 的 `channels/`，再砍 `auth/`；W1b/W3/W3b/W4/W5 本来就不在本阶段。
 
-> Phase 1 保持 `tests/` 文件路径不变：`tests/conftest.py` 的 Windows skip 表按 node-id 精确匹配（含 `tests/unit/test_tools/...`），搬测试目录会改变 skipped 计数。只改 import 与 patch 字符串。
+> Phase 1 保持 `tests/` 文件路径不变：`tests/conftest.py` 的 Windows skip 表按 node-id 精确匹配（含 `tests/unit/test_tools/test_core_tools.py`），搬测试目录会改变 skipped 计数。只改 import 与 patch 字符串。
 
 ---
 
