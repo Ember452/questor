@@ -31,24 +31,6 @@ class BaseChannelConfig(_CompatModel):
     allow_from: list[str] = Field(default_factory=list)
 
 
-class TelegramConfig(BaseChannelConfig):
-    token: str = ""
-    chat_id: str | None = None
-    proxy: str | None = None
-    reply_to_message: bool = True
-    bot_name: str = "ohmo"
-
-
-class SlackConfig(BaseChannelConfig):
-    bot_token: str = ""
-    app_token: str = ""
-    signing_secret: str = ""
-
-
-class DiscordConfig(BaseChannelConfig):
-    token: str = ""
-
-
 class FeishuConfig(BaseChannelConfig):
     app_id: str = ""
     app_secret: str = ""
@@ -62,56 +44,17 @@ class FeishuConfig(BaseChannelConfig):
     domain: str = "https://open.feishu.cn"  # Lark 国际版请使用 https://open.larksuite.com
 
 
-class DingTalkConfig(BaseChannelConfig):
-    client_id: str = ""
-    client_secret: str = ""
-    robot_code: str = ""
-
-
-class EmailConfig(BaseChannelConfig):
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_username: str = ""
-    smtp_password: str = ""
-    from_address: str = ""
-
-
 class QQConfig(BaseChannelConfig):
     token: str = ""
     app_id: str = ""
     app_secret: str = ""
 
 
-class MatrixConfig(BaseChannelConfig):
-    homeserver: str = ""
-    access_token: str = ""
-    user_id: str = ""
-
-
-class WhatsAppConfig(BaseChannelConfig):
-    access_token: str = ""
-    phone_number_id: str = ""
-    verify_token: str = ""
-
-
-class MochatConfig(BaseChannelConfig):
-    endpoint: str = ""
-    token: str = ""
-
-
 class ChannelConfigs(_CompatModel):
     send_progress: bool = True
     send_tool_hints: bool = True
-    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
-    slack: SlackConfig = Field(default_factory=SlackConfig)
-    discord: DiscordConfig = Field(default_factory=DiscordConfig)
     feishu: FeishuConfig = Field(default_factory=FeishuConfig)
-    dingtalk: DingTalkConfig = Field(default_factory=DingTalkConfig)
-    email: EmailConfig = Field(default_factory=EmailConfig)
     qq: QQConfig = Field(default_factory=QQConfig)
-    matrix: MatrixConfig = Field(default_factory=MatrixConfig)
-    whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
-    mochat: MochatConfig = Field(default_factory=MochatConfig)
 
 
 class Config(_CompatModel):

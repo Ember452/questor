@@ -51,7 +51,7 @@ app.add_typer(soul_app)
 app.add_typer(user_app)
 app.add_typer(gateway_app)
 
-_INTERACTIVE_CHANNELS = ("telegram", "slack", "discord", "feishu")
+_INTERACTIVE_CHANNELS = ("feishu", "qq")
 _WORKSPACE_HELP = "Path to the ohmo workspace (defaults to ~/.ohmo)"
 
 
@@ -214,62 +214,7 @@ def _prompt_channels(existing: GatewayConfig) -> tuple[list[str], dict[str, dict
         )
         allow_from = [item.strip() for item in allow_from_raw.split(",") if item.strip()]
         config: dict[str, object] = {"allow_from": allow_from}
-        if channel == "telegram":
-            config["token"] = _text_prompt(
-                "Telegram bot token",
-                default=str(prior.get("token", "")),
-            )
-            config["reply_to_message"] = _confirm_prompt(
-                "Reply to the original Telegram message?",
-                default=bool(prior.get("reply_to_message", True)),
-            )
-        elif channel == "slack":
-            config["bot_token"] = _text_prompt(
-                "Slack bot token",
-                default=str(prior.get("bot_token", "")),
-            )
-            config["app_token"] = _text_prompt(
-                "Slack app token",
-                default=str(prior.get("app_token", "")),
-            )
-            config["mode"] = "socket"
-            config["reply_in_thread"] = _confirm_prompt(
-                "Reply in thread?",
-                default=bool(prior.get("reply_in_thread", True)),
-            )
-            config["group_policy"] = _select_from_menu(
-                "Slack group policy:",
-                [
-                    ("mention", "Mention only"),
-                    ("open", "Always reply in channels"),
-                    ("allowlist", "Only allow configured channels"),
-                ],
-                default_value=str(prior.get("group_policy", "mention")),
-            )
-        elif channel == "discord":
-            config["token"] = _text_prompt(
-                "Discord bot token",
-                default=str(prior.get("token", "")),
-            )
-            config["gateway_url"] = _text_prompt(
-                "Discord gateway URL",
-                default=str(prior.get("gateway_url", "wss://gateway.discord.gg/?v=10&encoding=json")),
-            )
-            config["intents"] = int(
-                _text_prompt(
-                    "Discord intents bitmask",
-                    default=str(prior.get("intents", 513)),
-                )
-            )
-            config["group_policy"] = _select_from_menu(
-                "Discord group policy:",
-                [
-                    ("mention", "Mention only"),
-                    ("open", "Always reply in channels"),
-                ],
-                default_value=str(prior.get("group_policy", "mention")),
-            )
-        elif channel == "feishu":
+        if channel == "feishu":
             config["domain"] = _select_from_menu(
                 "Feishu domain:",
                 [
@@ -320,6 +265,19 @@ def _prompt_channels(existing: GatewayConfig) -> tuple[list[str], dict[str, dict
             config["bot_open_id"] = _text_prompt(
                 "Feishu bot open_id for exact mention detection (optional)",
                 default=str(prior.get("bot_open_id", "")),
+            )
+        elif channel == "qq":
+            config["app_id"] = _text_prompt(
+                "QQ bot app id",
+                default=str(prior.get("app_id", "")),
+            )
+            config["token"] = _text_prompt(
+                "QQ bot token",
+                default=str(prior.get("token", "")),
+            )
+            config["app_secret"] = _text_prompt(
+                "QQ bot app secret",
+                default=str(prior.get("app_secret", "")),
             )
         configs[channel] = config
     return enabled, configs

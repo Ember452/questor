@@ -19,7 +19,7 @@ class ChannelManager:
     Manages chat channels and coordinates message routing.
 
     Responsibilities:
-    - Initialize enabled channels (Telegram, WhatsApp, etc.)
+    - Initialize enabled channels (Feishu, QQ)
     - Start/stop channels
     - Route outbound messages
     """
@@ -35,41 +35,6 @@ class ChannelManager:
     def _init_channels(self) -> None:
         """Initialize channels based on config."""
 
-        # Telegram 渠道
-        if self.config.channels.telegram.enabled:
-            try:
-                from questorharness.channels.impl.telegram import TelegramChannel
-                self.channels["telegram"] = TelegramChannel(
-                    self.config.channels.telegram,
-                    self.bus,
-                    groq_api_key=self.config.providers.groq.api_key,
-                )
-                logger.info("Telegram channel enabled")
-            except ImportError as e:
-                logger.warning("Telegram channel not available: %s", e)
-
-        # WhatsApp 渠道
-        if self.config.channels.whatsapp.enabled:
-            try:
-                from questorharness.channels.impl.whatsapp import WhatsAppChannel
-                self.channels["whatsapp"] = WhatsAppChannel(
-                    self.config.channels.whatsapp, self.bus
-                )
-                logger.info("WhatsApp channel enabled")
-            except ImportError as e:
-                logger.warning("WhatsApp channel not available: %s", e)
-
-        # Discord 渠道
-        if self.config.channels.discord.enabled:
-            try:
-                from questorharness.channels.impl.discord import DiscordChannel
-                self.channels["discord"] = DiscordChannel(
-                    self.config.channels.discord, self.bus
-                )
-                logger.info("Discord channel enabled")
-            except ImportError as e:
-                logger.warning("Discord channel not available: %s", e)
-
         # 飞书渠道
         if self.config.channels.feishu.enabled:
             try:
@@ -80,51 +45,6 @@ class ChannelManager:
                 logger.info("Feishu channel enabled")
             except ImportError as e:
                 logger.warning("Feishu channel not available: %s", e)
-
-        # Mochat 渠道
-        if self.config.channels.mochat.enabled:
-            try:
-                from questorharness.channels.impl.mochat import MochatChannel
-
-                self.channels["mochat"] = MochatChannel(
-                    self.config.channels.mochat, self.bus
-                )
-                logger.info("Mochat channel enabled")
-            except ImportError as e:
-                logger.warning("Mochat channel not available: %s", e)
-
-        # 钉钉渠道
-        if self.config.channels.dingtalk.enabled:
-            try:
-                from questorharness.channels.impl.dingtalk import DingTalkChannel
-                self.channels["dingtalk"] = DingTalkChannel(
-                    self.config.channels.dingtalk, self.bus
-                )
-                logger.info("DingTalk channel enabled")
-            except ImportError as e:
-                logger.warning("DingTalk channel not available: %s", e)
-
-        # 邮件渠道
-        if self.config.channels.email.enabled:
-            try:
-                from questorharness.channels.impl.email import EmailChannel
-                self.channels["email"] = EmailChannel(
-                    self.config.channels.email, self.bus
-                )
-                logger.info("Email channel enabled")
-            except ImportError as e:
-                logger.warning("Email channel not available: %s", e)
-
-        # Slack 渠道
-        if self.config.channels.slack.enabled:
-            try:
-                from questorharness.channels.impl.slack import SlackChannel
-                self.channels["slack"] = SlackChannel(
-                    self.config.channels.slack, self.bus
-                )
-                logger.info("Slack channel enabled")
-            except ImportError as e:
-                logger.warning("Slack channel not available: %s", e)
 
         # QQ 渠道
         if self.config.channels.qq.enabled:
@@ -137,18 +57,6 @@ class ChannelManager:
                 logger.info("QQ channel enabled")
             except ImportError as e:
                 logger.warning("QQ channel not available: %s", e)
-
-        # Matrix 渠道
-        if self.config.channels.matrix.enabled:
-            try:
-                from questorharness.channels.impl.matrix import MatrixChannel
-                self.channels["matrix"] = MatrixChannel(
-                    self.config.channels.matrix,
-                    self.bus,
-                )
-                logger.info("Matrix channel enabled")
-            except ImportError as e:
-                logger.warning("Matrix channel not available: %s", e)
 
         self._validate_allow_from()
 

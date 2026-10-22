@@ -21,7 +21,7 @@ def test_resolve_channel_media_dir_uses_questorharness_data_dir(monkeypatch, tmp
     monkeypatch.delenv("QUESTORHARNESS_CHANNEL_MEDIA_DIR", raising=False)
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(data_dir))
 
-    media_dir = resolve_channel_media_dir("telegram")
+    media_dir = resolve_channel_media_dir("qq")
 
-    assert media_dir == data_dir / "media" / "telegram"
+    assert media_dir == data_dir / "media" / "qq"
     assert media_dir.is_dir()

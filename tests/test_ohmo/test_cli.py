@@ -93,13 +93,12 @@ def test_ohmo_init_interactive_writes_gateway_config(tmp_path: Path, monkeypatch
     user_input = "\n".join(
         [
             "1",  # provider profile
-            "y",  # enable telegram
+            "n",  # enable feishu
+            "y",  # enable qq
             "123456",  # allow_from
-            "telegram-token",
-            "y",  # reply_to_message
-            "n",  # slack
-            "n",  # discord
-            "n",  # feishu
+            "qq-app",  # app_id
+            "qq-token",  # token
+            "qq-secret",  # app_secret
             "y",  # send_progress
             "y",  # send_tool_hints
             "n",  # allow_remote_admin_commands
@@ -108,9 +107,11 @@ def test_ohmo_init_interactive_writes_gateway_config(tmp_path: Path, monkeypatch
     result = runner.invoke(app, ["init", "--workspace", str(workspace)], input=user_input)
     assert result.exit_code == 0
     config = json.loads((workspace / "gateway.json").read_text(encoding="utf-8"))
-    assert config["enabled_channels"] == ["telegram"]
-    assert config["channel_configs"]["telegram"]["token"] == "telegram-token"
-    assert config["channel_configs"]["telegram"]["allow_from"] == ["123456"]
+    assert config["enabled_channels"] == ["qq"]
+    assert config["channel_configs"]["qq"]["app_id"] == "qq-app"
+    assert config["channel_configs"]["qq"]["token"] == "qq-token"
+    assert config["channel_configs"]["qq"]["app_secret"] == "qq-secret"
+    assert config["channel_configs"]["qq"]["allow_from"] == ["123456"]
 
 
 def test_ohmo_init_interactive_allows_blank_allow_from_for_secure_default(tmp_path: Path, monkeypatch):
@@ -121,13 +122,12 @@ def test_ohmo_init_interactive_allows_blank_allow_from_for_secure_default(tmp_pa
     user_input = "\n".join(
         [
             "1",  # provider profile
-            "y",  # enable telegram
+            "n",  # enable feishu
+            "y",  # enable qq
             "",   # allow_from -> deny all until explicitly configured
-            "telegram-token",
-            "y",  # reply_to_message
-            "n",  # slack
-            "n",  # discord
-            "n",  # feishu
+            "qq-app",  # app_id
+            "qq-token",  # token
+            "qq-secret",  # app_secret
             "y",  # send_progress
             "y",  # send_tool_hints
             "n",  # allow_remote_admin_commands
@@ -136,8 +136,8 @@ def test_ohmo_init_interactive_allows_blank_allow_from_for_secure_default(tmp_pa
     result = runner.invoke(app, ["init", "--workspace", str(workspace)], input=user_input)
     assert result.exit_code == 0
     config = json.loads((workspace / "gateway.json").read_text(encoding="utf-8"))
-    assert config["channel_configs"]["telegram"]["allow_from"] == []
-    assert "Remote access denied until allow_from is configured for: telegram" in result.output
+    assert config["channel_configs"]["qq"]["allow_from"] == []
+    assert "Remote access denied until allow_from is configured for: qq" in result.output
 
 
 def test_ohmo_init_interactive_writes_feishu_gateway_config(tmp_path: Path, monkeypatch):
@@ -148,9 +148,6 @@ def test_ohmo_init_interactive_writes_feishu_gateway_config(tmp_path: Path, monk
     user_input = "\n".join(
         [
             "1",         # provider profile
-            "n",         # telegram
-            "n",         # slack
-            "n",         # discord
             "y",         # feishu
             "feishu-user-1",         # allow_from
             "1",         # domain -> Feishu (China)
@@ -162,6 +159,7 @@ def test_ohmo_init_interactive_writes_feishu_gateway_config(tmp_path: Path, monk
             "1",         # group_policy -> managed_or_mention
             "ohmo,openclaw", # bot_names
             "",          # bot_open_id
+            "n",         # qq
             "y",         # send_progress
             "n",         # send_tool_hints
             "n",         # allow_remote_admin_commands
@@ -193,9 +191,6 @@ def test_ohmo_config_interactive_can_restart_gateway(tmp_path: Path, monkeypatch
     user_input = "\n".join(
         [
             "4",          # provider profile -> codex
-            "n",          # telegram
-            "n",          # slack
-            "n",          # discord
             "y",          # feishu
             "feishu-user-1",          # allow_from
             "2",          # domain -> Lark (International)
@@ -207,6 +202,7 @@ def test_ohmo_config_interactive_can_restart_gateway(tmp_path: Path, monkeypatch
             "1",          # group_policy -> managed_or_mention
             "ohmo,openclaw", # bot_names
             "",           # bot_open_id
+            "n",          # qq
             "y",          # send_progress
             "y",          # send_tool_hints
             "n",          # allow_remote_admin_commands
@@ -245,10 +241,8 @@ def test_ohmo_config_keeps_existing_channel_when_not_reconfigured(tmp_path: Path
     user_input = "\n".join(
         [
             "4",  # provider profile -> codex
-            "n",  # telegram
-            "n",  # slack
-            "n",  # discord
             "n",  # reconfigure feishu? keep existing
+            "n",  # qq
             "y",  # send_progress
             "y",  # send_tool_hints
             "n",  # allow_remote_admin_commands

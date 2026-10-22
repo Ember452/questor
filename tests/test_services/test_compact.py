@@ -403,7 +403,7 @@ async def test_compact_conversation_runs_hooks_and_preserves_carryover_state(tmp
                     "Look into issue #98",
                     "Confirm issue #98 and fix the logger formatting bug",
                 ],
-                "active_artifacts": [str(image_path), "src/questorharness/channels/impl/matrix.py:398"],
+                "active_artifacts": [str(image_path), "src/questorharness/channels/impl/feishu.py:398"],
                 "verified_state": ["Issue #98 is about logger placeholder formatting"],
                 "next_step": "Patch the logger formatting and rerun focused tests",
             },
@@ -420,7 +420,7 @@ async def test_compact_conversation_runs_hooks_and_preserves_carryover_state(tmp
             "recent_work_log": ["Ran pytest -q tests/test_compact.py [41 passed]"],
             "recent_verified_work": [
                 "Issue #98 is about logger placeholder formatting",
-                "matrix.py still contains mixed {} / %s logging",
+                "feishu.py still contains mixed {} / %s logging",
             ],
             "compact_last": {"checkpoint": "query_auto_triggered", "token_count": 12345},
         },

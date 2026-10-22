@@ -962,18 +962,7 @@ def _format_channel_progress(
     compact_trigger: str | None = None,
     attempt: int | None = None,
 ) -> str:
-    if channel not in {
-        "feishu",
-        "telegram",
-        "slack",
-        "discord",
-        "matrix",
-        "whatsapp",
-        "email",
-        "dingtalk",
-        "qq",
-        "wechat",
-    }:
+    if channel not in {"feishu", "qq"}:
         return text
     prefers_chinese = _prefers_chinese_progress(content)
     if kind == "thinking":

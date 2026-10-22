@@ -27,10 +27,8 @@ dependencies = [
     "watchfiles>=0.20.0",
     "croniter>=2.0.0",
     "tzdata; sys_platform == 'win32'",
-    "slack-sdk>=3.0.0",
-    "python-telegram-bot>=21.0.0",
-    "discord.py>=2.0.0",
     "lark-oapi>=1.5.0",
+    "qq-botpy>=1.2.1",
 ]
 
 [project.optional-dependencies]

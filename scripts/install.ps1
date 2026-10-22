@@ -39,7 +39,7 @@ if ($Help) {
 }
 
 if ($WithChannels) {
-    Write-Warn "-WithChannels is no longer required; common IM channel dependencies are installed by default."
+    Write-Warn "-WithChannels is no longer required; Feishu and QQ channel dependencies are installed by default."
 }
 
 # ---------------------------------------------------------------------------

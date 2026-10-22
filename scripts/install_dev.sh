@@ -98,7 +98,7 @@ success "Installed QuestorHarness from ${REPO_ROOT}"
 
 if [ "$WITH_CHANNELS" = true ]; then
     step "Channel dependencies"
-    info "--with-channels is no longer required; common IM channel dependencies are installed by default."
+    info "--with-channels is no longer required; Feishu and QQ channel dependencies are installed by default."
 fi
 
 step "Installing React terminal dependencies (optional)"

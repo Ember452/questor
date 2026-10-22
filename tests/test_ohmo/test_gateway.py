@@ -58,14 +58,14 @@ from ohmo.workspace import get_gateway_restart_notice_path, get_skills_dir, init
 
 def test_gateway_router_uses_thread_and_sender_for_group_when_present():
     message = InboundMessage(
-        channel="slack",
+        channel="feishu",
         sender_id="u1",
         chat_id="c1",
         content="hello",
         timestamp=datetime.utcnow(),
         metadata={"thread_ts": "t1", "chat_type": "group"},
     )
-    assert session_key_for_message(message) == "slack:c1:t1:u1"
+    assert session_key_for_message(message) == "feishu:c1:t1:u1"
 
 
 def test_gateway_router_keeps_private_chat_scope_for_legacy_sessions():
@@ -82,18 +82,18 @@ def test_gateway_router_keeps_private_chat_scope_for_legacy_sessions():
 
 def test_gateway_router_falls_back_to_chat_scope_when_chat_type_unknown():
     message = InboundMessage(
-        channel="telegram",
+        channel="qq",
         sender_id="u1",
         chat_id="chat-1",
         content="hello",
         timestamp=datetime.utcnow(),
     )
-    assert session_key_for_message(message) == "telegram:chat-1"
+    assert session_key_for_message(message) == "qq:chat-1"
 
 
 def test_gateway_router_separates_senders_in_same_chat_thread():
     first = InboundMessage(
-        channel="slack",
+        channel="feishu",
         sender_id="alice",
         chat_id="shared-chat",
         content="hello",
@@ -101,15 +101,15 @@ def test_gateway_router_separates_senders_in_same_chat_thread():
         metadata={"thread_ts": "thread-1", "chat_type": "group"},
     )
     second = InboundMessage(
-        channel="slack",
+        channel="feishu",
         sender_id="bob",
         chat_id="shared-chat",
         content="hello",
         timestamp=datetime.utcnow(),
         metadata={"thread_ts": "thread-1", "chat_type": "group"},
     )
-    assert session_key_for_message(first) == "slack:shared-chat:thread-1:alice"
-    assert session_key_for_message(second) == "slack:shared-chat:thread-1:bob"
+    assert session_key_for_message(first) == "feishu:shared-chat:thread-1:alice"
+    assert session_key_for_message(second) == "feishu:shared-chat:thread-1:bob"
 
 
 def test_gateway_router_separates_senders_in_same_group_without_thread():
@@ -134,98 +134,11 @@ def test_gateway_router_separates_senders_in_same_group_without_thread():
 
 
 @pytest.mark.asyncio
-async def test_slack_thread_messages_use_sender_scoped_router_keys(monkeypatch):
-    import sys
-    import types
-
-    def install_stub(name, **attrs):
-        module = types.ModuleType(name)
-        for key, value in attrs.items():
-            setattr(module, key, value)
-        monkeypatch.setitem(sys.modules, name, module)
-        return module
-
-    install_stub("slackify_markdown", slackify_markdown=lambda text: text)
-    install_stub("slack_sdk")
-    install_stub("slack_sdk.socket_mode")
-    install_stub("slack_sdk.socket_mode.request", SocketModeRequest=object)
-
-    class FakeSocketModeResponse:
-        def __init__(self, envelope_id=None):
-            self.envelope_id = envelope_id
-
-    install_stub("slack_sdk.socket_mode.response", SocketModeResponse=FakeSocketModeResponse)
-    install_stub("slack_sdk.socket_mode.websockets", SocketModeClient=object)
-    install_stub("slack_sdk.web")
-    install_stub("slack_sdk.web.async_client", AsyncWebClient=object)
-
-    from questorharness.channels.impl.slack import SlackChannel
-    from questorharness.config.schema import SlackConfig
-
-    class CapturingBus:
-        def __init__(self):
-            self.messages = []
-
-        async def publish_inbound(self, msg):
-            self.messages.append(msg)
-
-    class FakeSocketClient:
-        async def send_socket_mode_response(self, response):
-            return None
-
-    async def send_thread_message(channel, *, user):
-        request = SimpleNamespace(
-            type="events_api",
-            envelope_id=f"env-{user}",
-            payload={
-                "event": {
-                    "type": "app_mention",
-                    "user": user,
-                    "channel": "C_SHARED",
-                    "channel_type": "channel",
-                    "text": "<@BOT> /summary 50",
-                    "thread_ts": "1710000000.000100",
-                    "ts": f"1710000000.{user[-1]}",
-                }
-            },
-        )
-        await channel._on_socket_request(FakeSocketClient(), request)
-
-    bus = CapturingBus()
-    config = SlackConfig(
-        allow_from=["U_ALICE", "U_BOB"],
-        bot_token="xoxb-fake",
-        app_token="xapp-fake",
-        mode="socket",
-        group_policy="mention",
-        reply_in_thread=True,
-        react_emoji="eyes",
-        dm=SimpleNamespace(enabled=True, policy="allowlist", allow_from=["U_ALICE", "U_BOB"]),
-    )
-    channel = SlackChannel(config, bus)
-    channel._bot_user_id = "BOT"
-    channel._web_client = None
-
-    await send_thread_message(channel, user="U_ALICE")
-    await send_thread_message(channel, user="U_BOB")
-
-    alice, bob = bus.messages
-    assert alice.session_key_override is None
-    assert bob.session_key_override is None
-    assert alice.metadata["thread_ts"] == "1710000000.000100"
-    assert bob.metadata["thread_ts"] == "1710000000.000100"
-    assert alice.metadata["chat_type"] == "group"
-    assert bob.metadata["chat_type"] == "group"
-    assert session_key_for_message(alice) == "slack:C_SHARED:1710000000.000100:U_ALICE"
-    assert session_key_for_message(bob) == "slack:C_SHARED:1710000000.000100:U_BOB"
-
-
-@pytest.mark.asyncio
-async def test_runtime_pool_summary_does_not_restore_other_slack_thread_sender(tmp_path, monkeypatch):
+async def test_runtime_pool_summary_does_not_restore_other_feishu_thread_sender(tmp_path, monkeypatch):
     workspace = tmp_path / ".ohmo-home"
     initialize_workspace(workspace)
     alice_message = InboundMessage(
-        channel="slack",
+        channel="feishu",
         sender_id="U_ALICE",
         chat_id="C_SHARED",
         content="hello",
@@ -233,7 +146,7 @@ async def test_runtime_pool_summary_does_not_restore_other_slack_thread_sender(t
         metadata={"thread_ts": "1710000000.000100", "chat_type": "group"},
     )
     bob_message = InboundMessage(
-        channel="slack",
+        channel="feishu",
         sender_id="U_BOB",
         chat_id="C_SHARED",
         content="/summary 50",
@@ -313,8 +226,8 @@ async def test_runtime_pool_blocks_registered_resume_without_listing_or_loading_
     assert command.remote_invocable is False
 
     alice_secret = "ALICE_PRIVATE_RESUME_SECRET"
-    alice_key = "slack:C_SHARED:thread1:U_ALICE"
-    bob_key = "slack:C_SHARED:thread1:U_BOB"
+    alice_key = "feishu:C_SHARED:thread1:U_ALICE"
+    bob_key = "feishu:C_SHARED:thread1:U_BOB"
     save_session_snapshot(
         cwd=tmp_path,
         workspace=workspace,
@@ -362,7 +275,7 @@ async def test_runtime_pool_blocks_registered_resume_without_listing_or_loading_
     pool = OhmoSessionRuntimePool(cwd=tmp_path, workspace=workspace, provider_profile="codex")
     for payload in ("/resume", "/resume alice-session"):
         message = InboundMessage(
-            channel="slack",
+            channel="feishu",
             sender_id="U_BOB",
             chat_id="C_SHARED",
             content=payload,
@@ -570,13 +483,13 @@ async def test_runtime_pool_blocks_registered_diff_full_without_leaking_workspac
 
     pool = OhmoSessionRuntimePool(cwd=repo, workspace=workspace, provider_profile="codex")
     message = InboundMessage(
-        channel="slack",
+        channel="feishu",
         sender_id="U_ALLOWED",
         chat_id="C_SHARED",
         content="/diff full",
     )
 
-    updates = [update async for update in pool.stream_message(message, "slack:C_SHARED:U_ALLOWED")]
+    updates = [update async for update in pool.stream_message(message, "feishu:C_SHARED:U_ALLOWED")]
 
     assert updates[-1].kind == "final"
     assert updates[-1].text == "/diff is only available in the local QuestorHarness UI."
@@ -1259,12 +1172,12 @@ async def test_runtime_pool_blocks_registered_commit_without_running_git_hooks(t
 
     pool = OhmoSessionRuntimePool(cwd=repo, workspace=workspace, provider_profile="codex")
     message = InboundMessage(
-        channel="slack",
+        channel="feishu",
         sender_id="U_ATTACKER",
         chat_id="C_SHARED",
         content="/commit remote requested commit",
     )
-    updates = [u async for u in pool.stream_message(message, "slack:C_SHARED:U_ATTACKER")]
+    updates = [u async for u in pool.stream_message(message, "feishu:C_SHARED:U_ATTACKER")]
 
     assert updates[-1].kind == "final"
     assert updates[-1].text == "/commit is only available in the local QuestorHarness UI."
@@ -1390,8 +1303,8 @@ async def test_runtime_pool_blocks_project_context_commands_without_writing_file
         ("/issue set Remote supplied issue :: REMOTE_ISSUE_CONTEXT_POISON", "/issue is only available in the local QuestorHarness UI."),
         ("/pr_comments add src/app.py:1 :: REMOTE_PR_COMMENT_POISON", "/pr_comments is only available in the local QuestorHarness UI."),
     ):
-        message = InboundMessage(channel="slack", sender_id="U_ATTACKER", chat_id="C_SHARED", content=payload)
-        updates = [u async for u in pool.stream_message(message, "slack:C_SHARED:U_ATTACKER")]
+        message = InboundMessage(channel="feishu", sender_id="U_ATTACKER", chat_id="C_SHARED", content=payload)
+        updates = [u async for u in pool.stream_message(message, "feishu:C_SHARED:U_ATTACKER")]
         assert updates[-1].kind == "final"
         assert updates[-1].text == expected_denial
 
@@ -1454,8 +1367,8 @@ async def test_runtime_pool_blocks_registered_config_show_without_leaking_secret
     monkeypatch.setattr("ohmo.gateway.runtime.start_runtime", fake_start_runtime)
 
     pool = OhmoSessionRuntimePool(cwd=tmp_path, workspace=workspace, provider_profile="codex")
-    message = InboundMessage(channel="slack", sender_id="U_ATTACKER", chat_id="C_SHARED", content="/config show")
-    updates = [u async for u in pool.stream_message(message, "slack:C_SHARED:U_ATTACKER")]
+    message = InboundMessage(channel="feishu", sender_id="U_ATTACKER", chat_id="C_SHARED", content="/config show")
+    updates = [u async for u in pool.stream_message(message, "feishu:C_SHARED:U_ATTACKER")]
 
     assert updates[-1].kind == "final"
     assert updates[-1].text == "/config is only available in the local QuestorHarness UI."
@@ -1739,13 +1652,13 @@ async def test_runtime_pool_retries_with_attachment_summary_when_model_rejects_i
 
     pool = OhmoSessionRuntimePool(cwd=tmp_path, workspace=workspace, provider_profile="openrouter")
     message = InboundMessage(
-        channel="telegram",
+        channel="qq",
         sender_id="u1",
         chat_id="c1",
         content="帮我看这个图片",
         media=[str(image_path)],
     )
-    updates = [u async for u in pool.stream_message(message, "telegram:c1")]
+    updates = [u async for u in pool.stream_message(message, "qq:c1")]
 
     assert updates[-1].kind == "final"
     assert updates[-1].text == "done"
@@ -3097,8 +3010,8 @@ async def test_runtime_pool_blocks_registered_autopilot_run_next_from_remote_mes
     monkeypatch.setattr("ohmo.gateway.runtime.start_runtime", fake_start_runtime)
 
     pool = OhmoSessionRuntimePool(cwd=tmp_path, workspace=workspace, provider_profile="codex")
-    message = InboundMessage(channel="slack", sender_id="u1", chat_id="c1", content="/autopilot run-next")
-    updates = [u async for u in pool.stream_message(message, "slack:c1:u1")]
+    message = InboundMessage(channel="feishu", sender_id="u1", chat_id="c1", content="/autopilot run-next")
+    updates = [u async for u in pool.stream_message(message, "feishu:c1:u1")]
 
     assert updates[-1].text == "/autopilot is only available in the local QuestorHarness UI."
     assert agent_invoked is False
