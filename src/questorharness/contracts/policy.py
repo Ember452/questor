@@ -1,4 +1,4 @@
-"""Permission mode definitions."""
+"""Permission vocabulary shared across engine layers."""
 
 from __future__ import annotations
 

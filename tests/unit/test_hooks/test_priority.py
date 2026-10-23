@@ -11,7 +11,7 @@ from questorharness.contracts.usage import UsageSnapshot
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 from questorharness.runtime.hooks import HookEvent, HookExecutionContext, HookExecutor
 from questorharness.runtime.hooks.loader import HookRegistry
-from questorharness.runtime.hooks.schemas import CommandHookDefinition, HttpHookDefinition
+from questorharness.contracts.hooks import CommandHookDefinition, HttpHookDefinition
 
 
 class FakeApiClient:

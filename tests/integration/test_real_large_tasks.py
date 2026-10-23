@@ -39,7 +39,7 @@ def make_engine(system_prompt, cwd=None, hook_executor=None, max_tokens=4096, ma
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
-    from questorharness.capabilities.policy.modes import PermissionMode
+    from questorharness.contracts.policy import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
@@ -96,7 +96,7 @@ async def task_security_audit_with_hooks():
 
     from questorharness.contracts.hooks import HookEvent
     from questorharness.runtime.hooks.loader import HookRegistry
-    from questorharness.runtime.hooks.schemas import CommandHookDefinition
+    from questorharness.contracts.hooks import CommandHookDefinition
     from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
     from questorharness.providers.llm.client import AnthropicApiClient
 
@@ -180,7 +180,7 @@ async def task_coordinator_code_review():
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
-    from questorharness.capabilities.policy.modes import PermissionMode
+    from questorharness.contracts.policy import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
@@ -531,7 +531,7 @@ async def task_full_pipeline():
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
-    from questorharness.capabilities.policy.modes import PermissionMode
+    from questorharness.contracts.policy import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool

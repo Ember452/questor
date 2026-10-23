@@ -53,7 +53,7 @@ def _make_registry(extra_tools=None):
 def _make_checker():
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
-    from questorharness.capabilities.policy.modes import PermissionMode
+    from questorharness.contracts.policy import PermissionMode
     return PermissionChecker(PermissionSettings(mode=PermissionMode.FULL_AUTO))
 
 

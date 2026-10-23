@@ -121,7 +121,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `keybindings/`、`themes/`、`vim/`、`output_styles/` | **Phase 1 冻结**；Phase 2 随 UI 一起移除（ADR-0005） | 不迁 `surfaces/terminal/` |
 | `voice/` | `providers/voice/`（Phase 2） | 有策略时升 capabilities |
 | `utils/` | Phase 2 才归位；落 `providers/`（fs / shell / network_guard） | 解散，不留 utils |
-| `config/` | 类型 → `contracts/settings.py`；解析/注入 → `bootstrap/config/`（Phase 2） | 禁止下层 import `bootstrap` |
+| `config/` | 已收敛为叶子：模型与加载同包，只依赖 `contracts` | `Settings.resolve_auth()` 的 provider 惰性边待销账 |
 | `bridge/` | `runtime/bridge/`（已完成） | 有策略时再拆 |
 | `questor/gateway/` | **Phase 1 不动**（W5） | 协议路由进 `surfaces/gateway/`，产品策略留在产品包 |
 | `frontend/terminal/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `apps/terminal/`；wheel force-include 同步删除 |

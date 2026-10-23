@@ -58,6 +58,7 @@ questor/
 │  │  ├─ contracts/                   # 词表 + Port（无实现、无 IO）
 │  │  │  ├─ ids.py                    # SessionId / RunId / TurnId / ProfileId
 │  │  │  ├─ errors.py
+│  │  │  ├─ task.py subagent.py agent.py hooks.py policy.py  # 共享词表
 │  │  │  ├─ commands/                 # session.py run.py turn.py profile.py
 │  │  │  ├─ events/                   # session.py run.py memory.py tool.py
 │  │  │  ├─ domain/                   # session.py run.py message.py tool_call.py
@@ -179,6 +180,7 @@ questor/
 - `kernel` 不 import `runtime`；`runtime` 不 import `kernel` 的内部模块，只用 `kernel` 的公开入口。
 - `engine` 是编排层：循环天然要组合 `capabilities` / `providers` / `runtime`，因此它不参与“越往下越纯”的秩；`commands` 是应用层命令分派器，允许 import 任意层，也不进矩阵。把二者塞进 `runtime` 会让 `runtime` 自己违反 `runtime` 的依赖规则。
 - `platform` 是最底层（只依赖标准库）：允许被 `contracts` 及以上所有层 import；它只放平台检测与路径解析，不放配置策略。
+- `config` 是设置层叶子：模型与加载同包，只依赖 `contracts`；需要 `Settings` 的层直接 import 它（`resolve_auth` 的 provider 惰性边已登记为已知债）。
 
 ### 2.2 强制方式
 

@@ -12,7 +12,7 @@ from questorharness.contracts.domain.message import ConversationMessage, TextBlo
 from questorharness.runtime.hooks import HookEvent, HookExecutionContext, HookExecutor
 from questorharness.runtime.hooks.executor import _inject_arguments
 from questorharness.runtime.hooks.loader import HookRegistry
-from questorharness.runtime.hooks.schemas import CommandHookDefinition, PromptHookDefinition
+from questorharness.contracts.hooks import CommandHookDefinition, PromptHookDefinition
 
 
 class FakeApiClient:

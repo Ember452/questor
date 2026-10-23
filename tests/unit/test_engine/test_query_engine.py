@@ -34,7 +34,7 @@ from pydantic import BaseModel
 from questorharness.contracts.domain.message import ToolResultBlock
 from questorharness.runtime.hooks import HookExecutionContext, HookExecutor, HookEvent
 from questorharness.runtime.hooks.loader import HookRegistry
-from questorharness.runtime.hooks.schemas import PromptHookDefinition
+from questorharness.contracts.hooks import PromptHookDefinition
 from questorharness.engine.query import QueryContext, _execute_tool_call, _is_prompt_too_long_error
 
 

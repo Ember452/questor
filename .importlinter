@@ -56,6 +56,25 @@ forbidden_modules =
 # The facade re-exports these modules; only direct product imports are forbidden.
 allow_indirect_imports = True
 
+[importlinter:contract:config-is-leaf]
+name = Config must not import runtime, capabilities, engine, ui or plugins
+type = forbidden
+source_modules =
+    questorharness.config
+forbidden_modules =
+    questorharness.kernel
+    questorharness.runtime
+    questorharness.capabilities
+    questorharness.surfaces
+    questorharness.engine
+    questorharness.commands
+    questorharness.plugins
+    questorharness.ui
+# Settings.resolve_auth() lazily reads provider auth storage; that provider
+# edge is a documented exception until credential resolution moves out of the
+# settings model.
+allow_indirect_imports = True
+
 [importlinter:contract:providers-are-adapters]
 name = Providers must not import runtime, kernel or capabilities
 type = forbidden

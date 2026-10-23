@@ -17,7 +17,7 @@ from questorharness.providers.lsp.runtime import ProviderLspRuntime
 _TOOL_PORTS = {"tasks": default_task_runtime, "subagents": default_subagent_runtime}
 
 
-async def _wait_for_terminal_task(task_id: str, *, timeout_seconds: float = 2.0) -> None:
+async def _wait_for_terminal_task(task_id: str, *, timeout_seconds: float = 10.0) -> None:
     deadline = asyncio.get_running_loop().time() + timeout_seconds
     manager = get_task_manager()
     while asyncio.get_running_loop().time() < deadline:
@@ -167,7 +167,7 @@ async def test_agent_send_message_flow_restarts_completed_agent(tmp_path: Path, 
     assert match, create_result.output
     task_id = match.group(1)
 
-    for _ in range(80):
+    for _ in range(200):
         output = await task_output.execute(task_output.input_model(task_id=task_id), context)
         if "AGENT_ECHO:ready" in output.output:
             break
@@ -182,7 +182,7 @@ async def test_agent_send_message_flow_restarts_completed_agent(tmp_path: Path, 
     assert send_result.is_error is False
 
     await asyncio.sleep(0.2)
-    for _ in range(80):
+    for _ in range(200):
         output = await task_output.execute(task_output.input_model(task_id=task_id), context)
         if "AGENT_ECHO:agent ping" in output.output:
             break

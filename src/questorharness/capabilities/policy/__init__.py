@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from questorharness.capabilities.policy.checker import PermissionChecker, PermissionDecision
-    from questorharness.capabilities.policy.modes import PermissionMode
+    from questorharness.contracts.policy import PermissionMode
 
 __all__ = ["PermissionChecker", "PermissionDecision", "PermissionMode"]
 
@@ -20,7 +20,7 @@ def __getattr__(name: str):
             "PermissionDecision": PermissionDecision,
         }[name]
     if name == "PermissionMode":
-        from questorharness.capabilities.policy.modes import PermissionMode
+        from questorharness.contracts.policy import PermissionMode
 
         return PermissionMode
     raise AttributeError(name)

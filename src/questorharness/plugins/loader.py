@@ -622,7 +622,7 @@ def _load_plugin_hooks(path: Path) -> dict[str, list]:
     """Load hooks from a flat hooks.json file."""
     if not path.exists():
         return {}
-    from questorharness.runtime.hooks.schemas import (
+    from questorharness.contracts.hooks import (
         AgentHookDefinition,
         CommandHookDefinition,
         HttpHookDefinition,
