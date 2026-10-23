@@ -9,7 +9,9 @@ from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.engine.cost_tracker import CostTracker
 from questorharness.runtime.coordinator.coordinator_mode import get_coordinator_user_context
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock, ToolResultBlock, sanitize_conversation_messages
-from questorharness.engine.query import AskUserPrompt, PermissionPrompt, QueryContext, remember_user_goal, run_query
+from questorharness.engine.context import AskUserPrompt, PermissionPrompt, QueryContext
+from questorharness.engine.query import run_query
+from questorharness.engine.tool_metadata import remember_user_goal
 from questorharness.contracts.domain.events import AssistantTurnComplete, StreamEvent
 from questorharness.config.settings import Settings
 from questorharness.runtime.hooks import HookEvent, HookExecutor
