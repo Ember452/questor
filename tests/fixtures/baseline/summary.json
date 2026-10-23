@@ -6,13 +6,13 @@
   },
   "lint": {
     "broken": 0,
-    "kept": 9
+    "kept": 10
   },
-  "main_node_id_count": 1203,
-  "node_id_count": 1216,
+  "main_node_id_count": 1206,
+  "node_id_count": 1219,
   "pytest": {
     "deselected": 10,
-    "passed": 1188,
+    "passed": 1191,
     "skipped": 28
   },
   "snapshot_messages": 4

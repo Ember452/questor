@@ -53,6 +53,7 @@ STEPS: tuple[Step, ...] = (
     Step("namespace-doc", (PYTHON, "scripts/guards/gen_namespaces.py", "--check")),
     Step("tree-map", (PYTHON, "scripts/guards/gen_tree.py", "--check")),
     Step("structure-baseline", (PYTHON, "scripts/guards/gen_structure_baseline.py", "--check")),
+    Step("graph", (PYTHON, "scripts/guards/gen_graph.py", "--check")),
     Step("mypy", ("uv", "run", "mypy")),
     Step("mypy-scope", (PYTHON, "scripts/guards/check_mypy_scope.py", "--fail-on-empty")),
     Step("prompt-surface", (PYTHON, "scripts/ci/prompt_surface.py", "--check")),

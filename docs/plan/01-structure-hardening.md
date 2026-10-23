@@ -579,3 +579,11 @@ W1–W10 把形态和门禁做对了，但**五条增长规则**还缺。它们�
 | 37 | 公开面新增一个名字 | 计划未提 | 产品工具必须从 `questorharness.api` 取类型（`product-uses-public-face` 禁止直连 capabilities） | `api.py` 重导出 `ToolCapabilities`；属纯加法 | W5 |
 | 38 | 门面测试的旧前提失效 | — | `tests/unit/test_tools/test_tools_facade.py` 断言“取到工厂就导入 30+ 模块”；discovery 后改为“调用工厂才导入” | 测试改为三段：取工厂前 <10 / 取后仍 <10 / 调用后 ≥30 且工具数 ≥30 | W5 |
 | 39 | 工具半径实测 | §4 W5「radius 5 → 1」 | 注册点 1 + 消费方 3（均 0 命中）= **1**；`structure.json` 的 `tool_radius` 经 `--refresh-baseline --reason` 从 5 刷到 1 | 金标 15 个调用前后逐字相等；`read_only_tools` 9 / `compactable_tools` 8 与旧名单完全一致 | W5 |
+| 40 | 契约 10 条全 KEPT | §4 D2「9 + 1 = 10」 | 实测：`Contracts: 10 kept, 0 broken`（`capabilities-are-leaf` 加 plugins/engine/commands/surfaces，`plugins-stay-an-extension-layer` 加 4 条，新增 `lower-layers-do-not-import-capabilities`） | 不为凑数加第 11 条 | W6 |
+| 41 | “环数 0”的准确口径 | §4 W6「报告环数 0」 | 包级环 **1**：`engine↔runtime` 就是计划自己保留的那一条反向边（`.importlinter` 的 `ignore_imports`） | `gen_graph` 分开报「已登记 / 未登记」：实为 1 / **0**；未登记 0 才是门禁对象 | W6 |
+| 42 | vacuous-contracts 实测 11，不是 2 | §4 W6「目标模块不存在」 | 6 个不存在的目标 × 多条契约 = **11 条记录**：`kernel`/`personalization`/`profiles`/`prompts`/`skills`/`ui`（后三个是 Phase 1 已搬到 `capabilities/` 的旧顶层包） | 按实测写入 `GRAPH.md`；`--check` 逐字比对，多一条即红 | W6 |
+| 43 | 冻结靠“内容相等”实现 | §4 W6「多一条即红」 | 若另立 pin 文件，就多一份可手改的真源 | 冻结集写在 **docs/architecture/GRAPH.md** 里（5 条边 + 2 个模块 + 1 条反向边），`gen_graph --check` 逐字比对：多一条边/多一个环/多一条恒真契约/手改一行 → 红 | W6 |
+| 44 | Port 注入的接线点不止 bootstrap | §4 W6「由 bootstrap 注入」 | `--dry-run` 预览也构建真 prompt（`cli_preview.py`），不接线就会抛；测试也需要 | 三个接线点：`bootstrap/runtime.py:build_runtime`、`cli_preview` 预览构建、`tests/conftest.py` autouse；`load_skill_registry` 签名不变，fail-fast 在 loader 里 | W6 |
+| 45 | prompt_surface 的插件隔离方式变了 | §4 E3「注入 NullPluginSource」 | 原先 patch `plugins.loader.load_plugins`，Port 之后不再经过它 | 改为 `configure_plugin_source(NullPluginSource())`；四份快照逐字未变（证明隔离等价） | W6 |
+| 46 | 契约数变了会打红旧 summary | `.importlinter` 从 9 → 10 | `baseline_check` 的 `summary.json` 记的 `lint.kept` 是 9 | W6 末做一次 `--record`；`dryrun.txt`/`help-*.txt`/`doctor.txt` 均未变 | W6 |
+| 47 | `src_files` 变 320 | W0 基线 319 | `plugins/source.py` 是新增源文件 | `--refresh-baseline --reason`；`test_files` 142、`tool_radius` 1 同步 | W6 |

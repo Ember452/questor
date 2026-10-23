@@ -19,7 +19,7 @@
     "capabilities_size": {
       "caliber": "git ls-files src | non-__init__ under capabilities/",
       "gate": true,
-      "ratio": 31.6,
+      "ratio": 31.5,
       "subdirs_ge2": 12,
       "tool_files": 44,
       "value": 81
@@ -33,11 +33,10 @@
     "dependency_cycles": {
       "caliber": "AST import graph at two-level package granularity, Tarjan SCC",
       "cycles": [
-        "questorharness.capabilities <-> questorharness.plugins",
         "questorharness.engine <-> questorharness.runtime"
       ],
       "gate": true,
-      "value": 2
+      "value": 1
     },
     "export_heavy_packages": {
       "caliber": "AST literal __all__ per __init__.py, len > 10",
@@ -58,7 +57,7 @@
       "max_file": "src/questorharness/cli.py",
       "over_limit": 0,
       "value": 4,
-      "warning_band": 4
+      "warning_band": 5
     },
     "mypy_errors": {
       "caliber": "uv run mypy src (historical pin; gate lives in check_mypy_scope.py from W4)",
@@ -111,22 +110,22 @@
     "src_files": {
       "caliber": "git ls-files src | *.py",
       "gate": true,
-      "modules": 256,
-      "value": 319
+      "modules": 257,
+      "value": 320
     },
     "test_files": {
       "caliber": "git ls-files tests | *.py",
       "e2e": 11,
       "gate": true,
       "integration": 31,
-      "unit": 95,
-      "value": 142
+      "unit": 96,
+      "value": 143
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
       "gate": true,
-      "percent": 33.6,
-      "value": "86/256"
+      "percent": 33.9,
+      "value": "87/257"
     },
     "tool_radius": {
       "caliber": "shared files a new tool must touch: registration point + consumers with hard-coded names",
@@ -139,7 +138,7 @@
     }
   },
   "pin": {
-    "commit": "d34b30a63b0f416995d6c195bd57ffecaa9a4eae",
+    "commit": "53b15e9d81757cadd7ad86a94bed7b35d5d5fe28",
     "date": "2026-10-23"
   }
 }

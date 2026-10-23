@@ -17,7 +17,7 @@ run `uv run python scripts/guards/gen_tree.py --write` instead.
 | `src/questorharness/bootstrap/hosts/coordinator_drain.py` | 197 |
 | `src/questorharness/bootstrap/hosts/protocol.py` | 249 |
 | `src/questorharness/bootstrap/hosts/react_launcher.py` | 191 |
-| `src/questorharness/bootstrap/runtime.py` | 797 |
+| `src/questorharness/bootstrap/runtime.py` | 801 |
 | `src/questorharness/capabilities/__init__.py` | 3 |
 | `src/questorharness/capabilities/context/__init__.py` | 1 |
 | `src/questorharness/capabilities/context/compact/__init__.py` | 1171 |
@@ -58,14 +58,14 @@ run `uv run python scripts/guards/gen_tree.py --write` instead.
 | `src/questorharness/capabilities/memory/usage.py` | 155 |
 | `src/questorharness/capabilities/policy/__init__.py` | 28 |
 | `src/questorharness/capabilities/policy/checker.py` | 202 |
-| `src/questorharness/capabilities/ports.py` | 195 |
+| `src/questorharness/capabilities/ports.py` | 219 |
 | `src/questorharness/capabilities/schedule/__init__.py` | 1 |
 | `src/questorharness/capabilities/schedule/cron.py` | 137 |
 | `src/questorharness/capabilities/schedule/cron_scheduler.py` | 612 |
 | `src/questorharness/capabilities/skills/__init__.py` | 46 |
 | `src/questorharness/capabilities/skills/_frontmatter.py` | 99 |
 | `src/questorharness/capabilities/skills/bundled/__init__.py` | 77 |
-| `src/questorharness/capabilities/skills/loader.py` | 229 |
+| `src/questorharness/capabilities/skills/loader.py` | 263 |
 | `src/questorharness/capabilities/skills/registry.py` | 29 |
 | `src/questorharness/capabilities/skills/types.py` | 26 |
 | `src/questorharness/capabilities/tools/__init__.py` | 39 |
@@ -127,7 +127,7 @@ run `uv run python scripts/guards/gen_tree.py --write` instead.
 | `src/questorharness/cli_cron.py` | 135 |
 | `src/questorharness/cli_mcp.py` | 68 |
 | `src/questorharness/cli_plugin.py` | 52 |
-| `src/questorharness/cli_preview.py` | 742 |
+| `src/questorharness/cli_preview.py` | 747 |
 | `src/questorharness/cli_provider.py` | 148 |
 | `src/questorharness/commands/__init__.py` | 21 |
 | `src/questorharness/commands/families/__init__.py` | 3 |
@@ -198,6 +198,7 @@ run `uv run python scripts/guards/gen_tree.py --write` instead.
 | `src/questorharness/plugins/installer.py` | 41 |
 | `src/questorharness/plugins/loader.py` | 732 |
 | `src/questorharness/plugins/schemas.py` | 26 |
+| `src/questorharness/plugins/source.py` | 55 |
 | `src/questorharness/plugins/types.py` | 61 |
 | `src/questorharness/providers/__init__.py` | 3 |
 | `src/questorharness/providers/auth/__init__.py` | 31 |

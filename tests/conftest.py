@@ -125,3 +125,16 @@ def fake_mcp_server_path() -> Path:
 async def _reset_background_task_manager():
     yield
     await shutdown_task_manager()
+
+
+@pytest.fixture(autouse=True)
+def _wire_plugin_source():
+    """Mirror what ``bootstrap`` does: wire the real plugin discovery port.
+
+    ``load_skill_registry`` fails fast when a project-level load runs without a
+    configured port, so tests that exercise project skills need the same wiring
+    the application gets from ``build_runtime``.
+    """
+    from questorharness.plugins.source import ensure_plugin_source
+
+    ensure_plugin_source()

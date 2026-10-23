@@ -411,8 +411,13 @@ def _build_dry_run_preview(
     from questorharness.config import load_settings
     from questorharness.platform.paths import get_config_file_path
     from questorharness.plugins import load_plugins
+    from questorharness.plugins.source import ensure_plugin_source
     from questorharness.providers.llm.provider import auth_status, detect_provider
     from questorharness.providers.mcp.config import load_mcp_server_configs
+
+    # The preview builds the real prompt, so the plugin port has to be wired here
+    # too; ``bootstrap`` only does it when a runtime is assembled.
+    ensure_plugin_source()
 
     resolved_cwd = str(Path(cwd).expanduser().resolve())
     settings = load_settings().merge_cli_overrides(

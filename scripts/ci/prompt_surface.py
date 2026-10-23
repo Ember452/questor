@@ -43,7 +43,6 @@ ENVIRONMENT_PATCH = "questorharness.capabilities.context.prompts.system_prompt.g
 PLATFORM_PATCH = "questorharness.capabilities.context.prompts.context.get_platform"
 RULES_PATCH = "questorharness.capabilities.context.prompts.context.load_local_rules"
 USER_SKILLS_PATCH = "questorharness.capabilities.skills.loader.get_user_skill_dirs"
-PLUGINS_PATCH = "questorharness.plugins.loader.load_plugins"
 
 
 @dataclass(frozen=True)
@@ -113,18 +112,22 @@ def _tool_payload(host: Host) -> list[dict[str, object]]:
 
 def _render(host: Host) -> str:
     from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
+    from questorharness.capabilities.skills.loader import configure_plugin_source
+    from questorharness.plugins.source import NullPluginSource
 
     workdir = SCRATCH / host.name
     if workdir.exists():
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True)
 
+    # Snapshots must not depend on the developer's home directory: no user
+    # plugins, no user skills, no local rules.
+    configure_plugin_source(NullPluginSource())
     with (
         mock.patch(ENVIRONMENT_PATCH, return_value=_fixed_environment()),
         mock.patch(PLATFORM_PATCH, return_value="linux"),
         mock.patch(RULES_PATCH, return_value=""),
         mock.patch(USER_SKILLS_PATCH, return_value=[]),
-        mock.patch(PLUGINS_PATCH, return_value=[]),
     ):
         prompt = build_runtime_system_prompt(
             _settings(),

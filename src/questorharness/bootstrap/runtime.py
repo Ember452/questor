@@ -36,6 +36,7 @@ from questorharness.providers.mcp.client import McpClientManager
 from questorharness.providers.mcp.config import load_mcp_server_configs
 from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins import load_plugins
+from questorharness.plugins.source import ensure_plugin_source
 from questorharness.capabilities.context.prompts import build_runtime_system_prompt
 from questorharness.state import AppState, AppStateStore
 from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, SessionBackend
@@ -299,6 +300,9 @@ async def build_runtime(
     autodream_context: dict[str, object] | None = None,
 ) -> RuntimeBundle:
     """Build the shared runtime for an QuestorHarness session."""
+    # The plugin port must be wired before any prompt or skill load: an unwired
+    # port raises PluginSourceNotConfigured instead of silently losing plugins.
+    ensure_plugin_source()
     settings_overrides: dict[str, Any] = {
         "model": model,
         "max_turns": max_turns,

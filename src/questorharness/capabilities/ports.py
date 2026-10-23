@@ -6,7 +6,7 @@ Capabilities depend on these protocols only; the provider adapters live in
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -191,5 +191,29 @@ class HookRuntime(Protocol):
     """Hook execution consumed by compaction and subagent events."""
 
     async def execute(self, event: HookEvent, payload: dict[str, Any]) -> AggregatedHookResult: ...
+
+
+class PluginLike(Protocol):
+    """The shape ``capabilities`` needs from a plugin, and nothing more."""
+
+    enabled: bool
+    skills: Sequence[Any]
+
+
+@runtime_checkable
+class PluginSource(Protocol):
+    """Plugin discovery injected from the assembly layer.
+
+    ``capabilities`` must not import ``plugins`` (ADR-0003 layering), so the
+    loader asks this port instead and ``bootstrap`` wires the real implementation.
+    """
+
+    def load(
+        self,
+        settings: Any,
+        cwd: str | Path,
+        *,
+        extra_roots: Iterable[str | Path] | None = None,
+    ) -> Sequence[PluginLike]: ...
 
 # questor: allow R7 -- until W8 adds the mirror test
