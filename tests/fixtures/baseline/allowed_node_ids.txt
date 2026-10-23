@@ -5,3 +5,4 @@ tests/unit/test_tools/test_tool_ports.py::test_image_to_text_uses_injected_llm_r
 tests/unit/test_tools/test_tool_ports.py::test_task_list_uses_injected_task_runtime
 tests/unit/test_tools/test_tool_ports.py::test_team_create_uses_injected_subagent_runtime
 tests/unit/test_tools/test_tools_facade.py::test_tools_facade_is_lazy
+tests/unit/test_config/test_settings.py::test_load_settings_accepts_utf8_bom

@@ -912,3 +912,14 @@ class TestModelScopeProvider:
         assert materialized.model == "deepseek-ai/DeepSeek-V4-Flash"
         assert materialized.provider == "modelscope"
         assert materialized.api_format == "openai"
+
+
+def test_load_settings_accepts_utf8_bom(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("QUESTORHARNESS_MODEL", raising=False)
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    config_path = tmp_path / "settings.json"
+    config_path.write_bytes(b"\xef\xbb\xbf" + b'{"model": "bom-model"}')
+
+    settings = load_settings(config_path)
+
+    assert settings.model == "bom-model"

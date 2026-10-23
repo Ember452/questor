@@ -152,7 +152,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
         config_path = get_config_file_path()
 
     if config_path.exists():
-        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        raw = json.loads(config_path.read_text(encoding="utf-8-sig"))
         settings = Settings.model_validate(raw)
         env_profile = os.environ.get("QUESTORHARNESS_PROFILE")
         if env_profile:
