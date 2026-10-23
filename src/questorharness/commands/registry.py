@@ -88,8 +88,8 @@ from questorharness.capabilities.memory.session import (
     update_session_memory_file,
 )
 from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, SessionBackend
-from questorharness.skills import load_skill_registry
-from questorharness.skills.types import SkillDefinition
+from questorharness.capabilities.skills import load_skill_registry
+from questorharness.capabilities.skills.types import SkillDefinition
 from questorharness.runtime.tasks import get_task_manager
 from questorharness.plugins.types import PluginCommandDefinition
 

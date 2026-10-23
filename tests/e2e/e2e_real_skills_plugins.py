@@ -71,7 +71,7 @@ async def test_install_real_skills() -> tuple[bool, str]:
 
 async def test_real_skills_loaded() -> tuple[bool, str]:
     """Verify that the installed real skills are loaded by the registry."""
-    from questorharness.skills.loader import load_skill_registry
+    from questorharness.capabilities.skills.loader import load_skill_registry
 
     registry = load_skill_registry(cwd=".")
     skills = registry.list_skills()
@@ -87,7 +87,7 @@ async def test_real_skills_loaded() -> tuple[bool, str]:
 
 async def test_real_skill_content_quality() -> tuple[bool, str]:
     """Verify that real skills have substantial content (not stubs)."""
-    from questorharness.skills.loader import load_skill_registry
+    from questorharness.capabilities.skills.loader import load_skill_registry
 
     registry = load_skill_registry(cwd=".")
     issues = []

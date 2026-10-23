@@ -299,8 +299,8 @@ async def task_migration_plan_with_memory():
     saves session for later resume."""
 
     from questorharness.runtime.coordinator.agent_definitions import get_agent_definition
-    from questorharness.skills.registry import SkillRegistry
-    from questorharness.skills.types import SkillDefinition
+    from questorharness.capabilities.skills.registry import SkillRegistry
+    from questorharness.capabilities.skills.types import SkillDefinition
     from questorharness.capabilities.memory.manager import add_memory_entry, list_memory_files, remove_memory_entry
     from questorharness.contracts.session_storage import save_session_snapshot, export_session_markdown
     import questorharness.capabilities.memory.paths as mp

@@ -6,10 +6,10 @@ import textwrap
 from pathlib import Path
 
 from questorharness.config.settings import Settings
-from questorharness.skills import get_user_skills_dir, load_skill_registry
-from questorharness.skills.loader import discover_project_skill_dirs, get_user_skill_dirs
-from questorharness.skills.bundled import _parse_frontmatter as parse_bundled_frontmatter
-from questorharness.skills.loader import _parse_skill_markdown as parse_skill_markdown
+from questorharness.capabilities.skills import get_user_skills_dir, load_skill_registry
+from questorharness.capabilities.skills.loader import discover_project_skill_dirs, get_user_skill_dirs
+from questorharness.capabilities.skills.bundled import _parse_frontmatter as parse_bundled_frontmatter
+from questorharness.capabilities.skills.loader import _parse_skill_markdown as parse_skill_markdown
 
 
 def test_load_skill_registry_includes_bundled(tmp_path: Path, monkeypatch):

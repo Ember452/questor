@@ -27,8 +27,8 @@ from questorharness.runtime.coordinator.agent_definitions import (
 )
 from questorharness.plugins.schemas import PluginManifest
 from questorharness.plugins.types import LoadedPlugin, PluginCommandDefinition
-from questorharness.skills.loader import _parse_skill_metadata
-from questorharness.skills.types import SkillDefinition
+from questorharness.capabilities.skills.loader import _parse_skill_metadata
+from questorharness.capabilities.skills.types import SkillDefinition
 
 logger = logging.getLogger(__name__)
 

@@ -20,7 +20,7 @@ from questorharness.contracts.policy import PermissionMode
 from questorharness.platform import get_platform
 from questorharness.prompts.claudemd import load_claude_md_prompt
 from questorharness.prompts.system_prompt import build_system_prompt
-from questorharness.skills.loader import load_skill_registry
+from questorharness.capabilities.skills.loader import load_skill_registry
 
 
 def _build_skills_section(

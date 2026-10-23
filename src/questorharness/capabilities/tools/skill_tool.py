@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.skills import load_skill_registry
+from questorharness.capabilities.skills import load_skill_registry
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 

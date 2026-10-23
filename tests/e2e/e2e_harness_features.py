@@ -75,7 +75,7 @@ async def test_api_retry_real_call() -> tuple[bool, str]:
 
 async def test_skills_loaded() -> tuple[bool, str]:
     """Test that bundled skills are loaded from .md files."""
-    from questorharness.skills.bundled import get_bundled_skills
+    from questorharness.capabilities.skills.bundled import get_bundled_skills
 
     skills = get_bundled_skills()
     names = [s.name for s in skills]

@@ -8,15 +8,15 @@ from typing import Iterable
 
 from questorharness.platform.paths import get_config_dir
 from questorharness.config.settings import load_settings
-from questorharness.skills._frontmatter import (
+from questorharness.capabilities.skills._frontmatter import (
     optional_frontmatter_str,
     parse_bool_frontmatter,
     parse_skill_frontmatter,
     parse_skill_metadata,
 )
-from questorharness.skills.bundled import get_bundled_skills
-from questorharness.skills.registry import SkillRegistry
-from questorharness.skills.types import SkillDefinition
+from questorharness.capabilities.skills.bundled import get_bundled_skills
+from questorharness.capabilities.skills.registry import SkillRegistry
+from questorharness.capabilities.skills.types import SkillDefinition
 
 logger = logging.getLogger(__name__)
 

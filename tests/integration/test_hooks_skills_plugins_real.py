@@ -157,7 +157,7 @@ async def task_model_invokes_skill_tool():
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.capabilities.tools.skill_tool import SkillTool
-    import questorharness.skills.loader as sl
+    import questorharness.capabilities.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create a skill file that gives specific instructions
@@ -250,7 +250,7 @@ async def task_plugin_skill_in_agent_loop():
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.capabilities.tools.skill_tool import SkillTool
-    import questorharness.skills.loader as sl
+    import questorharness.capabilities.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create a plugin with a skill
@@ -360,7 +360,7 @@ async def task_hook_gates_writes_skill_guides():
     from questorharness.runtime.hooks.loader import HookRegistry
     from questorharness.contracts.hooks import CommandHookDefinition
     from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
-    import questorharness.skills.loader as sl
+    import questorharness.capabilities.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create skill
@@ -509,7 +509,7 @@ async def task_swarm_teammates_use_skills():
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.capabilities.tools.skill_tool import SkillTool
     from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
-    import questorharness.skills.loader as sl
+    import questorharness.capabilities.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
         skills_dir = Path(tmpdir) / "skills"

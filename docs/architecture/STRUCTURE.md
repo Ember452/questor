@@ -91,6 +91,7 @@ questor/
 │  │  │  ├─ context/                  # assemble.py compact/ budget.py
 │  │  │  ├─ memory/                   # recall/ write/ consolidate/ backends/
 │  │  │  ├─ tools/                    # fs/ shell/ web/ task/ agent/ mcp/ media/ cron/
+│  │  │  ├─ skills/                   # 技能发现 / 解析 / bundled 数据
 │  │  │  ├─ policy/                   # permission.py sandbox.py approval.py
 │  │  │  ├─ delivery/                 # D环（留缝）
 │  │  │  ├─ schedule/                 # E环
