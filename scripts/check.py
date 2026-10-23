@@ -47,6 +47,7 @@ STEPS: tuple[Step, ...] = (
     Step("agents-self-test", (PYTHON, "scripts/guards/check_agents_docs.py", "--self-test")),
     Step("agents-size-self-test", (PYTHON, "scripts/guards/check_agents_md_size.py", "--self-test")),
     Step("codeowners-self-test", (PYTHON, "scripts/guards/check_codeowners.py", "--self-test")),
+    Step("orphan-self-test", (PYTHON, "scripts/guards/check_orphan_modules.py", "--self-test")),
     Step("thread-leak", (PYTHON, "scripts/guards/check_thread_leak.py", "--fail-on-empty")),
     Step("secret-projection", (PYTHON, "scripts/guards/check_secret_projection.py", "--fail-on-empty")),
     Step("doc-cross-refs", (PYTHON, "scripts/guards/check_doc_cross_refs.py", "--fail-on-empty")),
@@ -54,6 +55,9 @@ STEPS: tuple[Step, ...] = (
     Step("agents-docs", (PYTHON, "scripts/guards/check_agents_docs.py", "--fail-on-empty")),
     Step("agents-size", (PYTHON, "scripts/guards/check_agents_md_size.py")),
     Step("codeowners", (PYTHON, "scripts/guards/check_codeowners.py", "--fail-on-empty")),
+    # Report-only for now (plan 01 W10): the list has to be reviewed before a
+    # non-empty result becomes a failure.
+    Step("orphan-report", (PYTHON, "scripts/guards/check_orphan_modules.py", "--fail-on-empty")),
     Step("tool-radius", (PYTHON, "scripts/guards/check_tool_radius.py", "--fail-on-empty")),
     Step("name-registries", (PYTHON, "scripts/guards/check_name_registries.py", "--fail-on-empty")),
     Step("namespace-doc", (PYTHON, "scripts/guards/gen_namespaces.py", "--check")),

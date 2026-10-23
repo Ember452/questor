@@ -1165,7 +1165,7 @@ __all__ = [
     "summarize_messages",
 ]
 
-# questor: allow R2 -- 1171 lines until W8 splits this file
-# questor: allow R4 -- until W8 facade split
-# questor: allow R5 -- until W8 public-face split
-# questor: allow R8 -- refactor the offenders in W8
+# questor: allow R2 -- 1171 lines until W8 splits this file (ledger row 86)
+# questor: allow R4 -- split when a test proves patching should_autocompact still bites
+# questor: allow R5 -- 20 exports until the R4 split above lands
+# questor: allow R8 -- refactor compact_conversation (CC 42) in W8, after the split
