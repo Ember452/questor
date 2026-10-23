@@ -8,7 +8,7 @@ import re
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class EnterWorktreeToolInput(BaseModel):
@@ -26,6 +26,8 @@ class EnterWorktreeTool(BaseTool):
     name = "enter_worktree"
     description = "Create a git worktree and return its path."
     input_model = EnterWorktreeToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(
         self,

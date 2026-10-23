@@ -67,11 +67,13 @@ BANNED_NAMES = frozenset(
 )
 
 # B9: the shared files a new tool has to touch today. ``registry.py`` is the
-# registration point; the other four keep their own tool-name allow-lists.
+# registration point; the other three used to keep their own tool-name lists.
+# ``capabilities/context/coordinator.py`` is deliberately absent: what is left
+# there is worker capability policy, not a per-tool fact, and adding a tool does
+# not edit it.
 TOOL_RADIUS_FILES = (
     "src/questorharness/capabilities/tools/registry.py",
     "src/questorharness/capabilities/context/compact/constants.py",
-    "src/questorharness/capabilities/context/coordinator.py",
     "src/questorharness/runtime/swarm/permission_sync.py",
     "src/questorharness/engine/tool_metadata.py",
 )
@@ -303,18 +305,22 @@ def collect() -> dict[str, dict[str, object]]:
 
     tool_classes = _tool_classes()
     tool_names = {name for _, _, name in tool_classes if name}
-    literal_hits: list[str] = []
-    for relative in TOOL_RADIUS_FILES:
-        path = REPO_ROOT / relative
-        if not path.exists():
-            raise GuardConfigError(f"tool radius file is missing: {relative}")
-        text = read_text(path)
-        if any(f'"{name}"' in text or f"'{name}'" in text for name in tool_names):
-            literal_hits.append(relative)
-    # The registration point always counts: adding a tool means editing it even
-    # though it carries no tool-name literal. The consumers count only while
-    # they still hard-code names.
-    radius = [TOOL_RADIUS_FILES[0], *literal_hits]
+    # Radius = the registration point plus every consumer the radius guard still
+    # flags. Sharing the guard's rule keeps the metric and the gate in step; a
+    # plain substring scan cannot tell a category name from a tool name.
+    try:
+        from .check_tool_radius import _consumer_problems as radius_problems
+    except ImportError:  # direct script execution
+        from check_tool_radius import _consumer_problems as radius_problems  # type: ignore[no-redef]
+
+    flagged = {
+        problem.split(":", 1)[0] for problem in radius_problems(REPO_ROOT, tool_names)
+    }
+    radius = [TOOL_RADIUS_FILES[0]]
+    radius.extend(
+        relative for relative in TOOL_RADIUS_FILES[1:] if relative in flagged
+    )
+    literal_hits = [relative for relative in radius[1:]]
 
     test_stems = {Path(path).stem for path in tests}
     mirrored = [path for path in src_modules if f"test_{Path(path).stem}" in test_stems]

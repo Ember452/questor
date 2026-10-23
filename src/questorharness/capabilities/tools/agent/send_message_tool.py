@@ -6,7 +6,7 @@ import logging
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,11 @@ class SendMessageTool(BaseTool):
     name = "send_message"
     description = "Send a follow-up message to a running local agent task."
     input_model = SendMessageToolInput
+
+    capabilities = ToolCapabilities(
+        artifact_keys=("to", "task_id"),
+        remember_as="async_message",
+    )
 
     async def execute(self, arguments: SendMessageToolInput, context: ToolExecutionContext) -> ToolResult:
         # 群协作 Agent 使用 agent_id 格式（name@team）；旧任务使用普通 task ID

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import AliasChoices, BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class GlobToolInput(BaseModel):
@@ -28,6 +28,13 @@ class GlobTool(BaseTool):
     name = "glob"
     description = "List files matching a glob pattern."
     input_model = GlobToolInput
+
+    capabilities = ToolCapabilities(
+        read_only_by_default=True,
+        keep_in_compaction=True,
+        artifact_keys=("pattern",),
+        remember_as="glob",
+    )
 
     def is_read_only(self, arguments: GlobToolInput) -> bool:
         del arguments

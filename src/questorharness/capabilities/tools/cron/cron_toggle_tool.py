@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from questorharness.capabilities.schedule.cron import set_job_enabled
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class CronToggleToolInput(BaseModel):
@@ -21,6 +21,8 @@ class CronToggleTool(BaseTool):
     name = "cron_toggle"
     description = "Enable or disable a local cron job by name."
     input_model = CronToggleToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(
         self,

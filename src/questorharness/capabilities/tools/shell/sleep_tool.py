@@ -6,7 +6,7 @@ import asyncio
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class SleepToolInput(BaseModel):
@@ -21,6 +21,8 @@ class SleepTool(BaseTool):
     name = "sleep"
     description = "Sleep for a short duration."
     input_model = SleepToolInput
+
+    capabilities = ToolCapabilities()
 
     def is_read_only(self, arguments: SleepToolInput) -> bool:
         del arguments

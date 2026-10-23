@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class TeamCreateToolInput(BaseModel):
@@ -20,6 +20,8 @@ class TeamCreateTool(BaseTool):
     name = "team_create"
     description = "Create a lightweight in-memory team for agent tasks."
     input_model = TeamCreateToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(self, arguments: TeamCreateToolInput, context: ToolExecutionContext) -> ToolResult:
         if context.subagents is None:

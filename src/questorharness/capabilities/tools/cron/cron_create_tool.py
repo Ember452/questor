@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from questorharness.capabilities.schedule.cron import upsert_cron_job, validate_cron_expression, validate_timezone
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class CronCreateToolInput(BaseModel):
@@ -50,6 +50,8 @@ class CronCreateTool(BaseTool):
         "Use 'oh cron start' to run the scheduler daemon."
     )
     input_model = CronCreateToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(
         self,

@@ -12,7 +12,7 @@ import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 from questorharness.capabilities.ports import LlmToolRuntime
 
 log = logging.getLogger(__name__)
@@ -82,6 +82,8 @@ class ImageGenerationTool(BaseTool):
         "for OpenAI-compatible key/base_url image APIs."
     )
     input_model = ImageGenerationToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(self, arguments: ImageGenerationToolInput, context: ToolExecutionContext) -> ToolResult:
         config = context.metadata.get("image_generation_config", {})

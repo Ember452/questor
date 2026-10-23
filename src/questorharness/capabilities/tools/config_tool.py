@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from questorharness.config.settings import load_settings, save_settings
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class ConfigToolInput(BaseModel):
@@ -24,6 +24,8 @@ class ConfigTool(BaseTool):
     name = "config"
     description = "Read or update QuestorHarness settings."
     input_model = ConfigToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(self, arguments: ConfigToolInput, context: ToolExecutionContext) -> ToolResult:
         del context

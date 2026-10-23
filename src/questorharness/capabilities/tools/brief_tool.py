@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class BriefToolInput(BaseModel):
@@ -20,6 +20,8 @@ class BriefTool(BaseTool):
     name = "brief"
     description = "Shorten a piece of text for compact display."
     input_model = BriefToolInput
+
+    capabilities = ToolCapabilities()
 
     def is_read_only(self, arguments: BriefToolInput) -> bool:
         del arguments

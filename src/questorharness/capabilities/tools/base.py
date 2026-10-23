@@ -1,4 +1,4 @@
-"""Tool abstractions."""
+"""Tool abstractions and the capability declarations every tool must carry."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from typing import ClassVar
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
@@ -19,6 +20,23 @@ if TYPE_CHECKING:
         SubagentRuntime,
         TaskRuntime,
     )
+
+
+@dataclass(frozen=True)
+class ToolCapabilities:
+    """What the rest of the engine may assume about a tool, declared once.
+
+    Before this type existed the same facts lived in four hand-maintained lists
+    (compaction, coordinator, swarm permissions, tool carry-over), so adding a
+    tool meant editing five files. Every field defaults to the safe answer; a
+    tool still has to carry an explicit ``capabilities = ToolCapabilities(...)``
+    line, which ``scripts/guards/check_tool_radius.py`` asserts.
+    """
+
+    read_only_by_default: bool = False
+    keep_in_compaction: bool = False
+    artifact_keys: tuple[str, ...] = ()
+    remember_as: str | None = None
 
 
 @dataclass
@@ -50,6 +68,7 @@ class BaseTool(ABC):
     name: str
     description: str
     input_model: type[BaseModel]
+    capabilities: ClassVar[ToolCapabilities]
 
     @abstractmethod
     async def execute(self, arguments: BaseModel, context: ToolExecutionContext) -> ToolResult:

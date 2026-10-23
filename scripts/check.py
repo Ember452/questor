@@ -48,6 +48,7 @@ STEPS: tuple[Step, ...] = (
     Step("secret-projection", (PYTHON, "scripts/guards/check_secret_projection.py", "--fail-on-empty")),
     Step("doc-cross-refs", (PYTHON, "scripts/guards/check_doc_cross_refs.py", "--fail-on-empty")),
     Step("layout", (PYTHON, "scripts/guards/check_layout.py", "--fail-on-empty")),
+    Step("tool-radius", (PYTHON, "scripts/guards/check_tool_radius.py", "--fail-on-empty")),
     Step("name-registries", (PYTHON, "scripts/guards/check_name_registries.py", "--fail-on-empty")),
     Step("namespace-doc", (PYTHON, "scripts/guards/gen_namespaces.py", "--check")),
     Step("tree-map", (PYTHON, "scripts/guards/gen_tree.py", "--check")),

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from questorharness.capabilities.schedule.cron import delete_cron_job
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class CronDeleteToolInput(BaseModel):
@@ -20,6 +20,8 @@ class CronDeleteTool(BaseTool):
     name = "cron_delete"
     description = "Delete a local cron-style job by name."
     input_model = CronDeleteToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(
         self,

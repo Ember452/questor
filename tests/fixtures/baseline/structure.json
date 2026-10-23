@@ -119,8 +119,8 @@
       "e2e": 11,
       "gate": true,
       "integration": 31,
-      "unit": 94,
-      "value": 141
+      "unit": 95,
+      "value": 142
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
@@ -131,24 +131,15 @@
     "tool_radius": {
       "caliber": "shared files a new tool must touch: registration point + consumers with hard-coded names",
       "files": [
-        "src/questorharness/capabilities/tools/registry.py",
-        "src/questorharness/capabilities/context/compact/constants.py",
-        "src/questorharness/capabilities/context/coordinator.py",
-        "src/questorharness/runtime/swarm/permission_sync.py",
-        "src/questorharness/engine/tool_metadata.py"
+        "src/questorharness/capabilities/tools/registry.py"
       ],
       "gate": true,
-      "literal_hits": [
-        "src/questorharness/capabilities/context/compact/constants.py",
-        "src/questorharness/capabilities/context/coordinator.py",
-        "src/questorharness/runtime/swarm/permission_sync.py",
-        "src/questorharness/engine/tool_metadata.py"
-      ],
-      "value": 5
+      "literal_hits": [],
+      "value": 1
     }
   },
   "pin": {
-    "commit": "4c4703d97c1e31c8ed1e807f8f7a0df245bfad74",
+    "commit": "d34b30a63b0f416995d6c195bd57ffecaa9a4eae",
     "date": "2026-10-23"
   }
 }

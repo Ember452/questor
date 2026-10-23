@@ -70,27 +70,19 @@ def _get_teammate_color() -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# 只读工具启发式判断
+# 只读工具判断（来自工具自己的声明，本文件不再持有名单）
 # ---------------------------------------------------------------------------
-
-_READ_ONLY_TOOLS: frozenset[str] = frozenset(
-    {
-        "read_file",
-        "glob",
-        "grep",
-        "web_fetch",
-        "web_search",
-        "task_get",
-        "task_list",
-        "task_output",
-        "cron_list",
-    }
-)
 
 
 def _is_read_only(tool_name: str) -> bool:
-    """Return True for tools that are considered safe/read-only."""
-    return tool_name in _READ_ONLY_TOOLS
+    """Return True for tools that declare ``read_only_by_default``.
+
+    名单在 `ToolCapabilities` 里，本函数只做查询；延迟 import 避免
+    runtime → capabilities.tools → 40 个工具模块的模块级环。
+    """
+    from questorharness.capabilities.tools.registry import read_only_tool_names
+
+    return tool_name in read_only_tool_names()
 
 
 # ---------------------------------------------------------------------------

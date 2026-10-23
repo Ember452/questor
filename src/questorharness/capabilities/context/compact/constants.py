@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-COMPACTABLE_TOOLS: frozenset[str] = frozenset({
-    "read_file",
-    "bash",
-    "grep",
-    "glob",
-    "web_search",
-    "web_fetch",
-    "edit_file",
-    "write_file",
-})
+
+def compactable_tool_names() -> frozenset[str]:
+    """Return the tools whose results survive compaction.
+
+    Derived from the per-tool declarations (``ToolCapabilities.keep_in_compaction``)
+    instead of a local list, so adding a compactable tool touches one file. The
+    import is deferred: this module is loaded very early, and the tool registry
+    pulls in every tool module.
+    """
+    from questorharness.capabilities.tools.registry import compactable_tool_names as names
+
+    return names()
 
 TIME_BASED_MC_CLEARED_MESSAGE = "[Old tool result content cleared]"
 

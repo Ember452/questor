@@ -572,3 +572,10 @@ W1–W10 把形态和门禁做对了，但**五条增长规则**还缺。它们�
 | 30 | `# type: ignore[code] -- 原因` 语法无效 | §4 W4「只允许 `# type: ignore[code]` 且带 `-- 原因`」 | mypy 报 `Invalid "type: ignore" comment [syntax]` | 改用 mypy 认可的 `# type: ignore[code]  # 原因`；`check_mypy_scope` 的忽略卫生检查两种都收 | W4 |
 | 31 | `types-PyYAML` 未加依赖 | §4 W4「靠 + `types-PyYAML`」 | 加 dev 依赖会改 `uv.lock` 且可能顺带升级 | 改用 `[[tool.mypy.overrides]] module=["yaml"] ignore_missing_imports`，并写明删除条件；不动锁文件 | W4 |
 | 32 | 暂缓池用包级计数 | §4 W4「暂缓池条目数被记录」 | 模块级是 234 条，不可审 | `mypy_deferred.json` 记 16 个包 / 234 个模块；任一包计数上涨即红；抬高计数是显式、可审的改动 | W4 |
+| 33 | 声明合并成单一 `ToolCapabilities` | §4 D4「`read_only_by_default: ClassVar[bool] = False`」 | 四个字段各自默认值无法区分「声明为 False」与「漏声明」 | 改为**一个必填声明** `capabilities: ClassVar[ToolCapabilities]`（字段带默认值），AST 断言每个子类类体里必须有这个赋值；`capability_index()` 遇无声明者抛 `UndeclaredToolError` | W5 |
+| 34 | coordinator 不在“0 命中”范围内 | §4 W5「4 处消费方 0 命中」 | `capabilities/context/coordinator.py` 剩的两张表（`_WORKER_TOOLS`/`_SIMPLE_WORKER_TOOLS`）是**工作器能力策略**，不是每工具事实；新工具不应自动加入 | `get_coordinator_tools()` 改由 `by_remember_key` 派生；两张策略表在 `check_tool_radius.POLICY_LISTS` 具名豁免；半径指标同步剔除该文件（否则 2 而不是 1） | W5 |
+| 35 | 分类名与工具名撞车 | §4 W5「工具名字面量 0 命中」 | `category == "skill"`/`"grep"` 等分类串本身就是工具名，字符串扫描会误报 | 守卫只判「列表/集合字面量里 ≥2 个工具名」与「`tool_name == "<工具名>"`」；分类比较不算 | W5 |
+| 36 | private helper 加了参数 | §7.2「不改函数签名」 | `_remember_async_agent_activity/task` 原来按 `tool_name` 分支，现在需要 `category` | 两个模块内部 helper 各加一个关键字参数（无外部调用方）；golden 15 用例逐字相等 | W5 |
+| 37 | 公开面新增一个名字 | 计划未提 | 产品工具必须从 `questorharness.api` 取类型（`product-uses-public-face` 禁止直连 capabilities） | `api.py` 重导出 `ToolCapabilities`；属纯加法 | W5 |
+| 38 | 门面测试的旧前提失效 | — | `tests/unit/test_tools/test_tools_facade.py` 断言“取到工厂就导入 30+ 模块”；discovery 后改为“调用工厂才导入” | 测试改为三段：取工厂前 <10 / 取后仍 <10 / 调用后 ≥30 且工具数 ≥30 | W5 |
+| 39 | 工具半径实测 | §4 W5「radius 5 → 1」 | 注册点 1 + 消费方 3（均 0 命中）= **1**；`structure.json` 的 `tool_radius` 经 `--refresh-baseline --reason` 从 5 刷到 1 | 金标 15 个调用前后逐字相等；`read_only_tools` 9 / `compactable_tools` 8 与旧名单完全一致 | W5 |

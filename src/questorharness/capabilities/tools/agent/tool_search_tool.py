@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class ToolSearchToolInput(BaseModel):
@@ -19,6 +19,8 @@ class ToolSearchTool(BaseTool):
     name = "tool_search"
     description = "Search the available tool list by name or description."
     input_model = ToolSearchToolInput
+
+    capabilities = ToolCapabilities()
 
     def is_read_only(self, arguments: ToolSearchToolInput) -> bool:
         del arguments

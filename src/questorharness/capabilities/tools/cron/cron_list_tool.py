@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from questorharness.capabilities.schedule.cron import load_cron_jobs
 from questorharness.capabilities.schedule.cron_scheduler import is_scheduler_running
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class CronListToolInput(BaseModel):
@@ -19,6 +19,10 @@ class CronListTool(BaseTool):
     name = "cron_list"
     description = "List configured local cron jobs with schedule, status, and next run time."
     input_model = CronListToolInput
+
+    capabilities = ToolCapabilities(
+        read_only_by_default=True,
+    )
 
     def is_read_only(self, arguments: CronListToolInput) -> bool:
         del arguments

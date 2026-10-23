@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class ExitWorktreeToolInput(BaseModel):
@@ -22,6 +22,8 @@ class ExitWorktreeTool(BaseTool):
     name = "exit_worktree"
     description = "Remove a git worktree by path."
     input_model = ExitWorktreeToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(
         self,

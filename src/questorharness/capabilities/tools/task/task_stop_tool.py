@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class TaskStopToolInput(BaseModel):
@@ -19,6 +19,8 @@ class TaskStopTool(BaseTool):
     name = "task_stop"
     description = "Stop a background task."
     input_model = TaskStopToolInput
+
+    capabilities = ToolCapabilities(remember_as="task_stop")
 
     async def execute(self, arguments: TaskStopToolInput, context: ToolExecutionContext) -> ToolResult:
         if context.tasks is None:

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from questorharness.config.settings import load_settings, save_settings
 from questorharness.capabilities.policy import PermissionMode
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class EnterPlanModeToolInput(BaseModel):
@@ -19,6 +19,10 @@ class EnterPlanModeTool(BaseTool):
     name = "enter_plan_mode"
     description = "Switch permission mode to plan."
     input_model = EnterPlanModeToolInput
+
+    capabilities = ToolCapabilities(
+        remember_as="plan_enter",
+    )
 
     async def execute(self, arguments: EnterPlanModeToolInput, context: ToolExecutionContext) -> ToolResult:
         del arguments, context

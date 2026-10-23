@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from questorharness.capabilities.skills import load_skill_registry
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class SkillToolInput(BaseModel):
@@ -20,6 +20,11 @@ class SkillTool(BaseTool):
     name = "skill"
     description = "Read a bundled, user, project, or plugin skill by name."
     input_model = SkillToolInput
+
+    capabilities = ToolCapabilities(
+        artifact_keys=("name",),
+        remember_as="skill",
+    )
 
     def is_read_only(self, arguments: SkillToolInput) -> bool:
         del arguments

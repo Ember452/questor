@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class TaskListToolInput(BaseModel):
@@ -19,6 +19,10 @@ class TaskListTool(BaseTool):
     name = "task_list"
     description = "List background tasks."
     input_model = TaskListToolInput
+
+    capabilities = ToolCapabilities(
+        read_only_by_default=True,
+    )
 
     def is_read_only(self, arguments: TaskListToolInput) -> bool:
         del arguments

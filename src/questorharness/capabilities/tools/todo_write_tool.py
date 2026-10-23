@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class TodoWriteToolInput(BaseModel):
@@ -23,6 +23,8 @@ class TodoWriteTool(BaseTool):
     name = "todo_write"
     description = "Add a new TODO item or mark an existing one as done in a markdown checklist file."
     input_model = TodoWriteToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(self, arguments: TodoWriteToolInput, context: ToolExecutionContext) -> ToolResult:
         path = Path(context.cwd) / arguments.path

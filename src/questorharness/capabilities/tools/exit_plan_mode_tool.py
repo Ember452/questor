@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from questorharness.config.settings import load_settings, save_settings
 from questorharness.capabilities.policy import PermissionMode
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class ExitPlanModeToolInput(BaseModel):
@@ -19,6 +19,10 @@ class ExitPlanModeTool(BaseTool):
     name = "exit_plan_mode"
     description = "Switch permission mode back to default."
     input_model = ExitPlanModeToolInput
+
+    capabilities = ToolCapabilities(
+        remember_as="plan_exit",
+    )
 
     async def execute(self, arguments: ExitPlanModeToolInput, context: ToolExecutionContext) -> ToolResult:
         del arguments, context

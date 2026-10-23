@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class TeamDeleteToolInput(BaseModel):
@@ -19,6 +19,8 @@ class TeamDeleteTool(BaseTool):
     name = "team_delete"
     description = "Delete an in-memory team."
     input_model = TeamDeleteToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(self, arguments: TeamDeleteToolInput, context: ToolExecutionContext) -> ToolResult:
         if context.subagents is None:

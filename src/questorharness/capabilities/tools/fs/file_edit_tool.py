@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class FileEditToolInput(BaseModel):
@@ -25,6 +25,11 @@ class FileEditTool(BaseTool):
     name = "edit_file"
     description = "Edit an existing file by replacing a string."
     input_model = FileEditToolInput
+
+    capabilities = ToolCapabilities(
+        keep_in_compaction=True,
+        artifact_keys=("file_path",),
+    )
 
     async def execute(
         self,

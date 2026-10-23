@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class FileWriteToolInput(BaseModel):
@@ -24,6 +24,11 @@ class FileWriteTool(BaseTool):
     name = "write_file"
     description = "Create or overwrite a text file in the local repository."
     input_model = FileWriteToolInput
+
+    capabilities = ToolCapabilities(
+        keep_in_compaction=True,
+        artifact_keys=("file_path",),
+    )
 
     async def execute(
         self,

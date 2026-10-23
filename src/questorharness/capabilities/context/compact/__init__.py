@@ -320,7 +320,7 @@ def _collect_compactable_tool_ids(messages: list[ConversationMessage]) -> list[s
     return [
         tool_id
         for tool_id in ordered_ids
-        if tool_names.get(tool_id, "") in COMPACTABLE_TOOLS
+        if tool_names.get(tool_id, "") in compactable_tool_names()
         or is_microcompactable_tool_result(
             tool_names.get(tool_id, ""),
             result_content.get(tool_id, ""),
@@ -1147,7 +1147,7 @@ __all__ = [
     "AutoCompactState",
     "CompactAttachment",
     "CompactionResult",
-    "COMPACTABLE_TOOLS",
+    "compactable_tool_names",
     "TIME_BASED_MC_CLEARED_MESSAGE",
     "auto_compact_if_needed",
     "build_post_compact_messages",

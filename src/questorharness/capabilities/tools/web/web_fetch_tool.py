@@ -8,7 +8,7 @@ from html.parser import HTMLParser
 import httpx
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 from questorharness.execution.network import (
     NetworkGuardError,
     fetch_public_http_response,
@@ -36,6 +36,13 @@ class WebFetchTool(BaseTool):
     name = "web_fetch"
     description = "Fetch one web page and return compact readable text."
     input_model = WebFetchToolInput
+
+    capabilities = ToolCapabilities(
+        read_only_by_default=True,
+        keep_in_compaction=True,
+        artifact_keys=("url",),
+        remember_as="web_fetch",
+    )
 
     async def execute(self, arguments: WebFetchToolInput, context: ToolExecutionContext) -> ToolResult:
         del context

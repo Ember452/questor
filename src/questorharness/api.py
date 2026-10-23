@@ -37,7 +37,12 @@ from questorharness.capabilities.memory.schema import (
     utc_now,
 )
 from questorharness.capabilities.schedule.cron_scheduler import register_notification_handler
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.base import (
+    BaseTool,
+    ToolCapabilities,
+    ToolExecutionContext,
+    ToolResult,
+)
 from questorharness.commands import (
     CommandContext,
     CommandResult,
@@ -103,6 +108,7 @@ __all__ = [
     "ToolExecutionContext",
     "ToolExecutionCompleted",
     "ToolExecutionStarted",
+    "ToolCapabilities",
     "ToolResult",
     "UsageSnapshot",
     "last_user_text",
