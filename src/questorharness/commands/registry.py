@@ -663,6 +663,43 @@ def register_memory_commands(registry: CommandRegistry) -> None:
     registry.register(SlashCommand("hooks", "Show configured hooks", _hooks_handler))
 
 
+def register_plugin_commands(
+    registry: CommandRegistry,
+    plugin_commands: Iterable[PluginCommandDefinition] | None,
+) -> None:
+    """Register user-invocable plugin commands."""
+
+    for plugin_command in plugin_commands or ():
+        if not plugin_command.user_invocable:
+            continue
+
+        async def _plugin_command_handler(
+            args: str,
+            context: CommandContext,
+            *,
+            command: PluginCommandDefinition = plugin_command,
+        ) -> CommandResult:
+            prompt = _render_plugin_command_prompt(
+                command,
+                args,
+                getattr(context, "session_id", None),
+            )
+            if command.disable_model_invocation:
+                return CommandResult(message=prompt)
+            return CommandResult(
+                submit_prompt=prompt,
+                submit_model=command.model,
+            )
+
+        registry.register(
+            SlashCommand(
+                plugin_command.name,
+                plugin_command.description,
+                _plugin_command_handler,
+            )
+        )
+
+
 def create_default_command_registry(
     plugin_commands: Iterable[PluginCommandDefinition] | None = None,
 ) -> CommandRegistry:
@@ -2399,35 +2436,7 @@ def create_default_command_registry(
         )
     )
 
-    for plugin_command in plugin_commands or ():
-        if not plugin_command.user_invocable:
-            continue
-
-        async def _plugin_command_handler(
-            args: str,
-            context: CommandContext,
-            *,
-            command: PluginCommandDefinition = plugin_command,
-        ) -> CommandResult:
-            prompt = _render_plugin_command_prompt(
-                command,
-                args,
-                getattr(context, "session_id", None),
-            )
-            if command.disable_model_invocation:
-                return CommandResult(message=prompt)
-            return CommandResult(
-                submit_prompt=prompt,
-                submit_model=command.model,
-            )
-
-        registry.register(
-            SlashCommand(
-                plugin_command.name,
-                plugin_command.description,
-                _plugin_command_handler,
-            )
-        )
+    register_plugin_commands(registry, plugin_commands)
     return registry
 
 
