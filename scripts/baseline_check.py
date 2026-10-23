@@ -82,6 +82,12 @@ def _normalize(text: str) -> str:
     text = text.replace(str(REPO_ROOT), "<REPO>")
     text = text.replace(str(REPO_ROOT).replace("\\", "/"), "<REPO>")
     text = text.replace(str(Path.home()), "<HOME>")
+    # ``- system prompt chars: N`` is len(system_prompt). That number embeds the
+    # working directory, the date, the python path, the venv and the git branch,
+    # so it changes when you switch branches and can never match across machines.
+    # Pin its presence, not its value: prompt content is covered by
+    # scripts/ci/prompt_surface.py with fixed rendering inputs.
+    text = re.sub(r"(?m)^- system prompt chars: \d+$", "- system prompt chars: <VOLATILE>", text)
     return text
 
 

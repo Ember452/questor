@@ -43,19 +43,10 @@ jobs:
       - name: Pre-commit
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
-      - name: Guard self-tests
-        run: |
-          uv run python scripts/guards/_guard_kit.py --self-test
-          uv run python scripts/guards/check_thread_leak.py --self-test
-          uv run python scripts/guards/check_secret_projection.py --self-test
-          uv run python scripts/guards/check_doc_cross_refs.py --self-test
-
       - name: Guards and import contracts
         run: |
-          uv run python scripts/guards/check_thread_leak.py --fail-on-empty
-          uv run python scripts/guards/check_secret_projection.py --fail-on-empty
-          uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
-          uv run lint-imports
+          uv run python scripts/check.py --list
+          uv run python scripts/check.py
 
       - name: Failure diagnostics
         if: failure()

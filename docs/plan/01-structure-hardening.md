@@ -549,3 +549,7 @@ W1–W10 把形态和门禁做对了，但**五条增长规则**还缺。它们�
 | 7 | B9 工具半径的"registry ×2 处" | 半径 5，含 `registry.py` ×2 处 | `registry.py` 里没有工具名字面量（只有类实例化），字面量命中的是 4 个消费方 | 半径 = 注册点（恒计） + 字面量消费方 = **5**，另记 `literal_hits` = 4 | W0 |
 | 8 | B13 "CI 只跑 3 个"会成为易变项 | 守卫 5 / CI 3 | 计数会随 W1 把守卫搬进 CI 而变 | `ci_guard_scripts.value` 固定为基线守卫数 5；`in_ci` 只记录不设门（真正的门是 **scripts/check.py** + `ci.yml`） | W0 |
 | 9 | `--check` 的 expected/got 语义 | 「expected 319, got 320」 | 常规写法是 expected=基线、got=实测，与该证据串相反 | 按证据串实现：`expected` = 现场实测，`got` = 基线文件记录值；输出追加 `(recorded baseline is stale)` 消歧 | W0 |
+| 10 | `--record --fast` 不存在 | §4 W1「`--record --fast` 受控重录」 | `scripts/baseline_check.py` 明写 `--fast cannot be combined with --record` | 改用 `--record` 全量重录（本机 ~100s），再做三件审计 | W1 |
+| 11 | 该标量不只跨机不稳，还随分支变 | 「`dryrun.txt` 的 `system prompt chars` 19008 → 18987」 | 切到 `ci/structure-hardening` 后同一台机器变为 **19005**（prompt 内嵌 git 分支名）；每次改分支就漂 20 上下 | 归一化为 `- system prompt chars: <VOLATILE>`；体积信号移交 W3 固定输入快照 | W1 |
+| 12 | pre-commit 五个守卫 hook 都指向单个脚本 | §4 W1「`layout` / `tree-map` 改为调用 **scripts/check.py**」 | 若只改两个 hook，`import-contracts`/`secret-projection`/`doc-cross-refs` 仍会与 `check.py` 分叉 | 五个 hook 合成一个 `repo-guards`（`--fast`），pre-push 改为全量 `scripts/check.py`；同时更新守卫 README 的入口说明 | W1 |
+| 13 | CI 里看不到四条实体命令的字面串 | §4 W1「`guards` job 的 step 列表包含上述四条实体命令」 | 单一入口后，命令只存在于 **scripts/check.py** 的 `STEPS` 表 | `guards` job 先跑 `scripts/check.py --list` 把完整 argv 表打进 CI 日志，再跑 `scripts/check.py`；断言依据从 `ci.yml` 文本改为「日志 + `STEPS` 表」 | W1 |
