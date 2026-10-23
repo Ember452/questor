@@ -71,12 +71,23 @@ def _public_face(module_file: Path) -> tuple[set[str], bool]:
 
     tree = ast.parse(read_text(module_file))
     for node in tree.body:
-        if isinstance(node, ast.Assign) and any(
-            getattr(target, "id", None) == "__all__" for target in node.targets
-        ):
-            if isinstance(node.value, (ast.List, ast.Tuple)):
-                found = {item.value for item in node.value.elts if isinstance(item.value, str) and item.value}
-                return found, True
+        if isinstance(node, ast.AnnAssign):
+            targets: list[ast.expr] = [node.target]
+            value = node.value
+        elif isinstance(node, ast.Assign):
+            targets = list(node.targets)
+            value = node.value
+        else:
+            continue
+        if not any(getattr(target, "id", None) == "__all__" for target in targets):
+            continue
+        if value is not None and isinstance(value, (ast.List, ast.Tuple)):
+            declared = {
+                item.value
+                for item in value.elts
+                if isinstance(item, ast.Constant) and isinstance(item.value, str) and item.value
+            }
+            return declared, True
     names: set[str] = set()
     for node in tree.body:
         if isinstance(node, (ast.Import, ast.ImportFrom)):

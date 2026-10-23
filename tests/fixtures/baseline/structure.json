@@ -57,7 +57,7 @@
         "R2": 4,
         "R3": 22,
         "R4": 1,
-        "R5": 10,
+        "R5": 1,
         "R7": 170,
         "R8": 31
       }
@@ -105,12 +105,11 @@
         "capabilities",
         "contracts",
         "execution",
-        "platform",
         "providers",
         "runtime",
         "surfaces"
       ],
-      "value": 8
+      "value": 7
     },
     "pytest_node_ids": {
       "caliber": "uv run pytest -m 'unit or integration' --collect-only -q (owned by baseline_check.py)",
@@ -154,7 +153,7 @@
     }
   },
   "pin": {
-    "commit": "3fcab4ee823f3d6de82dc9ef99ecac51b0974d88",
+    "commit": "266d8afc01e5bc83e663fcd62f6c8927dd25d48a",
     "date": "2026-10-23"
   }
 }

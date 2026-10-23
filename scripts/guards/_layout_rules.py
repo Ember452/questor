@@ -106,12 +106,14 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # debt without lowering its number here fails just as loudly as taking on new
 # debt. Raising a number is therefore impossible to hide — it turns the check
 # red until the matching comment is also removed.
-# R5 is 10 rather than 17: nine top-level packages still owe a literal __all__
-# (including the product distribution's ``questor/gateway``), and context.compact
-# still exports too much from a behavior facade. Seven pure aggregate facades
-# (swarm, memory, consolidate, auth, mcp, sandbox, bridge) re-export a family of
-# siblings and define nothing themselves; pruning them would push callers inside
-# the package, so they carry a pinned cap in AGGREGATE_FACADE_EXPORT_CAPS instead.
+# R5 is 1 rather than 17: the only remaining case is context.compact, which
+# exports too much from an entry point that still holds behavior (its split is the
+# last W8 unit). Seven pure aggregate facades (swarm, memory, consolidate, auth,
+# mcp, sandbox, bridge) keep a pinned cap in AGGREGATE_FACADE_EXPORT_CAPS because
+# pruning them would push callers inside the package. Nine top-level packages now
+# declare their face instead of relying on dir(): eight expose nothing at the
+# package root (submodule imports are the API) and platform exposes five names out
+# of the twelve it binds.
 # R4 is 1 rather than 14: W8 examined every exempted facade instead of assuming
 # each one needed splitting. Eight only re-export (seven pure lazy __getattr__
 # tables plus runtime.swarm's eager-import hybrid), three were split (skills.bundled
@@ -123,7 +125,7 @@ EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 4,
     "R3": 22,
     "R4": 1,
-    "R5": 10,
+    "R5": 1,
     "R7": 170,
     "R8": 31,
 }
@@ -245,13 +247,25 @@ def _source_files(root: Path) -> list[Path]:
 
 
 def _literal_exports(tree: ast.Module) -> list[str] | None:
+    """Return the declared ``__all__``, or None when the package has none.
+
+    Annotated form (``__all__: list[str] = [...]``) counts too: ignoring it would
+    let a package dodge the export rules by adding a type annotation.
+    """
+
     for node in tree.body:
-        if not isinstance(node, ast.Assign):
+        if isinstance(node, ast.AnnAssign):
+            targets: list[ast.expr] = [node.target]
+            value = node.value
+        elif isinstance(node, ast.Assign):
+            targets = list(node.targets)
+            value = node.value
+        else:
             continue
-        if not any(getattr(target, "id", None) == "__all__" for target in node.targets):
+        if not any(getattr(target, "id", None) == "__all__" for target in targets):
             continue
-        if isinstance(node.value, (ast.List, ast.Tuple)):
-            return [item.value for item in node.value.elts if isinstance(item, ast.Constant)]
+        if value is not None and isinstance(value, (ast.List, ast.Tuple)):
+            return [item.value for item in value.elts if isinstance(item, ast.Constant)]
         return None
     return None
 

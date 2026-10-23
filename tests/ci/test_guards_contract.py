@@ -272,6 +272,20 @@ def test_r5_aggregate_cap_retires_when_the_facade_shrinks(tmp_path: Path) -> Non
     assert any("no longer needed" in item.message for item in hits), [item.render() for item in hits]
 
 
+def test_literal_exports_accepts_the_annotated_form() -> None:
+    """``__all__: list[str] = [...]`` is a declaration too, not an escape hatch."""
+    import ast as _ast
+
+    plain = rules._literal_exports(_ast.parse('__all__ = ["a", "b"]'))
+    annotated = rules._literal_exports(_ast.parse('__all__: list[str] = ["a", "b"]'))
+    empty = rules._literal_exports(_ast.parse('__all__: list[str] = []'))
+    none = rules._literal_exports(_ast.parse("VALUE = 1"))
+
+    assert plain == annotated == ["a", "b"]
+    assert empty == []
+    assert none is None
+
+
 @pytest.mark.parametrize("rule", ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"])
 def test_every_rule_has_a_green_counterpart(rule: str, tmp_path: Path) -> None:
     """Every rule must be silent on the clean fixture."""

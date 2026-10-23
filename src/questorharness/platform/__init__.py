@@ -85,4 +85,15 @@ def get_platform_capabilities(platform_name: PlatformName | None = None) -> Plat
         supports_docker_sandbox=False,
     )
 
-# questor: allow R5 -- until W8 public-face split
+
+# The five names below are the whole face; ``os``/``platform``/``dataclass`` are
+# import machinery, not exports, and submodule access keeps working regardless
+# (plan 01 W8).
+__all__ = [
+    "PlatformName",
+    "PlatformCapabilities",
+    "detect_platform",
+    "get_platform",
+    "get_platform_capabilities",
+]
+

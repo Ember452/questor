@@ -11,6 +11,7 @@ tests/ci/test_guards_contract.py::test_every_rule_has_a_green_counterpart[R8]
 tests/ci/test_guards_contract.py::test_exemption_budget_cannot_be_left_high
 tests/ci/test_guards_contract.py::test_exemption_budget_cannot_grow
 tests/ci/test_guards_contract.py::test_exemption_without_reason_is_red
+tests/ci/test_guards_contract.py::test_literal_exports_accepts_the_annotated_form
 tests/ci/test_guards_contract.py::test_r1_fanout_red_then_green
 tests/ci/test_guards_contract.py::test_r2_lines_red_then_green
 tests/ci/test_guards_contract.py::test_r3_banned_name_red_then_green
