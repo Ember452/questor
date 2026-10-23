@@ -8,8 +8,8 @@ import time
 from pathlib import Path
 
 from questorharness.capabilities.memory.paths import get_project_memory_dir
-from questorharness.contracts.session_storage import get_project_session_dir
-from questorharness.contracts.io import atomic_write_text
+from questorharness.platform.session_storage import get_project_session_dir
+from questorharness.platform.io import atomic_write_text
 
 LOCK_FILE = ".consolidate-lock"
 HOLDER_STALE_SECONDS = 60 * 60

@@ -23,7 +23,7 @@ from questorharness.capabilities.memory.consolidate.lock import (
     try_acquire_consolidation_lock,
 )
 from questorharness.capabilities.memory.consolidate.prompt import build_consolidation_prompt
-from questorharness.contracts.session_storage import get_project_session_dir
+from questorharness.platform.session_storage import get_project_session_dir
 from questorharness.capabilities.ports import TaskRuntime
 from questorharness.contracts.task import TaskRecord
 
@@ -200,27 +200,14 @@ async def start_dream_now(
     if child_model:
         env["QUESTORHARNESS_MODEL"] = child_model
 
-    auth_kind = ""
-    auth_value = ""
-    try:
-        if settings.api_key:
-            auth_kind, auth_value = "api_key", settings.api_key
-        else:
-            auth = settings.resolve_auth()
-            auth_kind, auth_value = auth.auth_kind, auth.value
-    except Exception:
-        pass
-
-    if auth_kind == "api_key" and auth_value:
+    # The child loads the same config dir and profile, so it resolves keyring and
+    # external credentials itself; only an explicit in-settings key has to be
+    # forwarded as the provider env var.
+    if settings.api_key:
         auth_source = default_auth_source_for_provider(settings.provider, settings.api_format)
         candidates = auth_source_env_var_candidates(auth_source)
         if candidates:
-            env[candidates[0]] = auth_value
-        env.pop("QUESTORHARNESS_API_KEY", None)
-    elif auth_value:
-        env["ANTHROPIC_AUTH_TOKEN"] = auth_value
-        env.pop("ANTHROPIC_API_KEY", None)
-        env.pop("OPENAI_API_KEY", None)
+            env[candidates[0]] = settings.api_key
         env.pop("QUESTORHARNESS_API_KEY", None)
 
     try:
@@ -243,8 +230,8 @@ async def start_dream_now(
                 argv.extend(["--base-url", str(settings.base_url)])
             if settings.api_format:
                 argv.extend(["--api-format", str(settings.api_format)])
-            if auth_kind == "api_key" and auth_value:
-                argv.extend(["--api-key", auth_value])
+            if settings.api_key:
+                argv.extend(["--api-key", settings.api_key])
         argv.extend(["--print", prompt])
         task = await tasks.create_shell_task(
             description="dreaming",

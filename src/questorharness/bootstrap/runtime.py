@@ -12,6 +12,7 @@ from questorharness.providers.llm.codex_client import CodexApiClient
 from questorharness.providers.llm.copilot_client import CopilotClient
 from questorharness.providers.llm.openai_client import OpenAICompatibleClient
 from questorharness.providers.llm.provider import auth_status, detect_provider
+from questorharness.providers.auth.resolver import resolve_auth
 from questorharness.runtime.bridge import get_bridge_manager
 from questorharness.commands import (
     CommandContext,
@@ -79,7 +80,7 @@ def _resolve_image_generation_config(settings) -> dict[str, str]:
                 "profiles": {**settings.profiles, "codex": codex_profile},
             }
         ).materialize_active_profile()
-        codex_auth = codex_settings.resolve_auth()
+        codex_auth = resolve_auth(codex_settings)
         resolved["codex_auth_token"] = codex_auth.value
         resolved["codex_base_url"] = resolved["codex_base_url"] or (codex_settings.base_url or "")
         resolved["codex_model"] = resolved["codex_model"] or codex_settings.model
@@ -196,7 +197,7 @@ def _resolve_api_client_from_settings(settings) -> SupportsStreamingMessages:
 
     def _safe_resolve_auth():
         try:
-            return settings.resolve_auth()
+            return resolve_auth(settings)
         except Exception as exc:
             _print_auth_resolution_error(settings, exc)
             raise SystemExit(1)
@@ -221,7 +222,7 @@ def _resolve_api_client_from_settings(settings) -> SupportsStreamingMessages:
             auth_token=_safe_resolve_auth().value,
             base_url=settings.base_url,
             claude_oauth=True,
-            auth_token_resolver=lambda: settings.resolve_auth().value,
+            auth_token_resolver=lambda: resolve_auth(settings).value,
         )
     if settings.api_format in ("openai", "openai_compat"):
         auth = _safe_resolve_auth()
@@ -500,7 +501,7 @@ async def close_runtime(bundle: RuntimeBundle) -> None:
         await close_api_client()
 
 
-def _last_user_text(messages: list[ConversationMessage]) -> str:
+def last_user_text(messages: list[ConversationMessage]) -> str:
     for msg in reversed(messages):
         if msg.role == "user" and msg.text.strip():
             return msg.text.strip()
@@ -552,7 +553,7 @@ def refresh_runtime_client(bundle: RuntimeBundle) -> None:
     system_prompt = build_runtime_system_prompt(
         settings,
         cwd=bundle.cwd,
-        latest_user_prompt=_last_user_text(bundle.engine.messages),
+        latest_user_prompt=last_user_text(bundle.engine.messages),
         extra_skill_dirs=bundle.extra_skill_dirs,
         extra_plugin_roots=bundle.extra_plugin_roots,
         include_project_memory=bundle.include_project_memory,
@@ -645,7 +646,7 @@ async def handle_line(
             system_prompt = build_runtime_system_prompt(
                 settings,
                 cwd=bundle.cwd,
-                latest_user_prompt=_last_user_text(bundle.engine.messages),
+                latest_user_prompt=last_user_text(bundle.engine.messages),
                 extra_skill_dirs=bundle.extra_skill_dirs,
                 extra_plugin_roots=bundle.extra_plugin_roots,
                 include_project_memory=bundle.include_project_memory,
@@ -788,6 +789,6 @@ async def run_autopilot_prompt(
     return "".join(collected).strip()
 
 
-from questorharness.runtime.autopilot.service import configure_runtime_runner
+from questorharness.runtime.autopilot.runner import configure_runtime_runner
 
 configure_runtime_runner(run_autopilot_prompt)

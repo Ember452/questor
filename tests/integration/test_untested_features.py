@@ -392,7 +392,7 @@ async def test_memory_lifecycle():
 # ====================================================================
 async def test_session_storage():
     """Test session save/load/list/export cycle."""
-    from questorharness.contracts.session_storage import (
+    from questorharness.platform.session_storage import (
         save_session_snapshot, load_session_snapshot,
         list_session_snapshots, export_session_markdown,
     )

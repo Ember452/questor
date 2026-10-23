@@ -23,8 +23,8 @@ from questorharness.capabilities.memory.schema import (
     coerce_int,
     utc_now,
 )
-from questorharness.contracts.locking import exclusive_file_lock
-from questorharness.contracts.io import atomic_write_text
+from questorharness.platform.locking import exclusive_file_lock
+from questorharness.platform.io import atomic_write_text
 
 
 def _memory_lock_path(cwd: str | Path) -> Path:

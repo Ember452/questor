@@ -8,8 +8,9 @@ from types import MethodType, SimpleNamespace
 import pytest
 
 from questorharness.runtime.autopilot import RepoAutopilotStore, RepoVerificationStep
+from questorharness.runtime.autopilot import runner as autopilot_runner
 from questorharness.runtime.autopilot import service as autopilot_service
-from questorharness.runtime.autopilot.service import _DEFAULT_VERIFICATION_POLICY
+from questorharness.runtime.autopilot.constants import _DEFAULT_VERIFICATION_POLICY
 from questorharness.platform.paths import (
     get_project_active_repo_context_path,
     get_project_autopilot_policy_path,
@@ -502,9 +503,9 @@ def test_wait_for_pr_ci_allows_repos_with_no_remote_checks_after_grace(tmp_path:
     store = RepoAutopilotStore(repo)
 
     times = iter([1000.0, 1000.0, 1006.0, 1006.0])
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.time.time", lambda: next(times))
+    monkeypatch.setattr("questorharness.runtime.autopilot.github.time.time", lambda: next(times))
     monkeypatch.setattr(
-        "questorharness.runtime.autopilot.service.asyncio.sleep",
+        "questorharness.runtime.autopilot.github.asyncio.sleep",
         lambda _seconds: __import__("asyncio").sleep(0),
     )
     monkeypatch.setattr(
@@ -534,7 +535,7 @@ def test_wait_for_pr_ci_waits_for_check_settle_window(tmp_path: Path, monkeypatc
     store = RepoAutopilotStore(repo)
 
     current_time = {"value": 1000.0}
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.time.time", lambda: current_time["value"])
+    monkeypatch.setattr("questorharness.runtime.autopilot.github.time.time", lambda: current_time["value"])
     snapshots = [
         {
             "url": "https://example/pr/33",
@@ -564,7 +565,7 @@ def test_wait_for_pr_ci_waits_for_check_settle_window(tmp_path: Path, monkeypatc
         sleep_calls.append(seconds)
         current_time["value"] += seconds
 
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("questorharness.runtime.autopilot.github.asyncio.sleep", fake_sleep)
     monkeypatch.setattr(
         store,
         "_pr_status_snapshot",
@@ -623,7 +624,7 @@ def test_merge_pull_request_does_not_request_branch_deletion(tmp_path: Path, mon
 
 
 async def test_run_agent_prompt_fails_closed_without_runner(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(autopilot_service, "_RUNTIME_RUNNER", None)
+    monkeypatch.setattr(autopilot_runner, "_RUNTIME_RUNNER", None)
     store = RepoAutopilotStore(tmp_path)
 
     with pytest.raises(RuntimeError, match="not configured"):
@@ -650,7 +651,7 @@ async def test_run_agent_prompt_uses_configured_runner(tmp_path: Path, monkeypat
         )
         return "runner output"
 
-    monkeypatch.setattr(autopilot_service, "_RUNTIME_RUNNER", runner)
+    monkeypatch.setattr(autopilot_runner, "_RUNTIME_RUNNER", runner)
     store = RepoAutopilotStore(tmp_path)
 
     result = await store._run_agent_prompt(

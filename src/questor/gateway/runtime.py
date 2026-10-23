@@ -2,45 +2,57 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
-import logging
-import mimetypes
-from pathlib import Path
 import json
-import os
-import re
-import string
-
-from questorharness.api import InboundMessage
-from questorharness.api import CommandContext, CommandResult, lookup_skill_slash_command
-from questorharness.api import (
-    ConversationMessage,
-    ImageBlock,
-    TextBlock,
-    sanitize_conversation_messages,
-)
-from questorharness.api import MaxTurnsExceeded
-from questorharness.api import (
-    AssistantTextDelta,
-    AssistantTurnComplete,
-    CompactProgressEvent,
-    ErrorEvent,
-    StatusEvent,
-    ToolExecutionCompleted,
-    ToolExecutionStarted,
-)
-from questorharness.api import build_runtime_system_prompt
-from questorharness.api import RuntimeBundle, _last_user_text, build_runtime, close_runtime, start_runtime
+import logging
+from dataclasses import dataclass
+from pathlib import Path
 
 from questor.gateway.config import load_gateway_config
-from questor.gateway.group_tool import CreateFeishuGroup, QuestorCreateFeishuGroupTool, PublishGroupWelcome
-from questor.gateway.provider_commands import handle_gateway_model_command, handle_gateway_provider_command
+from questor.gateway.group_tool import (
+    CreateFeishuGroup,
+    PublishGroupWelcome,
+    QuestorCreateFeishuGroupTool,
+)
+from questor.gateway.provider_commands import (
+    handle_gateway_model_command,
+    handle_gateway_provider_command,
+)
 from questor.group_registry import load_managed_group_record, normalize_cwd
 from questor.memory import create_memory_command_backend
 from questor.prompts import build_questor_system_prompt
 from questor.session_storage import QuestorSessionBackend
-from questor.workspace import get_memory_dir, get_plugins_dir, get_sessions_dir, get_skills_dir, initialize_workspace
+from questor.workspace import (
+    get_memory_dir,
+    get_plugins_dir,
+    get_sessions_dir,
+    get_skills_dir,
+    initialize_workspace,
+)
+from questorharness.api import (
+    AssistantTextDelta,
+    AssistantTurnComplete,
+    CommandContext,
+    CommandResult,
+    CompactProgressEvent,
+    ConversationMessage,
+    ErrorEvent,
+    ImageBlock,
+    InboundMessage,
+    MaxTurnsExceeded,
+    RuntimeBundle,
+    StatusEvent,
+    TextBlock,
+    ToolExecutionCompleted,
+    ToolExecutionStarted,
+    last_user_text,
+    build_runtime,
+    build_runtime_system_prompt,
+    close_runtime,
+    lookup_skill_slash_command,
+    sanitize_conversation_messages,
+    start_runtime,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,13 +72,6 @@ _CHANNEL_THINKING_PHRASES_EN = (
     "🪄 Following the thread…",
 )
 
-_TEXT_PREVIEW_BYTES = 4096
-_TEXT_PREVIEW_CHARS = 900
-_BINARY_HEAD_BYTES = 32
-_FINAL_REPLY_IMAGE_PATH_RE = re.compile(
-    r"(?P<path>(?:[A-Za-z]:[\\/]|/)[^\r\n`\"'<>|?*\x00]+?\.(?:png|jpe?g|webp|gif|bmp))",
-    re.IGNORECASE,
-)
 _IMAGE_FALLBACK_NOTE = (
     "[Image attachment omitted because the active model does not support image input. "
     "Use the attachment paths and summaries above if needed.]"
@@ -82,16 +87,6 @@ _GROUP_METADATA_KEYS = (
     "compact_checkpoints",
     "compact_last",
 )
-
-
-@dataclass(frozen=True)
-class GatewayStreamUpdate:
-    """One outbound update produced while processing a channel message."""
-
-    kind: str
-    text: str
-    metadata: dict[str, object]
-    media: list[str] | None = None
 
 
 class QuestorSessionRuntimePool:
@@ -366,7 +361,7 @@ class QuestorSessionRuntimePool:
             if bundle.enforce_max_turns:
                 bundle.engine.set_max_turns(settings.max_turns)
             bundle.engine.set_system_prompt(
-                self._runtime_system_prompt(bundle, _last_user_text(bundle.engine.messages))
+                self._runtime_system_prompt(bundle, last_user_text(bundle.engine.messages))
             )
             turns = result.continue_turns if result.continue_turns is not None else bundle.engine.max_turns
             reply_parts: list[str] = []
@@ -786,6 +781,20 @@ class QuestorSessionRuntimePool:
         QuestorSessionRuntimePool._unregister_group_tool(bundle)
 
 
+from questor.gateway.media import (  # noqa: F401
+    _build_attachment_notes,
+    _decode_text_preview,
+    _describe_media_path,
+    _extract_final_reply_media,
+    _extract_tool_media,
+    _format_tool_media_caption,
+    _is_image_attachment,
+    _remember_update_media,
+    _summarize_attachment,
+)
+from questor.gateway.types import GatewayStreamUpdate  # noqa: F401
+
+
 def _content_snippet(text: str, *, limit: int = 160) -> str:
     """Return a compact single-line preview for logs."""
     normalized = " ".join(text.split())
@@ -805,85 +814,6 @@ def _sanitize_snapshot_messages(raw_messages: object) -> list[dict[str, object]]
         except Exception:
             logger.warning("questor runtime skipped invalid restored message while sanitizing snapshot")
     return [message.model_dump(mode="json") for message in _sanitize_group_command_prompts(messages)]
-
-
-def _extract_tool_media(event: ToolExecutionCompleted) -> list[str]:
-    """Return local media paths produced by a tool completion event."""
-    if event.is_error or not isinstance(event.metadata, dict):
-        return []
-    raw_paths = event.metadata.get("paths") or event.metadata.get("media")
-    if isinstance(raw_paths, str):
-        candidates = [raw_paths]
-    elif isinstance(raw_paths, list):
-        candidates = [str(item) for item in raw_paths if isinstance(item, str) and item.strip()]
-    else:
-        candidates = []
-    media: list[str] = []
-    seen: set[str] = set()
-    for raw in candidates:
-        path = Path(raw).expanduser()
-        if not path.is_absolute():
-            path = path.resolve()
-        if not path.is_file():
-            continue
-        resolved = str(path)
-        if resolved not in seen:
-            seen.add(resolved)
-            media.append(resolved)
-    return media
-
-
-def _remember_update_media(seen: set[str], update: GatewayStreamUpdate) -> None:
-    """Track media already emitted during this gateway turn."""
-    raw_media = update.media or (update.metadata or {}).get("_media") or []
-    if isinstance(raw_media, str):
-        candidates = [raw_media]
-    elif isinstance(raw_media, list):
-        candidates = [str(item) for item in raw_media if isinstance(item, str) and item.strip()]
-    else:
-        candidates = []
-    for raw in candidates:
-        try:
-            path = Path(raw).expanduser()
-            if not path.is_absolute():
-                path = path.resolve()
-            seen.add(str(path))
-        except Exception:
-            continue
-
-
-def _extract_final_reply_media(reply: str, emitted_media: set[str]) -> list[str]:
-    """Return local image paths mentioned in final text that were not already emitted."""
-    media: list[str] = []
-    seen = set(emitted_media)
-    for match in _FINAL_REPLY_IMAGE_PATH_RE.finditer(reply or ""):
-        raw = match.group("path").strip(" \t\r\n\"'.,;:，。；：、)]}")
-        if not raw:
-            continue
-        path = Path(raw).expanduser()
-        if not path.is_absolute():
-            continue
-        if not path.is_file():
-            continue
-        resolved = str(path)
-        if resolved in seen:
-            continue
-        seen.add(resolved)
-        media.append(resolved)
-    return media
-
-
-def _format_tool_media_caption(event: ToolExecutionCompleted, media: list[str]) -> str:
-    """Return a short caption for media generated by tools."""
-    if event.tool_name == "image_generation":
-        provider = ""
-        if isinstance(event.metadata, dict):
-            provider = str(event.metadata.get("provider") or "").strip()
-        suffix = f" via {provider}" if provider else ""
-        names = ", ".join(Path(path).name for path in media)
-        return f"已生成图片{suffix}：{names}"
-    names = ", ".join(Path(path).name for path in media)
-    return f"已生成文件：{names}"
 
 
 def _sanitize_group_command_prompts(messages: list[ConversationMessage]) -> list[ConversationMessage]:
@@ -1129,94 +1059,6 @@ def _build_speaker_context(message: InboundMessage) -> str:
         f"This message was sent in a group chat by: {sender_label}\n"
         f"Sender id: {message.sender_id}"
     )
-
-
-def _build_attachment_notes(media_paths: list[str]) -> str:
-    """Build textual attachment notes for non-image context and persistence."""
-    if not media_paths:
-        return ""
-    lines = [
-        "[Channel attachments]",
-        "The following attachments were downloaded locally for this message.",
-        "Inspect them by path if needed.",
-    ]
-    for media_path in media_paths:
-        lines.append(f"- {_describe_media_path(media_path)}")
-        summary = _summarize_attachment(media_path)
-        if summary:
-            for part in summary.splitlines():
-                lines.append(f"  {part}")
-    return "\n".join(lines).strip()
-
-
-def _describe_media_path(media_path: str) -> str:
-    """Return a short type + path description for an inbound attachment."""
-    suffix = Path(media_path).suffix.lower()
-    if _is_image_attachment(media_path):
-        kind = "image"
-    elif suffix in {".mp3", ".wav", ".m4a", ".opus", ".aac"}:
-        kind = "audio"
-    elif suffix in {".mp4", ".mov", ".avi", ".mkv", ".webm"}:
-        kind = "video"
-    else:
-        kind = "file"
-    filename = os.path.basename(media_path)
-    return f"{kind}: {filename} (path: {media_path})"
-
-
-def _is_image_attachment(media_path: str) -> bool:
-    mime, _ = mimetypes.guess_type(media_path)
-    return bool(mime and mime.startswith("image/"))
-
-
-def _summarize_attachment(media_path: str) -> str:
-    """Return a compact summary/header for a downloaded attachment."""
-    path = Path(media_path)
-    if not path.exists() or not path.is_file():
-        return "summary: attachment is unavailable on disk"
-    try:
-        stat = path.stat()
-    except OSError:
-        return "summary: attachment metadata is unavailable"
-
-    mime, _ = mimetypes.guess_type(str(path))
-    summary_lines = [f"summary: size={stat.st_size} bytes mime={mime or 'unknown'}"]
-    try:
-        head = path.read_bytes()[:_TEXT_PREVIEW_BYTES]
-    except OSError:
-        return "\n".join(summary_lines)
-
-    if _is_image_attachment(str(path)):
-        return "\n".join(summary_lines)
-
-    text_preview = _decode_text_preview(head)
-    if text_preview is not None:
-        summary_lines.append(f"text preview: {text_preview}")
-        return "\n".join(summary_lines)
-
-    head_hex = head[:_BINARY_HEAD_BYTES].hex(" ")
-    if head_hex:
-        summary_lines.append(f"binary header: {head_hex}")
-    return "\n".join(summary_lines)
-
-
-def _decode_text_preview(data: bytes) -> str | None:
-    """Return a compact text preview when a file looks text-like."""
-    if not data:
-        return ""
-    try:
-        decoded = data.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
-    printable = sum(1 for char in decoded if char in string.printable or char.isprintable() or char in "\n\r\t")
-    if printable / max(len(decoded), 1) < 0.9:
-        return None
-    normalized = " ".join(decoded.split())
-    if not normalized:
-        return ""
-    if len(normalized) > _TEXT_PREVIEW_CHARS:
-        return normalized[: _TEXT_PREVIEW_CHARS - 3] + "..."
-    return normalized
 
 
 def _prefers_chinese_progress(content: str) -> bool:

@@ -18,6 +18,7 @@ from questorharness.config.settings_models import (
     PathRuleConfig,
     PermissionSettings,
     ProviderProfile,
+    ResolvedAuth,
     SandboxNetworkSettings,
     SandboxSettings,
     Settings,
@@ -34,6 +35,7 @@ from questorharness.config.settings_models import (
     display_model_setting,
     is_claude_family_provider,
     normalize_anthropic_model_name,
+    resolve_auth_env_value,
     resolve_model_setting,
     strip_ansi_escape_sequences,
 )
@@ -45,6 +47,7 @@ __all__ = [
     "PathRuleConfig",
     "PermissionSettings",
     "ProviderProfile",
+    "ResolvedAuth",
     "SandboxNetworkSettings",
     "SandboxSettings",
     "Settings",

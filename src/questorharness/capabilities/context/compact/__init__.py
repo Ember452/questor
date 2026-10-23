@@ -18,20 +18,59 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal
 from uuid import uuid4
 
+from questorharness.capabilities.context.compact.attachments import (  # noqa: F401
+    CompactAttachment,
+    _build_compact_attachments,
+    _extract_attachment_paths,
+    _extract_discovered_tools,
+    _replace_images_with_compaction_placeholders,
+    _create_hook_attachments,
+    _sanitize_metadata,
+    create_async_agent_attachment_if_needed,
+    create_invoked_skills_attachment_if_needed,
+    create_plan_attachment_if_needed,
+    create_recent_files_attachment_if_needed,
+    create_recent_verified_work_attachment_if_needed,
+    create_task_focus_attachment_if_needed,
+    create_work_log_attachment_if_needed,
+    render_compact_attachment,
+)
+from questorharness.capabilities.context.compact.collapse import (  # noqa: F401
+    _split_preserving_tool_pairs,
+    truncate_head_for_ptl_retry,
+    try_context_collapse,
+)
+from questorharness.capabilities.context.compact.constants import *  # noqa: F403
+from questorharness.capabilities.context.compact.constants import (  # noqa: F401
+    _DEFAULT_CONTEXT_WINDOW,
+    _DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE,
+)
+from questorharness.capabilities.context.compact.prompts import (  # noqa: F401
+    BASE_COMPACT_PROMPT,
+    NO_TOOLS_PREAMBLE,
+    NO_TOOLS_TRAILER,
+    build_compact_summary_message,
+    format_compact_summary,
+    get_compact_prompt,
+)
+from questorharness.capabilities.context.compact.tokens import (  # noqa: F401
+    estimate_conversation_tokens,
+    estimate_message_tokens,
+)
+from questorharness.capabilities.ports import HookRuntime
+from questorharness.contracts.domain.events import CompactProgressEvent
 from questorharness.contracts.domain.message import (
-    ConversationMessage,
     ContentBlock,
+    ConversationMessage,
     ImageBlock,
     TextBlock,
     ToolResultBlock,
     ToolUseBlock,
     sanitize_conversation_messages,
 )
-from questorharness.contracts.domain.events import CompactProgressEvent
 from questorharness.contracts.hooks import HookEvent
-from questorharness.capabilities.ports import HookRuntime
-from questorharness.contracts.tool_outputs import is_microcompactable_tool_result
 from questorharness.contracts.tokens import estimate_tokens
+from questorharness.contracts.tool_outputs import is_microcompactable_tool_result
 
 log = logging.getLogger(__name__)
 
@@ -39,61 +78,18 @@ log = logging.getLogger(__name__)
 # 常量（来自 Claude Code 的 microCompact.ts / autoCompact.ts）
 # ---------------------------------------------------------------------------
 
-COMPACTABLE_TOOLS: frozenset[str] = frozenset({
-    "read_file",
-    "bash",
-    "grep",
-    "glob",
-    "web_search",
-    "web_fetch",
-    "edit_file",
-    "write_file",
-})
-
-TIME_BASED_MC_CLEARED_MESSAGE = "[Old tool result content cleared]"
 
 # 自动压缩阈值
-AUTOCOMPACT_BUFFER_TOKENS = 13_000
-MAX_OUTPUT_TOKENS_FOR_SUMMARY = 20_000
-MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3
-COMPACT_TIMEOUT_SECONDS = 25
-MAX_COMPACT_STREAMING_RETRIES = 2
-MAX_PTL_RETRIES = 3
-SESSION_MEMORY_KEEP_RECENT = 12
-SESSION_MEMORY_MAX_LINES = 48
-SESSION_MEMORY_MAX_CHARS = 4_000
-CONTEXT_COLLAPSE_TEXT_CHAR_LIMIT = 2_400
-CONTEXT_COLLAPSE_HEAD_CHARS = 900
-CONTEXT_COLLAPSE_TAIL_CHARS = 500
-MAX_COMPACT_ATTACHMENTS = 6
-MAX_DISCOVERED_TOOLS = 12
 
 # 微压缩默认值
-DEFAULT_KEEP_RECENT = 5
-DEFAULT_GAP_THRESHOLD_MINUTES = 60
 
 # Token 估算余量（保守值）
-TOKEN_ESTIMATION_PADDING = 4 / 3
-_DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE = 3_072
 
 # 各模型家族的默认上下文窗口
-_DEFAULT_CONTEXT_WINDOW = 200_000
-PTL_RETRY_MARKER = "[earlier conversation truncated for compaction retry]"
-ERROR_MESSAGE_INCOMPLETE_RESPONSE = "Compaction interrupted before a complete summary was returned."
 
 CompactTrigger = Literal["auto", "manual", "reactive"]
 CompactProgressCallback = Callable[[CompactProgressEvent], Awaitable[None]]
 CompactionKind = Literal["full", "session_memory"]
-
-
-@dataclass
-class CompactAttachment:
-    """Structured compact asset carried across a compaction boundary."""
-
-    kind: str
-    title: str
-    body: str
-    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -113,76 +109,6 @@ class CompactionResult:
 # ---------------------------------------------------------------------------
 # Token 估算
 # ---------------------------------------------------------------------------
-
-def estimate_message_tokens(messages: list[ConversationMessage]) -> int:
-    """Estimate total tokens for a conversation, including the 4/3 padding."""
-    total = 0
-    image_token_estimate = _vision_token_budget_per_image()
-    for msg in messages:
-        for block in msg.content:
-            if isinstance(block, TextBlock):
-                total += estimate_tokens(block.text)
-            elif isinstance(block, ToolResultBlock):
-                total += estimate_tokens(block.content)
-            elif isinstance(block, ToolUseBlock):
-                total += estimate_tokens(block.name)
-                total += estimate_tokens(str(block.input))
-            elif isinstance(block, ImageBlock):
-                total += image_token_estimate
-    return int(total * TOKEN_ESTIMATION_PADDING)
-
-
-def estimate_conversation_tokens(messages: list[ConversationMessage]) -> int:
-    """Alias kept for backward compatibility."""
-    return estimate_message_tokens(messages)
-
-
-def _vision_token_budget_per_image() -> int:
-    raw = os.environ.get("QUESTORHARNESS_IMAGE_TOKEN_ESTIMATE", "").strip()
-    if raw:
-        try:
-            return max(64, int(raw))
-        except ValueError:
-            log.warning("Ignoring invalid QUESTORHARNESS_IMAGE_TOKEN_ESTIMATE=%r", raw)
-    return _DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE
-
-
-def _replace_images_with_compaction_placeholders(
-    messages: list[ConversationMessage],
-) -> list[ConversationMessage]:
-    """Strip image payloads from summarizer-only compact requests."""
-    replaced: list[ConversationMessage] = []
-    for message in messages:
-        next_content: list[ContentBlock] = []
-        changed = False
-        for block in message.content:
-            if isinstance(block, ImageBlock):
-                changed = True
-                label = block.source_path.strip() or "inline"
-                next_content.append(
-                    TextBlock(
-                        text=f"[Image omitted from compaction summarization; source: {label}.]\n"
-                    )
-                )
-            else:
-                next_content.append(block)
-        if changed:
-            replaced.append(message.model_copy(update={"content": next_content}))
-        else:
-            replaced.append(message)
-    return replaced
-
-
-def _sanitize_metadata(value: Any) -> Any:
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, dict):
-        return {str(key): _sanitize_metadata(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set)):
-        return [_sanitize_metadata(item) for item in value]
-    return str(value)
 
 
 def _record_compact_checkpoint(
@@ -271,157 +197,6 @@ def _is_prompt_too_long_error(exc: Exception) -> bool:
     )
 
 
-def _group_messages_by_prompt_round(
-    messages: list[ConversationMessage],
-) -> list[list[ConversationMessage]]:
-    groups: list[list[ConversationMessage]] = []
-    current: list[ConversationMessage] = []
-    for message in messages:
-        starts_new_round = (
-            message.role == "user"
-            and not any(isinstance(block, ToolResultBlock) for block in message.content)
-            and bool(message.text.strip())
-        )
-        if starts_new_round and current:
-            groups.append(current)
-            current = []
-        current.append(message)
-    if current:
-        groups.append(current)
-    return groups
-
-
-def _collapse_text(text: str) -> str:
-    if len(text) <= CONTEXT_COLLAPSE_TEXT_CHAR_LIMIT:
-        return text
-    omitted = len(text) - CONTEXT_COLLAPSE_HEAD_CHARS - CONTEXT_COLLAPSE_TAIL_CHARS
-    head = text[:CONTEXT_COLLAPSE_HEAD_CHARS].rstrip()
-    tail = text[-CONTEXT_COLLAPSE_TAIL_CHARS:].lstrip()
-    return f"{head}\n...[collapsed {omitted} chars]...\n{tail}"
-
-
-def try_context_collapse(
-    messages: list[ConversationMessage],
-    *,
-    preserve_recent: int,
-) -> list[ConversationMessage] | None:
-    """Deterministically shrink oversized text blocks before full compact."""
-    if len(messages) <= preserve_recent + 2:
-        return None
-
-    older, newer = _split_preserving_tool_pairs(messages, preserve_recent=preserve_recent)
-    changed = False
-    collapsed_older: list[ConversationMessage] = []
-    for message in older:
-        new_blocks: list[ContentBlock] = []
-        for block in message.content:
-            if isinstance(block, TextBlock):
-                collapsed = _collapse_text(block.text)
-                if collapsed != block.text:
-                    changed = True
-                new_blocks.append(TextBlock(text=collapsed))
-            elif isinstance(block, ToolResultBlock):
-                collapsed = _collapse_text(block.content)
-                if collapsed != block.content:
-                    changed = True
-                new_blocks.append(
-                    ToolResultBlock(
-                        tool_use_id=block.tool_use_id,
-                        content=collapsed,
-                        is_error=block.is_error,
-                    )
-                )
-            else:
-                new_blocks.append(block)
-        collapsed_older.append(ConversationMessage(role=message.role, content=new_blocks))
-
-    if not changed:
-        return None
-
-    result = [*collapsed_older, *newer]
-    if estimate_message_tokens(result) >= estimate_message_tokens(messages):
-        return None
-    return result
-
-
-def truncate_head_for_ptl_retry(
-    messages: list[ConversationMessage],
-) -> list[ConversationMessage] | None:
-    """Drop the oldest prompt rounds when the compact request itself is too large."""
-    groups = _group_messages_by_prompt_round(messages)
-    if len(groups) < 2:
-        return None
-
-    drop_count = max(1, len(groups) // 5)
-    drop_count = min(drop_count, len(groups) - 1)
-    retained = [message for group in groups[drop_count:] for message in group]
-    if not retained:
-        return None
-    if retained[0].role == "assistant":
-        return [ConversationMessage.from_user_text(PTL_RETRY_MARKER), *retained]
-    return retained
-
-
-def _extract_attachment_paths(messages: list[ConversationMessage]) -> list[str]:
-    found: list[str] = []
-    seen: set[str] = set()
-    path_pattern = re.compile(r"path:\s*([^)\\n]+)")
-    attachment_pattern = re.compile(r"\[attachment:\s*([^\]]+)\]")
-    for message in messages:
-        for block in message.content:
-            if isinstance(block, ImageBlock) and block.source_path:
-                path = str(Path(block.source_path).expanduser())
-                if path not in seen:
-                    seen.add(path)
-                    found.append(path)
-            elif isinstance(block, TextBlock):
-                for match in path_pattern.findall(block.text):
-                    path = match.strip()
-                    if path and path not in seen:
-                        seen.add(path)
-                        found.append(path)
-                for match in attachment_pattern.findall(block.text):
-                    path = match.strip()
-                    if path and "download failed" not in path and path not in seen:
-                        seen.add(path)
-                        found.append(path)
-            if len(found) >= MAX_COMPACT_ATTACHMENTS:
-                return found
-    return found
-
-
-def _extract_discovered_tools(messages: list[ConversationMessage]) -> list[str]:
-    discovered: list[str] = []
-    seen: set[str] = set()
-    for message in messages:
-        for tool_use in message.tool_uses:
-            if tool_use.name and tool_use.name not in seen:
-                seen.add(tool_use.name)
-                discovered.append(tool_use.name)
-            if len(discovered) >= MAX_DISCOVERED_TOOLS:
-                return discovered
-    return discovered
-
-
-def _create_attachment(kind: str, title: str, lines: list[str], *, metadata: dict[str, Any] | None = None) -> CompactAttachment | None:
-    filtered = [line.rstrip() for line in lines if line and line.strip()]
-    if not filtered:
-        return None
-    return CompactAttachment(
-        kind=kind,
-        title=title,
-        body="\n".join(filtered),
-        metadata=_sanitize_metadata(metadata or {}),
-    )
-
-
-def render_compact_attachment(attachment: CompactAttachment) -> ConversationMessage:
-    """Serialize a structured compact attachment into a conversation message."""
-    header = f"[Compact attachment: {attachment.kind}] {attachment.title}".strip()
-    text = f"{header}\n{attachment.body}".strip()
-    return ConversationMessage.from_user_text(text)
-
-
 def create_compact_boundary_message(metadata: dict[str, Any]) -> ConversationMessage:
     """Create a boundary marker message for post-compact conversation rebuild."""
     lines = [
@@ -469,41 +244,6 @@ def build_post_compact_messages(result: CompactionResult) -> list[ConversationMe
     ]
 
 
-def _boundary_crosses_tool_pair(previous: ConversationMessage, current: ConversationMessage) -> bool:
-    """Return True when a preserve boundary would split a tool_use/result pair."""
-
-    if previous.role != "assistant" or current.role != "user":
-        return False
-    pending_tool_ids = {block.id for block in previous.content if isinstance(block, ToolUseBlock)}
-    if not pending_tool_ids:
-        return False
-    result_ids = {block.tool_use_id for block in current.content if isinstance(block, ToolResultBlock)}
-    return bool(pending_tool_ids & result_ids)
-
-
-def _split_preserving_tool_pairs(
-    messages: list[ConversationMessage],
-    *,
-    preserve_recent: int,
-) -> tuple[list[ConversationMessage], list[ConversationMessage]]:
-    """Split older/newer segments without cutting through a tool_use/result pair.
-
-    The preserved segment is also sanitized so trailing orphan tool_use blocks
-    never survive the compaction boundary.
-    """
-
-    if len(messages) <= preserve_recent:
-        return [], sanitize_conversation_messages(list(messages))
-
-    split_index = max(0, len(messages) - preserve_recent)
-    while split_index > 0 and _boundary_crosses_tool_pair(messages[split_index - 1], messages[split_index]):
-        split_index -= 1
-
-    older = list(messages[:split_index])
-    newer = sanitize_conversation_messages(list(messages[split_index:]))
-    return older, newer
-
-
 def _sanitize_compaction_segments(result: CompactionResult) -> None:
     """Normalize summary+preserved messages into a provider-safe sequence."""
 
@@ -514,224 +254,6 @@ def _sanitize_compaction_segments(result: CompactionResult) -> None:
     summary_count = len(result.summary_messages)
     result.summary_messages = sanitized[:summary_count]
     result.messages_to_keep = sanitized[summary_count:]
-
-
-def _create_recent_attachments_attachment_if_needed(
-    attachment_paths: list[str],
-) -> CompactAttachment | None:
-    if not attachment_paths:
-        return None
-    return _create_attachment(
-        "recent_attachments",
-        "Recent local attachments",
-        ["Keep these local attachment paths in working memory:"] + [f"- {path}" for path in attachment_paths],
-        metadata={"paths": attachment_paths},
-    )
-
-
-def create_recent_files_attachment_if_needed(
-    read_file_state: Any,
-) -> CompactAttachment | None:
-    if not isinstance(read_file_state, list) or not read_file_state:
-        return None
-    lines = ["Recently read files that may still matter:"]
-    entries: list[dict[str, Any]] = []
-    normalized_entries = [
-        entry
-        for entry in read_file_state
-        if isinstance(entry, dict) and str(entry.get("path") or "").strip()
-    ]
-    normalized_entries.sort(
-        key=lambda entry: float(entry.get("timestamp") or 0.0),
-        reverse=True,
-    )
-    for entry in normalized_entries[:4]:
-        if not isinstance(entry, dict):
-            continue
-        path = str(entry.get("path") or "").strip()
-        span = str(entry.get("span") or "").strip()
-        preview = str(entry.get("preview") or "").strip()
-        timestamp = entry.get("timestamp")
-        if not path:
-            continue
-        bullet = f"- {path}"
-        if span:
-            bullet += f" ({span})"
-        lines.append(bullet)
-        if preview:
-            lines.append(f"  Preview: {preview}")
-        entries.append({"path": path, "span": span, "preview": preview, "timestamp": timestamp})
-    return _create_attachment("recent_files", "Recently read files", lines, metadata={"entries": entries})
-
-
-def create_task_focus_attachment_if_needed(
-    metadata: dict[str, Any],
-) -> CompactAttachment | None:
-    state = metadata.get("task_focus_state")
-    if not isinstance(state, dict):
-        return None
-    goal = str(state.get("goal") or "").strip()
-    recent_goals = [
-        str(item).strip()
-        for item in state.get("recent_goals", [])
-        if str(item).strip()
-    ]
-    active_artifacts = [
-        str(item).strip()
-        for item in state.get("active_artifacts", [])
-        if str(item).strip()
-    ]
-    verified_state = [
-        str(item).strip()
-        for item in state.get("verified_state", [])
-        if str(item).strip()
-    ]
-    next_step = str(state.get("next_step") or "").strip()
-    if not any((goal, recent_goals, active_artifacts, verified_state, next_step)):
-        return None
-    lines = ["Current working focus to preserve across compaction:"]
-    if goal:
-        lines.append(f"- Goal: {goal}")
-    if recent_goals:
-        lines.append("- Recent user goals that still matter:")
-        lines.extend(f"  - {item}" for item in recent_goals[-3:])
-    if active_artifacts:
-        lines.append("- Active artifacts in play:")
-        lines.extend(f"  - {item}" for item in active_artifacts[-5:])
-    if verified_state:
-        lines.append("- Verified state already established:")
-        lines.extend(f"  - {item}" for item in verified_state[-4:])
-    if next_step:
-        lines.append(f"- Suggested next step: {next_step}")
-    return _create_attachment(
-        "task_focus",
-        "Current working focus",
-        lines,
-        metadata={
-            "goal": goal,
-            "recent_goals": recent_goals[-3:],
-            "active_artifacts": active_artifacts[-5:],
-            "verified_state": verified_state[-4:],
-            "next_step": next_step,
-        },
-    )
-
-
-def create_recent_verified_work_attachment_if_needed(
-    verified_work: Any,
-) -> CompactAttachment | None:
-    if not isinstance(verified_work, list) or not verified_work:
-        return None
-    entries = [str(entry).strip() for entry in verified_work[-8:] if str(entry).strip()]
-    if not entries:
-        return None
-    return _create_attachment(
-        "recent_verified_work",
-        "Recently verified work",
-        ["These steps or conclusions were explicitly verified before compaction:"] + [f"- {entry}" for entry in entries],
-        metadata={"entries": entries},
-    )
-
-
-def create_plan_attachment_if_needed(metadata: dict[str, Any]) -> CompactAttachment | None:
-    permission_mode = str(metadata.get("permission_mode") or "").strip().lower()
-    if permission_mode != "plan":
-        return None
-    lines = [
-        "Plan mode is still active for this session.",
-        "Do not execute mutating tools until the user explicitly exits plan mode.",
-    ]
-    plan_summary = str(metadata.get("plan_summary") or "").strip()
-    if plan_summary:
-        lines.append(f"Current plan summary: {plan_summary}")
-    return _create_attachment(
-        "plan",
-        "Plan mode context",
-        lines,
-        metadata={"permission_mode": permission_mode, "plan_summary": plan_summary},
-    )
-
-
-def create_invoked_skills_attachment_if_needed(
-    invoked_skills: Any,
-) -> CompactAttachment | None:
-    if not isinstance(invoked_skills, list) or not invoked_skills:
-        return None
-    normalized = [str(skill).strip() for skill in invoked_skills[-8:] if str(skill).strip()]
-    if not normalized:
-        return None
-    return _create_attachment(
-        "invoked_skills",
-        "Skills used earlier in the session",
-        ["The following skills were invoked and may still shape the next step:", "- " + ", ".join(normalized)],
-        metadata={"skills": normalized},
-    )
-
-
-def create_async_agent_attachment_if_needed(
-    async_agent_state: Any,
-) -> CompactAttachment | None:
-    if not isinstance(async_agent_state, list) or not async_agent_state:
-        return None
-    entries = [str(entry).strip() for entry in async_agent_state[-6:] if str(entry).strip()]
-    if not entries:
-        return None
-    return _create_attachment(
-        "async_agents",
-        "Async agent and background task state",
-        ["Recent async-agent/background-task activity:"] + [f"- {entry}" for entry in entries],
-        metadata={"entries": entries},
-    )
-
-
-def create_work_log_attachment_if_needed(
-    recent_work_log: Any,
-) -> CompactAttachment | None:
-    if not isinstance(recent_work_log, list) or not recent_work_log:
-        return None
-    entries = [str(entry).strip() for entry in recent_work_log[-8:] if str(entry).strip()]
-    if not entries:
-        return None
-    return _create_attachment(
-        "recent_work_log",
-        "Recent execution checkpoints",
-        ["Recent work and verification steps taken in this session:"] + [f"- {entry}" for entry in entries],
-        metadata={"entries": entries},
-    )
-
-
-def _create_hook_attachments(hook_note: str | None) -> list[CompactAttachment]:
-    if not hook_note or not hook_note.strip():
-        return []
-    attachment = _create_attachment(
-        "hook_results",
-        "Compact hook notes",
-        [hook_note.strip()],
-        metadata={"note": hook_note.strip()},
-    )
-    return [attachment] if attachment is not None else []
-
-
-def _build_compact_attachments(
-    messages: list[ConversationMessage],
-    *,
-    metadata: dict[str, Any] | None,
-) -> list[CompactAttachment]:
-    metadata = metadata or {}
-    attachments: list[CompactAttachment] = []
-    attachment_paths = _extract_attachment_paths(messages)
-    builders = [
-        create_task_focus_attachment_if_needed(metadata),
-        create_recent_verified_work_attachment_if_needed(metadata.get("recent_verified_work")),
-        _create_recent_attachments_attachment_if_needed(attachment_paths),
-        create_recent_files_attachment_if_needed(metadata.get("read_file_state")),
-        create_plan_attachment_if_needed(metadata),
-        create_invoked_skills_attachment_if_needed(metadata.get("invoked_skills")),
-        create_async_agent_attachment_if_needed(metadata.get("async_agent_state")),
-        create_work_log_attachment_if_needed(metadata.get("recent_work_log")),
-    ]
-    attachments.extend(attachment for attachment in builders if attachment is not None)
-    return attachments
 
 
 def _finalize_compaction_result(result: CompactionResult) -> CompactionResult:
@@ -962,88 +484,6 @@ def try_session_memory_compaction(
 # 完整压缩 — 基于 LLM 的摘要
 # ---------------------------------------------------------------------------
 
-NO_TOOLS_PREAMBLE = """\
-CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.
-
-- Do NOT use read_file, bash, grep, glob, edit_file, write_file, or ANY other tool.
-- You already have all the context you need in the conversation above.
-- Tool calls will be REJECTED and will waste your only turn — you will fail the task.
-- Your entire response must be plain text: an <analysis> block followed by a <summary> block.
-
-"""
-
-BASE_COMPACT_PROMPT = """\
-Your task is to create a detailed summary of the conversation so far. This summary will replace the earlier messages, so it must capture all important information.
-
-First, draft your analysis inside <analysis> tags. Walk through the conversation chronologically and extract:
-- Every user request and intent (explicit and implicit)
-- The approach taken and technical decisions made
-- Specific code, files, and configurations discussed (with paths and line numbers where available)
-- All errors encountered and how they were fixed
-- Any user feedback or corrections
-
-Then, produce a structured summary inside <summary> tags with these sections:
-
-1. **Primary Request and Intent**: All user requests in full detail, including nuances and constraints.
-2. **Key Technical Concepts**: Technologies, frameworks, patterns, and conventions discussed.
-3. **Files and Code Sections**: Every file examined or modified, with specific code snippets and line numbers.
-4. **Errors and Fixes**: Every error encountered, its cause, and how it was resolved.
-5. **Problem Solving**: Problems solved and approaches that worked vs. didn't work.
-6. **All User Messages**: Non-tool-result user messages (preserve exact wording for context).
-7. **Pending Tasks**: Explicitly requested work that hasn't been completed yet.
-8. **Current Work**: Detailed description of the last task being worked on before compaction.
-9. **Optional Next Step**: The single most logical next step, directly aligned with the user's recent request.
-"""
-
-NO_TOOLS_TRAILER = """
-REMINDER: Do NOT call any tools. Respond with plain text only — an <analysis> block followed by a <summary> block. Tool calls will be rejected and you will fail the task."""
-
-
-def get_compact_prompt(custom_instructions: str | None = None) -> str:
-    """Build the full compaction prompt sent to the model."""
-    prompt = NO_TOOLS_PREAMBLE + BASE_COMPACT_PROMPT
-    if custom_instructions and custom_instructions.strip():
-        prompt += f"\n\nAdditional Instructions:\n{custom_instructions}"
-    prompt += NO_TOOLS_TRAILER
-    return prompt
-
-
-def format_compact_summary(raw_summary: str) -> str:
-    """Strip the <analysis> scratchpad and extract the <summary> content."""
-    text = re.sub(r"<analysis>[\s\S]*?</analysis>", "", raw_summary)
-    m = re.search(r"<summary>([\s\S]*?)</summary>", text)
-    if m:
-        text = text.replace(m.group(0), f"Summary:\n{m.group(1).strip()}")
-    text = re.sub(r"\n\n+", "\n\n", text)
-    return text.strip()
-
-
-def build_compact_summary_message(
-    summary: str,
-    *,
-    suppress_follow_up: bool = False,
-    recent_preserved: bool = False,
-) -> str:
-    """Create the injected user message that replaces compacted history."""
-    formatted = format_compact_summary(summary)
-    text = (
-        "This session is being continued from a previous conversation that ran "
-        "out of context. The summary below covers the earlier portion of the "
-        "conversation.\n\n"
-        f"{formatted}"
-    )
-    if recent_preserved:
-        text += "\n\nRecent messages are preserved verbatim."
-    if suppress_follow_up:
-        text += (
-            "\nContinue the conversation from where it left off without asking "
-            "the user any further questions. Resume directly — do not acknowledge "
-            "the summary, do not recap what was happening, do not preface with "
-            '"I\'ll continue" or similar. Pick up the last task as if the break '
-            "never happened."
-        )
-    return text
-
 
 # ---------------------------------------------------------------------------
 # 自动压缩跟踪
@@ -1151,7 +591,7 @@ async def compact_conversation(
     Returns:
         Structured compaction result that can be rebuilt into post-compact messages.
     """
-    from questorharness.contracts.llm import ApiMessageRequest, ApiMessageCompleteEvent
+    from questorharness.contracts.llm import ApiMessageCompleteEvent, ApiMessageRequest
 
     if len(messages) <= preserve_recent:
         return _build_passthrough_compaction_result(

@@ -12,7 +12,7 @@ from questorharness.api import SupportsStreamingMessages
 from questorharness.api import AssistantTextDelta, AssistantTurnComplete, CompactProgressEvent, ErrorEvent, StatusEvent
 from questorharness.api import run_backend_host
 from questorharness.api import build_runtime, close_runtime, handle_line, start_runtime
-from questorharness.api import _resolve_npm, _resolve_tsx, get_frontend_dir
+from questorharness.api import resolve_npm, resolve_tsx, get_frontend_dir
 
 from questor.memory import create_memory_command_backend
 from questor.prompts import build_questor_system_prompt
@@ -103,7 +103,7 @@ async def launch_questor_react_tui(
     if not package_json.exists():
         raise RuntimeError(f"React terminal frontend is missing: {package_json}")
 
-    npm = _resolve_npm()
+    npm = resolve_npm()
     if not (frontend_dir / "node_modules").exists():
         install = await asyncio.create_subprocess_exec(
             npm,
@@ -131,7 +131,7 @@ async def launch_questor_react_tui(
             "theme": "default",
         }
     )
-    tsx_cmd = _resolve_tsx(frontend_dir)
+    tsx_cmd = resolve_tsx(frontend_dir)
     process = await asyncio.create_subprocess_exec(
         *tsx_cmd,
         "src/index.tsx",

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from questorharness.providers.auth.storage import ExternalAuthBinding
-from questorharness.contracts.io import atomic_write_text
+from questorharness.platform.io import atomic_write_text
 
 CODEX_PROVIDER = "openai_codex"
 CLAUDE_PROVIDER = "anthropic_claude"

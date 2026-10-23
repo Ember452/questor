@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from questorharness.providers.auth.resolver import resolve_api_key, resolve_auth
 from questorharness.providers.auth.storage import store_credential
 from questorharness.config.settings import (
     ProviderProfile,
@@ -37,25 +38,25 @@ class TestSettings:
 
     def test_resolve_api_key_from_instance(self):
         s = Settings(api_key="sk-test-123")
-        assert s.resolve_api_key() == "sk-test-123"
+        assert resolve_api_key(s) == "sk-test-123"
 
     def test_resolve_api_key_from_env(self, monkeypatch):
         monkeypatch.delenv("QUESTORHARNESS_ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-env-456")
         s = Settings()
-        assert s.resolve_api_key() == "sk-env-456"
+        assert resolve_api_key(s) == "sk-env-456"
 
     def test_resolve_api_key_prefers_questorharness_env(self, monkeypatch):
         monkeypatch.setenv("QUESTORHARNESS_ANTHROPIC_API_KEY", "sk-oh-456")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-env-456")
         s = Settings()
-        assert s.resolve_api_key() == "sk-oh-456"
+        assert resolve_api_key(s) == "sk-oh-456"
 
     def test_resolve_api_key_instance_takes_precedence(self, monkeypatch):
         monkeypatch.delenv("QUESTORHARNESS_ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-env-456")
         s = Settings(api_key="sk-instance-789")
-        assert s.resolve_api_key() == "sk-instance-789"
+        assert resolve_api_key(s) == "sk-instance-789"
 
     def test_resolve_api_key_missing_raises(self, monkeypatch):
         monkeypatch.delenv("QUESTORHARNESS_ANTHROPIC_API_KEY", raising=False)
@@ -64,7 +65,7 @@ class TestSettings:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         s = Settings()
         with pytest.raises(ValueError, match="No API key found"):
-            s.resolve_api_key()
+            resolve_api_key(s)
 
     def test_merge_cli_overrides(self):
         s = Settings()
@@ -106,7 +107,7 @@ class TestSettings:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         s = Settings(api_key="sk-ant-wrong-provider", api_format="openai")
         s = s.sync_active_profile_from_flat_fields()
-        auth = s.resolve_auth()
+        auth = resolve_auth(s)
         assert auth.value == "sk-openai-correct"
         assert "OPENAI" in auth.source
 
@@ -116,7 +117,7 @@ class TestSettings:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         s = Settings(api_key="sk-ant-wrong-provider", api_format="openai")
         s = s.sync_active_profile_from_flat_fields()
-        auth = s.resolve_auth()
+        auth = resolve_auth(s)
         assert auth.value == "sk-oh-openai"
         assert auth.source == "env:QUESTORHARNESS_OPENAI_API_KEY"
 
@@ -129,7 +130,7 @@ class TestSettings:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         s = Settings(api_key="sk-fallback-key")
         s = s.sync_active_profile_from_flat_fields()
-        auth = s.resolve_auth()
+        auth = resolve_auth(s)
         assert auth.value == "sk-fallback-key"
 
     def test_env_overrides_picks_up_openai_base_url(self, tmp_path: Path, monkeypatch):
@@ -528,7 +529,7 @@ class TestLoadSaveSettings:
             },
         )
 
-        resolved = settings.resolve_auth()
+        resolved = resolve_auth(settings)
 
         assert resolved.value == "sk-profile-specific"
         assert resolved.source == "file:profile:kimi-anthropic"
@@ -685,7 +686,7 @@ class TestMiniMaxProvider:
                 )
             },
         )
-        resolved = settings.resolve_auth()
+        resolved = resolve_auth(settings)
         assert resolved.value == "minimax-test-key"
         assert "MINIMAX_API_KEY" in resolved.source
 
@@ -749,7 +750,7 @@ class TestNvidiaProvider:
                 )
             },
         )
-        resolved = settings.resolve_auth()
+        resolved = resolve_auth(settings)
         assert resolved.value == "nvidia-test-key"
         assert "NVIDIA_API_KEY" in resolved.source
 
@@ -813,7 +814,7 @@ class TestQwenProvider:
                 )
             },
         )
-        resolved = settings.resolve_auth()
+        resolved = resolve_auth(settings)
         assert resolved.value == "dashscope-test-key"
         assert "DASHSCOPE_API_KEY" in resolved.source
 
@@ -890,7 +891,7 @@ class TestModelScopeProvider:
                 )
             },
         )
-        resolved = settings.resolve_auth()
+        resolved = resolve_auth(settings)
         assert resolved.value == "modelscope-test-key"
         assert "MODELSCOPE_API_KEY" in resolved.source
 

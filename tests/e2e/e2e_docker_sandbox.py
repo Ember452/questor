@@ -559,7 +559,7 @@ class TestShellIntegration:
             start_docker_sandbox,
             stop_docker_sandbox,
         )
-        from questorharness.contracts.shell import create_shell_subprocess
+        from questorharness.execution.shell import create_shell_subprocess
 
         settings = _settings()
 

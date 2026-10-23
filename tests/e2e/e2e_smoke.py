@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from questorharness.providers.llm.client import AnthropicApiClient
 from questorharness.platform.paths import get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import load_settings
+from questorharness.providers.auth.resolver import resolve_api_key
 from questorharness.engine import QueryEngine
 from questorharness.contracts.domain.events import (
     AssistantTurnComplete,
@@ -758,7 +759,7 @@ async def _run_scenario(
 
 async def _run() -> int:
     args = _parse_args()
-    api_key = sys.stdin.readline().strip() if args.api_key_stdin else load_settings().resolve_api_key()
+    api_key = sys.stdin.readline().strip() if args.api_key_stdin else resolve_api_key(load_settings())
     if not api_key:
         raise SystemExit("Missing API key.")
 

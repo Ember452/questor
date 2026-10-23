@@ -15,7 +15,7 @@ from questorharness.capabilities.memory.consolidate.lock import (
 )
 from questorharness.capabilities.memory.consolidate.prompt import build_consolidation_prompt
 from questorharness.capabilities.memory.consolidate.service import execute_auto_dream, start_dream_now
-from questorharness.contracts.session_storage import get_project_session_dir
+from questorharness.platform.session_storage import get_project_session_dir
 
 
 def test_consolidation_lock_acquire_and_rollback(tmp_path: Path, monkeypatch) -> None:

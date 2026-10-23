@@ -14,8 +14,8 @@ from questorharness.config.settings_models import (
     resolve_auth_env_value,
     strip_ansi_escape_sequences,
 )
-from questorharness.contracts.io import atomic_write_text
-from questorharness.contracts.locking import exclusive_file_lock
+from questorharness.platform.io import atomic_write_text
+from questorharness.platform.locking import exclusive_file_lock
 
 
 def _apply_env_overrides(settings: Settings) -> Settings:

@@ -17,7 +17,7 @@ from questorharness.providers.sandbox.adapter import (
     get_sandbox_availability,
     wrap_command_for_sandbox,
 )
-from questorharness.contracts.shell import create_shell_subprocess
+from questorharness.execution.shell import create_shell_subprocess
 
 
 def test_build_sandbox_runtime_config_maps_settings():

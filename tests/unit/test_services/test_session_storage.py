@@ -7,7 +7,7 @@ from pathlib import Path
 
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock
-from questorharness.contracts.session_storage import (
+from questorharness.platform.session_storage import (
     export_session_markdown,
     get_project_session_dir,
     load_session_snapshot,

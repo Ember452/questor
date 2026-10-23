@@ -16,10 +16,6 @@ from pathlib import Path
 if sys.platform == "win32":
     import ctypes
 
-from questorharness.api import OutboundMessage
-from questorharness.api import MessageBus
-from questorharness.api import ChannelManager
-
 from questor.gateway.bridge import QuestorGatewayBridge
 from questor.gateway.config import build_channel_manager_config, load_gateway_config
 from questor.gateway.models import GatewayState
@@ -33,6 +29,7 @@ from questor.workspace import (
     get_workspace_root,
     initialize_workspace,
 )
+from questorharness.api import ChannelManager, MessageBus, OutboundMessage
 
 logger = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).resolve().parents[2]

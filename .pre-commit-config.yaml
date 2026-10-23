@@ -39,6 +39,12 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: tree-map
+        name: source tree map is up to date
+        entry: uv run python scripts/guards/gen_tree.py --check
+        language: system
+        pass_filenames: false
+
       - id: baseline-fast
         name: baseline (fast)
         entry: uv run python scripts/baseline_check.py --check --fast

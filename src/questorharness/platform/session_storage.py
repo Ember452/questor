@@ -12,7 +12,7 @@ from uuid import uuid4
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.platform.paths import get_sessions_dir
 from questorharness.contracts.domain.message import ConversationMessage, sanitize_conversation_messages
-from questorharness.contracts.io import atomic_write_text
+from questorharness.platform.io import atomic_write_text
 
 
 _PERSISTED_TOOL_METADATA_KEYS = (
@@ -41,7 +41,7 @@ def _sanitize_metadata(value: Any) -> Any:
     return str(value)
 
 
-def _persistable_tool_metadata(tool_metadata: dict[str, object] | None) -> dict[str, Any]:
+def persistable_tool_metadata(tool_metadata: dict[str, object] | None) -> dict[str, Any]:
     if not isinstance(tool_metadata, dict):
         return {}
     payload: dict[str, Any] = {}
@@ -89,7 +89,7 @@ def save_session_snapshot(
         "system_prompt": system_prompt,
         "messages": [message.model_dump(mode="json") for message in messages],
         "usage": usage.model_dump(),
-        "tool_metadata": _persistable_tool_metadata(tool_metadata),
+        "tool_metadata": persistable_tool_metadata(tool_metadata),
         "created_at": now,
         "summary": summary,
         "message_count": len(messages),
@@ -107,7 +107,7 @@ def save_session_snapshot(
     return latest_path
 
 
-def _sanitize_snapshot_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def sanitize_snapshot_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Normalize persisted messages for forward compatibility."""
     raw_messages = payload.get("messages", [])
     if isinstance(raw_messages, list):
@@ -125,7 +125,7 @@ def load_session_snapshot(cwd: str | Path) -> dict[str, Any] | None:
     path = get_project_session_dir(cwd) / "latest.json"
     if not path.exists():
         return None
-    return _sanitize_snapshot_payload(json.loads(path.read_text(encoding="utf-8")))
+    return sanitize_snapshot_payload(json.loads(path.read_text(encoding="utf-8")))
 
 
 def list_session_snapshots(cwd: str | Path, limit: int = 20) -> list[dict[str, Any]]:
@@ -197,11 +197,11 @@ def load_session_by_id(cwd: str | Path, session_id: str) -> dict[str, Any] | Non
     # 优先尝试具名会话
     path = session_dir / f"session-{session_id}.json"
     if path.exists():
-        return _sanitize_snapshot_payload(json.loads(path.read_text(encoding="utf-8")))
+        return sanitize_snapshot_payload(json.loads(path.read_text(encoding="utf-8")))
     # 若 session_id 匹配则回退到 latest.json
     latest = session_dir / "latest.json"
     if latest.exists():
-        data = _sanitize_snapshot_payload(json.loads(latest.read_text(encoding="utf-8")))
+        data = sanitize_snapshot_payload(json.loads(latest.read_text(encoding="utf-8")))
         if data.get("session_id") == session_id or session_id == "latest":
             return data
     return None

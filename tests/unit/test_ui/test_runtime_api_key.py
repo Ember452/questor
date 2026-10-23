@@ -12,10 +12,11 @@ from questorharness.bootstrap.runtime import _resolve_api_client_from_settings, 
 async def test_build_runtime_exits_cleanly_when_auth_resolution_fails(monkeypatch):
     """build_runtime should raise SystemExit(1) — not ValueError — when auth resolution fails."""
 
-    def fake_resolve_auth(self):
+    def fake_resolve_auth(settings):
+        del settings
         raise ValueError("No credentials found")
 
-    monkeypatch.setattr("questorharness.config.settings.Settings.resolve_auth", fake_resolve_auth)
+    monkeypatch.setattr("questorharness.bootstrap.runtime.resolve_auth", fake_resolve_auth)
 
     with pytest.raises(SystemExit, match="1"):
         await build_runtime(active_profile="claude-api")
@@ -25,10 +26,11 @@ async def test_build_runtime_exits_cleanly_when_auth_resolution_fails(monkeypatc
 async def test_build_runtime_exits_cleanly_for_openai_format(monkeypatch):
     """Same check for the openai-compatible path."""
 
-    def fake_resolve_auth(self):
+    def fake_resolve_auth(settings):
+        del settings
         raise ValueError("No credentials found")
 
-    monkeypatch.setattr("questorharness.config.settings.Settings.resolve_auth", fake_resolve_auth)
+    monkeypatch.setattr("questorharness.bootstrap.runtime.resolve_auth", fake_resolve_auth)
 
     with pytest.raises(SystemExit, match="1"):
         await build_runtime(active_profile="openai-compatible", api_format="openai")

@@ -19,12 +19,12 @@ def _resolve_theme() -> str:
         return "default"
 
 
-def _resolve_npm() -> str:
+def resolve_npm() -> str:
     """Resolve the npm executable (npm.cmd on Windows)."""
     return shutil.which("npm") or "npm"
 
 
-def _resolve_tsx(frontend_dir: Path) -> tuple[str, ...]:
+def resolve_tsx(frontend_dir: Path) -> tuple[str, ...]:
     """Resolve the tsx command to invoke directly, bypassing ``npm exec``.
 
     On Windows / WSL the ``npm exec -- tsx`` wrapper chain often spawns
@@ -53,7 +53,7 @@ def _resolve_tsx(frontend_dir: Path) -> tuple[str, ...]:
         return (global_tsx,)
 
     # 3. 最后手段 — 通过 npm exec（在 Windows/WSL 上可能破坏 TTY）
-    return (_resolve_npm(), "exec", "--", "tsx")
+    return (resolve_npm(), "exec", "--", "tsx")
 
 
 def get_frontend_dir() -> Path:
@@ -132,7 +132,7 @@ async def launch_react_tui(
     if not package_json.exists():
         raise RuntimeError(f"React terminal frontend is missing: {package_json}")
 
-    npm = _resolve_npm()
+    npm = resolve_npm()
 
     if not (frontend_dir / "node_modules").exists():
         install = await asyncio.create_subprocess_exec(
@@ -163,7 +163,7 @@ async def launch_react_tui(
             "theme": _resolve_theme(),
         }
     )
-    tsx_cmd = _resolve_tsx(frontend_dir)
+    tsx_cmd = resolve_tsx(frontend_dir)
     process = await asyncio.create_subprocess_exec(
         *tsx_cmd,
         "src/index.tsx",

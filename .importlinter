@@ -3,6 +3,53 @@ root_packages =
     questorharness
     questor
 
+[importlinter:contract:layers]
+name = Layered architecture (bootstrap > surfaces > commands > engine > runtime > execution > providers > config > platform > contracts)
+type = layers
+layers =
+    questorharness.bootstrap
+    questorharness.surfaces
+    questorharness.commands
+    questorharness.engine
+    questorharness.runtime
+    questorharness.execution
+    questorharness.providers
+    questorharness.config
+    questorharness.platform
+    questorharness.contracts
+# ``capabilities``, ``plugins``, ``state``, ``keybindings``, ``themes``,
+# ``vim`` and ``output_styles`` are deliberately outside this ladder.
+#
+# - capabilities and plugins are cross-cutting: capabilities owns tools that
+#   execute commands (they need ``execution``) while runtime calls back into
+#   capability policy/schedule helpers. Their boundary is enforced by
+#   ``capabilities-are-leaf`` and ``plugins-stay-an-extension-layer`` instead.
+# - the appearance packages (state/keybindings/themes/vim/output_styles) are
+#   leaves that any layer may read.
+#
+# The ladder therefore only claims what is actually true, and the contracts
+# below cover the packages it does not claim.
+#
+# One documented reverse edge: a swarm teammate runs one engine turn. engine
+# imports runtime in five places, so engine must stay above runtime and this is
+# the single edge back. Injecting a runner here would turn a wiring mistake into
+# a runtime failure for every teammate spawn.
+ignore_imports =
+    questorharness.runtime.swarm.in_process -> questorharness.engine.query
+
+[importlinter:contract:plugins-stay-an-extension-layer]
+name = Plugins may not import the app, surfaces, commands or engine
+type = forbidden
+source_modules =
+    questorharness.plugins
+forbidden_modules =
+    questor
+    questorharness.surfaces
+    questorharness.commands
+    questorharness.engine
+    questorharness.bootstrap
+allow_indirect_imports = True
+
 [importlinter:contract:engine-app-boundary]
 name = Engine must not import the product app
 type = forbidden

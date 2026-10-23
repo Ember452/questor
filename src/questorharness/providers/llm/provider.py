@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 
 from questorharness.providers.auth.external import describe_external_binding
+from questorharness.providers.auth.resolver import resolve_auth
 from questorharness.providers.auth.storage import load_external_binding
 from questorharness.providers.llm.registry import detect_provider_from_registry
 from questorharness.config.settings import Settings
@@ -106,7 +107,7 @@ def auth_status(settings: Settings) -> str:
             return f"configured (enterprise: {auth_info.enterprise_url})"
         return "configured"
     try:
-        resolved = settings.resolve_auth()
+        resolved = resolve_auth(settings)
     except ValueError as exc:
         if settings.provider == "openai_codex":
             return "missing (run 'oh auth codex-login')"

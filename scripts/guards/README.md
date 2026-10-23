@@ -19,6 +19,7 @@ uv run python scripts/guards/check_thread_leak.py --fail-on-empty
 uv run python scripts/guards/check_secret_projection.py --fail-on-empty
 uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
 uv run python scripts/guards/check_layout.py --fail-on-empty
+uv run python scripts/guards/gen_tree.py --check
 uv run lint-imports
 ```
 
@@ -72,4 +73,8 @@ Pins the Phase 2 layout so it cannot silently regress:
 - `textual` / `prompt_toolkit` must not be imported anywhere under `src/`
 - `commands/registry.py` stays ≤250 lines and each `commands/families/*.py` stays ≤600
 
-Per-file limits are deliberately generous: they catch a god file being rebuilt, not normal growth.
+Per-file limits are deliberately generous: they catch a god file being rebuilt, not normal growth. Every source file is also held to the ADR-0003 red line of 1200 lines.
+
+## `gen_tree.py`
+
+Regenerates `docs/architecture/TREE.md` from the source tree (`--write`) and fails when the committed map no longer matches the code (`--check`), so the structure document cannot drift.

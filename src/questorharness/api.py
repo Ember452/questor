@@ -10,6 +10,18 @@ modules are reshaped.
 
 from __future__ import annotations
 
+from questorharness.bootstrap.hosts.backend_host import run_backend_host
+from questorharness.bootstrap.hosts.react_launcher import get_frontend_dir, resolve_npm, resolve_tsx
+from questorharness.bootstrap.runtime import (
+    RuntimeBundle,
+    build_runtime,
+    close_runtime,
+    handle_line,
+    last_user_text,
+    start_runtime,
+)
+from questorharness.capabilities.context.prompts import build_runtime_system_prompt
+from questorharness.capabilities.context.prompts.system_prompt import get_base_system_prompt
 from questorharness.capabilities.memory import load_memory_prompt
 from questorharness.capabilities.memory.scan import scan_memory_files
 from questorharness.capabilities.memory.schema import (
@@ -24,6 +36,7 @@ from questorharness.capabilities.memory.schema import (
     split_memory_file,
     utc_now,
 )
+from questorharness.capabilities.schedule.cron_scheduler import register_notification_handler
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 from questorharness.commands import (
     CommandContext,
@@ -33,13 +46,6 @@ from questorharness.commands import (
 )
 from questorharness.config import load_settings
 from questorharness.config.schema import Config
-from questorharness.contracts.domain.message import (
-    ConversationMessage,
-    ImageBlock,
-    TextBlock,
-    sanitize_conversation_messages,
-)
-from questorharness.engine.query import MaxTurnsExceeded
 from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     AssistantTurnComplete,
@@ -49,32 +55,26 @@ from questorharness.contracts.domain.events import (
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
-from questorharness.capabilities.context.prompts import build_runtime_system_prompt
-from questorharness.capabilities.context.prompts.system_prompt import get_base_system_prompt
+from questorharness.contracts.domain.message import (
+    ConversationMessage,
+    ImageBlock,
+    TextBlock,
+    sanitize_conversation_messages,
+)
+from questorharness.contracts.usage import UsageSnapshot
+from questorharness.engine.query import MaxTurnsExceeded
+from questorharness.platform.io import atomic_write_text
+from questorharness.platform.locking import exclusive_file_lock
+from questorharness.platform.session_storage import (
+    persistable_tool_metadata,
+    sanitize_snapshot_payload,
+)
 from questorharness.providers.auth.manager import AuthManager
 from questorharness.providers.llm.client import SupportsStreamingMessages
-from questorharness.contracts.usage import UsageSnapshot
-from questorharness.capabilities.schedule.cron_scheduler import register_notification_handler
 from questorharness.runtime.session.backend import SessionBackend
-from questorharness.contracts.session_storage import (
-    _persistable_tool_metadata,
-    _sanitize_snapshot_payload,
-)
 from questorharness.surfaces.channels.bus.events import InboundMessage, OutboundMessage
 from questorharness.surfaces.channels.bus.queue import MessageBus
 from questorharness.surfaces.channels.impl.manager import ChannelManager
-from questorharness.bootstrap.hosts.backend_host import run_backend_host
-from questorharness.bootstrap.hosts.react_launcher import _resolve_npm, _resolve_tsx, get_frontend_dir
-from questorharness.bootstrap.runtime import (
-    RuntimeBundle,
-    _last_user_text,
-    build_runtime,
-    close_runtime,
-    handle_line,
-    start_runtime,
-)
-from questorharness.contracts.locking import exclusive_file_lock
-from questorharness.contracts.io import atomic_write_text
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -105,11 +105,11 @@ __all__ = [
     "ToolExecutionStarted",
     "ToolResult",
     "UsageSnapshot",
-    "_last_user_text",
-    "_persistable_tool_metadata",
-    "_resolve_npm",
-    "_resolve_tsx",
-    "_sanitize_snapshot_payload",
+    "last_user_text",
+    "persistable_tool_metadata",
+    "resolve_npm",
+    "resolve_tsx",
+    "sanitize_snapshot_payload",
     "atomic_write_text",
     "build_runtime",
     "build_runtime_system_prompt",

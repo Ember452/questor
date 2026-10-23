@@ -11,7 +11,7 @@ from questorharness.capabilities.schedule.cron import get_cron_job
 from questorharness.capabilities.schedule.cron_scheduler import _command_for_job
 from questorharness.contracts.errors import SandboxUnavailableError
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
-from questorharness.contracts.shell import create_shell_subprocess
+from questorharness.execution.shell import create_shell_subprocess
 
 
 class RemoteTriggerToolInput(BaseModel):

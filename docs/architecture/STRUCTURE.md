@@ -160,28 +160,38 @@ questor/
 
 ### 2.1 允许的依赖
 
-| from \ may import | contracts | kernel | runtime | capabilities | providers | surfaces | profiles | bootstrap |
-|---|---|---|---|---|---|---|---|---|
-| `kernel` | ✅ | — | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `runtime` | ✅ | ✅ | — | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `capabilities` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ❌ | ❌ |
-| `providers` | ✅ | ❌ | ❌ | ❌ | — | ❌ | ❌ | ❌ |
-| `engine`（编排） | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `surfaces` | ✅ | ❌ | ❌（facade 注入） | ❌ | ❌ | — | ❌ | ❌ |
-| `profiles` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | — | ❌ |
-| `bootstrap` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| `questor`（产品） | api only | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+实际生效的层序（`.importlinter` 的 `layers` 契约，自上而下，上层可依赖下层）：
+
+```
+bootstrap
+  surfaces
+    commands
+      engine
+        runtime
+          execution
+            providers
+              config
+                platform
+                  contracts
+```
+
+不在层序内、由单独契约管的包：
+
+| 包 | 归属 | 约束 |
+|---|---|---|
+| `capabilities` | 横切能力层 | `capabilities-are-leaf`：只可 import contracts / config / platform / execution / plugins |
+| `plugins` | 扩展层 | `plugins-stay-an-extension-layer`：不 import app / surfaces / commands / engine / bootstrap |
+| `state`、`keybindings`、`themes`、`vim`、`output_styles` | 叶子 | 任何层可读；它们不向外依赖 |
 
 关键点：
 
-- `runtime` **不 import 任何能力实现**。它只认 `contracts/ports` 与 `kernel` 的公开入口，由 `bootstrap` 注入。
-- `capabilities` **不 import providers**。它只依赖 Port；适配器由 `bootstrap` 注入。
-- `surfaces` **不 import runtime/capabilities**。它只认 `contracts` 和注入的 facade。
-- `profiles` 是纯数据：只引用注册表 ID，不含 import。
-- `kernel` 不 import `runtime`；`runtime` 不 import `kernel` 的内部模块，只用 `kernel` 的公开入口。
-- `engine` 是编排层：循环天然要组合 `capabilities` / `providers` / `runtime`，因此它不参与“越往下越纯”的秩；`commands` 是应用层命令分派器，允许 import 任意层，也不进矩阵。把二者塞进 `runtime` 会让 `runtime` 自己违反 `runtime` 的依赖规则。
-- `platform` 是最底层（只依赖标准库）：允许被 `contracts` 及以上所有层 import；它只放平台检测与路径解析，不放配置策略。
-- `config` 是设置层叶子：模型与加载同包，只依赖 `contracts`；需要 `Settings` 的层直接 import 它（`resolve_auth` 的 provider 惰性边已登记为已知债）。
+- `contracts` 是纯数据契约（模型、协议、异常），零内部依赖。历史上混进来的 `shell` / `network` / `locking` / `session_storage` / `io` 已下沉到 `platform`，否则 `contracts → config/providers` 会让层序无法成立。
+- `platform` 只放标准库级工具（平台检测、路径、原子写、文件锁），不读配置。
+- `config` 是设置模型与加载，只依赖 `platform` + `contracts`；`resolve_auth` 已移到 `providers.auth.resolver`，`config → providers` 归零。
+- `execution` 是需要配置与沙箱的执行基础设施（子进程、HTTP 抓取）。它必须在 `providers` 之上、`runtime` 之下，因为 capabilities 的工具也要用它。
+- `runtime` 不 import `capabilities` 的实现；`capabilities` 通过 `capabilities/ports.py` 反向拿服务。
+- `engine` 是编排层，`commands` 是应用层分派器，都在层序里，但允许依赖其下所有层。
+- 唯一登记的例外：`runtime.swarm.in_process → engine.query`（一个 teammate 要跑一轮引擎），在 `.importlinter` 里以 `ignore_imports` 显式命名。
 
 ### 2.2 强制方式
 

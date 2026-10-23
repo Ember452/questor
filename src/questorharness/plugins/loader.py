@@ -15,15 +15,15 @@ import yaml
 
 from questorharness.platform.paths import get_config_dir
 from questorharness.contracts.agent import AgentDefinition
-from questorharness.runtime.coordinator.agent_definitions import (
+from questorharness.platform.frontmatter import (
     AGENT_COLORS,
     EFFORT_LEVELS,
     ISOLATION_MODES,
     MEMORY_SCOPES,
     PERMISSION_MODES,
-    _parse_agent_frontmatter,
-    _parse_positive_int,
-    _parse_str_list,
+    parse_frontmatter,
+    parse_positive_int,
+    parse_str_list,
 )
 from questorharness.plugins.schemas import PluginManifest
 from questorharness.plugins.types import LoadedPlugin, PluginCommandDefinition
@@ -528,16 +528,16 @@ def _load_single_agent_file(
         return None
     seen.add(resolved)
     content = file_path.read_text(encoding="utf-8")
-    frontmatter, body = _parse_agent_frontmatter(content)
+    frontmatter, body = parse_frontmatter(content)
 
     base_agent_name = str(frontmatter.get("name", "")).strip() or file_path.stem
     agent_name = ":".join([plugin_name, *namespace, base_agent_name])
     description = str(frontmatter.get("description", "")).strip() or f"Agent from {plugin_name} plugin"
     description = description.replace("\\n", "\n")
 
-    tools = _parse_str_list(frontmatter.get("tools"))
+    tools = parse_str_list(frontmatter.get("tools"))
     disallowed_raw = frontmatter.get("disallowedTools", frontmatter.get("disallowed_tools"))
-    disallowed_tools = _parse_str_list(disallowed_raw)
+    disallowed_tools = parse_str_list(disallowed_raw)
 
     model_raw = frontmatter.get("model")
     model: str | None = None
@@ -555,7 +555,7 @@ def _load_single_agent_file(
 
     background_raw = frontmatter.get("background")
     background = background_raw is True or background_raw == "true"
-    skills = _parse_str_list(frontmatter.get("skills")) or []
+    skills = parse_str_list(frontmatter.get("skills")) or []
 
     color_raw = frontmatter.get("color")
     color = color_raw if isinstance(color_raw, str) and color_raw in AGENT_COLORS else None
@@ -567,7 +567,7 @@ def _load_single_agent_file(
     isolation = isolation_raw if isinstance(isolation_raw, str) and isolation_raw in ISOLATION_MODES else None
 
     max_turns_raw = frontmatter.get("maxTurns", frontmatter.get("max_turns"))
-    max_turns = _parse_positive_int(max_turns_raw)
+    max_turns = parse_positive_int(max_turns_raw)
 
     permission_raw = frontmatter.get("permissionMode", frontmatter.get("permission_mode"))
     permission_mode = (
@@ -580,7 +580,7 @@ def _load_single_agent_file(
     critical_raw = frontmatter.get("criticalSystemReminder", frontmatter.get("critical_system_reminder"))
     critical_system_reminder = critical_raw.strip() if isinstance(critical_raw, str) and critical_raw.strip() else None
 
-    required_mcp_servers = _parse_str_list(
+    required_mcp_servers = parse_str_list(
         frontmatter.get("requiredMcpServers", frontmatter.get("required_mcp_servers"))
     )
 

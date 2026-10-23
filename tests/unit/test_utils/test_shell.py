@@ -9,12 +9,12 @@ from pathlib import Path
 import pytest
 
 from questorharness.config.settings import Settings
-from questorharness.contracts.shell import _bash_is_usable, create_shell_subprocess, resolve_shell_command
+from questorharness.execution.shell import _bash_is_usable, create_shell_subprocess, resolve_shell_command
 
 
 def test_resolve_shell_command_prefers_bash_on_linux(monkeypatch):
     monkeypatch.setattr(
-        "questorharness.contracts.shell.shutil.which",
+        "questorharness.execution.shell.shutil.which",
         lambda name: "/usr/bin/bash" if name == "bash" else None,
     )
 
@@ -31,7 +31,7 @@ def test_resolve_shell_command_wraps_with_script_when_pty_requested(monkeypatch)
         }
         return mapping.get(name)
 
-    monkeypatch.setattr("questorharness.contracts.shell.shutil.which", fake_which)
+    monkeypatch.setattr("questorharness.execution.shell.shutil.which", fake_which)
 
     command = resolve_shell_command("echo hi", platform_name="linux", prefer_pty=True)
 
@@ -45,8 +45,8 @@ def test_resolve_shell_command_uses_powershell_on_windows(monkeypatch):
         }
         return mapping.get(name)
 
-    monkeypatch.setattr("questorharness.contracts.shell.shutil.which", fake_which)
-    monkeypatch.setattr("questorharness.contracts.shell._bash_is_usable", lambda _: False)
+    monkeypatch.setattr("questorharness.execution.shell.shutil.which", fake_which)
+    monkeypatch.setattr("questorharness.execution.shell._bash_is_usable", lambda _: False)
 
     command = resolve_shell_command("Write-Output hi", platform_name="windows")
 
@@ -67,7 +67,7 @@ def test_resolve_shell_command_skips_script_on_macos(monkeypatch):
         }
         return mapping.get(name)
 
-    monkeypatch.setattr("questorharness.contracts.shell.shutil.which", fake_which)
+    monkeypatch.setattr("questorharness.execution.shell.shutil.which", fake_which)
 
     command = resolve_shell_command("echo hi", platform_name="macos", prefer_pty=True)
 
@@ -81,7 +81,7 @@ def test_resolve_shell_command_linux_without_script_falls_back(monkeypatch):
         }
         return mapping.get(name)
 
-    monkeypatch.setattr("questorharness.contracts.shell.shutil.which", fake_which)
+    monkeypatch.setattr("questorharness.execution.shell.shutil.which", fake_which)
 
     command = resolve_shell_command("echo hi", platform_name="linux", prefer_pty=True)
 
@@ -96,8 +96,8 @@ def test_resolve_shell_command_windows_skips_unusable_bash(monkeypatch):
         }
         return mapping.get(name)
 
-    monkeypatch.setattr("questorharness.contracts.shell.shutil.which", fake_which)
-    monkeypatch.setattr("questorharness.contracts.shell._bash_is_usable", lambda _: False)
+    monkeypatch.setattr("questorharness.execution.shell.shutil.which", fake_which)
+    monkeypatch.setattr("questorharness.execution.shell._bash_is_usable", lambda _: False)
 
     command = resolve_shell_command("Write-Output hi", platform_name="windows")
 
@@ -118,8 +118,8 @@ def test_resolve_shell_command_windows_uses_usable_bash(monkeypatch):
         }
         return mapping.get(name)
 
-    monkeypatch.setattr("questorharness.contracts.shell.shutil.which", fake_which)
-    monkeypatch.setattr("questorharness.contracts.shell._bash_is_usable", lambda _: True)
+    monkeypatch.setattr("questorharness.execution.shell.shutil.which", fake_which)
+    monkeypatch.setattr("questorharness.execution.shell._bash_is_usable", lambda _: True)
 
     command = resolve_shell_command("echo hi", platform_name="windows")
 
@@ -130,7 +130,7 @@ def test_bash_is_usable_returns_true_for_zero_exit(monkeypatch):
     class _Result:
         returncode = 0
 
-    monkeypatch.setattr("questorharness.contracts.shell.subprocess.run", lambda *args, **kwargs: _Result())
+    monkeypatch.setattr("questorharness.execution.shell.subprocess.run", lambda *args, **kwargs: _Result())
 
     assert _bash_is_usable("bash") is True
 
@@ -139,7 +139,7 @@ def test_bash_is_usable_returns_false_for_nonzero_exit(monkeypatch):
     class _Result:
         returncode = 1
 
-    monkeypatch.setattr("questorharness.contracts.shell.subprocess.run", lambda *args, **kwargs: _Result())
+    monkeypatch.setattr("questorharness.execution.shell.subprocess.run", lambda *args, **kwargs: _Result())
 
     assert _bash_is_usable("bash") is False
 
@@ -148,7 +148,7 @@ def test_bash_is_usable_returns_false_for_spawn_errors(monkeypatch):
     def raise_timeout(*args, **kwargs):
         raise subprocess.TimeoutExpired(cmd="bash", timeout=5)
 
-    monkeypatch.setattr("questorharness.contracts.shell.subprocess.run", raise_timeout)
+    monkeypatch.setattr("questorharness.execution.shell.subprocess.run", raise_timeout)
 
     assert _bash_is_usable("bash") is False
 
@@ -170,15 +170,15 @@ async def test_create_shell_subprocess_defaults_stdin_to_devnull(monkeypatch, tm
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "questorharness.contracts.shell.asyncio.create_subprocess_exec",
+        "questorharness.execution.shell.asyncio.create_subprocess_exec",
         fake_create_subprocess_exec,
     )
     monkeypatch.setattr(
-        "questorharness.contracts.shell.wrap_command_for_sandbox",
+        "questorharness.execution.shell.wrap_command_for_sandbox",
         lambda argv, settings=None: (argv, None),
     )
     monkeypatch.setattr(
-        "questorharness.contracts.shell.shutil.which",
+        "questorharness.execution.shell.shutil.which",
         lambda name: "/usr/bin/bash" if name == "bash" else None,
     )
 

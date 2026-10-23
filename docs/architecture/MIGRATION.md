@@ -122,8 +122,8 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `ui/` | 已完成并删除：组合根 → `bootstrap/runtime.py`，进程宿主 → `bootstrap/hosts/`；textual 与 prompt-toolkit 已移除 | `keybindings/`、`themes/`、`vim/`、`output_styles/` 保留 |
 | `keybindings/`、`themes/`、`vim/`、`output_styles/` | **保留**（ADR-0005 已更新：不随 UI 删除） | 不迁 `surfaces/terminal/` |
 | `voice/` | `providers/voice/`（Phase 2） | 有策略时升 capabilities |
-| `utils/` | Phase 2 才归位；落 `providers/`（fs / shell / network_guard） | 解散，不留 utils |
-| `config/` | 已收敛为叶子：模型与加载同包，只依赖 `contracts` | `Settings.resolve_auth()` 的 provider 惰性边待销账 |
+| `utils/` | 已达成：工具按职责分居 `platform/`（纯 stdlib）与 `execution/`（需要 config/sandbox） | 顶层无 `utils/` |
+| `config/` | 已收敛为叶子：模型与加载同包，只依赖 `platform` + `contracts`；`resolve_auth` 已移到 `providers.auth.resolver` | `config → providers` 已归零 |
 | `bridge/` | `runtime/bridge/`（已完成） | 有策略时再拆 |
 | `questor/gateway/` | **Phase 1 不动**（W5） | 协议路由进 `surfaces/gateway/`，产品策略留在产品包 |
 | `frontend/terminal/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `apps/terminal/`；wheel force-include 同步删除 |

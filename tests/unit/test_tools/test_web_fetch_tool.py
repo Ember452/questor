@@ -10,7 +10,7 @@ import pytest
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.web.web_fetch_tool import WebFetchTool, WebFetchToolInput, _html_to_text
 from questorharness.capabilities.tools.web.web_search_tool import WebSearchTool, WebSearchToolInput
-from questorharness.contracts.network import fetch_public_http_response
+from questorharness.execution.network import fetch_public_http_response
 
 
 @pytest.mark.asyncio
@@ -161,7 +161,7 @@ async def test_fetch_public_http_response_uses_questorharness_web_proxy(monkeypa
     async def fake_ensure_public_http_url(url: str) -> None:
         return None
 
-    monkeypatch.setattr("questorharness.contracts.network.ensure_public_http_url", fake_ensure_public_http_url)
+    monkeypatch.setattr("questorharness.execution.network.ensure_public_http_url", fake_ensure_public_http_url)
 
     response = await fetch_public_http_response("https://example.com/")
 

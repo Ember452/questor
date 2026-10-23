@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 
 from questorharness.platform.paths import get_config_dir
-from questorharness.contracts.io import atomic_write_text
+from questorharness.platform.io import atomic_write_text
 
 log = logging.getLogger(__name__)
 

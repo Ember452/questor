@@ -8,7 +8,7 @@ from typing import Protocol
 
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.contracts.domain.message import ConversationMessage
-from questorharness.contracts import session_storage
+from questorharness.platform import session_storage
 
 
 class SessionBackend(Protocol):

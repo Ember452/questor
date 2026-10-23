@@ -8,10 +8,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from questorharness.api import BaseTool, ToolExecutionContext, ToolResult
-
 from questor.group_registry import normalize_group_name, save_managed_group_record
-
+from questorharness.api import BaseTool, ToolExecutionContext, ToolResult
 
 CreateFeishuGroup = Callable[[str, str], Awaitable[str] | str]
 PublishGroupWelcome = Callable[[str, str, str], Awaitable[None] | None]

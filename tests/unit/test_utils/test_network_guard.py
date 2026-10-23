@@ -7,7 +7,7 @@ import ipaddress
 import httpx
 import pytest
 
-from questorharness.contracts.network import fetch_public_http_response
+from questorharness.execution.network import fetch_public_http_response
 
 
 class FakeAsyncClient:
@@ -35,7 +35,7 @@ async def test_fetch_public_http_response_direct_rejects_non_public_dns(monkeypa
     async def fake_resolve(host: str, port: int):
         return {ipaddress.ip_address("100.64.1.2")}
 
-    monkeypatch.setattr("questorharness.contracts.network._resolve_host_addresses", fake_resolve)
+    monkeypatch.setattr("questorharness.execution.network._resolve_host_addresses", fake_resolve)
 
     with pytest.raises(ValueError, match="synthetic DNS"):
         await fetch_public_http_response("https://example.com/")
@@ -48,7 +48,7 @@ async def test_fetch_public_http_response_synthetic_dns_allows_declared_cidr(mon
 
     monkeypatch.setenv("QUESTORHARNESS_WEB_RESOLUTION_MODE", "synthetic_dns")
     monkeypatch.setenv("QUESTORHARNESS_WEB_SYNTHETIC_DNS_CIDRS", "100.64.0.0/10")
-    monkeypatch.setattr("questorharness.contracts.network._resolve_host_addresses", fake_resolve)
+    monkeypatch.setattr("questorharness.execution.network._resolve_host_addresses", fake_resolve)
     monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
 
     response = await fetch_public_http_response("https://example.com/")
@@ -73,7 +73,7 @@ async def test_fetch_public_http_response_synthetic_dns_uses_persisted_settings(
             )
         )
     )
-    monkeypatch.setattr("questorharness.contracts.network._resolve_host_addresses", fake_resolve)
+    monkeypatch.setattr("questorharness.execution.network._resolve_host_addresses", fake_resolve)
     monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
 
     response = await fetch_public_http_response("https://example.com/")
@@ -109,7 +109,7 @@ async def test_fetch_public_http_response_synthetic_dns_rejects_undeclared_priva
 
     monkeypatch.setenv("QUESTORHARNESS_WEB_RESOLUTION_MODE", "synthetic_dns")
     monkeypatch.setenv("QUESTORHARNESS_WEB_SYNTHETIC_DNS_CIDRS", "100.64.0.0/10")
-    monkeypatch.setattr("questorharness.contracts.network._resolve_host_addresses", fake_resolve)
+    monkeypatch.setattr("questorharness.execution.network._resolve_host_addresses", fake_resolve)
 
     with pytest.raises(ValueError, match="non-public"):
         await fetch_public_http_response("https://example.com/")
@@ -122,7 +122,7 @@ async def test_fetch_public_http_response_proxy_mode_does_not_resolve_target_dns
 
     monkeypatch.setenv("QUESTORHARNESS_WEB_PROXY", "http://proxy.example.com:7890")
     monkeypatch.setenv("QUESTORHARNESS_WEB_SYNTHETIC_DNS_CIDRS", "not-a-cidr")
-    monkeypatch.setattr("questorharness.contracts.network._resolve_host_addresses", fail_resolve)
+    monkeypatch.setattr("questorharness.execution.network._resolve_host_addresses", fail_resolve)
     monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
 
     response = await fetch_public_http_response("https://example.com/")

@@ -10,6 +10,16 @@ import yaml
 from pydantic import BaseModel, Field
 
 from questorharness.platform.paths import get_config_dir
+from questorharness.platform.frontmatter import (
+    AGENT_COLORS,
+    EFFORT_LEVELS,
+    ISOLATION_MODES,
+    MEMORY_SCOPES,
+    PERMISSION_MODES,
+    parse_frontmatter,
+    parse_positive_int,
+    parse_str_list,
+)
 from questorharness.contracts.agent import AgentDefinition
 
 logger = logging.getLogger(__name__)
@@ -19,38 +29,14 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 #: Agent 可用的颜色名称（对应 TS 的 AgentColorName）。
-AGENT_COLORS: frozenset[str] = frozenset(
-    {
-        "red",
-        "green",
-        "blue",
-        "yellow",
-        "purple",
-        "orange",
-        "cyan",
-        "magenta",
-        "white",
-        "gray",
-    }
-)
 
 #: 有效的投入等级字符串（映射到 TS 的 EFFORT_LEVELS）。
-EFFORT_LEVELS: tuple[str, ...] = ("low", "medium", "high")
 
 #: 有效的权限模式字符串（映射到 TS 的 PERMISSION_MODES）。
-PERMISSION_MODES: tuple[str, ...] = (
-    "default",
-    "acceptEdits",
-    "bypassPermissions",
-    "plan",
-    "dontAsk",
-)
 
 #: 有效的记忆范围字符串（映射到 TS 的 AgentMemoryScope）。
-MEMORY_SCOPES: tuple[str, ...] = ("user", "project", "local")
 
 #: 有效的隔离模式字符串。
-ISOLATION_MODES: tuple[str, ...] = ("worktree", "remote")
 
 
 # ---------------------------------------------------------------------------
@@ -554,68 +540,6 @@ def get_builtin_agent_definitions() -> list[AgentDefinition]:
 # ---------------------------------------------------------------------------
 
 
-def _parse_agent_frontmatter(content: str) -> tuple[dict[str, Any], str]:
-    """Parse YAML frontmatter from a markdown file.
-
-    Returns a (frontmatter_dict, body) tuple. Uses ``yaml.safe_load`` for
-    proper YAML parsing (supports nested structures for hooks, mcpServers, etc.).
-    """
-    frontmatter: dict[str, Any] = {}
-    body = content
-
-    lines = content.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return frontmatter, body
-
-    end_index: int | None = None
-    for i, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
-            end_index = i
-            break
-
-    if end_index is None:
-        return frontmatter, body
-
-    fm_text = "\n".join(lines[1:end_index])
-    try:
-        parsed = yaml.safe_load(fm_text)
-        if isinstance(parsed, dict):
-            frontmatter = parsed
-    except yaml.YAMLError:
-        # 回退到简单的 key:value 解析
-        for fm_line in lines[1:end_index]:
-            if ":" in fm_line:
-                key, _, value = fm_line.partition(":")
-                frontmatter[key.strip()] = value.strip().strip("'\"")
-
-    # 正文是闭合 --- 之后的全部内容
-    body = "\n".join(lines[end_index + 1 :]).strip()
-    return frontmatter, body
-
-
-def _parse_str_list(raw: Any) -> list[str] | None:
-    """Parse a comma-separated string or list into a list of strings."""
-    if raw is None:
-        return None
-    if isinstance(raw, list):
-        return [str(item).strip() for item in raw if str(item).strip()]
-    if isinstance(raw, str):
-        items = [t.strip() for t in raw.split(",") if t.strip()]
-        return items if items else None
-    return None
-
-
-def _parse_positive_int(raw: Any) -> int | None:
-    """Parse a positive integer from frontmatter, returning None if invalid."""
-    if raw is None:
-        return None
-    try:
-        val = int(raw)
-        return val if val > 0 else None
-    except (TypeError, ValueError):
-        return None
-
-
 def load_agents_dir(directory: Path) -> list[AgentDefinition]:
     """Load agent definitions from .md files in *directory*.
 
@@ -657,7 +581,7 @@ def load_agents_dir(directory: Path) -> list[AgentDefinition]:
     for path in sorted(directory.glob("*.md")):
         try:
             content = path.read_text(encoding="utf-8")
-            frontmatter, body = _parse_agent_frontmatter(content)
+            frontmatter, body = parse_frontmatter(content)
 
             name = str(frontmatter.get("name", "")).strip() or path.stem
             description = str(frontmatter.get("description", "")).strip()
@@ -668,13 +592,13 @@ def load_agents_dir(directory: Path) -> list[AgentDefinition]:
             description = description.replace("\\n", "\n")
 
             # --- 工具 ---
-            tools = _parse_str_list(frontmatter.get("tools"))
+            tools = parse_str_list(frontmatter.get("tools"))
 
             # --- 禁止工具 ---
             disallowed_raw = frontmatter.get(
                 "disallowedTools", frontmatter.get("disallowed_tools")
             )
-            disallowed_tools = _parse_str_list(disallowed_raw)
+            disallowed_tools = parse_str_list(disallowed_raw)
 
             # --- 模型 ---
             model_raw = frontmatter.get("model")
@@ -704,13 +628,13 @@ def load_agents_dir(directory: Path) -> list[AgentDefinition]:
 
             # --- 最大轮次 ---
             max_turns_raw = frontmatter.get("maxTurns", frontmatter.get("max_turns"))
-            max_turns = _parse_positive_int(max_turns_raw)
+            max_turns = parse_positive_int(max_turns_raw)
             if max_turns_raw is not None and max_turns is None:
                 logger.debug("Agent %s: invalid maxTurns %r", name, max_turns_raw)
 
             # --- 技能 ---
             skills_raw = frontmatter.get("skills")
-            skills = _parse_str_list(skills_raw) or []
+            skills = parse_str_list(skills_raw) or []
 
             # --- MCP 服务器 ---
             mcp_raw = frontmatter.get("mcpServers", frontmatter.get("mcp_servers"))
@@ -772,7 +696,7 @@ def load_agents_dir(directory: Path) -> list[AgentDefinition]:
             rms_raw = frontmatter.get(
                 "requiredMcpServers", frontmatter.get("required_mcp_servers")
             )
-            required_mcp_servers = _parse_str_list(rms_raw)
+            required_mcp_servers = parse_str_list(rms_raw)
 
             # --- 权限（Python 专用） ---
             permissions: list[str] = []

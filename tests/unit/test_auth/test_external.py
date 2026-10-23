@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from questorharness.providers.auth.resolver import resolve_auth
 from questorharness.providers.auth.external import (
     CLAUDE_PROVIDER,
     CODEX_PROVIDER,
@@ -187,7 +188,7 @@ def test_settings_resolve_auth_uses_external_binding(monkeypatch, tmp_path: Path
         )
     )
 
-    resolved = Settings(active_profile="claude-subscription").resolve_auth()
+    resolved = resolve_auth(Settings(active_profile="claude-subscription"))
 
     assert resolved.auth_kind == "auth_token"
     assert resolved.value == "bound-claude-token"
@@ -228,7 +229,7 @@ def test_settings_resolve_auth_refreshes_expired_external_binding(monkeypatch, t
         )
     )
 
-    resolved = Settings(active_profile="claude-subscription").resolve_auth()
+    resolved = resolve_auth(Settings(active_profile="claude-subscription"))
 
     assert resolved.value == "fresh-token"
     persisted = json.loads(source.read_text(encoding="utf-8"))
@@ -493,7 +494,7 @@ def test_settings_resolve_auth_rejects_third_party_base_url_for_claude_subscript
     ).sync_active_profile_from_flat_fields()
 
     with pytest.raises(ValueError, match="third-party"):
-        settings.resolve_auth()
+        resolve_auth(settings)
 
 
 def test_describe_external_binding_reports_refreshable_claude_token(tmp_path: Path):

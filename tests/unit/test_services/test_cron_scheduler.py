@@ -138,7 +138,7 @@ class TestExecuteJob:
             mock_process.kill = Mock()
             mock_process.wait = AsyncMock()
             with patch(
-                "questorharness.contracts.shell.asyncio.create_subprocess_exec",
+                "questorharness.execution.shell.asyncio.create_subprocess_exec",
                 return_value=mock_process,
             ):
                 job = {"name": "slow-test", "command": "sleep 999", "cwd": "/tmp"}

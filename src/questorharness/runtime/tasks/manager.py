@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from questorharness.platform.paths import get_tasks_dir
 from questorharness.contracts.task import TaskRecord, TaskStatus, TaskType
-from questorharness.contracts.shell import create_shell_subprocess
+from questorharness.execution.shell import create_shell_subprocess
 
 log = logging.getLogger(__name__)
 _TASK_RESTART_NOTICE = "[QuestorHarness] Agent task restarted; prior interactive context was not preserved.\n"

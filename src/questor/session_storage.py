@@ -13,8 +13,8 @@ from questorharness.api import UsageSnapshot
 from questorharness.api import ConversationMessage, sanitize_conversation_messages
 from questorharness.api import SessionBackend
 from questorharness.api import (
-    _persistable_tool_metadata,
-    _sanitize_snapshot_payload,
+    persistable_tool_metadata,
+    sanitize_snapshot_payload,
 )
 from questorharness.api import atomic_write_text
 
@@ -70,7 +70,7 @@ def save_session_snapshot(
         "system_prompt": system_prompt,
         "messages": [message.model_dump(mode="json") for message in messages],
         "usage": usage.model_dump(),
-        "tool_metadata": _persistable_tool_metadata(tool_metadata),
+        "tool_metadata": persistable_tool_metadata(tool_metadata),
         "created_at": now,
         "summary": summary,
         "message_count": len(messages),
@@ -89,13 +89,13 @@ def load_latest(workspace: str | Path | None = None) -> dict[str, Any] | None:
     path = get_session_dir(workspace) / "latest.json"
     if not path.exists():
         return None
-    return _sanitize_snapshot_payload(json.loads(path.read_text(encoding="utf-8")))
+    return sanitize_snapshot_payload(json.loads(path.read_text(encoding="utf-8")))
 
 
 def load_latest_for_session_key(workspace: str | Path | None, session_key: str) -> dict[str, Any] | None:
     path = _session_key_latest_path(workspace, session_key)
     if path.exists():
-        return _sanitize_snapshot_payload(json.loads(path.read_text(encoding="utf-8")))
+        return sanitize_snapshot_payload(json.loads(path.read_text(encoding="utf-8")))
     return None
 
 
@@ -124,7 +124,7 @@ def list_snapshots(workspace: str | Path | None = None, limit: int = 20) -> list
 def load_by_id(workspace: str | Path | None, session_id: str) -> dict[str, Any] | None:
     path = get_session_dir(workspace) / f"session-{session_id}.json"
     if path.exists():
-        return _sanitize_snapshot_payload(json.loads(path.read_text(encoding="utf-8")))
+        return sanitize_snapshot_payload(json.loads(path.read_text(encoding="utf-8")))
     latest = load_latest(workspace)
     if latest and (latest.get("session_id") == session_id or session_id == "latest"):
         return latest

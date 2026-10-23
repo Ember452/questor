@@ -52,6 +52,8 @@ REMOVED_PACKAGES = (
     "src/questorharness/surfaces/ipc",
 )
 ALLOWED_SURFACES = {"channels"}
+# ADR-0003 red line: any source file above this is a god file.
+GLOBAL_LINE_BUDGET = 1200
 FILE_BUDGETS = {"src/questorharness/commands/registry.py": 250}
 DIR_BUDGETS = {"src/questorharness/commands/families": 600}
 DROPPED_UI_IMPORTS = ("textual", "prompt_toolkit")
@@ -118,6 +120,12 @@ def find_oversized_files(root: Path) -> list[str]:
             lines = count_lines(path)
             if lines > budget:
                 problems.append(f"{_rel(path, root)}: {lines} lines > {budget}")
+
+    # Global ADR-0003 red line: no source file may exceed 1200 lines.
+    for path in walk_py(root / "src"):
+        lines = count_lines(path)
+        if lines > GLOBAL_LINE_BUDGET:
+            problems.append(f"{_rel(path, root)}: {lines} lines > {GLOBAL_LINE_BUDGET}")
     return problems
 
 

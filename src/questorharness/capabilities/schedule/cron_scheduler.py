@@ -32,7 +32,7 @@ from questorharness.capabilities.schedule.cron import (
     validate_cron_expression,
 )
 from questorharness.contracts.errors import SandboxUnavailableError
-from questorharness.contracts.shell import create_shell_subprocess
+from questorharness.execution.shell import create_shell_subprocess
 
 NOTIFICATION_OUTPUT_LIMIT = 3500
 

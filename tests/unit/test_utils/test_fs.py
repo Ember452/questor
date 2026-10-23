@@ -1,4 +1,4 @@
-"""Tests for :mod:`questorharness.contracts.io` atomic-write helpers."""
+"""Tests for :mod:`questorharness.platform.io` atomic-write helpers."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.contracts.io import atomic_write_bytes, atomic_write_text
+from questorharness.platform.io import atomic_write_bytes, atomic_write_text
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +116,7 @@ def test_existing_file_is_untouched_on_write_failure(
     def _boom(*args: object, **kwargs: object) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr("questorharness.contracts.io.os.replace", _boom)
+    monkeypatch.setattr("questorharness.platform.io.os.replace", _boom)
 
     with pytest.raises(OSError, match="disk full"):
         atomic_write_text(path, '{"overwritten": true}')
@@ -136,8 +136,8 @@ def _concurrent_writer(target_path: str, lock_path: str, key: str, value: str) -
 
     Must be a module-level function so it is picklable by ``multiprocessing``.
     """
-    from questorharness.contracts.locking import exclusive_file_lock
-    from questorharness.contracts.io import atomic_write_text
+    from questorharness.platform.locking import exclusive_file_lock
+    from questorharness.platform.io import atomic_write_text
 
     target = Path(target_path)
     lock = Path(lock_path)

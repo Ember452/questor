@@ -329,7 +329,7 @@ async def task_session_resume_autoagent():
     print("  Task 4: PR#16 — Research AutoAgent → save → resume → continue")
     print("=" * 70)
 
-    from questorharness.contracts.session_storage import (
+    from questorharness.platform.session_storage import (
         save_session_snapshot, load_session_snapshot,
     )
     from questorharness.contracts.domain.message import ConversationMessage
@@ -505,7 +505,7 @@ async def task_full_dev_workflow():
     from questorharness.capabilities.tools.skill_tool import SkillTool
     from questorharness.capabilities.memory.scan import scan_memory_files
     from questorharness.capabilities.memory.search import find_relevant_memories
-    from questorharness.contracts.session_storage import save_session_snapshot, load_session_snapshot
+    from questorharness.platform.session_storage import save_session_snapshot, load_session_snapshot
     from questorharness.capabilities.schedule.cron import upsert_cron_job, load_cron_jobs, validate_cron_expression
     from questorharness.contracts.domain.message import ConversationMessage
     import questorharness.capabilities.memory.paths as mp

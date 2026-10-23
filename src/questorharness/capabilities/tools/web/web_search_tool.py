@@ -11,7 +11,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
-from questorharness.contracts.network import NetworkGuardError, fetch_public_http_response
+from questorharness.execution.network import NetworkGuardError, fetch_public_http_response
 
 
 class WebSearchToolInput(BaseModel):
