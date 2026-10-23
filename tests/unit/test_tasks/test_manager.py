@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.tasks.manager import BackgroundTaskManager, _encode_task_worker_payload
+from questorharness.runtime.tasks.manager import BackgroundTaskManager, _encode_task_worker_payload
 
 
 @pytest.mark.asyncio

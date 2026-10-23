@@ -32,8 +32,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from questorharness.swarm.lockfile import exclusive_file_lock
-from questorharness.swarm.mailbox import (
+from questorharness.runtime.swarm.lockfile import exclusive_file_lock
+from questorharness.runtime.swarm.mailbox import (
     MailboxMessage,
     TeammateMailbox,
     create_permission_request_message,
@@ -741,7 +741,7 @@ async def get_leader_name(team_name: str | None = None) -> str | None:
         The leader's name string, or ``None`` if the team file is missing.
         Falls back to ``'team-lead'`` if the lead member is not found.
     """
-    from questorharness.swarm.team_lifecycle import read_team_file_async
+    from questorharness.runtime.swarm.team_lifecycle import read_team_file_async
 
     team = team_name or _get_team_name()
     if not team:

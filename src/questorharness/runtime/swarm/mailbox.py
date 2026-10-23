@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from questorharness.swarm.lockfile import exclusive_file_lock
+from questorharness.runtime.swarm.lockfile import exclusive_file_lock
 
 
 # ---------------------------------------------------------------------------

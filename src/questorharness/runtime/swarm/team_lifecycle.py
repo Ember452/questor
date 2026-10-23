@@ -22,8 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from questorharness.swarm.mailbox import get_team_dir
-from questorharness.swarm.types import BackendType
+from questorharness.runtime.swarm.mailbox import get_team_dir
+from questorharness.runtime.swarm.types import BackendType
 
 
 # ---------------------------------------------------------------------------
@@ -633,9 +633,9 @@ async def _kill_orphaned_teammate_panes(team_name: str) -> None:
 
     Mirrors TS ``killOrphanedTeammatePanes`` in teamHelpers.ts.
     """
-    from questorharness.swarm.registry import get_backend_registry
-    from questorharness.swarm.spawn_utils import is_inside_tmux
-    from questorharness.swarm.types import is_pane_backend
+    from questorharness.runtime.swarm.registry import get_backend_registry
+    from questorharness.runtime.swarm.spawn_utils import is_inside_tmux
+    from questorharness.runtime.swarm.types import is_pane_backend
 
     team_file = read_team_file(team_name)
     if not team_file:

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.swarm.mailbox import (
+from questorharness.runtime.swarm.mailbox import (
     MailboxMessage,
     TeammateMailbox,
     create_idle_notification,

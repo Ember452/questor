@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.coordinator.coordinator_mode import get_team_registry
-from questorharness.tasks import get_task_manager
+from questorharness.runtime.coordinator.coordinator_mode import get_team_registry
+from questorharness.runtime.tasks import get_task_manager
 from questorharness.capabilities.tools.agent.agent_tool import AgentTool, AgentToolInput
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.task.task_create_tool import TaskCreateTool, TaskCreateToolInput
@@ -180,7 +180,7 @@ async def test_send_message_swarm_path_uses_subprocess_backend(
     from questorharness.capabilities.tools.agent.send_message_tool import SendMessageTool
 
     with patch(
-        "questorharness.swarm.subprocess_backend.SubprocessBackend.send_message",
+        "questorharness.runtime.swarm.subprocess_backend.SubprocessBackend.send_message",
         new_callable=AsyncMock,
     ) as mock_send:
         await SendMessageTool().execute(

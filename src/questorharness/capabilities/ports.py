@@ -6,7 +6,7 @@ Capabilities depend on these protocols only; the provider adapters live in
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -14,10 +14,7 @@ from questorharness.contracts.agent import AgentProfile
 from questorharness.contracts.hooks import AggregatedHookResult, HookEvent
 from questorharness.contracts.mcp import McpResourceInfo
 from questorharness.contracts.subagent import SpawnResult
-from questorharness.contracts.task import TaskRecord, TaskStatus, TaskType
-
-
-CompletionListener = Callable[[TaskRecord], Awaitable[None]]
+from questorharness.contracts.task import CompletionListener, TaskRecord, TaskStatus, TaskType
 
 
 @runtime_checkable

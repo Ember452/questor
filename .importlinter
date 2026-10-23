@@ -20,13 +20,8 @@ forbidden_modules =
     questorharness.kernel
     questorharness.runtime
     questorharness.providers
-    questorharness.tasks
-    questorharness.swarm
-    questorharness.coordinator
-    questorharness.hooks
-# Remaining top-level packages (config, engine, plugins, ui, ...) still have
-# direct edges from capabilities; they move behind contracts in later waves and
-# join this list then.
+# config, engine, plugins, ui, ... still have direct edges from capabilities;
+# they move behind contracts in later waves and join this list then.
 # The tools facade re-exports capabilities modules, so only direct edges count.
 allow_indirect_imports = True
 
@@ -45,14 +40,6 @@ forbidden_modules =
     questorharness.profiles
     questorharness.engine
     questorharness.commands
-    questorharness.coordinator
-    questorharness.swarm
-    questorharness.tasks
-    questorharness.hooks
-    questorharness.autopilot
-    questorharness.bridge
-    questorharness.services
-    questorharness.utils
     questorharness.config
     questorharness.state
     questorharness.prompts
@@ -63,7 +50,6 @@ forbidden_modules =
     questorharness.keybindings
     questorharness.vim
     questorharness.output_styles
-    questorharness.voice
     questorharness.personalization
     questorharness.platforms
     questorharness.cli

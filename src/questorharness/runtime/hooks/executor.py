@@ -16,8 +16,8 @@ import httpx
 from questorharness.providers.llm.client import ApiMessageCompleteEvent, ApiMessageRequest, SupportsStreamingMessages
 from questorharness.contracts.domain.message import ConversationMessage
 from questorharness.contracts.hooks import AggregatedHookResult, HookEvent, HookResult
-from questorharness.hooks.loader import HookRegistry
-from questorharness.hooks.schemas import (
+from questorharness.runtime.hooks.loader import HookRegistry
+from questorharness.runtime.hooks.schemas import (
     AgentHookDefinition,
     CommandHookDefinition,
     HookDefinition,

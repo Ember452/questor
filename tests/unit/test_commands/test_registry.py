@@ -14,7 +14,7 @@ from questorharness.commands.registry import (
     create_default_command_registry,
     lookup_skill_slash_command,
 )
-from questorharness.autopilot import RepoVerificationStep
+from questorharness.runtime.autopilot import RepoVerificationStep
 from questorharness.config.paths import get_feedback_log_path, get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import load_settings, save_settings, Settings
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock
@@ -24,7 +24,7 @@ from questorharness.contracts.mcp import McpHttpServerConfig, McpStdioServerConf
 from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins.types import PluginCommandDefinition
 from questorharness.state import AppState, AppStateStore
-from questorharness.tasks import get_task_manager
+from questorharness.runtime.tasks import get_task_manager
 from questorharness.capabilities.tools import create_default_tool_registry
 
 
@@ -683,11 +683,11 @@ async def test_ship_command_queues_and_executes_card(tmp_path: Path, monkeypatch
         return [RepoVerificationStep(command="uv run pytest -q", returncode=0, status="success")]
 
     monkeypatch.setattr(
-        "questorharness.autopilot.service.RepoAutopilotStore._run_agent_prompt",
+        "questorharness.runtime.autopilot.service.RepoAutopilotStore._run_agent_prompt",
         fake_run_agent_prompt,
     )
     monkeypatch.setattr(
-        "questorharness.autopilot.service.RepoAutopilotStore._run_verification_steps",
+        "questorharness.runtime.autopilot.service.RepoAutopilotStore._run_verification_steps",
         fake_run_verification_steps,
     )
 

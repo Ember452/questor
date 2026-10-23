@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from questorharness.contracts.hooks import HookEvent
-from questorharness.hooks.schemas import HookDefinition
+from questorharness.runtime.hooks.schemas import HookDefinition
 
 
 class HookRegistry:

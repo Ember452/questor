@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from questorharness.contracts.hooks import AggregatedHookResult, HookEvent, HookResult
-    from questorharness.hooks.executor import HookExecutionContext, HookExecutor
-    from questorharness.hooks.loader import HookRegistry
+    from questorharness.runtime.hooks.executor import HookExecutionContext, HookExecutor
+    from questorharness.runtime.hooks.loader import HookRegistry
 
 __all__ = [
     "AggregatedHookResult",
@@ -26,14 +26,14 @@ def __getattr__(name: str):
 
         return HookEvent
     if name in {"HookExecutionContext", "HookExecutor"}:
-        from questorharness.hooks.executor import HookExecutionContext, HookExecutor
+        from questorharness.runtime.hooks.executor import HookExecutionContext, HookExecutor
 
         return {
             "HookExecutionContext": HookExecutionContext,
             "HookExecutor": HookExecutor,
         }[name]
     if name in {"HookRegistry", "load_hook_registry"}:
-        from questorharness.hooks.loader import HookRegistry, load_hook_registry
+        from questorharness.runtime.hooks.loader import HookRegistry, load_hook_registry
 
         return {
             "HookRegistry": HookRegistry,

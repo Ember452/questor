@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.swarm.team_lifecycle import (
+from questorharness.runtime.swarm.team_lifecycle import (
     TeamFile,
     TeamLifecycleManager,
     TeamMember,

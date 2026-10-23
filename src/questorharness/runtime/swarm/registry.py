@@ -8,8 +8,8 @@ import shutil
 from typing import TYPE_CHECKING, Any
 
 from questorharness.platforms import get_platform, get_platform_capabilities
-from questorharness.swarm.spawn_utils import is_tmux_available
-from questorharness.swarm.types import BackendDetectionResult, BackendType, TeammateExecutor
+from questorharness.runtime.swarm.spawn_utils import is_tmux_available
+from questorharness.runtime.swarm.types import BackendDetectionResult, BackendType, TeammateExecutor
 
 if TYPE_CHECKING:
     pass
@@ -275,7 +275,7 @@ class BackendRegistry:
                      auto-detects the best available backend.
 
         Returns:
-            The registered :class:`~questorharness.swarm.types.TeammateExecutor`.
+            The registered :class:`~questorharness.runtime.swarm.types.TeammateExecutor`.
 
         Raises:
             KeyError: If the requested backend has not been registered.
@@ -378,11 +378,11 @@ class BackendRegistry:
 
     def _register_defaults(self) -> None:
         """Register built-in backends that are unconditionally available."""
-        from questorharness.swarm.subprocess_backend import SubprocessBackend
+        from questorharness.runtime.swarm.subprocess_backend import SubprocessBackend
 
         self._backends["subprocess"] = SubprocessBackend()
         if get_platform_capabilities().supports_swarm_mailbox:
-            from questorharness.swarm.in_process import InProcessBackend
+            from questorharness.runtime.swarm.in_process import InProcessBackend
 
             self._backends["in_process"] = InProcessBackend()
 

@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 
 from questorharness.config.settings import Settings
-from questorharness.hooks.loader import load_hook_registry
+from questorharness.runtime.hooks.loader import load_hook_registry
 from questorharness.plugins import load_plugins
 from questorharness.plugins.loader import get_user_plugins_dir
 from questorharness.skills import load_skill_registry

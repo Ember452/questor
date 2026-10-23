@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from questorharness.coordinator.coordinator_mode import (
+from questorharness.runtime.coordinator.coordinator_mode import (
     TaskNotification,
     WorkerConfig,
     format_task_notification,

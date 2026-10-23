@@ -14,7 +14,7 @@ from typing import Any, Iterable
 import yaml
 
 from questorharness.config.paths import get_config_dir
-from questorharness.coordinator.agent_definitions import (
+from questorharness.runtime.coordinator.agent_definitions import (
     AGENT_COLORS,
     EFFORT_LEVELS,
     ISOLATION_MODES,
@@ -622,7 +622,7 @@ def _load_plugin_hooks(path: Path) -> dict[str, list]:
     """Load hooks from a flat hooks.json file."""
     if not path.exists():
         return {}
-    from questorharness.hooks.schemas import (
+    from questorharness.runtime.hooks.schemas import (
         AgentHookDefinition,
         CommandHookDefinition,
         HttpHookDefinition,

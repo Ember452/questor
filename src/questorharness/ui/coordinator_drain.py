@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import asyncio
 
-from questorharness.coordinator.coordinator_mode import (
+from questorharness.runtime.coordinator.coordinator_mode import (
     TaskNotification,
     format_task_notification,
 )
 from questorharness.engine.query import MaxTurnsExceeded
 from questorharness.prompts.context import build_runtime_system_prompt
-from questorharness.tasks.manager import get_task_manager
+from questorharness.runtime.tasks.manager import get_task_manager
 
 
 _TERMINAL_TASK_STATUSES = frozenset({"completed", "failed", "killed"})

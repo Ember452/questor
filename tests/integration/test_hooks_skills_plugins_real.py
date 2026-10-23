@@ -74,9 +74,9 @@ async def task_hook_blocks_model_adapts():
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.contracts.hooks import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.runtime.hooks.schemas import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
 
@@ -357,9 +357,9 @@ async def task_hook_gates_writes_skill_guides():
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.capabilities.tools.skill_tool import SkillTool
     from questorharness.contracts.hooks import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.runtime.hooks.schemas import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
     import questorharness.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -495,8 +495,8 @@ async def task_swarm_teammates_use_skills():
     print("  Task 5: 2 concurrent teammates each invoke different skills")
     print("=" * 70)
 
-    from questorharness.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
+    from questorharness.runtime.swarm.types import TeammateSpawnConfig
     from questorharness.engine.query import QueryContext
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings

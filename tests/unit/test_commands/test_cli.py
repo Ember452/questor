@@ -515,7 +515,7 @@ def test_autopilot_run_next_cli(monkeypatch, tmp_path: Path):
 
             return Result()
 
-    monkeypatch.setattr("questorharness.autopilot.RepoAutopilotStore", FakeStore)
+    monkeypatch.setattr("questorharness.runtime.autopilot.RepoAutopilotStore", FakeStore)
 
     result = runner.invoke(app, ["autopilot", "run-next", "--cwd", str(tmp_path)])
 
@@ -533,7 +533,7 @@ def test_autopilot_install_cron_cli(monkeypatch, tmp_path: Path):
         def install_default_cron(self):
             return ["autopilot.scan", "autopilot.tick"]
 
-    monkeypatch.setattr("questorharness.autopilot.RepoAutopilotStore", FakeStore)
+    monkeypatch.setattr("questorharness.runtime.autopilot.RepoAutopilotStore", FakeStore)
 
     result = runner.invoke(app, ["autopilot", "install-cron", "--cwd", str(tmp_path)])
 
@@ -551,7 +551,7 @@ def test_autopilot_export_dashboard_cli(monkeypatch, tmp_path: Path):
         def export_dashboard(self, output=None):
             return tmp_path / "docs" / "autopilot"
 
-    monkeypatch.setattr("questorharness.autopilot.RepoAutopilotStore", FakeStore)
+    monkeypatch.setattr("questorharness.runtime.autopilot.RepoAutopilotStore", FakeStore)
 
     result = runner.invoke(app, ["autopilot", "export-dashboard", "--cwd", str(tmp_path)])
 

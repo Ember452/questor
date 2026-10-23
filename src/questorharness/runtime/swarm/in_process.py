@@ -16,7 +16,7 @@ Architecture summary
 * :func:`start_in_process_teammate` – the actual coroutine that sets up
   context, drives the query engine, and cleans up on exit.
 * :class:`InProcessBackend` – implements
-  :class:`~questorharness.swarm.types.TeammateExecutor` and manages the dict of
+  :class:`~questorharness.runtime.swarm.types.TeammateExecutor` and manages the dict of
   live asyncio Tasks.
 """
 
@@ -31,11 +31,11 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from questorharness.swarm.mailbox import (
+from questorharness.runtime.swarm.mailbox import (
     TeammateMailbox,
     create_idle_notification,
 )
-from questorharness.swarm.types import (
+from questorharness.runtime.swarm.types import (
     BackendType,
     SpawnResult,
     TeammateMessage,
@@ -509,7 +509,7 @@ class InProcessBackend:
             )
         agent_name, team_name = agent_id.split("@", 1)
 
-        from questorharness.swarm.mailbox import MailboxMessage
+        from questorharness.runtime.swarm.mailbox import MailboxMessage
 
         msg = MailboxMessage(
             id=str(uuid.uuid4()),

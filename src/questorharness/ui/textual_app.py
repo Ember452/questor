@@ -16,7 +16,7 @@ from textual.widgets import Button, Footer, Header, Input, RichLog, Static
 
 from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.config.settings import load_settings, save_settings
-from questorharness.coordinator.coordinator_mode import is_coordinator_mode
+from questorharness.runtime.coordinator.coordinator_mode import is_coordinator_mode
 from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     AssistantTurnComplete,
@@ -27,7 +27,7 @@ from questorharness.contracts.domain.events import (
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
-from questorharness.tasks import get_task_manager
+from questorharness.runtime.tasks import get_task_manager
 from questorharness.ui.coordinator_drain import drain_coordinator_async_agents
 from questorharness.ui.runtime import build_runtime, close_runtime, handle_line, start_runtime
 

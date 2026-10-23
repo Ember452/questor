@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from questorharness.tasks.manager import get_task_manager
+from questorharness.runtime.tasks.manager import get_task_manager
 from questorharness.contracts.task import TaskRecord
 
 

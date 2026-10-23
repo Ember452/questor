@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from questorharness.config import load_settings
-from questorharness.hooks.loader import HookRegistry, load_hook_registry
+from questorharness.runtime.hooks.loader import HookRegistry, load_hook_registry
 
 
 class HookReloader:

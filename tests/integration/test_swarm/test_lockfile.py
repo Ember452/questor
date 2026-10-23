@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.swarm import lockfile
+from questorharness.runtime.swarm import lockfile
 from questorharness.contracts import locking as file_lock
 
 
@@ -30,7 +30,7 @@ def test_exclusive_file_lock_routes_windows_branch(monkeypatch, tmp_path: Path):
         yield
 
     # The implementation lives in ``questorharness.contracts.locking``;
-    # ``questorharness.swarm.lockfile`` re-exports it for backwards compatibility.
+    # ``questorharness.runtime.swarm.lockfile`` re-exports it for backwards compatibility.
     monkeypatch.setattr(file_lock, "_exclusive_windows_lock", _fake_windows_lock)
 
     lock_path = tmp_path / "windows.lock"

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from questorharness.swarm.types import (
+from questorharness.runtime.swarm.types import (
     SpawnResult,
     TeammateExecutor,
     TeammateIdentity,

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable, Literal, get_args, Iterab
 
 import pyperclip
 
-from questorharness.autopilot import RepoAutopilotStore
+from questorharness.runtime.autopilot import RepoAutopilotStore
 from questorharness.providers.auth.manager import AuthManager
 from questorharness.config.paths import (
     get_config_dir,
@@ -25,9 +25,9 @@ from questorharness.config.paths import (
     get_project_issue_file,
     get_project_pr_comments_file,
 )
-from questorharness.bridge import get_bridge_manager
-from questorharness.bridge.types import WorkSecret
-from questorharness.bridge.work_secret import build_sdk_url, decode_work_secret, encode_work_secret
+from questorharness.runtime.bridge import get_bridge_manager
+from questorharness.runtime.bridge.types import WorkSecret
+from questorharness.runtime.bridge.work_secret import build_sdk_url, decode_work_secret, encode_work_secret
 from questorharness.providers.llm.provider import auth_status, detect_provider
 from questorharness.config.settings import Settings, display_model_setting, load_settings, save_settings
 from questorharness.contracts.domain.message import ConversationMessage, sanitize_conversation_messages
@@ -90,7 +90,7 @@ from questorharness.capabilities.memory.session import (
 from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, SessionBackend
 from questorharness.skills import load_skill_registry
 from questorharness.skills.types import SkillDefinition
-from questorharness.tasks import get_task_manager
+from questorharness.runtime.tasks import get_task_manager
 from questorharness.plugins.types import PluginCommandDefinition
 
 if TYPE_CHECKING:

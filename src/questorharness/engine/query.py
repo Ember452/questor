@@ -41,7 +41,7 @@ from questorharness.contracts.domain.events import (
     ToolExecutionStarted,
 )
 from questorharness.contracts.hooks import HookEvent
-from questorharness.hooks import HookExecutor
+from questorharness.runtime.hooks import HookExecutor
 from questorharness.capabilities.policy.checker import PermissionChecker
 from questorharness.contracts.tool_outputs import tool_output_inline_chars, tool_output_preview_chars
 from questorharness.capabilities.tools.base import ToolExecutionContext

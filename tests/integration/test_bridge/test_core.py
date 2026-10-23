@@ -7,7 +7,7 @@ import asyncio
 
 import pytest
 
-from questorharness.bridge import WorkSecret, build_sdk_url, decode_work_secret, encode_work_secret, spawn_session
+from questorharness.runtime.bridge import WorkSecret, build_sdk_url, decode_work_secret, encode_work_secret, spawn_session
 
 
 def test_work_secret_roundtrip():
@@ -51,7 +51,7 @@ async def test_spawn_session_merges_stderr_into_stdout(monkeypatch, tmp_path: Pa
         return FakeProcess()
 
     monkeypatch.setattr(
-        "questorharness.bridge.session_runner.create_shell_subprocess",
+        "questorharness.runtime.bridge.session_runner.create_shell_subprocess",
         fake_create_shell_subprocess,
     )
 

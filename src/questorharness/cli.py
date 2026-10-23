@@ -1013,7 +1013,7 @@ def autopilot_status_cmd(
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Repository root"),
 ) -> None:
     """Show repo autopilot queue status."""
-    from questorharness.autopilot import RepoAutopilotStore
+    from questorharness.runtime.autopilot import RepoAutopilotStore
 
     store = RepoAutopilotStore(cwd)
     counts = store.stats()
@@ -1048,7 +1048,7 @@ def autopilot_list_cmd(
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Repository root"),
 ) -> None:
     """List repo autopilot cards."""
-    from questorharness.autopilot import RepoAutopilotStore
+    from questorharness.runtime.autopilot import RepoAutopilotStore
 
     store = RepoAutopilotStore(cwd)
     cards = store.list_cards(status=status) if status else store.list_cards()
@@ -1070,7 +1070,7 @@ def autopilot_add_cmd(
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Repository root"),
 ) -> None:
     """Add one repo autopilot card."""
-    from questorharness.autopilot import RepoAutopilotStore
+    from questorharness.runtime.autopilot import RepoAutopilotStore
 
     source_map = {
         "idea": "manual_idea",
@@ -1100,7 +1100,7 @@ def autopilot_context_cmd(
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Repository root"),
 ) -> None:
     """Print the synthesized active repo context."""
-    from questorharness.autopilot import RepoAutopilotStore
+    from questorharness.runtime.autopilot import RepoAutopilotStore
 
     store = RepoAutopilotStore(cwd)
     print(store.load_active_context())
@@ -1112,7 +1112,7 @@ def autopilot_journal_cmd(
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Repository root"),
 ) -> None:
     """Print the recent repo autopilot journal."""
-    from questorharness.autopilot import RepoAutopilotStore
+    from questorharness.runtime.autopilot import RepoAutopilotStore
 
     store = RepoAutopilotStore(cwd)
     entries = store.load_journal(limit=limit)
@@ -1130,7 +1130,7 @@ def autopilot_scan_cmd(
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Repository root"),
 ) -> None:
     """Scan one or more autopilot intake sources."""
-    from questorharness.autopilot import RepoAutopilotStore
+    from questorharness.runtime.autopilot import RepoAutopilotStore
 
     store = RepoAutopilotStore(cwd)
     if target == "issues":
@@ -1158,7 +1158,7 @@ def autopilot_run_next_cmd(
 ) -> None:
     """Run the highest-priority queued autopilot card end-to-end."""
     import asyncio
-    from questorharness.autopilot import RepoAutopilotStore
+    from questorharness.runtime.autopilot import RepoAutopilotStore
 
     try:
         result = asyncio.run(
@@ -1186,7 +1186,7 @@ def autopilot_tick_cmd(
 ) -> None:
     """Scan sources and, if idle, run the next queued autopilot task."""
     import asyncio
-    from questorharness.autopilot import RepoAutopilotStore
+    from questorharness.runtime.autopilot import RepoAutopilotStore
 
     try:
         result = asyncio.run(
@@ -1214,7 +1214,7 @@ def autopilot_install_cron_cmd(
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Repository root"),
 ) -> None:
     """Install default cron jobs for repo autopilot scan/tick."""
-    from questorharness.autopilot import RepoAutopilotStore
+    from questorharness.runtime.autopilot import RepoAutopilotStore
 
     names = RepoAutopilotStore(cwd).install_default_cron()
     print("Installed cron jobs: " + ", ".join(names))
@@ -1226,7 +1226,7 @@ def autopilot_export_dashboard_cmd(
     output: str | None = typer.Option(None, "--output", help="Dashboard output directory"),
 ) -> None:
     """Export a static autopilot kanban site for GitHub Pages."""
-    from questorharness.autopilot import RepoAutopilotStore
+    from questorharness.runtime.autopilot import RepoAutopilotStore
 
     path = RepoAutopilotStore(cwd).export_dashboard(output)
     print(f"Exported autopilot dashboard: {path}")

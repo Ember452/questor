@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -30,3 +31,7 @@ class TaskRecord:
     metadata: dict[str, str] = field(default_factory=dict)
     env: dict[str, str] | None = None
     argv: list[str] | None = None
+
+
+CompletionListener = Callable[[TaskRecord], Awaitable[None]]
+"""Callback fired when a background task reaches a terminal state."""

@@ -11,7 +11,7 @@ from questorharness.config.paths import (
     get_project_pr_comments_file,
 )
 from questorharness.config.settings import Settings
-from questorharness.coordinator.coordinator_mode import get_coordinator_system_prompt, is_coordinator_mode
+from questorharness.runtime.coordinator.coordinator_mode import get_coordinator_system_prompt, is_coordinator_mode
 from questorharness.capabilities.memory import load_memory_prompt
 from questorharness.capabilities.memory.relevance import format_relevant_memories, select_relevant_memories
 from questorharness.capabilities.memory.usage import mark_memory_used

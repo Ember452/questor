@@ -25,16 +25,16 @@ from questorharness.contracts.domain.events import (
     ToolExecutionStarted,
 )
 from questorharness.capabilities.policy import PermissionChecker, PermissionMode
-from questorharness.tasks import get_task_manager
+from questorharness.runtime.tasks import get_task_manager
 from questorharness.capabilities.tools import create_default_tool_registry
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult
 from questorharness.capabilities.tools.fs.glob_tool import GlobTool
 from questorharness.capabilities.tools.fs.grep_tool import GrepTool
 from pydantic import BaseModel
 from questorharness.contracts.domain.message import ToolResultBlock
-from questorharness.hooks import HookExecutionContext, HookExecutor, HookEvent
-from questorharness.hooks.loader import HookRegistry
-from questorharness.hooks.schemas import PromptHookDefinition
+from questorharness.runtime.hooks import HookExecutionContext, HookExecutor, HookEvent
+from questorharness.runtime.hooks.loader import HookRegistry
+from questorharness.runtime.hooks.schemas import PromptHookDefinition
 from questorharness.engine.query import QueryContext, _execute_tool_call, _is_prompt_too_long_error
 
 

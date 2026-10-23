@@ -9,7 +9,7 @@ import pytest
 from questorharness.providers.llm.client import ApiMessageCompleteEvent
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock, ToolResultBlock, ToolUseBlock
-from questorharness.hooks import HookEvent
+from questorharness.runtime.hooks import HookEvent
 from questorharness.capabilities.context.compact import (
     build_post_compact_messages,
     compact_conversation,

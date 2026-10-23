@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from questorharness.swarm.worktree import (
+from questorharness.runtime.swarm.worktree import (
     _flatten_slug,
     _worktree_branch,
     validate_worktree_slug,

@@ -111,18 +111,18 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `prompts/` | **Phase 1 不动**（文本与 loader 要拆，属语义改动） | prompt 文本 → `profiles/prompts/`；loader 代码 → `capabilities/context`；`profiles` 保持纯数据 |
 | `skills/`、`plugins/` | loader/registry → `capabilities/tools/`；`bundled/*.md` → 根 `plugins/` | 代码与数据必须分开 |
 | `state/`（UI store） | **Phase 1 不动**；Phase 2 再拆 | 事实状态层不建（durable 未立项） |
-| `engine/` | **Phase 1 不动**（W4） | `runtime/turn/{loop,tool_cycle,stop}` + `capabilities/context/assemble` |
-| `commands/` | `runtime/commands/` | `registry.py` 2586 行按命令族拆 |
-| `coordinator/`、`swarm/` | `runtime/delegation/` + `capabilities/policy/` | 按 team / permission 拆 |
-| `tasks/` | `runtime/tasks/` | 拆 task_manager / local_agent / local_shell |
-| `autopilot/` | **Phase 1 不动**（W4） | `runtime/autopilot/{policy,loop,triggers,state}`（service.py 2089） |
-| `hooks/` | `runtime/extension/` | 按 hook 类型拆 |
+| `engine/` | **保留在顶层**（编排层） | 循环组合 capabilities/providers/runtime；内核立项后再拆 `runtime/run` + `runtime/turn` |
+| `commands/` | **保留在顶层**（应用层分派器） | `registry.py` 2586 行按命令族拆（未做） |
+| `coordinator/`、`swarm/` | `runtime/coordinator/` + `runtime/swarm/`（已完成） | 按 team / permission / backend 拆 |
+| `tasks/` | `runtime/tasks/`（已完成） | 拆 task_manager / local_agent / local_shell |
+| `autopilot/` | `runtime/autopilot/`（已完成，文件未拆） | 拆 `{policy,loop,triggers,state}`（service.py 2089） |
+| `hooks/` | `runtime/hooks/`（已完成） | 按 hook 类型拆 |
 | `ui/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `surfaces/terminal/`；先解耦再删 |
 | `keybindings/`、`themes/`、`vim/`、`output_styles/` | **Phase 1 冻结**；Phase 2 随 UI 一起移除（ADR-0005） | 不迁 `surfaces/terminal/` |
 | `voice/` | `providers/voice/`（Phase 2） | 有策略时升 capabilities |
 | `utils/` | Phase 2 才归位；落 `providers/`（fs / shell / network_guard） | 解散，不留 utils |
 | `config/` | 类型 → `contracts/settings.py`；解析/注入 → `bootstrap/config/`（Phase 2） | 禁止下层 import `bootstrap` |
-| `bridge/` | **Phase 1 不动**（W4） | `surfaces/bridge/` |
+| `bridge/` | `runtime/bridge/`（已完成） | 有策略时再拆 |
 | `questor/gateway/` | **Phase 1 不动**（W5） | 协议路由进 `surfaces/gateway/`，产品策略留在产品包 |
 | `frontend/terminal/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `apps/terminal/`；wheel force-include 同步删除 |
 
@@ -239,14 +239,15 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 必需（目录存在时 9 个；Phase 3 后 11 个）：
 
 ```text
-src/questorharness/contracts/AGENTS.md        （contracts 建立后）
-src/questorharness/runtime/AGENTS.md
-src/questorharness/capabilities/AGENTS.md
-src/questorharness/providers/AGENTS.md
-src/questorharness/surfaces/AGENTS.md
+src/questorharness/contracts/AGENTS.md        （已建）
+src/questorharness/runtime/AGENTS.md          （已建）
+src/questorharness/engine/AGENTS.md           （待补：编排层）
+src/questorharness/capabilities/AGENTS.md     （已建）
+src/questorharness/providers/AGENTS.md        （已建）
+src/questorharness/surfaces/AGENTS.md         （已建）
 src/questorharness/profiles/AGENTS.md         （profiles 建立后）
-src/questorharness/bootstrap/AGENTS.md
-src/questor/AGENTS.md
+src/questorharness/bootstrap/AGENTS.md        （bootstrap 建立后）
+src/questor/AGENTS.md                         （待补：产品组合根）
 apps/desktop/AGENTS.md                        （Phase 3）
 apps/web/AGENTS.md                            （Phase 3）
 ```

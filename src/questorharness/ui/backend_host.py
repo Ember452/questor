@@ -17,8 +17,8 @@ from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.providers.auth.manager import AuthManager
 from questorharness.commands import MemoryCommandBackend
 from questorharness.config.settings import CLAUDE_MODEL_ALIAS_OPTIONS, resolve_model_setting
-from questorharness.bridge import get_bridge_manager
-from questorharness.coordinator.coordinator_mode import is_coordinator_mode
+from questorharness.runtime.bridge import get_bridge_manager
+from questorharness.runtime.coordinator.coordinator_mode import is_coordinator_mode
 from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock
 from questorharness.themes import list_themes
 from questorharness.contracts.domain.events import (
@@ -32,7 +32,7 @@ from questorharness.contracts.domain.events import (
     ToolExecutionStarted,
 )
 from questorharness.output_styles import load_output_styles
-from questorharness.tasks import get_task_manager
+from questorharness.runtime.tasks import get_task_manager
 from questorharness.ui.coordinator_drain import drain_coordinator_async_agents
 from questorharness.ui.protocol import BackendEvent, FrontendImageAttachment, FrontendRequest, TranscriptItem
 from questorharness.ui.runtime import build_runtime, close_runtime, handle_line, start_runtime

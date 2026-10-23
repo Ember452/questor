@@ -104,9 +104,9 @@ async def run_test(name, coro):
 async def test_hooks_command_block():
     """Register a pre_tool_use command hook that blocks bash, verify it fires."""
     from questorharness.contracts.hooks import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.runtime.hooks.schemas import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
 
     registry = HookRegistry()
     # Hook: run 'echo BLOCKED' when bash is used — block_on_failure means if exit!=0 it blocks
@@ -149,9 +149,9 @@ async def test_hooks_command_block():
 async def test_hooks_post_tool_use():
     """Register a post_tool_use hook that logs tool output, verify it runs."""
     from questorharness.contracts.hooks import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.runtime.hooks.schemas import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
 
     registry = HookRegistry()
     hook = CommandHookDefinition(
@@ -192,9 +192,9 @@ async def test_hooks_in_agent_loop():
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.contracts.hooks import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.runtime.hooks.schemas import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
 
@@ -565,7 +565,7 @@ async def test_web_fetch_real():
 @pytest.mark.skipif(_SKIP_REAL_API, reason="Needs local environment")
 async def test_worktree_real_git():
     """Create a real git worktree, list it, remove it."""
-    from questorharness.swarm.worktree import WorktreeManager
+    from questorharness.runtime.swarm.worktree import WorktreeManager
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Init a git repo
@@ -652,9 +652,9 @@ async def test_combined_hooks_skills_agent():
     from questorharness.skills.registry import SkillRegistry
     from questorharness.skills.types import SkillDefinition
     from questorharness.contracts.hooks import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.runtime.hooks.schemas import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query import QueryContext, run_query
@@ -721,8 +721,8 @@ async def test_combined_hooks_skills_agent():
 @pytest.mark.skipif(_SKIP_REAL_API, reason="Needs real API + AutoAgent")
 async def test_full_swarm_autoagent():
     """Spawn 2 in-process teammates working on AutoAgent with team management."""
-    from questorharness.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
+    from questorharness.runtime.swarm.types import TeammateSpawnConfig
     from questorharness.engine.query import QueryContext
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
@@ -733,9 +733,9 @@ async def test_full_swarm_autoagent():
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
-    from questorharness.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
-    import questorharness.swarm.mailbox as mb
-    import questorharness.swarm.team_lifecycle as tl
+    from questorharness.runtime.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
+    import questorharness.runtime.swarm.mailbox as mb
+    import questorharness.runtime.swarm.team_lifecycle as tl
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
 

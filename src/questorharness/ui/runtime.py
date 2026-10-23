@@ -13,7 +13,7 @@ from questorharness.providers.llm.codex_client import CodexApiClient
 from questorharness.providers.llm.copilot_client import CopilotClient
 from questorharness.providers.llm.openai_client import OpenAICompatibleClient
 from questorharness.providers.llm.provider import auth_status, detect_provider
-from questorharness.bridge import get_bridge_manager
+from questorharness.runtime.bridge import get_bridge_manager
 from questorharness.commands import (
     CommandContext,
     CommandResult,
@@ -31,8 +31,8 @@ from questorharness.contracts.domain.message import (
 )
 from questorharness.engine.query import MaxTurnsExceeded
 from questorharness.contracts.domain.events import StreamEvent
-from questorharness.hooks import HookEvent, HookExecutionContext, HookExecutor, load_hook_registry
-from questorharness.hooks.hot_reload import HookReloader
+from questorharness.runtime.hooks import HookEvent, HookExecutionContext, HookExecutor, load_hook_registry
+from questorharness.runtime.hooks.hot_reload import HookReloader
 from questorharness.providers.mcp.client import McpClientManager
 from questorharness.providers.mcp.config import load_mcp_server_configs
 from questorharness.capabilities.policy import PermissionChecker

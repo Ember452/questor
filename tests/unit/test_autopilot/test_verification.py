@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from questorharness.autopilot import service
-from questorharness.autopilot.service import (
+from questorharness.runtime.autopilot import service
+from questorharness.runtime.autopilot.service import (
     _DEFAULT_VERIFICATION_POLICY,
     RepoAutopilotStore,
     _parse_verification_entry,

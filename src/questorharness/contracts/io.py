@@ -21,7 +21,7 @@ The pattern implemented here is the standard temp-file-plus-rename dance:
 
 For read-modify-write sequences on shared files (credentials, settings, cron
 registry), pair atomic writes with :func:`exclusive_file_lock` from
-:mod:`questorharness.swarm.lockfile` so two concurrent ``oh`` processes cannot
+:mod:`questorharness.runtime.swarm.lockfile` so two concurrent ``oh`` processes cannot
 clobber each other's updates.
 """
 

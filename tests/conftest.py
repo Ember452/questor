@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
-from questorharness.tasks.manager import shutdown_task_manager
+from questorharness.runtime.tasks.manager import shutdown_task_manager
 from scripts.guards.check_thread_leak import arm_exit_watchdog, detect, report, snapshot
 
 

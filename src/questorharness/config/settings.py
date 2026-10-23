@@ -18,7 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from questorharness.hooks.schemas import HookDefinition
+from questorharness.runtime.hooks.schemas import HookDefinition
 from questorharness.contracts.mcp import McpServerConfig
 from questorharness.capabilities.policy.modes import PermissionMode
 from questorharness.contracts.locking import exclusive_file_lock

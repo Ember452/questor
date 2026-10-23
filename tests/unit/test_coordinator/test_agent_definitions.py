@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from questorharness.coordinator.agent_definitions import (
+from questorharness.runtime.coordinator.agent_definitions import (
     AgentDefinition,
     _parse_agent_frontmatter,
     get_builtin_agent_definitions,

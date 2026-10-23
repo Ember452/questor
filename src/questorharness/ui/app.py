@@ -6,7 +6,7 @@ import asyncio
 import json
 import sys
 
-from questorharness.coordinator.coordinator_mode import is_coordinator_mode
+from questorharness.runtime.coordinator.coordinator_mode import is_coordinator_mode
 
 from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.contracts.domain.events import StreamEvent

@@ -9,10 +9,10 @@ import pytest
 from questorharness.providers.llm.client import ApiMessageCompleteEvent
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock
-from questorharness.hooks import HookEvent, HookExecutionContext, HookExecutor
-from questorharness.hooks.executor import _inject_arguments
-from questorharness.hooks.loader import HookRegistry
-from questorharness.hooks.schemas import CommandHookDefinition, PromptHookDefinition
+from questorharness.runtime.hooks import HookEvent, HookExecutionContext, HookExecutor
+from questorharness.runtime.hooks.executor import _inject_arguments
+from questorharness.runtime.hooks.loader import HookRegistry
+from questorharness.runtime.hooks.schemas import CommandHookDefinition, PromptHookDefinition
 
 
 class FakeApiClient:

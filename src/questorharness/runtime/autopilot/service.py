@@ -18,7 +18,7 @@ from uuid import uuid4
 
 import yaml
 
-from questorharness.autopilot.types import (
+from questorharness.runtime.autopilot.types import (
     RepoAutopilotRegistry,
     RepoJournalEntry,
     RepoRunResult,
@@ -37,7 +37,7 @@ from questorharness.config.paths import (
     get_project_verification_policy_path,
 )
 from questorharness.contracts.domain.events import AssistantTextDelta, AssistantTurnComplete, ErrorEvent
-from questorharness.swarm.worktree import WorktreeManager
+from questorharness.runtime.swarm.worktree import WorktreeManager
 from questorharness.contracts.io import atomic_write_text
 
 _SOURCE_BASE_SCORES: dict[RepoTaskSource, int] = {
