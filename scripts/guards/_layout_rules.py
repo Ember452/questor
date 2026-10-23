@@ -27,6 +27,7 @@ from __future__ import annotations
 import ast
 import re
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,7 +124,7 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # still carries behavior worth relocating behind an exemption.
 EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 4,
-    "R3": 22,
+    "R3": 20,
     "R4": 1,
     "R5": 1,
     "R7": 170,
@@ -373,8 +374,50 @@ def rule_r2_lines(root: Path) -> list[Violation]:
     return violations
 
 
+def case_collisions(relative_paths: Sequence[str]) -> list[tuple[str, str]]:
+    """Pairs of relative paths that collide under casefolding.
+
+    Pure so it can be tested: a developer on Windows cannot create the two files
+    this detects, which is precisely why it must not be verified by hand.
+    """
+
+    seen: dict[str, str] = {}
+    found: list[tuple[str, str]] = []
+    for relative in relative_paths:
+        key = relative.casefold()
+        previous = seen.get(key)
+        if previous is not None and previous != relative:
+            found.append((previous, relative))
+            continue
+        seen[key] = relative
+    return found
+
+
+def case_collision_problems(root: Path) -> list[Violation]:
+    """Two tracked paths that differ only by case are a Windows landmine.
+
+    On a case-insensitive filesystem ``git mv manager.py Manager.py`` can appear to
+    succeed while the old name keeps importing, so renames - the W9 wave - need this
+    checked before they are trusted. It is reported as R3 because a collision is
+    exactly the ambiguity that rule is about.
+    """
+
+    tracked = [
+        _relative(path, root)
+        for path in tracked_files(root, ("src", "tests", "scripts", "docs"))
+    ]
+    return [
+        Violation(
+            "R3",
+            second,
+            "path collides case-insensitively with " + first,
+        )
+        for first, second in case_collisions(tracked)
+    ]
+
+
 def rule_r3_names(root: Path) -> list[Violation]:
-    """Banned file names from ADR-0003 section 3."""
+    """Banned file names from ADR-0003 section 3, plus case-insensitive collisions."""
     violations: list[Violation] = []
     for path in _source_files(root):
         if path.name not in BANNED_NAMES:
@@ -384,6 +427,7 @@ def rule_r3_names(root: Path) -> list[Violation]:
         violations.append(
             Violation("R3", _relative(path, root), f"banned file name {path.name}")
         )
+    violations.extend(case_collision_problems(root))
     return violations
 
 
@@ -417,7 +461,7 @@ def rule_r4_facade(root: Path) -> list[Violation]:
         relative = _relative(path, root)
         # The allowlist is keyed by package, because the reviewed decision is
         # about the package's entry point, not about one accidental file path.
-        package_key = relative[: -len("/__init__.py")] if relative.endswith("/__init__.py") else relative
+        package_key = relative.removesuffix("/__init__.py")
         allowed_lines = FACADE_IMPLEMENTATION_PACKAGES.get(package_key)
         if allowed_lines is not None:
             seen_allowed.add(package_key)
@@ -505,7 +549,7 @@ def rule_r5_exports(root: Path) -> list[Violation]:
         if exports is None:
             continue
         relative = _relative(path, root)
-        package_key = relative[: -len("/__init__.py")] if relative.endswith("/__init__.py") else relative
+        package_key = relative.removesuffix("/__init__.py")
         limit = EXPORT_LIMIT_CONTRACTS if "/contracts/" in relative else EXPORT_LIMIT
         pinned = AGGREGATE_FACADE_EXPORT_CAPS.get(package_key)
         if pinned is not None:
@@ -741,6 +785,7 @@ __all__ = [
     "rule_r1_fanout",
     "rule_r2_lines",
     "rule_r3_names",
+    "case_collisions",
     "rule_r4_facade",
     "rule_r5_exports",
     "rule_r6_maps",

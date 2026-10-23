@@ -792,7 +792,7 @@ from questor.gateway.media import (  # noqa: F401
     _remember_update_media,
     _summarize_attachment,
 )
-from questor.gateway.types import GatewayStreamUpdate  # noqa: F401
+from questor.gateway.stream_update import GatewayStreamUpdate  # noqa: F401
 
 
 def _content_snippet(text: str, *, limit: int = 160) -> str:

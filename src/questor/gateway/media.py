@@ -8,7 +8,7 @@ import re
 import string
 from pathlib import Path
 
-from questor.gateway.types import GatewayStreamUpdate
+from questor.gateway.stream_update import GatewayStreamUpdate
 from questorharness.api import (
     ToolExecutionCompleted,
 )

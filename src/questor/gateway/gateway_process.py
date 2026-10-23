@@ -464,5 +464,4 @@ def gateway_status(cwd: str | Path | None = None, workspace: str | Path | None =
         last_error=last_error,
     )
 
-# questor: allow R3 -- until W9 rename wave
 # questor: allow R7 -- until W8 adds the mirror test

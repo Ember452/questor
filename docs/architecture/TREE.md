@@ -324,6 +324,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questor/gateway/__init__.py` | 7 |
 | `src/questor/gateway/bridge.py` | 413 |
 | `src/questor/gateway/config.py` | 46 |
+| `src/questor/gateway/gateway_process.py` | 467 |
 | `src/questor/gateway/group_tool.py` | 161 |
 | `src/questor/gateway/media.py` | 187 |
 | `src/questor/gateway/models.py` | 34 |
@@ -331,8 +332,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questor/gateway/provider_commands.py` | 140 |
 | `src/questor/gateway/router.py` | 33 |
 | `src/questor/gateway/runtime.py` | 1089 |
-| `src/questor/gateway/service.py` | 468 |
-| `src/questor/gateway/types.py` | 17 |
+| `src/questor/gateway/stream_update.py` | 15 |
 | `src/questor/group_registry.py` | 97 |
 | `src/questor/memory.py` | 221 |
 | `src/questor/prompts.py` | 74 |

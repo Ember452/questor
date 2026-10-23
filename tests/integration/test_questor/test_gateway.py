@@ -47,7 +47,7 @@ from questor.gateway.runtime import (
     _sanitize_group_command_metadata,
     _sanitize_group_command_prompts,
 )
-from questor.gateway.service import QuestorGatewayService, gateway_status, start_gateway_process, stop_gateway_process
+from questor.gateway.gateway_process import QuestorGatewayService, gateway_status, start_gateway_process, stop_gateway_process
 from questor.group_registry import load_managed_group_record, save_managed_group_record
 from questor.memory import add_memory_entry as add_questor_memory_entry
 from questor.memory import list_memory_files as list_questor_memory_files
@@ -350,7 +350,7 @@ def test_start_gateway_process_uses_child_log_file_handler_without_console_dupli
         captured["kwargs"] = kwargs
         return FakeProcess()
 
-    monkeypatch.setattr("questor.gateway.service.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("questor.gateway.gateway_process.subprocess.Popen", fake_popen)
 
     assert start_gateway_process(tmp_path, workspace) == 1234
 
@@ -382,9 +382,9 @@ def test_stop_gateway_process_kills_matching_workspace_processes(tmp_path, monke
 
         return Result()
 
-    monkeypatch.setattr("questor.gateway.service.subprocess.run", fake_run)
-    monkeypatch.setattr("questor.gateway.service._pid_is_running", lambda pid: True)
-    monkeypatch.setattr("questor.gateway.service.os.kill", lambda pid, sig: killed.append(pid))
+    monkeypatch.setattr("questor.gateway.gateway_process.subprocess.run", fake_run)
+    monkeypatch.setattr("questor.gateway.gateway_process._pid_is_running", lambda pid: True)
+    monkeypatch.setattr("questor.gateway.gateway_process.os.kill", lambda pid, sig: killed.append(pid))
 
     assert stop_gateway_process(tmp_path, workspace) is True
     assert killed == [123, 456]
@@ -2394,9 +2394,9 @@ async def test_gateway_service_request_restart_waits_before_stop(monkeypatch):
     async def fake_sleep(delay: float) -> None:
         slept.append(delay)
 
-    monkeypatch.setattr("questor.gateway.service.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("questor.gateway.gateway_process.asyncio.sleep", fake_sleep)
     monkeypatch.setattr(
-        "questor.gateway.service.get_gateway_restart_notice_path",
+        "questor.gateway.gateway_process.get_gateway_restart_notice_path",
         lambda workspace: Path("/tmp/restart-notice.json"),
     )
     writes: list[str] = []
@@ -2440,7 +2440,7 @@ async def test_gateway_service_publishes_pending_restart_notice(tmp_path, monkey
     async def fake_sleep(delay: float) -> None:
         return None
 
-    monkeypatch.setattr("questor.gateway.service.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("questor.gateway.gateway_process.asyncio.sleep", fake_sleep)
 
     await QuestorGatewayService._publish_pending_restart_notice(service)
 

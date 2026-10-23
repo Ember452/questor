@@ -44,7 +44,7 @@
 | remote_trigger | `src/questorharness/capabilities/tools/remote_trigger_tool.py` | — |
 | send_message | `src/questorharness/capabilities/tools/agent/send_message_tool.py` | `src/questorharness/bootstrap/hosts/app.py` / `src/questorharness/capabilities/context/coordinator.py` |
 | skill | `src/questorharness/capabilities/tools/skill_tool.py` | `src/questorharness/capabilities/context/compact/attachments.py` / `src/questorharness/capabilities/context/coordinator.py` |
-| sleep | `src/questorharness/capabilities/tools/shell/sleep_tool.py` | `src/questor/gateway/service.py` / `src/questorharness/bootstrap/hosts/coordinator_drain.py` |
+| sleep | `src/questorharness/capabilities/tools/shell/sleep_tool.py` | `src/questor/gateway/gateway_process.py` / `src/questorharness/bootstrap/hosts/coordinator_drain.py` |
 | task_create | `src/questorharness/capabilities/tools/task/task_create_tool.py` | `src/questorharness/capabilities/context/coordinator.py` |
 | task_get | `src/questorharness/capabilities/tools/task/task_get_tool.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/runtime/swarm/permission_sync.py` |
 | task_list | `src/questorharness/capabilities/tools/task/task_list_tool.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/runtime/swarm/permission_sync.py` |
@@ -69,14 +69,14 @@
 | autopilot | `src/questorharness/commands/families/agents.py` | `src/questorharness/bootstrap/runtime.py` / `src/questorharness/cli_autopilot.py` |
 | brainstorming | `src/questorharness/commands/helpers.py` | — |
 | branch | `src/questorharness/commands/families/project.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/capabilities/context/prompts/environment.py` |
-| bridge | `src/questorharness/commands/families/workspace.py` | `src/questor/gateway/bridge.py` / `src/questor/gateway/service.py` |
+| bridge | `src/questorharness/commands/families/workspace.py` | `src/questor/gateway/bridge.py` / `src/questor/gateway/gateway_process.py` |
 | clear | `src/questorharness/commands/families/session.py` | `src/questor/gateway/provider_commands.py` / `src/questorharness/capabilities/context/compact/__init__.py` |
 | commit | `src/questorharness/commands/families/project.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/cli_preview.py` |
 | compact | `src/questorharness/commands/families/session.py` | `src/questor/gateway/media.py` / `src/questor/gateway/runtime.py` |
 | config | `src/questorharness/commands/families/account.py` | `src/questor/cli.py` / `src/questor/gateway/bridge.py` |
 | context | `src/questorharness/commands/families/session.py` | `src/questor/gateway/bridge.py` / `src/questor/gateway/group_tool.py` |
 | continue | `src/questorharness/commands/families/model.py` | `src/questor/cli.py` / `src/questor/gateway/bridge.py` |
-| copy | `src/questorharness/commands/families/workspace.py` | `src/questor/gateway/service.py` / `src/questor/runtime.py` |
+| copy | `src/questorharness/commands/families/workspace.py` | `src/questor/gateway/gateway_process.py` / `src/questor/runtime.py` |
 | cost | `src/questorharness/commands/families/session.py` | `src/questorharness/cli_preview.py` |
 | debug | `src/questorharness/commands/helpers.py` | `src/questorharness/bootstrap/hosts/backend_host.py` / `src/questorharness/capabilities/schedule/cron_scheduler.py` |
 | diagnose | `src/questorharness/commands/helpers.py` | `src/questorharness/capabilities/context/prompts/system_prompt.py` |
@@ -188,7 +188,7 @@
 | CompactProgressEvent | `src/questorharness/contracts/domain/events.py` | `src/questor/gateway/runtime.py` / `src/questor/runtime.py` |
 | ErrorEvent | `src/questorharness/contracts/domain/events.py` | `src/questor/gateway/runtime.py` / `src/questor/runtime.py` |
 | InboundMessage | `src/questorharness/surfaces/channels/bus/events.py` | `src/questor/gateway/bridge.py` / `src/questor/gateway/router.py` |
-| OutboundMessage | `src/questorharness/surfaces/channels/bus/events.py` | `src/questor/gateway/bridge.py` / `src/questor/gateway/service.py` |
+| OutboundMessage | `src/questorharness/surfaces/channels/bus/events.py` | `src/questor/gateway/bridge.py` / `src/questor/gateway/gateway_process.py` |
 | StatusEvent | `src/questorharness/contracts/domain/events.py` | `src/questor/gateway/runtime.py` / `src/questor/runtime.py` |
 | ToolExecutionCompleted | `src/questorharness/contracts/domain/events.py` | `src/questor/gateway/media.py` / `src/questor/gateway/runtime.py` |
 | ToolExecutionStarted | `src/questorharness/contracts/domain/events.py` | `src/questor/gateway/runtime.py` / `src/questorharness/api.py` |
@@ -247,7 +247,7 @@
 | QUESTORHARNESS_AUTODREAM_MEMORY_DIR | `src/questorharness/capabilities/memory/consolidate/service.py` | — |
 | QUESTORHARNESS_AUTO_COMPACT_THRESHOLD_TOKENS | `src/questorharness/config/settings_loader.py` | — |
 | QUESTORHARNESS_BASE_URL | `src/questorharness/capabilities/memory/consolidate/service.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
-| QUESTORHARNESS_CHANNEL_MEDIA_DIR | `src/questor/gateway/service.py` | `src/questorharness/surfaces/channels/impl/base.py` |
+| QUESTORHARNESS_CHANNEL_MEDIA_DIR | `src/questor/gateway/gateway_process.py` | `src/questorharness/surfaces/channels/impl/base.py` |
 | QUESTORHARNESS_CONFIG_DIR | `src/questorharness/capabilities/memory/consolidate/service.py` | `src/questorharness/platform/paths.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
 | QUESTORHARNESS_CONTEXT_WINDOW_TOKENS | `src/questorharness/config/settings_loader.py` | — |
 | QUESTORHARNESS_DASHSCOPE_API_KEY | `src/questorharness/config/settings_models.py` | `src/questorharness/runtime/swarm/spawn_utils.py` |

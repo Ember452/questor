@@ -14,7 +14,7 @@ from questorharness.api import load_settings
 
 from questor.gateway.config import load_gateway_config, save_gateway_config
 from questor.gateway.models import GatewayConfig
-from questor.gateway.service import (
+from questor.gateway.gateway_process import (
     QuestorGatewayService,
     gateway_status,
     start_gateway_process,

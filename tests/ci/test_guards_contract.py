@@ -286,6 +286,21 @@ def test_literal_exports_accepts_the_annotated_form() -> None:
     assert none is None
 
 
+def test_case_collisions_detects_windows_ambiguity() -> None:
+    """A rename can leave two paths that differ only by case; the guard must see it.
+
+    The fixture cannot contain both files on a case-insensitive filesystem, which is
+    the whole reason the comparison is a pure function.
+    """
+    assert rules.case_collisions([]) == []
+    assert rules.case_collisions(["src/a/manager.py", "src/a/other.py"]) == []
+    assert rules.case_collisions(["src/a/manager.py", "src/a/Manager.py"]) == [
+        ("src/a/manager.py", "src/a/Manager.py")
+    ]
+    # identical paths are not a collision
+    assert rules.case_collisions(["src/a/manager.py"]) == []
+
+
 @pytest.mark.parametrize("rule", ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"])
 def test_every_rule_has_a_green_counterpart(rule: str, tmp_path: Path) -> None:
     """Every rule must be silent on the clean fixture."""
