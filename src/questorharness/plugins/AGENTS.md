@@ -8,4 +8,4 @@
 不变式：插件只作为扩展层被装配；`capabilities` 经 `PluginSource` 端口取插件，不 import 本包。
 禁止：不要在插件层引入回合或权限逻辑；不要让 capabilities 反向 import 本包。
 测试：`uv run pytest tests/unit/test_plugins -q`
-关键文件：`__init__.py`、`loader.py`、`types.py`
+关键文件：`__init__.py`、`loader.py`、`models.py`

@@ -45,7 +45,7 @@ from questorharness.commands.types import (
     MemoryCommandBackend,
     SlashCommand,
 )
-from questorharness.plugins.types import PluginCommandDefinition
+from questorharness.plugins.models import PluginCommandDefinition
 
 __all__ = [
     "CommandContext",

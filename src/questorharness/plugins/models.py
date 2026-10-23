@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from questorharness.contracts.agent import AgentDefinition
 from questorharness.contracts.mcp import McpServerConfig
 from questorharness.plugins.schemas import PluginManifest
-from questorharness.capabilities.skills.types import SkillDefinition
+from questorharness.capabilities.skills.definition import SkillDefinition
 
 if TYPE_CHECKING:
     from questorharness.capabilities.tools.base import BaseTool
@@ -57,5 +57,3 @@ class LoadedPlugin:
     @property
     def description(self) -> str:
         return self.manifest.description
-
-# questor: allow R3 -- until W9 rename wave

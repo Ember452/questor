@@ -18,20 +18,20 @@
 | McpToolAdapter | `src/questorharness/capabilities/tools/mcp/mcp_tool.py` | `src/questorharness/capabilities/tools/registry.py` |
 | agent | `src/questorharness/capabilities/tools/agent/agent_tool.py` | `src/questor/__init__.py` / `src/questor/cli.py` |
 | ask_user_question | `src/questorharness/capabilities/tools/agent/ask_user_question_tool.py` | — |
-| bash | `src/questorharness/capabilities/tools/shell/bash_tool.py` | `src/questor/gateway/bridge.py` / `src/questorharness/capabilities/context/compact/constants.py` |
+| bash | `src/questorharness/capabilities/tools/shell/bash_tool.py` | `src/questor/gateway/bridge.py` / `src/questorharness/capabilities/context/compact/limits.py` |
 | brief | `src/questorharness/capabilities/tools/brief_tool.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/runtime/swarm/mailbox.py` |
 | config | `src/questorharness/capabilities/tools/config_tool.py` | `src/questor/cli.py` / `src/questor/gateway/bridge.py` |
 | cron_create | `src/questorharness/capabilities/tools/cron/cron_create_tool.py` | — |
 | cron_delete | `src/questorharness/capabilities/tools/cron/cron_delete_tool.py` | — |
 | cron_list | `src/questorharness/capabilities/tools/cron/cron_list_tool.py` | `src/questorharness/runtime/swarm/permission_sync.py` |
 | cron_toggle | `src/questorharness/capabilities/tools/cron/cron_toggle_tool.py` | — |
-| edit_file | `src/questorharness/capabilities/tools/fs/file_edit_tool.py` | `src/questorharness/capabilities/context/compact/constants.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
+| edit_file | `src/questorharness/capabilities/tools/fs/file_edit_tool.py` | `src/questorharness/capabilities/context/compact/limits.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
 | enter_plan_mode | `src/questorharness/capabilities/tools/enter_plan_mode_tool.py` | `src/questorharness/engine/tool_metadata.py` |
 | enter_worktree | `src/questorharness/capabilities/tools/enter_worktree_tool.py` | — |
 | exit_plan_mode | `src/questorharness/capabilities/tools/exit_plan_mode_tool.py` | `src/questorharness/engine/tool_metadata.py` / `src/questorharness/runtime/coordinator/agent_definitions.py` |
 | exit_worktree | `src/questorharness/capabilities/tools/exit_worktree_tool.py` | — |
-| glob | `src/questorharness/capabilities/tools/fs/glob_tool.py` | `src/questor/session_storage.py` / `src/questorharness/capabilities/context/compact/constants.py` |
-| grep | `src/questorharness/capabilities/tools/fs/grep_tool.py` | `src/questorharness/capabilities/context/compact/constants.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
+| glob | `src/questorharness/capabilities/tools/fs/glob_tool.py` | `src/questor/session_storage.py` / `src/questorharness/capabilities/context/compact/limits.py` |
+| grep | `src/questorharness/capabilities/tools/fs/grep_tool.py` | `src/questorharness/capabilities/context/compact/limits.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
 | image_generation | `src/questorharness/capabilities/tools/media/image_generation_tool.py` | `src/questor/gateway/media.py` / `src/questorharness/bootstrap/runtime.py` |
 | image_to_text | `src/questorharness/capabilities/tools/media/image_to_text_tool.py` | `src/questorharness/config/settings_models.py` / `src/questorharness/engine/vision.py` |
 | list_mcp_resources | `src/questorharness/capabilities/tools/mcp/list_mcp_resources_tool.py` | — |
@@ -39,7 +39,7 @@
 | mcp_auth | `src/questorharness/capabilities/tools/mcp/mcp_auth_tool.py` | — |
 | notebook_edit | `src/questorharness/capabilities/tools/fs/notebook_edit_tool.py` | `src/questorharness/runtime/coordinator/agent_definitions.py` |
 | questor_create_feishu_group | `src/questor/gateway/group_tool.py` | `src/questor/gateway/bridge.py` / `src/questor/gateway/runtime.py` |
-| read_file | `src/questorharness/capabilities/tools/fs/file_read_tool.py` | `src/questorharness/capabilities/context/compact/constants.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
+| read_file | `src/questorharness/capabilities/tools/fs/file_read_tool.py` | `src/questorharness/capabilities/context/compact/limits.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
 | read_mcp_resource | `src/questorharness/capabilities/tools/mcp/read_mcp_resource_tool.py` | — |
 | remote_trigger | `src/questorharness/capabilities/tools/remote_trigger_tool.py` | — |
 | send_message | `src/questorharness/capabilities/tools/agent/send_message_tool.py` | `src/questorharness/bootstrap/hosts/app.py` / `src/questorharness/capabilities/context/coordinator.py` |
@@ -55,9 +55,9 @@
 | team_delete | `src/questorharness/capabilities/tools/agent/team_delete_tool.py` | — |
 | todo_write | `src/questorharness/capabilities/tools/todo_write_tool.py` | `src/questorharness/bootstrap/hosts/backend_host.py` |
 | tool_search | `src/questorharness/capabilities/tools/agent/tool_search_tool.py` | — |
-| web_fetch | `src/questorharness/capabilities/tools/web/web_fetch_tool.py` | `src/questorharness/capabilities/context/compact/constants.py` / `src/questorharness/capabilities/context/coordinator.py` |
-| web_search | `src/questorharness/capabilities/tools/web/web_search_tool.py` | `src/questorharness/capabilities/context/compact/constants.py` / `src/questorharness/capabilities/context/coordinator.py` |
-| write_file | `src/questorharness/capabilities/tools/fs/file_write_tool.py` | `src/questorharness/capabilities/context/compact/constants.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
+| web_fetch | `src/questorharness/capabilities/tools/web/web_fetch_tool.py` | `src/questorharness/capabilities/context/compact/limits.py` / `src/questorharness/capabilities/context/coordinator.py` |
+| web_search | `src/questorharness/capabilities/tools/web/web_search_tool.py` | `src/questorharness/capabilities/context/compact/limits.py` / `src/questorharness/capabilities/context/coordinator.py` |
+| write_file | `src/questorharness/capabilities/tools/fs/file_write_tool.py` | `src/questorharness/capabilities/context/compact/limits.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
 
 ## command
 
@@ -89,7 +89,7 @@
 | exit | `src/questorharness/commands/families/session.py` | `src/questor/cli.py` / `src/questorharness/bootstrap/hosts/app.py` |
 | export | `src/questorharness/commands/families/workspace.py` | `src/questorharness/capabilities/memory/personalization/extractor.py` / `src/questorharness/cli_autopilot.py` |
 | fast | `src/questorharness/commands/families/model.py` | `src/questor/gateway/runtime.py` / `src/questorharness/bootstrap/hosts/backend_host.py` |
-| feedback | `src/questorharness/commands/families/account.py` | `src/questorharness/capabilities/context/compact/constants.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
+| feedback | `src/questorharness/commands/families/account.py` | `src/questorharness/capabilities/context/compact/limits.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
 | files | `src/questorharness/commands/families/workspace.py` | `src/questor/gateway/group_tool.py` / `src/questor/memory.py` |
 | finishing-a-development-branch | `src/questorharness/commands/helpers.py` | — |
 | help | `src/questorharness/commands/families/session.py` | `src/questor/cli.py` / `src/questor/workspace.py` |
@@ -227,7 +227,7 @@
 | system_prompt | `src/questorharness/config/settings_models.py` | `src/questor/gateway/runtime.py` / `src/questor/runtime.py` |
 | theme | `src/questorharness/config/settings_models.py` | `src/questor/runtime.py` / `src/questorharness/bootstrap/hosts/backend_host.py` |
 | timeout | `src/questorharness/config/settings_models.py` | `src/questor/gateway/bridge.py` / `src/questorharness/bootstrap/hosts/backend_host.py` |
-| verbose | `src/questorharness/config/settings_models.py` | `src/questorharness/cli.py` / `src/questorharness/runtime/bridge/types.py` |
+| verbose | `src/questorharness/config/settings_models.py` | `src/questorharness/cli.py` / `src/questorharness/runtime/bridge/models.py` |
 | vim_mode | `src/questorharness/config/settings_models.py` | `src/questorharness/bootstrap/runtime.py` / `src/questorharness/commands/families/appearance.py` |
 | vision | `src/questorharness/config/settings_models.py` | `src/questor/gateway/runtime.py` / `src/questorharness/bootstrap/runtime.py` |
 | voice_mode | `src/questorharness/config/settings_models.py` | `src/questorharness/bootstrap/runtime.py` / `src/questorharness/commands/families/appearance.py` |

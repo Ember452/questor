@@ -22,7 +22,7 @@ from questorharness.engine.query_engine import QueryEngine
 from questorharness.capabilities.memory.paths import get_project_memory_dir
 from questorharness.contracts.mcp import McpHttpServerConfig, McpStdioServerConfig
 from questorharness.capabilities.policy import PermissionChecker
-from questorharness.plugins.types import PluginCommandDefinition
+from questorharness.plugins.models import PluginCommandDefinition
 from questorharness.state import AppState, AppStateStore
 from questorharness.runtime.tasks import get_task_manager
 from questorharness.capabilities.tools import create_default_tool_registry

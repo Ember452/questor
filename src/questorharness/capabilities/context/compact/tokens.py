@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
-from questorharness.capabilities.context.compact.constants import (
+from questorharness.capabilities.context.compact.limits import (
     _DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE,
     TOKEN_ESTIMATION_PADDING,
 )

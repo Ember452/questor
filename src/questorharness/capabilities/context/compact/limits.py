@@ -95,5 +95,4 @@ Then, produce a structured summary inside <summary> tags with these sections:
 NO_TOOLS_TRAILER = """
 REMINDER: Do NOT call any tools. Respond with plain text only — an <analysis> block followed by a <summary> block. Tool calls will be rejected and you will fail the task."""
 
-# questor: allow R3 -- until W9 rename wave
 # questor: allow R7 -- until W8 adds the mirror test

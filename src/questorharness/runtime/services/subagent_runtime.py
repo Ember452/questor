@@ -9,7 +9,7 @@ from questorharness.contracts.subagent import SpawnResult, TeammateMessage
 from questorharness.runtime.coordinator.agent_definitions import get_agent_definition
 from questorharness.runtime.coordinator.coordinator_mode import get_team_registry
 from questorharness.runtime.swarm.registry import get_backend_registry
-from questorharness.runtime.swarm.types import TeammateSpawnConfig
+from questorharness.runtime.swarm.models import TeammateSpawnConfig
 
 _SUBPROCESS_BACKEND = "subprocess"
 _SpawnTaskType = Literal["local_agent", "remote_agent", "in_process_teammate"]

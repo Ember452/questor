@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from questorharness.commands.helpers import _render_plugin_command_prompt
-from questorharness.plugins.types import PluginCommandDefinition
+from questorharness.plugins.models import PluginCommandDefinition
 from typing import Iterable
 
 from questorharness.commands.types import (

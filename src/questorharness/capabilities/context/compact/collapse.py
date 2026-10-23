@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from questorharness.capabilities.context.compact.constants import (
+from questorharness.capabilities.context.compact.limits import (
     CONTEXT_COLLAPSE_HEAD_CHARS,
     CONTEXT_COLLAPSE_TAIL_CHARS,
     CONTEXT_COLLAPSE_TEXT_CHAR_LIMIT,

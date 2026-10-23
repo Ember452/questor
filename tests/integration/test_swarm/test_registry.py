@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from questorharness.runtime.swarm.registry import BackendRegistry
-from questorharness.runtime.swarm.types import TeammateExecutor
+from questorharness.runtime.swarm.models import TeammateExecutor
 
 
 # ---------------------------------------------------------------------------

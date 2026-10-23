@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from questorharness.capabilities.skills.types import SkillDefinition
+from questorharness.capabilities.skills.definition import SkillDefinition
 
 
 class SkillRegistry:

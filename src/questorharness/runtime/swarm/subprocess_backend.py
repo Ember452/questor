@@ -11,13 +11,13 @@ from questorharness.runtime.swarm.spawn_utils import (
     build_inherited_env_vars,
     get_teammate_command,
 )
-from questorharness.runtime.swarm.types import (
+from questorharness.runtime.swarm.models import (
     BackendType,
     SpawnResult,
     TeammateMessage,
     TeammateSpawnConfig,
 )
-from questorharness.runtime.tasks.manager import get_task_manager
+from questorharness.runtime.tasks.task_manager import get_task_manager
 
 if TYPE_CHECKING:
     pass
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 class SubprocessBackend:
     """TeammateExecutor that runs each teammate as a separate subprocess.
 
-    Uses the existing :class:`~questorharness.runtime.tasks.manager.BackgroundTaskManager`
+    Uses the existing :class:`~questorharness.runtime.tasks.task_manager.BackgroundTaskManager`
     to create and manage the child processes, communicating via stdin/stdout.
     """
 

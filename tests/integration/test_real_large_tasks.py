@@ -174,7 +174,7 @@ async def task_coordinator_code_review():
     )
     from questorharness.runtime.coordinator.agent_definitions import get_agent_definition
     from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.runtime.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.models import TeammateSpawnConfig
     from questorharness.runtime.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
     from questorharness.engine.query import QueryContext
     from questorharness.providers.llm.client import AnthropicApiClient
@@ -300,7 +300,7 @@ async def task_migration_plan_with_memory():
 
     from questorharness.runtime.coordinator.agent_definitions import get_agent_definition
     from questorharness.capabilities.skills.registry import SkillRegistry
-    from questorharness.capabilities.skills.types import SkillDefinition
+    from questorharness.capabilities.skills.definition import SkillDefinition
     from questorharness.capabilities.memory.manager import add_memory_entry, list_memory_files, remove_memory_entry
     from questorharness.platform.session_storage import save_session_snapshot, export_session_markdown
     import questorharness.capabilities.memory.paths as mp
@@ -521,7 +521,7 @@ async def task_full_pipeline():
         get_coordinator_system_prompt, format_task_notification, TaskNotification,
     )
     from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.runtime.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.models import TeammateSpawnConfig
     from questorharness.runtime.swarm.permission_sync import (
         create_permission_request, write_permission_request,
         read_pending_permissions, resolve_permission, PermissionResolution,

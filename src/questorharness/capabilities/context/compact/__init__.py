@@ -40,8 +40,8 @@ from questorharness.capabilities.context.compact.collapse import (  # noqa: F401
     truncate_head_for_ptl_retry,
     try_context_collapse,
 )
-from questorharness.capabilities.context.compact.constants import *  # noqa: F403
-from questorharness.capabilities.context.compact.constants import (  # noqa: F401
+from questorharness.capabilities.context.compact.limits import *  # noqa: F403
+from questorharness.capabilities.context.compact.limits import (  # noqa: F401
     _DEFAULT_CONTEXT_WINDOW,
     _DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE,
 )

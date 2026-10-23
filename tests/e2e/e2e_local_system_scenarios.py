@@ -24,7 +24,7 @@ from questorharness.plugins import load_plugins
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin
 from questorharness.state import AppState, AppStateStore
 from questorharness.runtime.bridge import build_sdk_url, decode_work_secret, encode_work_secret, spawn_session
-from questorharness.runtime.bridge.types import WorkSecret
+from questorharness.runtime.bridge.models import WorkSecret
 from questorharness.capabilities.tools import create_default_tool_registry
 from questorharness.capabilities.tools.base import ToolExecutionContext
 

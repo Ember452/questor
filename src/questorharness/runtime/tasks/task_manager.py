@@ -483,5 +483,3 @@ async def _close_process_stdin(process: asyncio.subprocess.Process) -> None:
         await stdin.wait_closed()
     except (BrokenPipeError, ConnectionResetError):
         pass
-
-# questor: allow R3 -- until W9 rename wave

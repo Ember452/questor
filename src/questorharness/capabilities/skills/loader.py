@@ -16,7 +16,7 @@ from questorharness.capabilities.skills._frontmatter import (
 )
 from questorharness.capabilities.skills.bundled import get_bundled_skills
 from questorharness.capabilities.skills.registry import SkillRegistry
-from questorharness.capabilities.skills.types import SkillDefinition
+from questorharness.capabilities.skills.definition import SkillDefinition
 
 if TYPE_CHECKING:
     from questorharness.capabilities.ports import PluginSource

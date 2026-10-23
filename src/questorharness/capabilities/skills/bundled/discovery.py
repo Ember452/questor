@@ -16,7 +16,7 @@ from questorharness.capabilities.skills._frontmatter import (
     parse_skill_frontmatter,
     parse_skill_metadata,
 )
-from questorharness.capabilities.skills.types import SkillDefinition
+from questorharness.capabilities.skills.definition import SkillDefinition
 
 _CONTENT_DIR = Path(__file__).parent / "content"
 

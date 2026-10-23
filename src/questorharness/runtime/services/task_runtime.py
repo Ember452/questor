@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from questorharness.contracts.task import CompletionListener, TaskRecord, TaskStatus, TaskType
-from questorharness.runtime.tasks.manager import BackgroundTaskManager, get_task_manager
+from questorharness.runtime.tasks.task_manager import BackgroundTaskManager, get_task_manager
 
 
 class DefaultTaskRuntime:

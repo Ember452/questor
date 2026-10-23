@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from questorharness.runtime.bridge import build_sdk_url, decode_work_secret, encode_work_secret, spawn_session
-from questorharness.runtime.bridge.types import WorkSecret
+from questorharness.runtime.bridge.models import WorkSecret
 
 
 @pytest.mark.asyncio

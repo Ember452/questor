@@ -26,9 +26,9 @@ from questorharness.platform.frontmatter import (
     parse_str_list,
 )
 from questorharness.plugins.schemas import PluginManifest
-from questorharness.plugins.types import LoadedPlugin, PluginCommandDefinition
+from questorharness.plugins.models import LoadedPlugin, PluginCommandDefinition
 from questorharness.capabilities.skills.loader import _parse_skill_metadata
-from questorharness.capabilities.skills.types import SkillDefinition
+from questorharness.capabilities.skills.definition import SkillDefinition
 
 logger = logging.getLogger(__name__)
 

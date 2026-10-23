@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from questorharness.capabilities.context.compact.constants import *  # noqa: F403
-from questorharness.capabilities.context.compact.constants import (  # noqa: F401
+from questorharness.capabilities.context.compact.limits import *  # noqa: F403
+from questorharness.capabilities.context.compact.limits import (  # noqa: F401
     COMPACT_TIMEOUT_SECONDS,
     CONTEXT_COLLAPSE_HEAD_CHARS,
     CONTEXT_COLLAPSE_TAIL_CHARS,

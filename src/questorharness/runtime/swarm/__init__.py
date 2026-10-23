@@ -6,7 +6,7 @@ from importlib import import_module
 
 from questorharness.runtime.swarm.registry import BackendRegistry, get_backend_registry
 from questorharness.runtime.swarm.subprocess_backend import SubprocessBackend
-from questorharness.runtime.swarm.types import (
+from questorharness.runtime.swarm.models import (
     BackendType,
     SpawnResult,
     TeammateExecutor,

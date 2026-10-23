@@ -65,7 +65,7 @@ BANNED_NAMES = RULE_BANNED_NAMES
 # not edit it.
 TOOL_RADIUS_FILES = (
     "src/questorharness/capabilities/tools/registry.py",
-    "src/questorharness/capabilities/context/compact/constants.py",
+    "src/questorharness/capabilities/context/compact/limits.py",
     "src/questorharness/runtime/swarm/permission_sync.py",
     "src/questorharness/engine/tool_metadata.py",
 )

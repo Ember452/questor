@@ -7,10 +7,10 @@ import sys
 
 import pytest
 
-from questorharness.runtime.tasks.manager import BackgroundTaskManager
+from questorharness.runtime.tasks.task_manager import BackgroundTaskManager
 from questorharness.contracts.task import TaskRecord
 from questorharness.runtime.swarm.subprocess_backend import SubprocessBackend
-from questorharness.runtime.swarm.types import TeammateSpawnConfig
+from questorharness.runtime.swarm.models import TeammateSpawnConfig
 
 
 def _argv_str(captured: dict) -> str:

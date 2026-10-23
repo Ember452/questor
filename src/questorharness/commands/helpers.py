@@ -6,9 +6,9 @@ import json
 from typing import Literal, get_args
 
 from questorharness.capabilities.skills import load_skill_registry
-from questorharness.capabilities.skills.types import SkillDefinition
+from questorharness.capabilities.skills.definition import SkillDefinition
 from questorharness.config.settings import Settings
-from questorharness.plugins.types import PluginCommandDefinition
+from questorharness.plugins.models import PluginCommandDefinition
 
 from questorharness.commands.types import CommandContext, CommandResult, SlashCommand
 

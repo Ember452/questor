@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from questorharness.state.app_state import AppState
-from questorharness.runtime.bridge.manager import BridgeSessionRecord
+from questorharness.runtime.bridge.session_manager import BridgeSessionRecord
 from questorharness.contracts.mcp import McpConnectionStatus
 from questorharness.contracts.task import TaskRecord
 

@@ -354,5 +354,3 @@ class TeammateExecutor(Protocol):
 def is_pane_backend(backend_type: BackendType) -> bool:
     """Return True if *backend_type* is a terminal-pane backend (tmux or iterm2)."""
     return backend_type in ("tmux", "iterm2")
-
-# questor: allow R3 -- until W9 rename wave

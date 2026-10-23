@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from questorharness.platform import get_platform, get_platform_capabilities
 from questorharness.runtime.swarm.spawn_utils import is_tmux_available
-from questorharness.runtime.swarm.types import BackendDetectionResult, BackendType, TeammateExecutor
+from questorharness.runtime.swarm.models import BackendDetectionResult, BackendType, TeammateExecutor
 
 if TYPE_CHECKING:
     pass
@@ -275,7 +275,7 @@ class BackendRegistry:
                      auto-detects the best available backend.
 
         Returns:
-            The registered :class:`~questorharness.runtime.swarm.types.TeammateExecutor`.
+            The registered :class:`~questorharness.runtime.swarm.models.TeammateExecutor`.
 
         Raises:
             KeyError: If the requested backend has not been registered.

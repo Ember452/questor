@@ -496,7 +496,7 @@ async def task_swarm_teammates_use_skills():
     print("=" * 70)
 
     from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.runtime.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.models import TeammateSpawnConfig
     from questorharness.engine.query import QueryContext
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings

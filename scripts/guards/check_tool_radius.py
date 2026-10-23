@@ -34,7 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # The files that used to be edited whenever a tool was added.
 CONSUMERS = (
-    "src/questorharness/capabilities/context/compact/constants.py",
+    "src/questorharness/capabilities/context/compact/limits.py",
     "src/questorharness/capabilities/context/coordinator.py",
     "src/questorharness/runtime/swarm/permission_sync.py",
     "src/questorharness/engine/tool_metadata.py",

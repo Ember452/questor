@@ -12,7 +12,7 @@ from questorharness.runtime.swarm.in_process import (
     get_teammate_context,
     set_teammate_context,
 )
-from questorharness.runtime.swarm.types import TeammateMessage, TeammateSpawnConfig
+from questorharness.runtime.swarm.models import TeammateMessage, TeammateSpawnConfig
 
 
 # ---------------------------------------------------------------------------

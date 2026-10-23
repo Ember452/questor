@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 
-from questorharness.runtime.bridge.types import WorkSecret
+from questorharness.runtime.bridge.models import WorkSecret
 
 
 def encode_work_secret(secret: WorkSecret) -> str:

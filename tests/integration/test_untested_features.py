@@ -650,7 +650,7 @@ async def test_config_paths():
 async def test_combined_hooks_skills_agent():
     """Combined test: load skills, register hooks, run agent on AutoAgent."""
     from questorharness.capabilities.skills.registry import SkillRegistry
-    from questorharness.capabilities.skills.types import SkillDefinition
+    from questorharness.capabilities.skills.definition import SkillDefinition
     from questorharness.contracts.hooks import HookEvent
     from questorharness.runtime.hooks.loader import HookRegistry
     from questorharness.contracts.hooks import CommandHookDefinition
@@ -722,7 +722,7 @@ async def test_combined_hooks_skills_agent():
 async def test_full_swarm_autoagent():
     """Spawn 2 in-process teammates working on AutoAgent with team management."""
     from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.runtime.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.models import TeammateSpawnConfig
     from questorharness.engine.query import QueryContext
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
