@@ -14,7 +14,7 @@ from questorharness.contracts.usage import UsageSnapshot
 from questorharness.config.settings import PermissionSettings, Settings
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock, ToolUseBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.prompts.context import build_runtime_system_prompt
+from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
 from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     AssistantTurnComplete,

@@ -5,7 +5,7 @@ Assembles the system prompt from environment info and user configuration.
 
 from __future__ import annotations
 
-from questorharness.prompts.environment import EnvironmentInfo, get_environment_info
+from questorharness.capabilities.context.prompts.environment import EnvironmentInfo, get_environment_info
 
 
 _BASE_SYSTEM_PROMPT = """\

@@ -38,7 +38,7 @@ from questorharness.providers.mcp.client import McpClientManager
 from questorharness.providers.mcp.config import load_mcp_server_configs
 from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins import load_plugins
-from questorharness.prompts import build_runtime_system_prompt
+from questorharness.capabilities.context.prompts import build_runtime_system_prompt
 from questorharness.state import AppState, AppStateStore
 from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, SessionBackend
 from questorharness.capabilities.tools import ToolRegistry, create_default_tool_registry

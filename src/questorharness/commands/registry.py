@@ -64,7 +64,7 @@ from questorharness.capabilities.memory.team import (
 from questorharness.output_styles import load_output_styles
 from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.plugins import load_plugins
-from questorharness.prompts import build_runtime_system_prompt
+from questorharness.capabilities.context.prompts import build_runtime_system_prompt
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin
 from questorharness.capabilities.context.compact import (
     build_post_compact_messages,

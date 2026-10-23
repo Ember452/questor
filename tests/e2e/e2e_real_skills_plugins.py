@@ -134,7 +134,7 @@ async def test_skill_tool_with_real_skill() -> tuple[bool, str]:
 async def test_skills_in_prompt_with_real() -> tuple[bool, str]:
     """Test that real skills appear in the system prompt."""
     from questorharness.config.settings import load_settings
-    from questorharness.prompts.context import build_runtime_system_prompt
+    from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
 
     prompt = build_runtime_system_prompt(load_settings(), cwd=".")
     if "Available Skills" not in prompt:

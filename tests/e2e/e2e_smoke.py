@@ -29,7 +29,7 @@ from questorharness.contracts.mcp import McpStdioServerConfig
 from questorharness.capabilities.memory import add_memory_entry
 from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.plugins import load_plugins
-from questorharness.prompts import build_runtime_system_prompt
+from questorharness.capabilities.context.prompts import build_runtime_system_prompt
 from questorharness.capabilities.tools import create_default_tool_registry
 
 

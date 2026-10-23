@@ -18,7 +18,7 @@ from questorharness.runtime.coordinator.coordinator_mode import (
     format_task_notification,
 )
 from questorharness.engine.query import MaxTurnsExceeded
-from questorharness.prompts.context import build_runtime_system_prompt
+from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
 from questorharness.runtime.tasks.manager import get_task_manager
 
 

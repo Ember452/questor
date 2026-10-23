@@ -93,7 +93,7 @@ async def test_skills_loaded() -> tuple[bool, str]:
 async def test_skills_in_system_prompt() -> tuple[bool, str]:
     """Test that skills metadata is injected into the system prompt."""
     from questorharness.config.settings import load_settings
-    from questorharness.prompts.context import build_runtime_system_prompt
+    from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
 
     prompt = build_runtime_system_prompt(load_settings(), cwd=".")
     if "Available Skills" not in prompt:

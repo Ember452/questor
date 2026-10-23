@@ -88,7 +88,7 @@ questor/
 │  │  │  ├─ swarm/                    # 多 agent 后端（subprocess / in_process / tmux）
 │  │  │  └─ bridge/                   # 外部会话桥接
 │  │  ├─ capabilities/                # 能力域（每个子域一个叶子语法）
-│  │  │  ├─ context/                  # assemble.py compact/ budget.py
+│  │  │  ├─ context/                  # prompts/（system prompt 组装） compact/ budget.py
 │  │  │  ├─ memory/                   # recall/ write/ consolidate/ backends/
 │  │  │  ├─ tools/                    # fs/ shell/ web/ task/ agent/ mcp/ media/ cron/
 │  │  │  ├─ skills/                   # 技能发现 / 解析 / bundled 数据

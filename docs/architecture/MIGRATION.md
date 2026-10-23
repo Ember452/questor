@@ -110,7 +110,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `permissions/` | `capabilities/policy/` | 按 permission / sandbox / approval 拆 |
 | `channels/` | `surfaces/channels/` | 按 channel 拆；`feishu.py` 1115 行拆子目录 |
 | `mcp/` | `providers/mcp/`（client / config / types）+ `capabilities/tools/mcp/`（4 个工具适配器） | 策略与 transport 分离 |
-| `prompts/` | **Phase 1 不动**（文本与 loader 要拆，属语义改动） | prompt 文本 → `profiles/prompts/`；loader 代码 → `capabilities/context`；`profiles` 保持纯数据 |
+| `prompts/` | `capabilities/context/prompts/`（已完成）；`coordinator_mode` 的纯模式/提示词部分下沉 `capabilities/context/coordinator.py` | prompt 文本仍内嵌，后续可按 profile 外置 |
 | `skills/`、`plugins/` | `skills/` → `capabilities/skills/`（已完成，含 bundled 数据）；`plugins/` 仍待归位 | plugins 的 loader 与 coordinator 有环，先把 `AgentDefinition` 收进 contracts 再搬 |
 | `state/`（UI store） | **Phase 1 不动**；Phase 2 再拆 | 事实状态层不建（durable 未立项） |
 | `engine/` | **保留在顶层**（编排层） | 循环组合 capabilities/providers/runtime；内核立项后再拆 `runtime/run` + `runtime/turn` |

@@ -49,8 +49,8 @@ from questorharness.contracts.domain.events import (
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
-from questorharness.prompts import build_runtime_system_prompt
-from questorharness.prompts.system_prompt import get_base_system_prompt
+from questorharness.capabilities.context.prompts import build_runtime_system_prompt
+from questorharness.capabilities.context.prompts.system_prompt import get_base_system_prompt
 from questorharness.providers.auth.manager import AuthManager
 from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.contracts.usage import UsageSnapshot
