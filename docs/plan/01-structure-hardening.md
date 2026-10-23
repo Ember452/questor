@@ -531,3 +531,21 @@ W1–W10 把形态和门禁做对了，但**五条增长规则**还缺。它们�
 ## 9. 一句话
 
 **这份计划交付的不是"结构"，是 25 条可判红规则（I0–I8 / R1–R10 / C1–C6）+ 14 份只写边界不写事实的地图 + 一份生成的 `GRAPH.md` + 一条"新增能力只改一个文件"的路径。** 判断它是真做完还是假做完，只看一件事：**你构造的违规，CI 红了没有。**
+
+---
+
+## 10. 偏差台账
+
+只追加，不改正文。一行一条：现象 / 计划原文 / 实测 / 处置 / commit。
+
+| # | 现象 | 计划原文 | 实测 | 处置 | commit |
+|---|---|---|---|---|---|
+| 1 | 基线文件路径两说 | §1 写 **tests/fixtures/structure_baseline.json** | §4 W0 写 `tests/fixtures/baseline/structure.json` | 采用后者：与既有 `baseline_check.py` 快照同目录，不另建目录 | W0 |
+| 2 | `.gitignore` 要加两行 | §4 W0「增 `.tmp-baseline/`、`scratch/`」 | `scratch/` 已在册 | 只增 `.tmp-baseline/`，不重复加 | W0 |
+| 3 | B1 采集命令与数字不自洽 | §1「`git ls-files 'src/**/*.py'`」= 319 | 该命令实得 **318**（`**/` 不匹配 `src/__init__.py`）；319 需 `git ls-files src` 过滤 `.py` | `caliber` 记后者；`src_files` = 319 / `modules` = 256 | W0 |
+| 4 | B11 节点数漂移 | 1177 用例 | **1178**（`summary.json` 已在 e779133 更新） | 按实测记录，`gate=false`（节点集合由 `baseline_check.py` 拥有） | W0 |
+| 5 | B15 行数漂移 | 118 行 / 8646 字节 | **119 行** / 8646 字节 | 按实测记录 | W0 |
+| 6 | B17 二级目录数 | 16 个二级目录 | **12**（口径：`capabilities/` 下二级目录且 ≥2 个非 `__init__` 文件） | 按实测记录，`caliber` 写明口径 | W0 |
+| 7 | B9 工具半径的"registry ×2 处" | 半径 5，含 `registry.py` ×2 处 | `registry.py` 里没有工具名字面量（只有类实例化），字面量命中的是 4 个消费方 | 半径 = 注册点（恒计） + 字面量消费方 = **5**，另记 `literal_hits` = 4 | W0 |
+| 8 | B13 "CI 只跑 3 个"会成为易变项 | 守卫 5 / CI 3 | 计数会随 W1 把守卫搬进 CI 而变 | `ci_guard_scripts.value` 固定为基线守卫数 5；`in_ci` 只记录不设门（真正的门是 **scripts/check.py** + `ci.yml`） | W0 |
+| 9 | `--check` 的 expected/got 语义 | 「expected 319, got 320」 | 常规写法是 expected=基线、got=实测，与该证据串相反 | 按证据串实现：`expected` = 现场实测，`got` = 基线文件记录值；输出追加 `(recorded baseline is stale)` 消歧 | W0 |
