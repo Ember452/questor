@@ -564,3 +564,6 @@ W1–W10 把形态和门禁做对了，但**五条增长规则**还缺。它们�
 | 22 | ADR-0003 §2 阈值表已过时 | 计划 §1 B7 已改 1001–1500 / 1500 | ADR 表仍写 801–1200 / 1200 | 在 ADR §2 加一行「2026-10-23 修订」，指向 **scripts/guards/_layout_rules.py**；不改历史表格 | W2 |
 | 23 | `ci_guard_scripts.in_ci` 变空 | 计划未提 | 单一入口后 CI 不再直接调任何守卫脚本 | 该项只是记录字段（不设门）；`value` 仍为 5，门在 **scripts/check.py** | W2 |
 | 24 | `gen_namespaces --check` 未列入守卫 | §4 W2 只列了 R10 守卫 | 登记表是生成物，不加新鲜度检查就会再次变成手写事实 | `scripts/check.py` 增加 `namespace-doc` 步，与 `name-registries` 成对 | W2 |
+| 25 | prompt surface 需要 5 个打桩，不是 1 个 | §4 W3「固定渲染输入」只点名 `EnvironmentInfo` + `get_platform` | 还必须打桩 `load_local_rules`（读用户配置）、`get_user_skill_dirs`（读 `~/.questorharness/skills`、`~/.claude/skills`）、`questorharness.plugins.loader.load_plugins`（读用户插件目录） | 五个 patch 写在 `scripts/ci/prompt_surface.py` 顶部常量区；少一个就会漂 | W3 |
+| 26 | 4 个宿主的输入并非全不同 | §4 W3「宿主至少：CLI、桌面 host、一个 channel、cron」 | 四个宿主共用 `bootstrap/runtime.py:367` 的同一装配；`cli`/`desktop`/`cron` 只在 `latest_user_prompt` 上不同（而它只影响（空的）项目记忆）→ 三份快照逐字相同；真正不同的是 `channel`（`include_project_memory=False` + 一个 gateway 工具，1701 vs 1739 行） | 保留四份（路径覆盖 + 漂移定位），并断言 `len(HOSTS) == 4`；台账记明“三份相同是真的，不是漏渲” | W3 |
+| 27 | 没有复用 `_child_env` | §4 W3「复用 `baseline_check._normalize` 与 `_child_env`」 | `_child_env` 只为子进程准备环境；本实现改为**进程内渲染 + patch**，不启动子进程 | 复用 `_normalize`（同一归一化），不用 `_child_env`；理由写入脚本 docstring | W3 |

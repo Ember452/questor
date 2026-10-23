@@ -52,6 +52,7 @@ STEPS: tuple[Step, ...] = (
     Step("namespace-doc", (PYTHON, "scripts/guards/gen_namespaces.py", "--check")),
     Step("tree-map", (PYTHON, "scripts/guards/gen_tree.py", "--check")),
     Step("structure-baseline", (PYTHON, "scripts/guards/gen_structure_baseline.py", "--check")),
+    Step("prompt-surface", (PYTHON, "scripts/ci/prompt_surface.py", "--check")),
     Step("import-contracts", ("uv", "run", "lint-imports")),
     Step(
         "baseline-check",
