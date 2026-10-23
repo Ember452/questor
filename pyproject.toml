@@ -111,6 +111,10 @@ files = [
     # W8: the two halves of the split session-memory facade.
     "src/questorharness/capabilities/memory/session/document.py",
     "src/questorharness/capabilities/memory/session/store.py",
+    # W8: the three halves of the split memory-extraction facade.
+    "src/questorharness/capabilities/memory/extract/records.py",
+    "src/questorharness/capabilities/memory/extract/guard.py",
+    "src/questorharness/capabilities/memory/extract/extraction.py",
 ]
 plugins = ["pydantic.mypy"]
 

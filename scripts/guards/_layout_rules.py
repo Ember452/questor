@@ -112,17 +112,17 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # (swarm, memory, consolidate, auth, mcp, sandbox, bridge) re-export a family of
 # siblings and define nothing themselves; pruning them would push callers inside
 # the package, so they carry a pinned cap in AGGREGATE_FACADE_EXPORT_CAPS instead.
-# R4 is 2 rather than 14: W8 examined every exempted facade instead of assuming
+# R4 is 1 rather than 14: W8 examined every exempted facade instead of assuming
 # each one needed splitting. Eight only re-export (seven pure lazy __getattr__
-# tables plus runtime.swarm's eager-import hybrid), two were split (skills.bundled
-# -> discovery.py, memory.session -> store.py + document.py), and platform is a
-# reviewed implementation facade held by a line cap in FACADE_IMPLEMENTATION_PACKAGES.
-# Two facades still carry behavior worth relocating: memory.extract, context.compact
-# (providers.lsp was split into python_index.py + symbol_queries.py).
+# tables plus runtime.swarm's eager-import hybrid), three were split (skills.bundled
+# -> discovery.py, memory.session -> store.py + document.py, memory.extract ->
+# records.py + guard.py + extraction.py), and platform is a reviewed implementation
+# facade held by a line cap in FACADE_IMPLEMENTATION_PACKAGES. Only context.compact
+# still carries behavior worth relocating behind an exemption.
 EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 4,
     "R3": 22,
-    "R4": 2,
+    "R4": 1,
     "R5": 10,
     "R7": 170,
     "R8": 31,

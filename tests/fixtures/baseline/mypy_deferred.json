@@ -19,8 +19,11 @@
     "src/questorharness/vim": 1
   },
   "pinned_at": "741c3840979376ffa2bd5de398a7f81b0977601a",
-  "whitelist_modules": 27,
+  "whitelist_modules": 30,
   "whitelist_roots": [
+    "src/questorharness/capabilities/memory/extract/extraction.py",
+    "src/questorharness/capabilities/memory/extract/guard.py",
+    "src/questorharness/capabilities/memory/extract/records.py",
     "src/questorharness/capabilities/memory/session/document.py",
     "src/questorharness/capabilities/memory/session/store.py",
     "src/questorharness/capabilities/skills/bundled/discovery.py",

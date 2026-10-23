@@ -19,10 +19,10 @@
     "capabilities_size": {
       "caliber": "git ls-files src | non-__init__ under capabilities/",
       "gate": true,
-      "ratio": 32.1,
-      "subdirs_ge2": 17,
+      "ratio": 32.8,
+      "subdirs_ge2": 18,
       "tool_files": 44,
-      "value": 84
+      "value": 87
     },
     "ci_guard_scripts": {
       "caliber": "guards present at the baseline; gen_* generators are excluded",
@@ -48,7 +48,7 @@
     "init_with_logic": {
       "caliber": "regex ^\\s*(async )?(def|class) over tracked __init__.py",
       "gate": true,
-      "value": 11
+      "value": 10
     },
     "layout_exemptions": {
       "caliber": "inline 'questor: allow' comments per rule (see _layout_rules.EXEMPTION_BUDGET)",
@@ -56,7 +56,7 @@
       "value": {
         "R2": 4,
         "R3": 22,
-        "R4": 2,
+        "R4": 1,
         "R5": 10,
         "R7": 170,
         "R8": 31
@@ -126,22 +126,22 @@
     "src_files": {
       "caliber": "git ls-files src | *.py",
       "gate": true,
-      "modules": 262,
-      "value": 325
+      "modules": 265,
+      "value": 328
     },
     "test_files": {
       "caliber": "git ls-files tests | *.py",
       "e2e": 11,
       "gate": true,
       "integration": 31,
-      "unit": 101,
-      "value": 148
+      "unit": 104,
+      "value": 151
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
       "gate": true,
-      "percent": 35.5,
-      "value": "93/262"
+      "percent": 36.2,
+      "value": "96/265"
     },
     "tool_radius": {
       "caliber": "shared files a new tool must touch: registration point + consumers with hard-coded names",
@@ -154,7 +154,7 @@
     }
   },
   "pin": {
-    "commit": "9a549142fe7f06751a943df64fd291e7d7d60235",
+    "commit": "3fcab4ee823f3d6de82dc9ef99ecac51b0974d88",
     "date": "2026-10-23"
   }
 }

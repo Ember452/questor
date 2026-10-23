@@ -39,7 +39,10 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/memory/consolidate/lock.py` | 140 |
 | `src/questorharness/capabilities/memory/consolidate/prompt.py` | 130 |
 | `src/questorharness/capabilities/memory/consolidate/service.py` | 356 |
-| `src/questorharness/capabilities/memory/extract/__init__.py` | 263 |
+| `src/questorharness/capabilities/memory/extract/__init__.py` | 35 |
+| `src/questorharness/capabilities/memory/extract/extraction.py` | 139 |
+| `src/questorharness/capabilities/memory/extract/guard.py` | 81 |
+| `src/questorharness/capabilities/memory/extract/records.py` | 88 |
 | `src/questorharness/capabilities/memory/manager.py` | 185 |
 | `src/questorharness/capabilities/memory/memdir.py` | 52 |
 | `src/questorharness/capabilities/memory/migrate.py` | 139 |
