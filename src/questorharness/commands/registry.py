@@ -281,11 +281,8 @@ def _register_user_invocable_skill_commands(registry: CommandRegistry) -> None:
         )
 
 
-def create_default_command_registry(
-    plugin_commands: Iterable[PluginCommandDefinition] | None = None,
-) -> CommandRegistry:
-    """Create the built-in command registry."""
-    registry = CommandRegistry()
+def register_session_commands(registry: CommandRegistry) -> None:
+    """Register session and core commands in their original order."""
 
     async def _help_handler(_: str, context: CommandContext) -> CommandResult:
         del context
@@ -420,6 +417,36 @@ def create_default_command_registry(
                 f"- output_style: {style}"
             )
         )
+
+    registry.register(SlashCommand("help", "Show available commands", _help_handler))
+    registry.register(
+        SlashCommand("exit", "Exit QuestorHarness", _exit_handler, aliases=("quit",))
+    )
+    registry.register(SlashCommand("clear", "Clear conversation history", _clear_handler))
+    registry.register(SlashCommand("version", "Show the installed QuestorHarness version", _version_handler))
+    registry.register(SlashCommand("status", "Show session status", _status_handler))
+    registry.register(SlashCommand("context", "Show the active runtime system prompt", _context_handler))
+    registry.register(
+        SlashCommand(
+            "summary",
+            "Summarize conversation history",
+            _summary_handler,
+            remote_invocable=False,
+            remote_admin_opt_in=True,
+        )
+    )
+    registry.register(SlashCommand("compact", "Compact older conversation history", _compact_handler))
+    registry.register(SlashCommand("cost", "Show token usage and estimated cost", _cost_handler))
+    registry.register(SlashCommand("usage", "Show usage and token estimates", _usage_handler))
+    registry.register(SlashCommand("stats", "Show session statistics", _stats_handler))
+
+
+def create_default_command_registry(
+    plugin_commands: Iterable[PluginCommandDefinition] | None = None,
+) -> CommandRegistry:
+    """Create the built-in command registry."""
+    registry = CommandRegistry()
+
 
     async def _dream_handler(args: str, context: CommandContext) -> CommandResult:
         settings = getattr(context.engine, "_settings", None) or load_settings().materialize_active_profile()
@@ -2157,27 +2184,8 @@ def create_default_command_registry(
             )
         )
 
-    registry.register(SlashCommand("help", "Show available commands", _help_handler))
-    registry.register(
-        SlashCommand("exit", "Exit QuestorHarness", _exit_handler, aliases=("quit",))
-    )
-    registry.register(SlashCommand("clear", "Clear conversation history", _clear_handler))
-    registry.register(SlashCommand("version", "Show the installed QuestorHarness version", _version_handler))
-    registry.register(SlashCommand("status", "Show session status", _status_handler))
-    registry.register(SlashCommand("context", "Show the active runtime system prompt", _context_handler))
-    registry.register(
-        SlashCommand(
-            "summary",
-            "Summarize conversation history",
-            _summary_handler,
-            remote_invocable=False,
-            remote_admin_opt_in=True,
-        )
-    )
-    registry.register(SlashCommand("compact", "Compact older conversation history", _compact_handler))
-    registry.register(SlashCommand("cost", "Show token usage and estimated cost", _cost_handler))
-    registry.register(SlashCommand("usage", "Show usage and token estimates", _usage_handler))
-    registry.register(SlashCommand("stats", "Show session statistics", _stats_handler))
+    register_session_commands(registry)
+
     registry.register(SlashCommand("dream", "Consolidate memory", _dream_handler))
     registry.register(SlashCommand("memory", "Inspect and manage project memory", _memory_handler))
     registry.register(SlashCommand("hooks", "Show configured hooks", _hooks_handler))
