@@ -34,6 +34,10 @@ def _build_default(monkeypatch, tmp_path: Path):
         "questorharness.commands.registry.load_skill_registry",
         lambda *args, **kwargs: _EmptySkills(),
     )
+    monkeypatch.setattr(
+        "questorharness.commands.families.account.load_skill_registry",
+        lambda *args, **kwargs: _EmptySkills(),
+    )
     return create_default_command_registry(plugin_commands=[])
 
 

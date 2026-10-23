@@ -301,7 +301,9 @@ async def test_config_show_redacts_nested_mcp_and_vision_secrets(tmp_path: Path,
             "base_url": "https://vision.example",
         },
     )
-    monkeypatch.setattr(registry_module, "load_settings", lambda: settings)
+    monkeypatch.setattr(
+        "questorharness.commands.families.account.load_settings", lambda: settings
+    )
 
     registry = create_default_command_registry()
     command, args = registry.lookup("/config show")
@@ -1299,7 +1301,9 @@ async def test_copy_rewind_and_meta_commands(tmp_path: Path, monkeypatch):
     def _fake_copy(text: str) -> None:
         copied.append(text)
 
-    monkeypatch.setattr(registry_module.pyperclip, "copy", _fake_copy)
+    monkeypatch.setattr(
+        "questorharness.commands.families.workspace.pyperclip.copy", _fake_copy
+    )
 
     copy_command, copy_args = registry.lookup("/copy")
     copy_result = await copy_command.handler(copy_args, context)
