@@ -33,7 +33,7 @@ async def test_markdown_render() -> tuple[bool, str]:
     from io import StringIO
     from rich.console import Console
 
-    from questorharness.ui.output import OutputRenderer
+    from questorharness.surfaces.ipc.output import OutputRenderer
     from questorharness.contracts.domain.events import AssistantTextDelta, AssistantTurnComplete
     from questorharness.contracts.domain.message import ConversationMessage, TextBlock
     from questorharness.contracts.usage import UsageSnapshot
@@ -61,7 +61,7 @@ async def test_tool_output_format() -> tuple[bool, str]:
     from io import StringIO
     from rich.console import Console
 
-    from questorharness.ui.output import OutputRenderer
+    from questorharness.surfaces.ipc.output import OutputRenderer
     from questorharness.contracts.domain.events import ToolExecutionStarted, ToolExecutionCompleted
 
     renderer = OutputRenderer(style_name="default")
@@ -89,7 +89,7 @@ async def test_spinner_display() -> tuple[bool, str]:
     from io import StringIO
     from rich.console import Console
 
-    from questorharness.ui.output import OutputRenderer
+    from questorharness.surfaces.ipc.output import OutputRenderer
     from questorharness.contracts.domain.events import ToolExecutionStarted, ToolExecutionCompleted
 
     renderer = OutputRenderer(style_name="default")
@@ -119,7 +119,7 @@ async def test_real_model_headless() -> tuple[bool, str]:
     if not settings["api_key"]:
         return False, "ANTHROPIC_AUTH_TOKEN not set"
 
-    from questorharness.ui.app import run_print_mode
+    from questorharness.surfaces.ipc.app import run_print_mode
 
     try:
         await run_print_mode(

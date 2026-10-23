@@ -2395,7 +2395,7 @@ def main(
         settings.theme = theme
         save_settings(settings)
 
-    from questorharness.ui.app import run_print_mode, run_repl, run_task_worker
+    from questorharness.surfaces.ipc.app import run_print_mode, run_repl, run_task_worker
 
     if dry_run and (continue_session or resume is not None):
         print("Error: --dry-run does not support --continue/--resume yet.", file=sys.stderr)

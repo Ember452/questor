@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 from types import SimpleNamespace
 
-from questorharness.ui.app import run_print_mode, run_repl, run_task_worker
+from questorharness.surfaces.ipc.app import run_print_mode, run_repl, run_task_worker
 from questorharness.contracts.domain.events import AssistantTurnComplete
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock
-from questorharness.ui.react_launcher import build_backend_command
+from questorharness.surfaces.ipc.react_launcher import build_backend_command
 
 
 class _AsyncIterator:
@@ -44,7 +44,7 @@ async def test_run_repl_uses_react_launcher_by_default(monkeypatch):
         seen.update(kwargs)
         return 0
 
-    monkeypatch.setattr("questorharness.ui.app.launch_react_tui", _launch)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.launch_react_tui", _launch)
     await run_repl(prompt="hi", cwd="/tmp/demo", model="kimi-k2.5")
 
     assert seen["prompt"] == "hi"
@@ -74,10 +74,10 @@ async def test_run_print_mode_passes_cwd_to_build_runtime(monkeypatch):
     async def _close_runtime(_bundle):
         return None
 
-    monkeypatch.setattr("questorharness.ui.app.build_runtime", _build_runtime)
-    monkeypatch.setattr("questorharness.ui.app.start_runtime", _start_runtime)
-    monkeypatch.setattr("questorharness.ui.app.handle_line", _handle_line)
-    monkeypatch.setattr("questorharness.ui.app.close_runtime", _close_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.build_runtime", _build_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.start_runtime", _start_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.handle_line", _handle_line)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.close_runtime", _close_runtime)
 
     await run_print_mode(prompt="hi", cwd="/tmp/demo")
 
@@ -129,11 +129,11 @@ async def test_run_task_worker_reads_one_shot_json_line(monkeypatch):
     async def _close_runtime(_bundle):
         return None
 
-    monkeypatch.setattr("questorharness.ui.app.build_runtime", _build_runtime)
-    monkeypatch.setattr("questorharness.ui.app.start_runtime", _start_runtime)
-    monkeypatch.setattr("questorharness.ui.app.handle_line", _handle_line)
-    monkeypatch.setattr("questorharness.ui.app.close_runtime", _close_runtime)
-    monkeypatch.setattr("questorharness.ui.app.sys.stdin", _FakeStdin())
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.build_runtime", _build_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.start_runtime", _start_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.handle_line", _handle_line)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.close_runtime", _close_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.sys.stdin", _FakeStdin())
 
     await run_task_worker(cwd="/tmp/demo")
 
@@ -185,11 +185,11 @@ async def test_run_task_worker_decodes_multiline_json_payload(monkeypatch):
     async def _close_runtime(_bundle):
         return None
 
-    monkeypatch.setattr("questorharness.ui.app.build_runtime", _build_runtime)
-    monkeypatch.setattr("questorharness.ui.app.start_runtime", _start_runtime)
-    monkeypatch.setattr("questorharness.ui.app.handle_line", _handle_line)
-    monkeypatch.setattr("questorharness.ui.app.close_runtime", _close_runtime)
-    monkeypatch.setattr("questorharness.ui.app.sys.stdin", _FakeStdin())
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.build_runtime", _build_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.start_runtime", _start_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.handle_line", _handle_line)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.close_runtime", _close_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.sys.stdin", _FakeStdin())
 
     await run_task_worker(cwd="/tmp/demo")
 
@@ -283,21 +283,21 @@ async def test_run_print_mode_waits_for_coordinator_async_agents(monkeypatch):
 
     fake_manager = _FakeTaskManager()
 
-    monkeypatch.setattr("questorharness.ui.app.build_runtime", _build_runtime)
-    monkeypatch.setattr("questorharness.ui.app.start_runtime", _start_runtime)
-    monkeypatch.setattr("questorharness.ui.app.handle_line", _handle_line)
-    monkeypatch.setattr("questorharness.ui.app.close_runtime", _close_runtime)
-    monkeypatch.setattr("questorharness.ui.coordinator_drain.get_task_manager", lambda: fake_manager)
-    monkeypatch.setattr("questorharness.ui.app.is_coordinator_mode", lambda: True)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.build_runtime", _build_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.start_runtime", _start_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.handle_line", _handle_line)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.close_runtime", _close_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.coordinator_drain.get_task_manager", lambda: fake_manager)
+    monkeypatch.setattr("questorharness.surfaces.ipc.app.is_coordinator_mode", lambda: True)
     monkeypatch.setattr(
-        "questorharness.ui.coordinator_drain.build_runtime_system_prompt",
+        "questorharness.surfaces.ipc.coordinator_drain.build_runtime_system_prompt",
         lambda *args, **kwargs: "coordinator",
     )
 
     async def _sleep(_seconds):
         return None
 
-    monkeypatch.setattr("questorharness.ui.coordinator_drain.asyncio.sleep", _sleep)
+    monkeypatch.setattr("questorharness.surfaces.ipc.coordinator_drain.asyncio.sleep", _sleep)
 
     await run_print_mode(prompt="research this", cwd="/tmp/demo")
 

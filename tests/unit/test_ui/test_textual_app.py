@@ -7,7 +7,7 @@ import pytest
 from questorharness.providers.llm.client import ApiMessageCompleteEvent
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock, ToolUseBlock
-from questorharness.ui.textual_app import QuestorHarnessTerminalApp
+from questorharness.surfaces.ipc.textual_app import QuestorHarnessTerminalApp
 
 
 class StaticApiClient:

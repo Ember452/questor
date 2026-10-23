@@ -63,8 +63,8 @@ from questorharness.contracts.session_storage import (
 from questorharness.surfaces.channels.bus.events import InboundMessage, OutboundMessage
 from questorharness.surfaces.channels.bus.queue import MessageBus
 from questorharness.surfaces.channels.impl.manager import ChannelManager
-from questorharness.ui.backend_host import run_backend_host
-from questorharness.ui.react_launcher import _resolve_npm, _resolve_tsx, get_frontend_dir
+from questorharness.surfaces.ipc.backend_host import run_backend_host
+from questorharness.surfaces.ipc.react_launcher import _resolve_npm, _resolve_tsx, get_frontend_dir
 from questorharness.bootstrap.runtime import (
     RuntimeBundle,
     _last_user_text,

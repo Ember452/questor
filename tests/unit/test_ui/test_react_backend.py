@@ -14,14 +14,14 @@ from questorharness.contracts.usage import UsageSnapshot
 from questorharness.contracts.domain.events import CompactProgressEvent
 from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock
 from questorharness.config.settings import Settings, save_settings
-from questorharness.ui.backend_host import (
+from questorharness.surfaces.ipc.backend_host import (
     BackendHostConfig,
     ReactBackendHost,
     _build_user_message_with_images,
     _format_transcript_line,
     run_backend_host,
 )
-from questorharness.ui.protocol import BackendEvent, FrontendImageAttachment, FrontendRequest
+from questorharness.surfaces.ipc.protocol import BackendEvent, FrontendImageAttachment, FrontendRequest
 from questorharness.bootstrap.runtime import build_runtime, close_runtime, start_runtime
 
 
@@ -149,7 +149,7 @@ async def test_run_backend_host_accepts_permission_mode(monkeypatch):
         captured["permission_mode"] = self._config.permission_mode
         return 0
 
-    monkeypatch.setattr("questorharness.ui.backend_host.ReactBackendHost.run", _fake_run)
+    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.ReactBackendHost.run", _fake_run)
 
     result = await run_backend_host(
         api_client=StaticApiClient("unused"),
@@ -168,7 +168,7 @@ async def test_run_backend_host_accepts_autodream_context(monkeypatch):
         captured["autodream_context"] = self._config.autodream_context
         return 0
 
-    monkeypatch.setattr("questorharness.ui.backend_host.ReactBackendHost.run", _fake_run)
+    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.ReactBackendHost.run", _fake_run)
 
     result = await run_backend_host(
         api_client=StaticApiClient("unused"),
@@ -193,11 +193,11 @@ async def test_backend_host_forwards_autodream_context_to_runtime(monkeypatch):
     async def _noop(*args, **kwargs):
         return None
 
-    monkeypatch.setattr("questorharness.ui.backend_host.build_runtime", _fake_build_runtime)
-    monkeypatch.setattr("questorharness.ui.backend_host.start_runtime", _noop)
-    monkeypatch.setattr("questorharness.ui.backend_host.close_runtime", _noop)
+    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.build_runtime", _fake_build_runtime)
+    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.start_runtime", _noop)
+    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.close_runtime", _noop)
     monkeypatch.setattr(
-        "questorharness.ui.backend_host.BackendEvent.ready",
+        "questorharness.surfaces.ipc.backend_host.BackendEvent.ready",
         staticmethod(lambda *args, **kwargs: BackendEvent(type="ready")),
     )
     monkeypatch.setattr(ReactBackendHost, "_read_requests", _noop)
@@ -238,7 +238,7 @@ async def test_read_requests_resolves_permission_response_without_queueing(monke
     class _FakeStdin:
         buffer = _FakeBuffer()
 
-    monkeypatch.setattr("questorharness.ui.backend_host.sys.stdin", _FakeStdin())
+    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.sys.stdin", _FakeStdin())
 
     await host._read_requests()
 
@@ -270,7 +270,7 @@ async def test_read_requests_resolves_edit_approval_response_without_queueing(mo
     class _FakeStdin:
         buffer = _FakeBuffer()
 
-    monkeypatch.setattr("questorharness.ui.backend_host.sys.stdin", _FakeStdin())
+    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.sys.stdin", _FakeStdin())
 
     await host._read_requests()
 
@@ -304,7 +304,7 @@ async def test_read_requests_interrupt_cancels_active_request(monkeypatch):
     class _FakeStdin:
         buffer = _FakeBuffer()
 
-    monkeypatch.setattr("questorharness.ui.backend_host.sys.stdin", _FakeStdin())
+    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.sys.stdin", _FakeStdin())
 
     await host._read_requests()
 
@@ -498,7 +498,7 @@ async def test_backend_host_emits_compact_progress_event(tmp_path, monkeypatch):
         )
         return True
 
-    monkeypatch.setattr("questorharness.ui.backend_host.handle_line", _fake_handle_line)
+    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.handle_line", _fake_handle_line)
     host._emit = _emit  # type: ignore[method-assign]
     await start_runtime(host._bundle)
     try:
@@ -636,7 +636,7 @@ async def test_build_runtime_leaves_interactive_sessions_unbounded_by_default(tm
 async def test_backend_host_emits_utf8_protocol_bytes(monkeypatch):
     host = ReactBackendHost(BackendHostConfig())
     fake_stdout = FakeBinaryStdout()
-    monkeypatch.setattr("questorharness.ui.backend_host.sys.stdout", fake_stdout)
+    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.sys.stdout", fake_stdout)
 
     await host._emit(BackendEvent(type="assistant_delta", message="你好😊"))
 

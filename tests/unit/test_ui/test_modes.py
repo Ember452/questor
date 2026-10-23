@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from questorharness.ui.input import InputSession
-from questorharness.ui.output import OutputRenderer
+from questorharness.surfaces.ipc.input import InputSession
+from questorharness.surfaces.ipc.output import OutputRenderer
 
 
 def test_input_session_updates_prompt_modes():

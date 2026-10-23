@@ -9,7 +9,7 @@
 当前仓内同时存在两套终端 UI：
 
 - `frontend/terminal`：Node Ink（`ink` 5 / `react` 18 / `tsx`），打包时以 force-include 注入 `questorharness/_frontend`；
-- `src/questorharness/ui`：11 个 Python 模块，依赖 `textual` 与 `prompt-toolkit`，被 18 处 import。
+- `src/questorharness/surfaces/ipc`：11 个 Python 模块，依赖 `textual` 与 `prompt-toolkit`，被 18 处 import。
 
 同时产品路线要求 Electron 桌面端（`apps/desktop` + `apps/web`），并且 personal / coding 两种模式要共用同一套 run/session。三套 UI 意味着三份状态投影、三份输入/快捷键/主题实现，以及两条打包链。
 
@@ -17,8 +17,9 @@
 
 1. `apps/web`（React）是唯一 renderer；`apps/desktop`（Electron main/preload）只是它的宿主。
 2. 终端体验若保留，只作为**瘦客户端**：复用同一套 Transport（HTTP/SSE/IPC）与 envelope，不复制业务、不复制状态投影；**不建 `surfaces/terminal/`**。
-3. `frontend/terminal`、`src/questorharness/ui`、`themes/`、`keybindings/`、`vim/`、`output_styles/` 在 Phase 1 **冻结**（不搬、不新增功能），Phase 2 用单独 PR 移除。
-4. 移除顺序固定为：先解耦（把 CLI 编排从 `ui/` 抽出，保证 `questorharness --help` 与 run 路径不依赖 ui）→ 再删模块 → 再删依赖（`textual`、`prompt-toolkit`）→ 最后删 `frontend/terminal` 与 wheel force-include。
+3. `frontend/terminal`、`src/questorharness/surfaces/ipc`、`themes/`、`keybindings/`、`vim/`、`output_styles/` 在 Phase 1 **冻结**（不搬、不新增功能），Phase 2 用单独 PR 移除。
+   - 2026-10-23 更新：UI **不删除**。`ui/` 已拆成 `bootstrap/runtime.py`（组合根）与 `surfaces/ipc/`（宿主层）；`themes/`、`keybindings/`、`vim/`、`output_styles/` 仍保留。
+4. 移除顺序固定为：先解耦（组合根进 `bootstrap/`，宿主进 `surfaces/ipc/`，保证 `questorharness --help` 与 run 路径不依赖 UI 编排）→ 再评估删模块 → 再删依赖（`textual`、`prompt-toolkit`）→ 最后删 `frontend/terminal` 与 wheel force-include。
 5. `surfaces` 只保留 http / sse / ipc / gateway / channels。
 
 ## Alternatives considered

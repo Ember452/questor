@@ -28,7 +28,7 @@ from questorharness.contracts.domain.events import (
     ToolExecutionStarted,
 )
 from questorharness.runtime.tasks import get_task_manager
-from questorharness.ui.coordinator_drain import drain_coordinator_async_agents
+from questorharness.surfaces.ipc.coordinator_drain import drain_coordinator_async_agents
 from questorharness.bootstrap.runtime import build_runtime, close_runtime, handle_line, start_runtime
 
 
