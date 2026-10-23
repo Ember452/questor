@@ -108,10 +108,13 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # red until the matching comment is also removed.
 # R5 is 17 rather than 16: the product distribution's ``questor/gateway`` package
 # also has no ``__all__`` and is covered by the same rule.
+# R4 is 7 rather than 14: W8 found that seven of the exempted entries are pure
+# lazy ``__getattr__`` name tables (re-export, not behavior), so they were never
+# debt; the remaining seven facades do contain behavior and stay registered.
 EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 4,
     "R3": 22,
-    "R4": 14,
+    "R4": 7,
     "R5": 17,
     "R7": 170,
     "R8": 31,
@@ -122,7 +125,67 @@ EXEMPTION_BUDGET: dict[str, int] = {
 R8_EXEMPT_FUNCTIONS = 40
 
 PINNED_LINES_RE = re.compile(r"(\d+)\s+lines")
-FACADE_LOGIC_RE = re.compile(r"^\s*(async\s+def|def|class)\s", re.MULTILINE)
+
+# Statements that do work rather than name things. A facade may re-export eagerly
+# or lazily through ``__getattr__``; either way it must not compute (ADR-0003 §1).
+COMPUTING_STATEMENTS: tuple[type[ast.AST], ...] = (
+    ast.For,
+    ast.AsyncFor,
+    ast.While,
+    ast.Try,
+    ast.With,
+    ast.AsyncWith,
+    ast.ClassDef,
+    ast.Match,
+)
+NESTABLE_STATEMENTS: tuple[type[ast.AST], ...] = COMPUTING_STATEMENTS + (
+    ast.FunctionDef,
+    ast.AsyncFunctionDef,
+)
+
+# A lazy facade is a name table, so its honest size bound scales with the number
+# of exported names instead of a constant that ignores them.
+LAZY_FACADE_BASE_LINES = 40
+LAZY_FACADE_LINES_PER_EXPORT = 8
+
+
+def _facade_shape(tree: ast.Module) -> tuple[str, str, int]:
+    """Classify a package entry as ``eager`` / ``lazy`` / ``behavior``.
+
+    Returns the shape, the offending construct for ``behavior``, and the number of
+    names in a literal ``__all__`` (0 when there is none, which keeps the strict
+    line cap).
+    """
+
+    exported = 0
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            getattr(target, "id", None) == "__all__" for target in node.targets
+        ) and isinstance(node.value, (ast.List, ast.Tuple)):
+            exported = len(node.value.elts)
+
+    for node in tree.body:
+        if isinstance(node, COMPUTING_STATEMENTS):
+            return "behavior", type(node).__name__, exported
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name != "__getattr__":
+            return "behavior", f"def {node.name}()", exported
+
+    functions = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    if not functions:
+        return "eager", "", exported
+    for function in functions:
+        for inner in ast.walk(function):
+            if inner is function:
+                continue
+            if isinstance(inner, NESTABLE_STATEMENTS):
+                return "behavior", f"__getattr__ contains {type(inner).__name__}", exported
+    return "lazy", "", exported
+
+
+def _facade_line_limit(shape: str, exported: int) -> int:
+    if shape != "lazy" or exported <= 0:
+        return FACADE_LINE_LIMIT
+    return LAZY_FACADE_BASE_LINES + LAZY_FACADE_LINES_PER_EXPORT * exported
 KEY_FILES_RE = re.compile(r"关键文件[：:]\s*(.+)")
 BACKTICK_RE = re.compile(r"`([^`\n]+)`")
 
@@ -280,26 +343,37 @@ def rule_r3_names(root: Path) -> list[Violation]:
 
 
 def rule_r4_facade(root: Path) -> list[Violation]:
-    """``__init__.py`` stays a facade: no def/class and no more than 40 lines."""
+    """``__init__.py`` stays a facade: re-export only, and no unbounded growth.
+
+    Two shapes are legal. An **eager** facade is imports plus ``__all__`` and stays
+    under ``FACADE_LINE_LIMIT``. A **lazy** facade routes names through
+    ``__getattr__``; that routing is re-export, not behavior, so it is allowed —
+    with a size bound that grows with the declared exports instead of pretending
+    ten names fit in forty lines. Anything that computes (loops, try, with, class,
+    a second function, or logic inside the dispatcher) is a violation.
+    """
+
     violations: list[Violation] = []
     for path in _source_files(root):
         if path.name != "__init__.py":
             continue
         text = read_text(path)
-        has_logic = bool(FACADE_LOGIC_RE.search(text))
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue
+        shape, detail, exported = _facade_shape(tree)
         lines = len(text.splitlines())
-        if not has_logic and lines <= FACADE_LINE_LIMIT:
+        limit = _facade_line_limit(shape, exported)
+        if shape == "behavior":
+            problem = f"facade contains behavior ({detail})"
+        elif lines > limit:
+            problem = f"{lines} lines > {limit} ({shape} facade limit)"
+        else:
             continue
         if "R4" in parse_exemptions(path):
             continue
-        if has_logic:
-            violations.append(
-                Violation("R4", _relative(path, root), "facade contains def/class (logic belongs in siblings)")
-            )
-        else:
-            violations.append(
-                Violation("R4", _relative(path, root), f"{lines} lines > {FACADE_LINE_LIMIT}")
-            )
+        violations.append(Violation("R4", _relative(path, root), problem))
     return violations
 
 

@@ -52,4 +52,3 @@ def __getattr__(name: str):
         return LoadedPlugin
     raise AttributeError(name)
 
-# questor: allow R4 -- until W8 facade split

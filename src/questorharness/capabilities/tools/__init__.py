@@ -36,4 +36,3 @@ def __getattr__(name: str) -> Any:
         return create_default_tool_registry
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-# questor: allow R4 -- until W8 facade split

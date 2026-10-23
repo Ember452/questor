@@ -78,5 +78,4 @@ def __getattr__(name: str):
         }[name]
     raise AttributeError(name)
 
-# questor: allow R4 -- until W8 facade split
 # questor: allow R5 -- until W8 public-face split

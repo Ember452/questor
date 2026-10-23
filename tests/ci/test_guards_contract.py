@@ -164,6 +164,53 @@ def test_budget_ratchet_is_silent_when_counts_match() -> None:
     assert off_by_one and all(item.startswith("R8") for item in off_by_one), off_by_one
 
 
+LAZY_FACADE = '''"""Lazy facade."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from questorharness.engine import thing
+
+__all__ = ["thing", "other"]
+
+
+def __getattr__(name: str):
+    if name in {"thing", "other"}:
+        from questorharness.engine import thing
+
+        return thing
+    raise AttributeError(name)
+'''
+
+
+def test_r4_accepts_a_pure_lazy_facade(tmp_path: Path) -> None:
+    """Routing names through __getattr__ is re-export, so it must stay green."""
+    root = _repo(tmp_path, {"src/questorharness/lazypkg/__init__.py": LAZY_FACADE})
+    hits = [item for item in rules.rule_r4_facade(root) if "lazypkg" in item.path]
+    assert hits == [], [item.render() for item in hits]
+
+
+def test_r4_rejects_a_facade_that_computes(tmp_path: Path) -> None:
+    """A second function in the entry point is behavior and belongs in a sibling."""
+    source = LAZY_FACADE + "\n\ndef helper():\n    return 1\n"
+    root = _repo(tmp_path, {"src/questorharness/busy/__init__.py": source})
+    hits = [item for item in rules.rule_r4_facade(root) if "busy" in item.path]
+    assert any("facade contains behavior" in item.message for item in hits), [item.render() for item in hits]
+
+
+def test_r4_lazy_facade_size_bound_tracks_exports(tmp_path: Path) -> None:
+    """The cap grows with the name table, and still refuses unbounded padding."""
+    padded = LAZY_FACADE + "\n" + "\n".join(f"# note {index}" for index in range(60)) + "\n"
+    root = _repo(tmp_path, {"src/questorharness/verbose/__init__.py": padded})
+    hits = [item for item in rules.rule_r4_facade(root) if "verbose" in item.path]
+    limit = rules.LAZY_FACADE_BASE_LINES + rules.LAZY_FACADE_LINES_PER_EXPORT * 2
+    assert any(f"(lazy facade limit)" in item.message and str(limit) in item.message for item in hits), [
+        item.render() for item in hits
+    ]
+
+
 @pytest.mark.parametrize("rule", ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"])
 def test_every_rule_has_a_green_counterpart(rule: str, tmp_path: Path) -> None:
     """Every rule must be silent on the clean fixture."""

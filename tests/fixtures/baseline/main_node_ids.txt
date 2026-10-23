@@ -14,7 +14,10 @@ tests/ci/test_guards_contract.py::test_exemption_without_reason_is_red
 tests/ci/test_guards_contract.py::test_r1_fanout_red_then_green
 tests/ci/test_guards_contract.py::test_r2_lines_red_then_green
 tests/ci/test_guards_contract.py::test_r3_banned_name_red_then_green
+tests/ci/test_guards_contract.py::test_r4_accepts_a_pure_lazy_facade
 tests/ci/test_guards_contract.py::test_r4_facade_red_then_green
+tests/ci/test_guards_contract.py::test_r4_lazy_facade_size_bound_tracks_exports
+tests/ci/test_guards_contract.py::test_r4_rejects_a_facade_that_computes
 tests/ci/test_guards_contract.py::test_r5_exports_red_then_green
 tests/ci/test_guards_contract.py::test_r6_map_red_then_green
 tests/ci/test_guards_contract.py::test_r7_mirror_red_then_green
