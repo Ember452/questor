@@ -15,6 +15,11 @@ from questorharness.capabilities.tools.task.task_create_tool import TaskCreateTo
 from questorharness.capabilities.tools.task.task_output_tool import TaskOutputTool, TaskOutputToolInput
 from questorharness.capabilities.tools.task.task_update_tool import TaskUpdateTool, TaskUpdateToolInput
 from questorharness.capabilities.tools.agent.team_create_tool import TeamCreateTool, TeamCreateToolInput
+from questorharness.runtime.services import default_subagent_runtime, default_task_runtime
+
+
+def _context(cwd: Path) -> ToolExecutionContext:
+    return ToolExecutionContext(cwd=cwd, tasks=default_task_runtime, subagents=default_subagent_runtime)
 
 
 async def _wait_for_terminal_task(task_id: str, *, timeout_seconds: float = 2.0) -> None:
@@ -31,7 +36,7 @@ async def _wait_for_terminal_task(task_id: str, *, timeout_seconds: float = 2.0)
 @pytest.mark.asyncio
 async def test_task_create_and_output_tool(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
-    context = ToolExecutionContext(cwd=tmp_path)
+    context = _context(tmp_path)
 
     create_result = await TaskCreateTool().execute(
         TaskCreateToolInput(
@@ -60,7 +65,7 @@ async def test_task_create_and_output_tool(tmp_path: Path, monkeypatch):
 async def test_team_create_tool(tmp_path: Path):
     result = await TeamCreateTool().execute(
         TeamCreateToolInput(name="demo", description="test"),
-        ToolExecutionContext(cwd=tmp_path),
+        _context(tmp_path),
     )
     assert result.is_error is False
     assert "Created team demo" == result.output
@@ -69,7 +74,7 @@ async def test_team_create_tool(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_task_update_tool_updates_metadata(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
-    context = ToolExecutionContext(cwd=tmp_path)
+    context = _context(tmp_path)
 
     create_result = await TaskCreateTool().execute(
         TaskCreateToolInput(
@@ -114,7 +119,7 @@ async def test_agent_tool_uses_subprocess_backend_and_task_is_pollable(
     never saw — every poll attempt raised ValueError.
     """
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
-    context = ToolExecutionContext(cwd=tmp_path)
+    context = _context(tmp_path)
 
     result = await AgentTool().execute(
         AgentToolInput(
@@ -170,7 +175,7 @@ async def test_send_message_swarm_path_uses_subprocess_backend(
     from unittest.mock import AsyncMock, patch
 
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
-    context = ToolExecutionContext(cwd=tmp_path)
+    context = _context(tmp_path)
 
     from questorharness.capabilities.tools.agent.send_message_tool import SendMessageTool
 
@@ -201,7 +206,7 @@ async def test_send_message_swarm_path_uses_subprocess_backend(
 async def test_agent_tool_creates_missing_team_when_team_argument_is_provided(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
     get_team_registry()._teams.clear()
-    context = ToolExecutionContext(cwd=tmp_path)
+    context = _context(tmp_path)
 
     result = await AgentTool().execute(
         AgentToolInput(
@@ -223,7 +228,7 @@ async def test_agent_tool_creates_missing_team_when_team_argument_is_provided(tm
 @pytest.mark.asyncio
 async def test_agent_tool_supports_remote_and_teammate_modes(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
-    context = ToolExecutionContext(cwd=tmp_path)
+    context = _context(tmp_path)
 
     for i, mode in enumerate(("remote_agent", "in_process_teammate")):
         result = await AgentTool().execute(

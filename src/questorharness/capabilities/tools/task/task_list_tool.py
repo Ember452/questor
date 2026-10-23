@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.tasks.manager import get_task_manager
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
@@ -26,8 +25,9 @@ class TaskListTool(BaseTool):
         return True
 
     async def execute(self, arguments: TaskListToolInput, context: ToolExecutionContext) -> ToolResult:
-        del context
-        tasks = get_task_manager().list_tasks(status=arguments.status)  # type: ignore[arg-type]
+        if context.tasks is None:
+            return ToolResult(output="task runtime unavailable", is_error=True)
+        tasks = context.tasks.list_tasks(status=arguments.status)  # type: ignore[arg-type]
         if not tasks:
             return ToolResult(output="(no tasks)")
         return ToolResult(

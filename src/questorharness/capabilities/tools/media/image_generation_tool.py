@@ -13,7 +13,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
-from questorharness.capabilities.tools.ports import LlmToolRuntime
+from questorharness.capabilities.ports import LlmToolRuntime
 
 log = logging.getLogger(__name__)
 

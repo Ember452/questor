@@ -103,7 +103,7 @@ async def run_test(name, coro):
 # ====================================================================
 async def test_hooks_command_block():
     """Register a pre_tool_use command hook that blocks bash, verify it fires."""
-    from questorharness.hooks.events import HookEvent
+    from questorharness.contracts.hooks import HookEvent
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
     from questorharness.hooks.executor import HookExecutor, HookExecutionContext
@@ -148,7 +148,7 @@ async def test_hooks_command_block():
 # ====================================================================
 async def test_hooks_post_tool_use():
     """Register a post_tool_use hook that logs tool output, verify it runs."""
-    from questorharness.hooks.events import HookEvent
+    from questorharness.contracts.hooks import HookEvent
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
     from questorharness.hooks.executor import HookExecutor, HookExecutionContext
@@ -191,7 +191,7 @@ async def test_hooks_in_agent_loop():
     from questorharness.capabilities.policy.modes import PermissionMode
     from questorharness.capabilities.tools.base import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
-    from questorharness.hooks.events import HookEvent
+    from questorharness.contracts.hooks import HookEvent
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
     from questorharness.hooks.executor import HookExecutor, HookExecutionContext
@@ -651,7 +651,7 @@ async def test_combined_hooks_skills_agent():
     """Combined test: load skills, register hooks, run agent on AutoAgent."""
     from questorharness.skills.registry import SkillRegistry
     from questorharness.skills.types import SkillDefinition
-    from questorharness.hooks.events import HookEvent
+    from questorharness.contracts.hooks import HookEvent
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
     from questorharness.hooks.executor import HookExecutor, HookExecutionContext

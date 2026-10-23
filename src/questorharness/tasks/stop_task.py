@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from questorharness.tasks.manager import get_task_manager
-from questorharness.tasks.types import TaskRecord
+from questorharness.contracts.task import TaskRecord
 
 
 async def stop_task(task_id: str) -> TaskRecord:

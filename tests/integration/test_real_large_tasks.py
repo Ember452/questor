@@ -94,7 +94,7 @@ async def task_security_audit_with_hooks():
     """Full security audit: agent reads code, fetches OWASP checklist, reports issues.
     Hooks log every tool use. Permission denies dangerous commands."""
 
-    from questorharness.hooks.events import HookEvent
+    from questorharness.contracts.hooks import HookEvent
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
     from questorharness.hooks.executor import HookExecutor, HookExecutionContext

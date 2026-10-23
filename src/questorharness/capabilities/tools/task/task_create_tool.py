@@ -6,7 +6,6 @@ import os
 
 from pydantic import BaseModel, Field
 
-from questorharness.tasks.manager import get_task_manager
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
@@ -28,11 +27,13 @@ class TaskCreateTool(BaseTool):
     input_model = TaskCreateToolInput
 
     async def execute(self, arguments: TaskCreateToolInput, context: ToolExecutionContext) -> ToolResult:
-        manager = get_task_manager()
+        tasks = context.tasks
+        if tasks is None:
+            return ToolResult(output="task runtime unavailable", is_error=True)
         if arguments.type == "local_bash":
             if not arguments.command:
                 return ToolResult(output="command is required for local_bash tasks", is_error=True)
-            task = await manager.create_shell_task(
+            task = await tasks.create_shell_task(
                 command=arguments.command,
                 description=arguments.description,
                 cwd=context.cwd,
@@ -41,7 +42,7 @@ class TaskCreateTool(BaseTool):
             if not arguments.prompt:
                 return ToolResult(output="prompt is required for local_agent tasks", is_error=True)
             try:
-                task = await manager.create_agent_task(
+                task = await tasks.create_agent_task(
                     prompt=arguments.prompt,
                     description=arguments.description,
                     cwd=context.cwd,

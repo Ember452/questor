@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from questorharness.tasks.manager import get_task_manager
-from questorharness.tasks.types import TaskRecord
+from questorharness.contracts.task import TaskRecord
 
 
 async def spawn_shell_task(command: str, description: str, cwd: str | Path) -> TaskRecord:

@@ -131,7 +131,7 @@ class _HookExecutorStub:
 
     async def execute(self, event: HookEvent, payload: dict[str, object]):
         self.events.append((event, payload))
-        from questorharness.hooks.types import AggregatedHookResult
+        from questorharness.contracts.hooks import AggregatedHookResult
 
         return AggregatedHookResult()
 

@@ -12,7 +12,7 @@ forbidden_modules =
     questor
 
 [importlinter:contract:capabilities-are-leaf]
-name = Capabilities must not import runtime, kernel or providers
+name = Capabilities may import contracts only
 type = forbidden
 source_modules =
     questorharness.capabilities
@@ -20,8 +20,14 @@ forbidden_modules =
     questorharness.kernel
     questorharness.runtime
     questorharness.providers
-# utils.shell still re-exports sandbox helpers; W6 moves utils into providers,
-# at which point this contract can drop the indirect allowance.
+    questorharness.tasks
+    questorharness.swarm
+    questorharness.coordinator
+    questorharness.hooks
+# Remaining top-level packages (config, engine, plugins, ui, ...) still have
+# direct edges from capabilities; they move behind contracts in later waves and
+# join this list then.
+# The tools facade re-exports capabilities modules, so only direct edges count.
 allow_indirect_imports = True
 
 [importlinter:contract:product-uses-public-face]

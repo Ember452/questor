@@ -15,6 +15,7 @@ from questorharness.config.settings import Settings
 from questorharness.hooks import HookEvent, HookExecutor
 from questorharness.capabilities.policy.checker import PermissionChecker
 from questorharness.capabilities.memory.consolidate.service import schedule_auto_dream
+from questorharness.runtime.services import default_task_runtime
 from questorharness.capabilities.tools.base import ToolRegistry
 
 
@@ -147,6 +148,7 @@ class QueryEngine:
         schedule_auto_dream(
             cwd=self._cwd,
             settings=self._settings,
+            tasks=default_task_runtime,
             model=self._model,
             current_session_id=str(self._tool_metadata.get("session_id") or ""),
             **kwargs,

@@ -110,6 +110,16 @@ def test_memory_backup_diff_and_restore(tmp_path: Path) -> None:
     assert (memory_dir / "MEMORY.md").read_text(encoding="utf-8") == "# Memory\n"
 
 
+class _UnusedTasks:
+    """Task port stub for paths that return before scheduling."""
+
+    def register_completion_listener(self, listener):
+        return None
+
+    async def create_shell_task(self, **kwargs):
+        raise AssertionError("create_shell_task must not be called")
+
+
 async def test_execute_auto_dream_skips_when_disabled(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
     cwd = tmp_path / "repo"
@@ -117,7 +127,7 @@ async def test_execute_auto_dream_skips_when_disabled(tmp_path: Path, monkeypatc
     settings = Settings()
     settings.memory.auto_dream_enabled = False
 
-    assert await execute_auto_dream(cwd=cwd, settings=settings, model="test") is None
+    assert await execute_auto_dream(cwd=cwd, settings=settings, tasks=_UnusedTasks(), model="test") is None
 
 
 async def test_start_dream_now_uses_overrides(tmp_path: Path, monkeypatch) -> None:
@@ -156,7 +166,7 @@ async def test_start_dream_now_uses_overrides(tmp_path: Path, monkeypatch) -> No
             return None
 
         async def create_shell_task(self, **kwargs):
-            from questorharness.tasks.types import TaskRecord
+            from questorharness.contracts.task import TaskRecord
 
             captured.update(kwargs)
             return TaskRecord(
@@ -170,11 +180,11 @@ async def test_start_dream_now_uses_overrides(tmp_path: Path, monkeypatch) -> No
                 env=kwargs["env"],
             )
 
-    monkeypatch.setattr("questorharness.capabilities.memory.consolidate.service.get_task_manager", lambda: _Manager())
     settings = Settings()
     task = await start_dream_now(
         cwd=cwd,
         settings=settings,
+        tasks=_Manager(),
         force=True,
         memory_dir=memory_dir,
         session_dir=session_dir,
@@ -210,7 +220,7 @@ async def test_start_dream_now_propagates_transient_provider_settings(tmp_path: 
             return None
 
         async def create_shell_task(self, **kwargs):
-            from questorharness.tasks.types import TaskRecord
+            from questorharness.contracts.task import TaskRecord
 
             captured.update(kwargs)
             return TaskRecord(
@@ -224,7 +234,6 @@ async def test_start_dream_now_propagates_transient_provider_settings(tmp_path: 
                 env=kwargs["env"],
             )
 
-    monkeypatch.setattr("questorharness.capabilities.memory.consolidate.service.get_task_manager", lambda: _Manager())
     settings = Settings(
         provider="openai",
         api_format="openai",
@@ -237,6 +246,7 @@ async def test_start_dream_now_propagates_transient_provider_settings(tmp_path: 
     task = await start_dream_now(
         cwd=cwd,
         settings=settings,
+        tasks=_Manager(),
         force=True,
         memory_dir=memory_dir,
         session_dir=session_dir,

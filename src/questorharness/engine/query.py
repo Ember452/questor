@@ -40,11 +40,13 @@ from questorharness.contracts.domain.events import (
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
-from questorharness.hooks import HookEvent, HookExecutor
+from questorharness.contracts.hooks import HookEvent
+from questorharness.hooks import HookExecutor
 from questorharness.capabilities.policy.checker import PermissionChecker
 from questorharness.contracts.tool_outputs import tool_output_inline_chars, tool_output_preview_chars
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.base import ToolRegistry
+from questorharness.runtime.services import default_subagent_runtime, default_task_runtime
 
 AUTO_COMPACT_STATUS_MESSAGE = "Auto-compacting conversation memory to keep things fast and focused."
 REACTIVE_COMPACT_STATUS_MESSAGE = "Prompt too long; compacting conversation memory and retrying."
@@ -988,6 +990,8 @@ async def _execute_tool_call(
             sandbox=_TOOL_SANDBOX_RUNTIME,
             llm=_TOOL_LLM_RUNTIME,
             lsp=_TOOL_LSP_RUNTIME,
+            tasks=default_task_runtime,
+            subagents=default_subagent_runtime,
         ),
     )
     elapsed = time.monotonic() - t0

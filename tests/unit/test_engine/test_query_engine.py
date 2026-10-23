@@ -701,7 +701,7 @@ class _RecordingHookExecutor:
         self.calls: list[tuple[HookEvent, dict]] = []
 
     async def execute(self, event: HookEvent, payload: dict):
-        from questorharness.hooks.types import AggregatedHookResult
+        from questorharness.contracts.hooks import AggregatedHookResult
 
         self.calls.append((event, dict(payload)))
         return AggregatedHookResult(results=[])

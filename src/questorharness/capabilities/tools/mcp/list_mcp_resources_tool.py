@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
-from questorharness.capabilities.tools.ports import McpClientPort
+from questorharness.capabilities.ports import McpClientPort
 
 
 class ListMcpResourcesToolInput(BaseModel):

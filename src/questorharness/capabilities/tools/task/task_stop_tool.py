@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.tasks.manager import get_task_manager
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
@@ -22,9 +21,10 @@ class TaskStopTool(BaseTool):
     input_model = TaskStopToolInput
 
     async def execute(self, arguments: TaskStopToolInput, context: ToolExecutionContext) -> ToolResult:
-        del context
+        if context.tasks is None:
+            return ToolResult(output="task runtime unavailable", is_error=True)
         try:
-            task = await get_task_manager().stop_task(arguments.task_id)
+            task = await context.tasks.stop_task(arguments.task_id)
         except ValueError as exc:
             return ToolResult(output=str(exc), is_error=True)
         return ToolResult(output=f"Stopped task {task.id}")

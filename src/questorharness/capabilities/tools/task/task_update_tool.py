@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.tasks.manager import get_task_manager
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
@@ -29,9 +28,10 @@ class TaskUpdateTool(BaseTool):
         arguments: TaskUpdateToolInput,
         context: ToolExecutionContext,
     ) -> ToolResult:
-        del context
+        if context.tasks is None:
+            return ToolResult(output="task runtime unavailable", is_error=True)
         try:
-            task = get_task_manager().update_task(
+            task = context.tasks.update_task(
                 arguments.task_id,
                 description=arguments.description,
                 progress=arguments.progress,

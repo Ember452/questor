@@ -24,8 +24,8 @@ from questorharness.capabilities.memory.consolidate.lock import (
 )
 from questorharness.capabilities.memory.consolidate.prompt import build_consolidation_prompt
 from questorharness.contracts.session_storage import get_project_session_dir
-from questorharness.tasks.manager import get_task_manager
-from questorharness.tasks.types import TaskRecord
+from questorharness.capabilities.ports import TaskRuntime
+from questorharness.contracts.task import TaskRecord
 
 SESSION_SCAN_INTERVAL_SECONDS = 10 * 60
 _CHILD_ENV = "QUESTORHARNESS_AUTODREAM_CHILD"
@@ -67,7 +67,7 @@ def _files_changed_since(memory_dir: Path, before: dict[str, float]) -> list[str
     return changed
 
 
-def _ensure_listener_registered() -> None:
+def _ensure_listener_registered(tasks: TaskRuntime) -> None:
     global _listener_registered
     if _listener_registered:
         return
@@ -86,7 +86,7 @@ def _ensure_listener_registered() -> None:
         if task.status in {"failed", "killed"} or task.metadata.get("preview") == "true":
             rollback_consolidation_lock(task.cwd, prior_mtime, memory_dir=memory_dir)
 
-    get_task_manager().register_completion_listener(_listener)
+    tasks.register_completion_listener(_listener)
     _listener_registered = True
 
 
@@ -117,6 +117,7 @@ async def start_dream_now(
     *,
     cwd: str | Path,
     settings: Settings,
+    tasks: TaskRuntime,
     model: str | None = None,
     current_session_id: str | None = None,
     force: bool = False,
@@ -156,7 +157,7 @@ async def start_dream_now(
     if prior_mtime is None:
         return None
 
-    _ensure_listener_registered()
+    _ensure_listener_registered(tasks)
     resolved_memory_dir.mkdir(parents=True, exist_ok=True)
     resolved_session_dir.mkdir(parents=True, exist_ok=True)
     before = _memory_files_mtime_snapshot(resolved_memory_dir)
@@ -245,7 +246,7 @@ async def start_dream_now(
             if auth_kind == "api_key" and auth_value:
                 argv.extend(["--api-key", auth_value])
         argv.extend(["--print", prompt])
-        task = await get_task_manager().create_shell_task(
+        task = await tasks.create_shell_task(
             description="dreaming",
             cwd=cwd,
             task_type="dream",
@@ -285,7 +286,7 @@ async def start_dream_now(
             done.metadata["phase"] = "updating"
             done.metadata["files_touched"] = "\n".join(changed)
 
-    get_task_manager().register_completion_listener(_mark_changed_on_completion)
+    tasks.register_completion_listener(_mark_changed_on_completion)
     return task
 
 
@@ -293,6 +294,7 @@ async def execute_auto_dream(
     *,
     cwd: str | Path,
     settings: Settings,
+    tasks: TaskRuntime,
     model: str | None = None,
     current_session_id: str | None = None,
     memory_dir: str | Path | None = None,
@@ -336,6 +338,7 @@ async def execute_auto_dream(
     return await start_dream_now(
         cwd=cwd,
         settings=settings,
+        tasks=tasks,
         model=model,
         current_session_id=current_session_id,
         force=False,

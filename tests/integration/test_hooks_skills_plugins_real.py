@@ -73,7 +73,7 @@ async def task_hook_blocks_model_adapts():
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
-    from questorharness.hooks.events import HookEvent
+    from questorharness.contracts.hooks import HookEvent
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
     from questorharness.hooks.executor import HookExecutor, HookExecutionContext
@@ -356,7 +356,7 @@ async def task_hook_gates_writes_skill_guides():
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
     from questorharness.capabilities.tools.fs.grep_tool import GrepTool
     from questorharness.capabilities.tools.skill_tool import SkillTool
-    from questorharness.hooks.events import HookEvent
+    from questorharness.contracts.hooks import HookEvent
     from questorharness.hooks.loader import HookRegistry
     from questorharness.hooks.schemas import CommandHookDefinition
     from questorharness.hooks.executor import HookExecutor, HookExecutionContext

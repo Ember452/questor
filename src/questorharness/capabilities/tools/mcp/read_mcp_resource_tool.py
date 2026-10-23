@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from questorharness.contracts.errors import McpServerNotConnectedError
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
-from questorharness.capabilities.tools.ports import McpClientPort
+from questorharness.capabilities.ports import McpClientPort
 
 
 class ReadMcpResourceToolInput(BaseModel):

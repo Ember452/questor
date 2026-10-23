@@ -6,12 +6,8 @@ import logging
 
 from pydantic import BaseModel, Field
 
-from questorharness.coordinator.agent_definitions import get_agent_definition
-from questorharness.coordinator.coordinator_mode import get_team_registry
-from questorharness.hooks import HookEvent
-from questorharness.swarm.registry import get_backend_registry
-from questorharness.swarm.types import TeammateSpawnConfig
-from questorharness.tasks import get_task_manager
+from questorharness.contracts.hooks import HookEvent
+from questorharness.contracts.task import TaskRecord
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 logger = logging.getLogger(__name__)
@@ -50,36 +46,29 @@ class AgentTool(BaseTool):
             )
 
         # 若指定 subagent_type 则查找 Agent 定义
-        agent_def = None
-        if arguments.subagent_type:
-            agent_def = get_agent_definition(arguments.subagent_type)
+        subagents = context.subagents
+        if subagents is None:
+            return ToolResult(output="subagent runtime unavailable", is_error=True)
+        tasks = context.tasks
+        profile = subagents.resolve_profile(arguments.subagent_type) if arguments.subagent_type else None
 
         # 为群协作后端解析团队和 Agent 名称
         team = arguments.team or "default"
         agent_name = arguments.subagent_type or "agent"
 
-        # 使用子进程后端，使生成的 Agent 注册到
-        # BackgroundTaskManager，并可由任务工具轮询。
-        # 进程内任务返回 asyncio 内部 ID，任务工具
-        # 无法查询；子进程后端在所有平台始终可用。
-        registry = get_backend_registry()
-        executor = registry.get_executor("subprocess")
-
-        config = TeammateSpawnConfig(
-            name=agent_name,
-            team=team,
-            prompt=arguments.prompt,
-            cwd=str(context.cwd),
-            parent_session_id="main",
-            model=arguments.model or (agent_def.model if agent_def else None),
-            command=arguments.command,
-            system_prompt=agent_def.system_prompt if agent_def else None,
-            permissions=agent_def.permissions if agent_def else [],
-            task_type=arguments.mode,
-        )
-
+        # 任务状态由注入的 TaskRuntime 统一持有，agent 任务因此可被任务工具轮询。
         try:
-            result = await executor.spawn(config)
+            result = await subagents.spawn(
+                name=agent_name,
+                team=team,
+                prompt=arguments.prompt,
+                cwd=str(context.cwd),
+                model=arguments.model or (profile.model if profile else None),
+                command=arguments.command,
+                system_prompt=profile.system_prompt if profile else None,
+                permissions=list(profile.permissions) if profile else [],
+                task_type=arguments.mode,
+            )
         except Exception as exc:
             logger.error("Failed to spawn agent: %s", exc)
             return ToolResult(output=str(exc), is_error=True)
@@ -88,18 +77,12 @@ class AgentTool(BaseTool):
             return ToolResult(output=result.error or "Failed to spawn agent", is_error=True)
 
         if arguments.team:
-            registry = get_team_registry()
-            try:
-                registry.add_agent(arguments.team, result.task_id)
-            except ValueError:
-                registry.create_team(arguments.team)
-                registry.add_agent(arguments.team, result.task_id)
+            subagents.attach_agent(arguments.team, result.task_id)
 
-        if context.hook_executor is not None:
-            manager = get_task_manager()
+        if context.hook_executor is not None and tasks is not None:
             unregister = None
 
-            async def _emit_subagent_stop(task_record) -> None:
+            async def _emit_subagent_stop(task_record: TaskRecord) -> None:
                 nonlocal unregister
                 if task_record.id != result.task_id:
                     return
@@ -122,8 +105,8 @@ class AgentTool(BaseTool):
                     },
                 )
 
-            unregister = manager.register_completion_listener(_emit_subagent_stop)
-            task_record = manager.get_task(result.task_id)
+            unregister = tasks.register_completion_listener(_emit_subagent_stop)
+            task_record = tasks.get_task(result.task_id)
             if task_record is not None and task_record.status in {"completed", "failed", "killed"}:
                 await _emit_subagent_stop(task_record)
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from questorharness.state.app_state import AppState
 from questorharness.bridge.manager import BridgeSessionRecord
 from questorharness.contracts.mcp import McpConnectionStatus
-from questorharness.tasks.types import TaskRecord
+from questorharness.contracts.task import TaskRecord
 
 
 class FrontendImageAttachment(BaseModel):

@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from questorharness.hooks.events import HookEvent
+    from questorharness.contracts.hooks import AggregatedHookResult, HookEvent, HookResult
     from questorharness.hooks.executor import HookExecutionContext, HookExecutor
     from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.types import AggregatedHookResult, HookResult
 
 __all__ = [
     "AggregatedHookResult",
@@ -23,7 +22,7 @@ __all__ = [
 
 def __getattr__(name: str):
     if name == "HookEvent":
-        from questorharness.hooks.events import HookEvent
+        from questorharness.contracts.hooks import HookEvent
 
         return HookEvent
     if name in {"HookExecutionContext", "HookExecutor"}:
@@ -41,7 +40,7 @@ def __getattr__(name: str):
             "load_hook_registry": load_hook_registry,
         }[name]
     if name in {"AggregatedHookResult", "HookResult"}:
-        from questorharness.hooks.types import AggregatedHookResult, HookResult
+        from questorharness.contracts.hooks import AggregatedHookResult, HookResult
 
         return {
             "AggregatedHookResult": AggregatedHookResult,

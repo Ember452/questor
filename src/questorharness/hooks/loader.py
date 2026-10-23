@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from questorharness.hooks.events import HookEvent
+from questorharness.contracts.hooks import HookEvent
 from questorharness.hooks.schemas import HookDefinition
 
 

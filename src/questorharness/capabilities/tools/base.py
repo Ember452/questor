@@ -11,8 +11,14 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from questorharness.capabilities.tools.ports import LlmToolRuntime, LspRuntime, SandboxRuntime
-    from questorharness.hooks.executor import HookExecutor
+    from questorharness.capabilities.ports import (
+        HookRuntime,
+        LlmToolRuntime,
+        LspRuntime,
+        SandboxRuntime,
+        SubagentRuntime,
+        TaskRuntime,
+    )
 
 
 @dataclass
@@ -21,10 +27,12 @@ class ToolExecutionContext:
 
     cwd: Path
     metadata: dict[str, Any] = field(default_factory=dict)
-    hook_executor: HookExecutor | None = None
+    hook_executor: HookRuntime | None = None
     sandbox: SandboxRuntime | None = None
     llm: LlmToolRuntime | None = None
     lsp: LspRuntime | None = None
+    tasks: TaskRuntime | None = None
+    subagents: SubagentRuntime | None = None
 
 
 @dataclass(frozen=True)

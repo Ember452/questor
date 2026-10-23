@@ -15,7 +15,7 @@ import httpx
 
 from questorharness.providers.llm.client import ApiMessageCompleteEvent, ApiMessageRequest, SupportsStreamingMessages
 from questorharness.contracts.domain.message import ConversationMessage
-from questorharness.hooks.events import HookEvent
+from questorharness.contracts.hooks import AggregatedHookResult, HookEvent, HookResult
 from questorharness.hooks.loader import HookRegistry
 from questorharness.hooks.schemas import (
     AgentHookDefinition,
@@ -24,7 +24,6 @@ from questorharness.hooks.schemas import (
     HttpHookDefinition,
     PromptHookDefinition,
 )
-from questorharness.hooks.types import AggregatedHookResult, HookResult
 from questorharness.providers.sandbox import SandboxUnavailableError
 from questorharness.contracts.shell import create_shell_subprocess
 

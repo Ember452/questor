@@ -1,4 +1,4 @@
-"""Task data models."""
+"""Task vocabulary shared by capabilities, runtime and surfaces."""
 
 from __future__ import annotations
 

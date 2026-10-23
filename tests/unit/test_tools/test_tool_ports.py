@@ -6,12 +6,14 @@ from pathlib import Path
 
 import pytest
 
+from questorharness.capabilities.tools.agent.team_create_tool import TeamCreateTool, TeamCreateToolInput
 from questorharness.capabilities.tools.base import ToolExecutionContext
 from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool, FileReadToolInput
 from questorharness.capabilities.tools.media.image_to_text_tool import (
     ImageToTextTool,
     ImageToTextToolInput,
 )
+from questorharness.capabilities.tools.task.task_list_tool import TaskListTool, TaskListToolInput
 
 
 class _DenySandbox:
@@ -70,3 +72,49 @@ async def test_image_to_text_uses_injected_llm_runtime(tmp_path: Path) -> None:
     assert not result.is_error
     assert "a described image" in result.output
     assert llm.calls and llm.calls[0]["model"] == "vision-model"
+
+
+class _FakeTaskRuntime:
+    """Task runtime that records list calls."""
+
+    def __init__(self) -> None:
+        self.status_filters: list[object] = []
+
+    def list_tasks(self, *, status: object = None):
+        self.status_filters.append(status)
+        return []
+
+
+class _FakeSubagentRuntime:
+    """Subagent runtime that records team creation."""
+
+    def __init__(self) -> None:
+        self.created: list[tuple[str, str]] = []
+
+    def create_team(self, name: str, description: str = "") -> str:
+        self.created.append((name, description))
+        return name
+
+
+@pytest.mark.asyncio
+async def test_task_list_uses_injected_task_runtime(tmp_path: Path) -> None:
+    tasks = _FakeTaskRuntime()
+    result = await TaskListTool().execute(
+        TaskListToolInput(),
+        ToolExecutionContext(cwd=tmp_path, tasks=tasks),
+    )
+
+    assert result.output == "(no tasks)"
+    assert tasks.status_filters == [None]
+
+
+@pytest.mark.asyncio
+async def test_team_create_uses_injected_subagent_runtime(tmp_path: Path) -> None:
+    subagents = _FakeSubagentRuntime()
+    result = await TeamCreateTool().execute(
+        TeamCreateToolInput(name="demo", description="test"),
+        ToolExecutionContext(cwd=tmp_path, subagents=subagents),
+    )
+
+    assert result.output == "Created team demo"
+    assert subagents.created == [("demo", "test")]

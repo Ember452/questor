@@ -28,7 +28,8 @@ from questorharness.contracts.domain.message import (
     sanitize_conversation_messages,
 )
 from questorharness.contracts.domain.events import CompactProgressEvent
-from questorharness.hooks import HookEvent, HookExecutor
+from questorharness.contracts.hooks import HookEvent
+from questorharness.capabilities.ports import HookRuntime
 from questorharness.contracts.tool_outputs import is_microcompactable_tool_result
 from questorharness.contracts.tokens import estimate_tokens
 
@@ -1128,7 +1129,7 @@ async def compact_conversation(
     trigger: CompactTrigger = "manual",
     progress_callback: CompactProgressCallback | None = None,
     emit_hooks_start: bool = True,
-    hook_executor: HookExecutor | None = None,
+    hook_executor: HookRuntime | None = None,
     carryover_metadata: dict[str, Any] | None = None,
 ) -> CompactionResult:
     """Compact messages by calling the LLM to produce a summary.
@@ -1490,7 +1491,7 @@ async def auto_compact_if_needed(
     progress_callback: CompactProgressCallback | None = None,
     force: bool = False,
     trigger: CompactTrigger = "auto",
-    hook_executor: HookExecutor | None = None,
+    hook_executor: HookRuntime | None = None,
     carryover_metadata: dict[str, Any] | None = None,
     context_window_tokens: int | None = None,
     auto_compact_threshold_tokens: int | None = None,

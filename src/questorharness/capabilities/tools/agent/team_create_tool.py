@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.coordinator.coordinator_mode import get_team_registry
 from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
 
 
@@ -23,9 +22,10 @@ class TeamCreateTool(BaseTool):
     input_model = TeamCreateToolInput
 
     async def execute(self, arguments: TeamCreateToolInput, context: ToolExecutionContext) -> ToolResult:
-        del context
+        if context.subagents is None:
+            return ToolResult(output="subagent runtime unavailable", is_error=True)
         try:
-            team = get_team_registry().create_team(arguments.name, arguments.description)
+            name = context.subagents.create_team(arguments.name, arguments.description)
         except ValueError as exc:
             return ToolResult(output=str(exc), is_error=True)
-        return ToolResult(output=f"Created team {team.name}")
+        return ToolResult(output=f"Created team {name}")

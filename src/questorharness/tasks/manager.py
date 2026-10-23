@@ -13,7 +13,7 @@ from typing import Awaitable, Callable
 from uuid import uuid4
 
 from questorharness.config.paths import get_tasks_dir
-from questorharness.tasks.types import TaskRecord, TaskStatus, TaskType
+from questorharness.contracts.task import TaskRecord, TaskStatus, TaskType
 from questorharness.contracts.shell import create_shell_subprocess
 
 log = logging.getLogger(__name__)

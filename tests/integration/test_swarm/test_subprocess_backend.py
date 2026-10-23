@@ -8,7 +8,7 @@ import sys
 import pytest
 
 from questorharness.tasks.manager import BackgroundTaskManager
-from questorharness.tasks.types import TaskRecord
+from questorharness.contracts.task import TaskRecord
 from questorharness.swarm.subprocess_backend import SubprocessBackend
 from questorharness.swarm.types import TeammateSpawnConfig
 
