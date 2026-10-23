@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-from questorharness.coordinator.agent_definitions import (
+from questorharness.platform.frontmatter import parse_frontmatter
+from questorharness.runtime.coordinator.agent_definitions import (
     AgentDefinition,
-    _parse_agent_frontmatter,
     get_builtin_agent_definitions,
     load_agents_dir,
 )
@@ -126,7 +126,7 @@ def test_builtin_provider_agnostic_agents_use_inherit_or_none():
 
 def test_parse_frontmatter_with_valid_yaml():
     content = "---\nname: my-agent\ndescription: a test agent\n---\nThis is the body."
-    fm, body = _parse_agent_frontmatter(content)
+    fm, body = parse_frontmatter(content)
     assert fm["name"] == "my-agent"
     assert fm["description"] == "a test agent"
     assert body == "This is the body."
@@ -134,20 +134,20 @@ def test_parse_frontmatter_with_valid_yaml():
 
 def test_parse_frontmatter_missing_delimiter_returns_empty():
     content = "name: my-agent\ndescription: desc\nbody text"
-    fm, body = _parse_agent_frontmatter(content)
+    fm, body = parse_frontmatter(content)
     assert fm == {}
     assert body == content
 
 
 def test_parse_frontmatter_unclosed_returns_empty():
     content = "---\nname: agent\ndescription: desc\nbody"
-    fm, body = _parse_agent_frontmatter(content)
+    fm, body = parse_frontmatter(content)
     assert fm == {}
 
 
 def test_parse_frontmatter_strips_quotes():
     content = "---\nname: 'quoted-name'\ndescription: \"also quoted\"\n---\nbody"
-    fm, _ = _parse_agent_frontmatter(content)
+    fm, _ = parse_frontmatter(content)
     assert fm["name"] == "quoted-name"
     assert fm["description"] == "also quoted"
 

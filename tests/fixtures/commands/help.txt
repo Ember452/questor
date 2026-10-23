@@ -1,0 +1,64 @@
+Available commands:
+/agents       List or inspect agent and teammate tasks
+/autopilot    Manage repo autopilot intake and context
+/branch       Show git branch information
+/bridge       Inspect bridge helpers and spawn bridge sessions
+/clear        Clear conversation history
+/commit       Show status or create a git commit
+/compact      Compact older conversation history
+/config       Show or update configuration
+/context      Show the active runtime system prompt
+/continue     Continue the previous tool loop if it was interrupted
+/copy         Copy the latest response or provided text
+/cost         Show token usage and estimated cost
+/diff         Show git diff output
+/doctor       Show environment diagnostics
+/dream        Consolidate memory
+/effort       Show or update reasoning effort
+/exit         Exit QuestorHarness
+/export       Export the current transcript
+/fast         Show or update fast mode
+/feedback     Save CLI feedback to the local feedback log
+/files        List files in the current workspace
+/help         Show available commands
+/hooks        Show configured hooks
+/init         Initialize project QuestorHarness files
+/issue        Show or update project issue context
+/keybindings  Show resolved keybindings
+/login        Show auth status or store an API key
+/logout       Clear the stored API key
+/mcp          Show MCP status
+/memory       Inspect and manage project memory
+/model        Show, switch, or manage profile models
+/onboarding   Show the quickstart guide
+/output-style Show or update output style
+/passes       Show or update reasoning pass count
+/permissions  Show or update permission mode; Tab in the TUI opens the mode picker
+/plan         Toggle plan permission mode; /permissions default|full_auto exits plan explicitly
+/plugin       Manage plugins
+/pr_comments  Show or update project PR comments context
+/privacy-settings Show local privacy and storage settings
+/provider     Show or switch provider profiles
+/rate-limit-options Show ways to reduce provider rate pressure
+/release-notes Show recent QuestorHarness release notes
+/reload-plugins Reload plugin discovery for this workspace
+/resume       Restore the latest saved session
+/rewind       Remove the latest conversation turn(s)
+/session      Inspect the current session storage
+/share        Create a shareable transcript snapshot
+/ship         Queue and execute an questor-driven repo task
+/skills       List or show available skills
+/stats        Show session statistics
+/status       Show session status
+/stop         Interrupt the running turn from TUI/questor channels
+/subagents    Show subagent usage and inspect worker tasks
+/summary      Summarize conversation history
+/tag          Create a named snapshot of the current session
+/tasks        Manage background tasks
+/theme        List, set, show or preview TUI themes
+/turns        Show or update maximum agentic turn count
+/upgrade      Show upgrade instructions
+/usage        Show usage and token estimates
+/version      Show the installed QuestorHarness version
+/vim          Show or update Vim mode
+/voice        Show or update voice mode

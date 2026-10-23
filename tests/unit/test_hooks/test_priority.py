@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.api.client import ApiMessageCompleteEvent
-from questorharness.api.usage import UsageSnapshot
-from questorharness.engine.messages import ConversationMessage, TextBlock
-from questorharness.hooks import HookEvent, HookExecutionContext, HookExecutor
-from questorharness.hooks.loader import HookRegistry
-from questorharness.hooks.schemas import CommandHookDefinition, HttpHookDefinition
+from questorharness.providers.llm.client import ApiMessageCompleteEvent
+from questorharness.contracts.usage import UsageSnapshot
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
+from questorharness.runtime.hooks import HookEvent, HookExecutionContext, HookExecutor
+from questorharness.runtime.hooks.loader import HookRegistry
+from questorharness.contracts.hooks import CommandHookDefinition, HttpHookDefinition
 
 
 class FakeApiClient:

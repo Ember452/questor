@@ -14,23 +14,24 @@ from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from questorharness.api.client import AnthropicApiClient
-from questorharness.config.paths import get_project_issue_file, get_project_pr_comments_file
+from questorharness.providers.llm.client import AnthropicApiClient
+from questorharness.platform.paths import get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import load_settings
+from questorharness.providers.auth.resolver import resolve_api_key
 from questorharness.engine import QueryEngine
-from questorharness.engine.stream_events import (
+from questorharness.contracts.domain.events import (
     AssistantTurnComplete,
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
-from questorharness.mcp.client import McpClientManager
-from questorharness.mcp.config import load_mcp_server_configs
-from questorharness.mcp.types import McpStdioServerConfig
-from questorharness.memory import add_memory_entry
-from questorharness.permissions import PermissionChecker, PermissionMode
+from questorharness.providers.mcp.client import McpClientManager
+from questorharness.providers.mcp.config import load_mcp_server_configs
+from questorharness.contracts.mcp import McpStdioServerConfig
+from questorharness.capabilities.memory import add_memory_entry
+from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.plugins import load_plugins
-from questorharness.prompts import build_runtime_system_prompt
-from questorharness.tools import create_default_tool_registry
+from questorharness.capabilities.context.prompts import build_runtime_system_prompt
+from questorharness.capabilities.tools import create_default_tool_registry
 
 
 ScenarioSetup = Callable[[Path, Path], dict[str, object] | None]
@@ -758,7 +759,7 @@ async def _run_scenario(
 
 async def _run() -> int:
     args = _parse_args()
-    api_key = sys.stdin.readline().strip() if args.api_key_stdin else load_settings().resolve_api_key()
+    api_key = sys.stdin.readline().strip() if args.api_key_stdin else resolve_api_key(load_settings())
     if not api_key:
         raise SystemExit("Missing API key.")
 

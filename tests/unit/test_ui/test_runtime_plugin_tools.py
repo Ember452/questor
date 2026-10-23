@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.ui.runtime import build_runtime, close_runtime
+from questorharness.bootstrap.runtime import build_runtime, close_runtime
 
 
 class _StaticApiClient:
@@ -32,7 +32,7 @@ def _write_tool_plugin(plugins_root: Path) -> None:
     )
     (tools_dir / "echo_tool.py").write_text(
         "from pydantic import BaseModel\n"
-        "from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult\n\n"
+        "from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult\n\n"
         "class EchoArgs(BaseModel):\n"
         "    text: str = 'hello'\n\n"
         "class EchoTool(BaseTool):\n"
@@ -56,7 +56,7 @@ async def test_build_runtime_registers_enabled_plugin_tools(tmp_path: Path, monk
 
     from questorharness.config.settings import Settings
 
-    monkeypatch.setattr("questorharness.ui.runtime.load_settings", lambda: Settings(allow_project_plugins=True))
+    monkeypatch.setattr("questorharness.bootstrap.runtime.load_settings", lambda: Settings(allow_project_plugins=True))
 
     bundle = await build_runtime(cwd=str(project), api_client=_StaticApiClient())
     try:

@@ -15,6 +15,12 @@ repos:
         language: system
         types: [python]
 
+      - id: import-contracts
+        name: import contracts
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+
       - id: secret-projection
         name: secret projection guard
         entry: uv run python scripts/guards/check_secret_projection.py --fail-on-empty
@@ -26,3 +32,22 @@ repos:
         entry: uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
         language: system
         pass_filenames: false
+
+      - id: layout
+        name: layout guard (removed packages, thin surfaces, file budgets)
+        entry: uv run python scripts/guards/check_layout.py --fail-on-empty
+        language: system
+        pass_filenames: false
+
+      - id: tree-map
+        name: source tree map is up to date
+        entry: uv run python scripts/guards/gen_tree.py --check
+        language: system
+        pass_filenames: false
+
+      - id: baseline-fast
+        name: baseline (fast)
+        entry: uv run python scripts/baseline_check.py --check --fast
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

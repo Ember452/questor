@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.ui.runtime import build_runtime, close_runtime
+from questorharness.bootstrap.runtime import build_runtime, close_runtime
 
 
 class _ClosableApiClient:

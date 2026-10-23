@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.auth.manager import AuthManager
-from questorharness.config import load_settings
-
 from questor.gateway.config import load_gateway_config, save_gateway_config
+from questorharness.api import AuthManager, load_settings
 
 
 def handle_gateway_provider_command(args: str, *, workspace: str | Path | None) -> tuple[str, bool]:

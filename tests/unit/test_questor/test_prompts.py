@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from questorharness.config.settings import Settings
-from questorharness.memory import add_memory_entry as add_project_memory_entry
-from questorharness.prompts import build_runtime_system_prompt
+from questorharness.capabilities.memory import add_memory_entry as add_project_memory_entry
+from questorharness.capabilities.context.prompts import build_runtime_system_prompt
 
 from questor.memory import add_memory_entry as add_questor_memory_entry
 from questor.memory import list_memory_files as list_questor_memory_files

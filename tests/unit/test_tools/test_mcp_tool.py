@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from questorharness.tools.mcp_tool import _input_model_from_schema
+from questorharness.capabilities.tools.mcp.mcp_tool import _input_model_from_schema
 
 
 class TestInputModelFromSchema:

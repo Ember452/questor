@@ -43,6 +43,7 @@
 7. **`surfaces` 是传输**：http、sse、ipc、gateway、channels。只认 `contracts` 和注入的 facade，不写业务、不写状态；不建 `surfaces/terminal`（ADR-0005）。
 8. **`profiles` 是模式装配，纯数据**：personal / coding 是两份 YAML，只引用注册表 ID；每次 run 记录 `profile_fingerprint`。模式不是目录，不复制 memory/context/loop。profiles 只放 YAML 与文本；prompt 的加载代码归 `capabilities/context`，不下沉进 profiles。
 9. **产品只 import 引擎公开面**：`questorharness.api` + `bootstrap`。`questor` 负责组合根与产品策略（gateway 群规则、通知、onboarding、workspace）。
+   - 现状校正（2026-10-22）：公开门面 `questorharness/api.py` **尚不存在**；`questorharness/api/` 是 LLM 客户端包，Phase 1 已整包移入 `providers/llm/`。本文的 `questorharness.api` 是目标态门面，待 Phase 2/3 建立。
 10. **Electron 是宿主，不是第二后端**：`apps/desktop`（main/preload）+ `apps/web`（共享 renderer）；IPC 只是 Transport 的第二个实现，和 HTTP/SSE 共用同一套 Command/Event envelope。
 11. **字段三层（不预设事件溯源）**：domain（`contracts/domain`）/ storage（会话快照与 store 适配）/ wire（对外 schema）分离；现在只要求“旧快照能加载”与“wire 只增不删”；事件 `event_version` + upcaster 推到 durable 立项之后。新增字段必须 optional + 默认值 + 有生产者 + 有读取方。
 12. **文件级规则走 ADR-0003**：叶子语法、3–16 文件/目录、80–800 行/文件、禁用类型词、`__init__` 只做门面；关键包一个 `AGENTS.md`。

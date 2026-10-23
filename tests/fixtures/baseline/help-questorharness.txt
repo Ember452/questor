@@ -1,0 +1,82 @@
+                                                                               
+ Usage: questorharness [OPTIONS] COMMAND [ARGS]...                             
+                                                                               
+ QuestorHarness: a local-first AI coding assistant.                            
+                                                                               
+ Starts an interactive session by default, use -p/--print for non-interactive  
+ output.                                                                       
+                                                                               
+┌─ Options ───────────────────────────────────────────────────────────────────┐
+│ --version  -v        Show version and exit                                  │
+│ --help               Show this message and exit.                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌─ Session ───────────────────────────────────────────────────────────────────┐
+│ --continue  -c             Continue the most recent conversation in the     │
+│                            current directory                                │
+│ --resume    -r      <str>  Resume a conversation by session ID, or open     │
+│                            picker                                           │
+│ --name      -n      <str>  Set a display name for this session              │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌─ Model & Effort ────────────────────────────────────────────────────────────┐
+│ --model      -m      <str>  Model alias (e.g. 'sonnet', 'opus') or full     │
+│                             model ID                                        │
+│ --effort             <str>  Effort level for the session (low, medium,      │
+│                             high, xhigh/max)                                │
+│ --verbose                   Override verbose mode setting from config       │
+│ --max-turns          <int>  Maximum number of agentic turns (enforced by    │
+│                             default in --print; optional cap for            │
+│                             interactive mode)                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌─ Output ────────────────────────────────────────────────────────────────────┐
+│ --print          -p      <str>  Print response and exit. Pass your prompt   │
+│                                 as the value: -p 'your prompt'              │
+│ --output-format          <str>  Output format with --print: text (default), │
+│                                 json, or stream-json                        │
+│ --dry-run                       Preview resolved runtime config, skills,    │
+│                                 commands, and tools without executing the   │
+│                                 model or tools                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌─ Permissions ───────────────────────────────────────────────────────────────┐
+│ --permission-mode                     <str>  Permission mode: default,      │
+│                                              plan, or full_auto             │
+│ --dangerously-skip-permissions               Bypass all permission checks   │
+│                                              (only for sandboxed            │
+│                                              environments)                  │
+│ --allowed-tools                       <str>  Comma or space-separated list  │
+│                                              of tool names to allow         │
+│ --disallowed-tools                    <str>  Comma or space-separated list  │
+│                                              of tool names to deny          │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌─ System & Context ──────────────────────────────────────────────────────────┐
+│ --system-prompt         -s      <str>  Override the default system prompt   │
+│ --append-system-prompt          <str>  Append text to the default system    │
+│                                        prompt                               │
+│ --settings                      <str>  Path to a JSON settings file or      │
+│                                        inline JSON string                   │
+│ --base-url                      <str>  Anthropic-compatible API base URL    │
+│ --api-key               -k      <str>  API key (overrides config and        │
+│                                        environment)                         │
+│ --bare                                 Minimal mode: skip hooks, plugins,   │
+│                                        MCP, and auto-discovery              │
+│ --api-format                    <str>  API format: 'anthropic' (default),   │
+│                                        'openai' (DashScope, GitHub Models,  │
+│                                        etc.), or 'copilot' (GitHub Copilot) │
+│ --theme                         <str>  TUI theme: default, dark, minimal,   │
+│                                        cyberpunk, solarized, or custom name │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌─ Advanced ──────────────────────────────────────────────────────────────────┐
+│ --debug       -d             Enable debug logging                           │
+│ --mcp-config          <str>  Load MCP servers from JSON files or strings    │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌─ Commands ──────────────────────────────────────────────────────────────────┐
+│ setup      Unified setup flow: choose workflow, authenticate if needed,     │
+│            then set the model.                                              │
+│ mcp        Manage MCP servers                                               │
+│ plugin     Manage plugins                                                   │
+│ auth       Manage authentication                                            │
+│ provider   Manage provider profiles                                         │
+│ config     Show or update settings                                          │
+│ cron       Manage cron scheduler and jobs                                   │
+│ autopilot  Manage repo autopilot                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+

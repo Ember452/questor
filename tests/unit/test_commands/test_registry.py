@@ -14,18 +14,18 @@ from questorharness.commands.registry import (
     create_default_command_registry,
     lookup_skill_slash_command,
 )
-from questorharness.autopilot import RepoVerificationStep
-from questorharness.config.paths import get_feedback_log_path, get_project_issue_file, get_project_pr_comments_file
+from questorharness.runtime.autopilot import RepoVerificationStep
+from questorharness.platform.paths import get_feedback_log_path, get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import load_settings, save_settings, Settings
-from questorharness.engine.messages import ConversationMessage, TextBlock
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.memory.paths import get_project_memory_dir
-from questorharness.mcp.types import McpHttpServerConfig, McpStdioServerConfig
-from questorharness.permissions import PermissionChecker
+from questorharness.capabilities.memory.paths import get_project_memory_dir
+from questorharness.contracts.mcp import McpHttpServerConfig, McpStdioServerConfig
+from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins.types import PluginCommandDefinition
 from questorharness.state import AppState, AppStateStore
-from questorharness.tasks import get_task_manager
-from questorharness.tools import create_default_tool_registry
+from questorharness.runtime.tasks import get_task_manager
+from questorharness.capabilities.tools import create_default_tool_registry
 
 
 class FakeApiClient:
@@ -301,7 +301,9 @@ async def test_config_show_redacts_nested_mcp_and_vision_secrets(tmp_path: Path,
             "base_url": "https://vision.example",
         },
     )
-    monkeypatch.setattr(registry_module, "load_settings", lambda: settings)
+    monkeypatch.setattr(
+        "questorharness.commands.families.account.load_settings", lambda: settings
+    )
 
     registry = create_default_command_registry()
     command, args = registry.lookup("/config show")
@@ -683,11 +685,11 @@ async def test_ship_command_queues_and_executes_card(tmp_path: Path, monkeypatch
         return [RepoVerificationStep(command="uv run pytest -q", returncode=0, status="success")]
 
     monkeypatch.setattr(
-        "questorharness.autopilot.service.RepoAutopilotStore._run_agent_prompt",
+        "questorharness.runtime.autopilot.service.RepoAutopilotStore._run_agent_prompt",
         fake_run_agent_prompt,
     )
     monkeypatch.setattr(
-        "questorharness.autopilot.service.RepoAutopilotStore._run_verification_steps",
+        "questorharness.runtime.autopilot.service.RepoAutopilotStore._run_verification_steps",
         fake_run_verification_steps,
     )
 
@@ -1299,7 +1301,9 @@ async def test_copy_rewind_and_meta_commands(tmp_path: Path, monkeypatch):
     def _fake_copy(text: str) -> None:
         copied.append(text)
 
-    monkeypatch.setattr(registry_module.pyperclip, "copy", _fake_copy)
+    monkeypatch.setattr(
+        "questorharness.commands.families.workspace.pyperclip.copy", _fake_copy
+    )
 
     copy_command, copy_args = registry.lookup("/copy")
     copy_result = await copy_command.handler(copy_args, context)

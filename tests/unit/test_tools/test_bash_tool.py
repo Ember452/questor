@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.tools.base import ToolExecutionContext
-from questorharness.tools.bash_tool import BashTool, BashToolInput
-import questorharness.tools.bash_tool as bash_tool_module
+from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.shell.bash_tool import BashTool, BashToolInput
+import questorharness.capabilities.tools.shell.bash_tool as bash_tool_module
 
 
 class _FakeStdout:
@@ -196,7 +196,7 @@ async def test_bash_tool_timeout_does_not_hang_when_stdout_stays_open(monkeypatc
     async def fake_create_shell_subprocess(*args, **kwargs):
         return process
 
-    monkeypatch.setattr("questorharness.tools.bash_tool.create_shell_subprocess", fake_create_shell_subprocess)
+    monkeypatch.setattr("questorharness.capabilities.tools.shell.bash_tool.create_shell_subprocess", fake_create_shell_subprocess)
     monkeypatch.setattr(
         bash_tool_module,
         "_READ_REMAINING_OUTPUT_TIMEOUT_SECONDS",

@@ -7,27 +7,28 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.tools.bash_tool import BashTool, BashToolInput
-from questorharness.tools.base import ToolExecutionContext
-from questorharness.tools.brief_tool import BriefTool, BriefToolInput
-from questorharness.tools.cron_create_tool import CronCreateTool, CronCreateToolInput
-from questorharness.tools.cron_delete_tool import CronDeleteTool, CronDeleteToolInput
-from questorharness.tools.cron_list_tool import CronListTool, CronListToolInput
-from questorharness.tools.config_tool import ConfigTool, ConfigToolInput
-from questorharness.tools.enter_worktree_tool import EnterWorktreeTool, EnterWorktreeToolInput
-from questorharness.tools.exit_worktree_tool import ExitWorktreeTool, ExitWorktreeToolInput
-from questorharness.tools.file_edit_tool import FileEditTool, FileEditToolInput
-from questorharness.tools.file_read_tool import FileReadTool, FileReadToolInput
-from questorharness.tools.file_write_tool import FileWriteTool, FileWriteToolInput
-from questorharness.tools.glob_tool import GlobTool, GlobToolInput
-from questorharness.tools.grep_tool import GrepTool, GrepToolInput
-from questorharness.tools.lsp_tool import LspTool, LspToolInput
-from questorharness.tools.notebook_edit_tool import NotebookEditTool, NotebookEditToolInput
-from questorharness.tools.remote_trigger_tool import RemoteTriggerTool, RemoteTriggerToolInput
-from questorharness.tools.skill_tool import SkillTool, SkillToolInput
-from questorharness.tools.todo_write_tool import TodoWriteTool, TodoWriteToolInput
-from questorharness.tools.tool_search_tool import ToolSearchTool, ToolSearchToolInput
-from questorharness.tools import create_default_tool_registry
+from questorharness.capabilities.tools.shell.bash_tool import BashTool, BashToolInput
+from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.brief_tool import BriefTool, BriefToolInput
+from questorharness.capabilities.tools.cron.cron_create_tool import CronCreateTool, CronCreateToolInput
+from questorharness.capabilities.tools.cron.cron_delete_tool import CronDeleteTool, CronDeleteToolInput
+from questorharness.capabilities.tools.cron.cron_list_tool import CronListTool, CronListToolInput
+from questorharness.capabilities.tools.config_tool import ConfigTool, ConfigToolInput
+from questorharness.capabilities.tools.enter_worktree_tool import EnterWorktreeTool, EnterWorktreeToolInput
+from questorharness.capabilities.tools.exit_worktree_tool import ExitWorktreeTool, ExitWorktreeToolInput
+from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool, FileEditToolInput
+from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool, FileReadToolInput
+from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool, FileWriteToolInput
+from questorharness.capabilities.tools.fs.glob_tool import GlobTool, GlobToolInput
+from questorharness.capabilities.tools.fs.grep_tool import GrepTool, GrepToolInput
+from questorharness.capabilities.tools.fs.lsp_tool import LspTool, LspToolInput
+from questorharness.capabilities.tools.fs.notebook_edit_tool import NotebookEditTool, NotebookEditToolInput
+from questorharness.capabilities.tools.remote_trigger_tool import RemoteTriggerTool, RemoteTriggerToolInput
+from questorharness.capabilities.tools.skill_tool import SkillTool, SkillToolInput
+from questorharness.capabilities.tools.todo_write_tool import TodoWriteTool, TodoWriteToolInput
+from questorharness.capabilities.tools.agent.tool_search_tool import ToolSearchTool, ToolSearchToolInput
+from questorharness.capabilities.tools import create_default_tool_registry
+from questorharness.providers.lsp.runtime import ProviderLspRuntime
 
 
 @pytest.mark.asyncio
@@ -154,7 +155,7 @@ async def test_glob_and_grep(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_glob_tool_accepts_absolute_patterns(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr("questorharness.tools.glob_tool.shutil.which", lambda _: None)
+    monkeypatch.setattr("questorharness.capabilities.tools.fs.glob_tool.shutil.which", lambda _: None)
     context = ToolExecutionContext(cwd=tmp_path.parent)
     nested = tmp_path / "pkg"
     nested.mkdir()
@@ -298,7 +299,7 @@ async def test_lsp_tool(tmp_path: Path):
         "from pkg.utils import greet\n\nprint(greet('world'))\n",
         encoding="utf-8",
     )
-    context = ToolExecutionContext(cwd=tmp_path)
+    context = ToolExecutionContext(cwd=tmp_path, lsp=ProviderLspRuntime())
 
     document_symbols = await LspTool().execute(
         LspToolInput(operation="document_symbol", file_path="pkg/utils.py"),

@@ -1,10 +1,10 @@
-"""Tests for questorharness.config.paths."""
+"""Tests for questorharness.platform.paths."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.config.paths import (
+from questorharness.platform.paths import (
     get_config_dir,
     get_config_file_path,
     get_data_dir,

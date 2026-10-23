@@ -3,6 +3,53 @@ root_packages =
     questorharness
     questor
 
+[importlinter:contract:layers]
+name = Layered architecture (bootstrap > surfaces > commands > engine > runtime > execution > providers > config > platform > contracts)
+type = layers
+layers =
+    questorharness.bootstrap
+    questorharness.surfaces
+    questorharness.commands
+    questorharness.engine
+    questorharness.runtime
+    questorharness.execution
+    questorharness.providers
+    questorharness.config
+    questorharness.platform
+    questorharness.contracts
+# ``capabilities``, ``plugins``, ``state``, ``keybindings``, ``themes``,
+# ``vim`` and ``output_styles`` are deliberately outside this ladder.
+#
+# - capabilities and plugins are cross-cutting: capabilities owns tools that
+#   execute commands (they need ``execution``) while runtime calls back into
+#   capability policy/schedule helpers. Their boundary is enforced by
+#   ``capabilities-are-leaf`` and ``plugins-stay-an-extension-layer`` instead.
+# - the appearance packages (state/keybindings/themes/vim/output_styles) are
+#   leaves that any layer may read.
+#
+# The ladder therefore only claims what is actually true, and the contracts
+# below cover the packages it does not claim.
+#
+# One documented reverse edge: a swarm teammate runs one engine turn. engine
+# imports runtime in five places, so engine must stay above runtime and this is
+# the single edge back. Injecting a runner here would turn a wiring mistake into
+# a runtime failure for every teammate spawn.
+ignore_imports =
+    questorharness.runtime.swarm.in_process -> questorharness.engine.query
+
+[importlinter:contract:plugins-stay-an-extension-layer]
+name = Plugins may not import the app, surfaces, commands or engine
+type = forbidden
+source_modules =
+    questorharness.plugins
+forbidden_modules =
+    questor
+    questorharness.surfaces
+    questorharness.commands
+    questorharness.engine
+    questorharness.bootstrap
+allow_indirect_imports = True
+
 [importlinter:contract:engine-app-boundary]
 name = Engine must not import the product app
 type = forbidden
@@ -10,3 +57,105 @@ source_modules =
     questorharness
 forbidden_modules =
     questor
+
+[importlinter:contract:capabilities-are-leaf]
+name = Capabilities may import contracts only
+type = forbidden
+source_modules =
+    questorharness.capabilities
+forbidden_modules =
+    questorharness.kernel
+    questorharness.runtime
+    questorharness.providers
+# config, engine, plugins, ui, ... still have direct edges from capabilities;
+# they move behind contracts in later waves and join this list then.
+# The tools facade re-exports capabilities modules, so only direct edges count.
+allow_indirect_imports = True
+
+[importlinter:contract:product-uses-public-face]
+name = Product imports the public engine face only
+type = forbidden
+source_modules =
+    questor
+forbidden_modules =
+    questorharness.contracts
+    questorharness.kernel
+    questorharness.runtime
+    questorharness.capabilities
+    questorharness.providers
+    questorharness.surfaces
+    questorharness.profiles
+    questorharness.engine
+    questorharness.commands
+    questorharness.config
+    questorharness.state
+    questorharness.prompts
+    questorharness.skills
+    questorharness.plugins
+    questorharness.ui
+    questorharness.themes
+    questorharness.keybindings
+    questorharness.vim
+    questorharness.output_styles
+    questorharness.personalization
+    questorharness.platform
+    questorharness.cli
+# The facade re-exports these modules; only direct product imports are forbidden.
+allow_indirect_imports = True
+
+[importlinter:contract:config-is-leaf]
+name = Config must not import runtime, capabilities, engine, ui or plugins
+type = forbidden
+source_modules =
+    questorharness.config
+forbidden_modules =
+    questorharness.kernel
+    questorharness.runtime
+    questorharness.capabilities
+    questorharness.surfaces
+    questorharness.engine
+    questorharness.commands
+    questorharness.plugins
+    questorharness.ui
+# Settings.resolve_auth() lazily reads provider auth storage; that provider
+# edge is a documented exception until credential resolution moves out of the
+# settings model.
+allow_indirect_imports = True
+
+[importlinter:contract:providers-are-adapters]
+name = Providers must not import runtime, kernel or capabilities
+type = forbidden
+source_modules =
+    questorharness.providers
+forbidden_modules =
+    questorharness.kernel
+    questorharness.runtime
+    questorharness.capabilities
+allow_indirect_imports = True
+
+[importlinter:contract:surfaces-are-thin]
+name = Surfaces may import contracts, config and platform only
+type = forbidden
+source_modules =
+    questorharness.surfaces
+forbidden_modules =
+    questorharness.kernel
+    questorharness.runtime
+    questorharness.capabilities
+    questorharness.providers
+    questorharness.engine
+    questorharness.commands
+    questorharness.plugins
+    questorharness.bootstrap
+allow_indirect_imports = True
+
+[importlinter:contract:command-families-are-leaf]
+name = Command families and helpers do not import the registry
+type = forbidden
+source_modules =
+    questorharness.commands.families
+    questorharness.commands.helpers
+    questorharness.commands.memory_commands
+forbidden_modules =
+    questorharness.commands.registry
+allow_indirect_imports = True

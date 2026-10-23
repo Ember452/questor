@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from questorharness.config.settings import Settings
-from questorharness.platforms import get_platform
-from questorharness.prompts.context import build_runtime_system_prompt
+from questorharness.platform import get_platform
+from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
 
 
 def test_runtime_prompt_includes_windows_guidance_on_windows(tmp_path: Path) -> None:

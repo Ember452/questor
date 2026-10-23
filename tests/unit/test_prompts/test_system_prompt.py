@@ -1,9 +1,9 @@
-"""Tests for questorharness.prompts.system_prompt."""
+"""Tests for questorharness.capabilities.context.prompts.system_prompt."""
 
 from __future__ import annotations
 
-from questorharness.prompts.environment import EnvironmentInfo
-from questorharness.prompts.system_prompt import build_system_prompt
+from questorharness.capabilities.context.prompts.environment import EnvironmentInfo
+from questorharness.capabilities.context.prompts.system_prompt import build_system_prompt
 
 
 def _make_env(**overrides) -> EnvironmentInfo:

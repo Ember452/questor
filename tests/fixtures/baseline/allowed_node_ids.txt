@@ -1,0 +1,13 @@
+tests/unit/test_ui/test_react_backend.py::test_run_backend_host_accepts_autodream_context
+tests/unit/test_ui/test_react_backend.py::test_backend_host_forwards_autodream_context_to_runtime
+tests/unit/test_tools/test_tool_ports.py::test_file_read_uses_injected_sandbox
+tests/unit/test_tools/test_tool_ports.py::test_image_to_text_uses_injected_llm_runtime
+tests/unit/test_tools/test_tool_ports.py::test_task_list_uses_injected_task_runtime
+tests/unit/test_tools/test_tool_ports.py::test_team_create_uses_injected_subagent_runtime
+tests/unit/test_tools/test_tools_facade.py::test_tools_facade_is_lazy
+tests/unit/test_config/test_settings.py::test_load_settings_accepts_utf8_bom
+tests/unit/test_commands/test_registry_snapshot.py::test_help_text_snapshot
+tests/unit/test_commands/test_registry_snapshot.py::test_command_order_snapshot
+tests/unit/test_commands/test_registry_snapshot.py::test_alias_shares_the_canonical_command
+tests/unit/test_services/test_autopilot.py::test_run_agent_prompt_fails_closed_without_runner
+tests/unit/test_services/test_autopilot.py::test_run_agent_prompt_uses_configured_runner

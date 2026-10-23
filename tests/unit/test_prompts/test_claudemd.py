@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.config.paths import (
+from questorharness.platform.paths import (
     get_project_active_repo_context_path,
     get_project_issue_file,
     get_project_pr_comments_file,
 )
-from questorharness.engine.messages import ConversationMessage, TextBlock
-from questorharness.personalization import rules as personalization_rules
-from questorharness.personalization.session_hook import update_rules_from_session
-from questorharness.prompts import build_runtime_system_prompt, discover_claude_md_files, load_claude_md_prompt
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
+from questorharness.capabilities.memory.personalization import rules as personalization_rules
+from questorharness.capabilities.memory.personalization.session_hook import update_rules_from_session
+from questorharness.capabilities.context.prompts import build_runtime_system_prompt, discover_claude_md_files, load_claude_md_prompt
 from questorharness.config.settings import Settings
 
 

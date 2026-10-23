@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from re import sub
 
-from questorharness.commands import MemoryCommandBackend
-from questorharness.memory.scan import scan_memory_files
-from questorharness.memory.schema import (
+from questorharness.api import MemoryCommandBackend
+from questorharness.api import scan_memory_files
+from questorharness.api import (
     SCHEMA_VERSION,
     coerce_int,
     compute_memory_signature,
@@ -19,8 +19,8 @@ from questorharness.memory.schema import (
     split_memory_file,
     utc_now,
 )
-from questorharness.utils.file_lock import exclusive_file_lock
-from questorharness.utils.fs import atomic_write_text
+from questorharness.api import exclusive_file_lock
+from questorharness.api import atomic_write_text
 
 from questor.workspace import get_memory_dir, get_memory_index_path
 

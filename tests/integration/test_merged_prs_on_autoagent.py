@@ -34,13 +34,13 @@ RESULTS: dict[str, tuple[bool, float]] = {}
 # ==================================================================
 
 def _make_registry(extra_tools=None):
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.file_write_tool import FileWriteTool
-    from questorharness.tools.file_edit_tool import FileEditTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
+    from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
 
     reg = ToolRegistry()
     for t in [BashTool(), FileReadTool(), FileWriteTool(), FileEditTool(), GlobTool(), GrepTool()]:
@@ -52,13 +52,13 @@ def _make_registry(extra_tools=None):
 
 def _make_checker():
     from questorharness.config.settings import PermissionSettings
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
     return PermissionChecker(PermissionSettings(mode=PermissionMode.FULL_AUTO))
 
 
 def make_anthropic_engine(system_prompt, extra_tools=None):
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.engine.query_engine import QueryEngine
     api = AnthropicApiClient(api_key=API_KEY, base_url=ANTHROPIC_BASE)
     return QueryEngine(
@@ -69,7 +69,7 @@ def make_anthropic_engine(system_prompt, extra_tools=None):
 
 
 def make_openai_engine(system_prompt, extra_tools=None):
-    from questorharness.api.openai_client import OpenAICompatibleClient
+    from questorharness.providers.llm.openai_client import OpenAICompatibleClient
     from questorharness.engine.query_engine import QueryEngine
     api = OpenAICompatibleClient(api_key=API_KEY, base_url=OPENAI_BASE)
     return QueryEngine(
@@ -80,7 +80,7 @@ def make_openai_engine(system_prompt, extra_tools=None):
 
 
 def collect(events):
-    from questorharness.engine.stream_events import (
+    from questorharness.contracts.domain.events import (
         AssistantTextDelta, AssistantTurnComplete,
         ToolExecutionStarted, ToolExecutionCompleted,
     )
@@ -113,7 +113,7 @@ async def task_diagnose_autoagent():
     print("  Task 1: PR#17 — Use diagnose skill to investigate AutoAgent tests")
     print("=" * 70)
 
-    from questorharness.tools.skill_tool import SkillTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
 
     engine = make_anthropic_engine(
         "You are a debugger. Start by loading the 'diagnose' skill to get "
@@ -155,11 +155,11 @@ async def task_memory_research_autoagent():
     print("  Task 2: PR#12 — Research AutoAgent → save to memory → search → use")
     print("=" * 70)
 
-    from questorharness.memory.search import find_relevant_memories
-    from questorharness.memory.scan import scan_memory_files
-    import questorharness.memory.paths as mp
-    import questorharness.memory.manager as mm
-    import questorharness.memory.scan as ms
+    from questorharness.capabilities.memory.search import find_relevant_memories
+    from questorharness.capabilities.memory.scan import scan_memory_files
+    import questorharness.capabilities.memory.paths as mp
+    import questorharness.capabilities.memory.manager as mm
+    import questorharness.capabilities.memory.scan as ms
 
     with tempfile.TemporaryDirectory() as tmpdir:
         mem_dir = Path(tmpdir) / "memory"
@@ -329,10 +329,10 @@ async def task_session_resume_autoagent():
     print("  Task 4: PR#16 — Research AutoAgent → save → resume → continue")
     print("=" * 70)
 
-    from questorharness.services.session_storage import (
+    from questorharness.platform.session_storage import (
         save_session_snapshot, load_session_snapshot,
     )
-    from questorharness.engine.messages import ConversationMessage
+    from questorharness.contracts.domain.message import ConversationMessage
 
     with tempfile.TemporaryDirectory() as session_dir:
         # Phase 1: Original 3-turn research session
@@ -414,12 +414,12 @@ async def task_cron_autoagent_maintenance():
     print("  Task 5: PR#16 — Cron scheduler for AutoAgent maintenance")
     print("=" * 70)
 
-    from questorharness.services.cron import (
+    from questorharness.capabilities.schedule.cron import (
         load_cron_jobs, upsert_cron_job, delete_cron_job,
         get_cron_job, set_job_enabled,
         mark_job_run, next_run_time,
     )
-    import questorharness.services.cron as cron_mod
+    import questorharness.capabilities.schedule.cron as cron_mod
 
     with tempfile.TemporaryDirectory() as tmpdir:
         registry_path = Path(tmpdir) / "cron_jobs.json"
@@ -502,16 +502,16 @@ async def task_full_dev_workflow():
     print("  Task 6: ALL PRs — Full development workflow on AutoAgent")
     print("=" * 70)
 
-    from questorharness.tools.skill_tool import SkillTool
-    from questorharness.memory.scan import scan_memory_files
-    from questorharness.memory.search import find_relevant_memories
-    from questorharness.services.session_storage import save_session_snapshot, load_session_snapshot
-    from questorharness.services.cron import upsert_cron_job, load_cron_jobs, validate_cron_expression
-    from questorharness.engine.messages import ConversationMessage
-    import questorharness.memory.paths as mp
-    import questorharness.memory.manager as mm
-    import questorharness.memory.scan as ms
-    import questorharness.services.cron as cron_mod
+    from questorharness.capabilities.tools.skill_tool import SkillTool
+    from questorharness.capabilities.memory.scan import scan_memory_files
+    from questorharness.capabilities.memory.search import find_relevant_memories
+    from questorharness.platform.session_storage import save_session_snapshot, load_session_snapshot
+    from questorharness.capabilities.schedule.cron import upsert_cron_job, load_cron_jobs, validate_cron_expression
+    from questorharness.contracts.domain.message import ConversationMessage
+    import questorharness.capabilities.memory.paths as mp
+    import questorharness.capabilities.memory.manager as mm
+    import questorharness.capabilities.memory.scan as ms
+    import questorharness.capabilities.schedule.cron as cron_mod
 
     with tempfile.TemporaryDirectory() as tmpdir:
         mem_dir = Path(tmpdir) / "memory"

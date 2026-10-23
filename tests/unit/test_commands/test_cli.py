@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 import questorharness.cli as cli
 from questorharness.config import load_settings
 from questorharness.config.settings import Settings
-from questorharness.mcp.types import McpStdioServerConfig
+from questorharness.contracts.mcp import McpStdioServerConfig
 
 
 app = cli.app
@@ -97,8 +97,8 @@ def test_setup_flow_existing_api_key_profile_can_update_secret(tmp_path: Path, m
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    from questorharness.auth.manager import AuthManager
-    from questorharness.auth.storage import load_credential
+    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.storage import load_credential
 
     manager = AuthManager()
     manager.store_profile_credential("openai-compatible", "api_key", "old-key")
@@ -107,7 +107,7 @@ def test_setup_flow_existing_api_key_profile_can_update_secret(tmp_path: Path, m
     monkeypatch.setattr("questorharness.cli._select_setup_workflow", lambda *args, **kwargs: next(selections))
     monkeypatch.setattr("questorharness.cli._select_from_menu", lambda *args, **kwargs: next(selections))
     monkeypatch.setattr("questorharness.cli._confirm_prompt", lambda *args, **kwargs: True)
-    monkeypatch.setattr("questorharness.auth.flows.ApiKeyFlow.run", lambda self: "new-key")
+    monkeypatch.setattr("questorharness.providers.auth.flows.ApiKeyFlow.run", lambda self: "new-key")
     monkeypatch.setattr("questorharness.cli._prompt_model_for_profile", lambda profile: "gpt-4.1")
 
     result = runner.invoke(app, ["setup"])
@@ -135,7 +135,7 @@ def test_setup_flow_creates_kimi_profile_with_profile_scoped_key(tmp_path: Path,
     monkeypatch.setattr("questorharness.cli._select_setup_workflow", lambda *args, **kwargs: next(selections))
     monkeypatch.setattr("questorharness.cli._select_from_menu", lambda *args, **kwargs: next(selections))
     monkeypatch.setattr("questorharness.cli._text_prompt", lambda *args, **kwargs: next(prompts))
-    monkeypatch.setattr("questorharness.auth.flows.ApiKeyFlow.run", lambda self: "sk-kimi-test")
+    monkeypatch.setattr("questorharness.providers.auth.flows.ApiKeyFlow.run", lambda self: "sk-kimi-test")
 
     result = runner.invoke(app, ["setup"])
     assert result.exit_code == 0
@@ -149,7 +149,7 @@ def test_setup_flow_creates_kimi_profile_with_profile_scoped_key(tmp_path: Path,
     assert profile.credential_slot == "kimi-anthropic"
     assert profile.allowed_models == ["kimi-k2.5"]
 
-    from questorharness.auth.storage import load_credential
+    from questorharness.providers.auth.storage import load_credential
 
     assert load_credential("profile:kimi-anthropic", "api_key") == "sk-kimi-test"
 
@@ -158,7 +158,7 @@ def test_provider_add_can_store_profile_api_key(tmp_path: Path, monkeypatch):
     runner = CliRunner()
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path))
 
-    from questorharness.auth.storage import load_credential
+    from questorharness.providers.auth.storage import load_credential
 
     result = runner.invoke(
         app,
@@ -193,8 +193,8 @@ def test_provider_edit_can_replace_profile_api_key(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    from questorharness.auth.manager import AuthManager
-    from questorharness.auth.storage import load_credential
+    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.storage import load_credential
 
     manager = AuthManager()
     manager.store_profile_credential("openai-compatible", "api_key", "old-key")
@@ -213,7 +213,7 @@ def test_dangerously_skip_permissions_passes_full_auto_to_run_repl(monkeypatch):
     async def fake_run_repl(**kwargs):
         captured.update(kwargs)
 
-    monkeypatch.setattr("questorharness.ui.app.run_repl", fake_run_repl)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.app.run_repl", fake_run_repl)
 
     result = runner.invoke(app, ["--dangerously-skip-permissions"])
 
@@ -228,7 +228,7 @@ def test_task_worker_flag_routes_to_run_task_worker(monkeypatch):
     async def fake_run_task_worker(**kwargs):
         captured.update(kwargs)
 
-    monkeypatch.setattr("questorharness.ui.app.run_task_worker", fake_run_task_worker)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.app.run_task_worker", fake_run_task_worker)
 
     result = runner.invoke(app, ["--task-worker", "--model", "kimi-k2.5"])
 
@@ -276,7 +276,7 @@ def test_dry_run_uses_preview_builder_and_skips_repl(monkeypatch):
         raise AssertionError(f"run_repl should not be called during dry-run: {kwargs}")
 
     monkeypatch.setattr("questorharness.cli._build_dry_run_preview", fake_build_dry_run_preview)
-    monkeypatch.setattr("questorharness.ui.app.run_repl", fake_run_repl)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.app.run_repl", fake_run_repl)
 
     result = runner.invoke(app, ["--dry-run", "--print", "ship it", "--model", "gpt-5.4"])
 
@@ -357,14 +357,14 @@ def test_build_dry_run_preview_classifies_slash_command_and_flags_bad_mcp(monkey
 
     monkeypatch.setattr("questorharness.config.load_settings", lambda: settings)
     monkeypatch.setattr(
-        "questorharness.api.provider.detect_provider",
+        "questorharness.providers.llm.provider.detect_provider",
         lambda settings: types.SimpleNamespace(name="anthropic"),
     )
-    monkeypatch.setattr("questorharness.api.provider.auth_status", lambda settings: "configured")
+    monkeypatch.setattr("questorharness.providers.llm.provider.auth_status", lambda settings: "configured")
     monkeypatch.setattr("questorharness.plugins.load_plugins", lambda settings, cwd: [])
-    monkeypatch.setattr("questorharness.skills.load_skill_registry", lambda cwd, settings=None: _FakeSkillRegistry())
-    monkeypatch.setattr("questorharness.prompts.context.build_runtime_system_prompt", lambda *args, **kwargs: "preview prompt")
-    monkeypatch.setattr("questorharness.ui.runtime._resolve_api_client_from_settings", lambda settings: object())
+    monkeypatch.setattr("questorharness.capabilities.skills.load_skill_registry", lambda cwd, settings=None: _FakeSkillRegistry())
+    monkeypatch.setattr("questorharness.capabilities.context.prompts.context.build_runtime_system_prompt", lambda *args, **kwargs: "preview prompt")
+    monkeypatch.setattr("questorharness.bootstrap.runtime._resolve_api_client_from_settings", lambda settings: object())
 
     preview = cli._build_dry_run_preview(
         prompt="/plugin list",
@@ -398,18 +398,18 @@ def test_build_dry_run_preview_sets_blocked_when_model_prompt_lacks_auth(monkeyp
 
     monkeypatch.setattr("questorharness.config.load_settings", lambda: settings)
     monkeypatch.setattr(
-        "questorharness.api.provider.detect_provider",
+        "questorharness.providers.llm.provider.detect_provider",
         lambda settings: types.SimpleNamespace(name="anthropic"),
     )
-    monkeypatch.setattr("questorharness.api.provider.auth_status", lambda settings: "missing")
+    monkeypatch.setattr("questorharness.providers.llm.provider.auth_status", lambda settings: "missing")
     monkeypatch.setattr("questorharness.plugins.load_plugins", lambda settings, cwd: [])
-    monkeypatch.setattr("questorharness.skills.load_skill_registry", lambda cwd, settings=None: _FakeSkillRegistry())
-    monkeypatch.setattr("questorharness.prompts.context.build_runtime_system_prompt", lambda *args, **kwargs: "preview prompt")
+    monkeypatch.setattr("questorharness.capabilities.skills.load_skill_registry", lambda cwd, settings=None: _FakeSkillRegistry())
+    monkeypatch.setattr("questorharness.capabilities.context.prompts.context.build_runtime_system_prompt", lambda *args, **kwargs: "preview prompt")
 
     def fake_resolve_api_client(settings):
         raise SystemExit(1)
 
-    monkeypatch.setattr("questorharness.ui.runtime._resolve_api_client_from_settings", fake_resolve_api_client)
+    monkeypatch.setattr("questorharness.bootstrap.runtime._resolve_api_client_from_settings", fake_resolve_api_client)
 
     preview = cli._build_dry_run_preview(
         prompt="fix the failing tests",
@@ -467,15 +467,15 @@ def test_build_dry_run_preview_recommends_matching_skills_and_tools(monkeypatch,
 
     monkeypatch.setattr("questorharness.config.load_settings", lambda: settings)
     monkeypatch.setattr(
-        "questorharness.api.provider.detect_provider",
+        "questorharness.providers.llm.provider.detect_provider",
         lambda settings: types.SimpleNamespace(name="anthropic"),
     )
-    monkeypatch.setattr("questorharness.api.provider.auth_status", lambda settings: "configured")
+    monkeypatch.setattr("questorharness.providers.llm.provider.auth_status", lambda settings: "configured")
     monkeypatch.setattr("questorharness.plugins.load_plugins", lambda settings, cwd: [])
-    monkeypatch.setattr("questorharness.skills.load_skill_registry", lambda cwd, settings=None: _FakeSkillRegistry())
-    monkeypatch.setattr("questorharness.tools.create_default_tool_registry", lambda: _FakeToolRegistry())
-    monkeypatch.setattr("questorharness.prompts.context.build_runtime_system_prompt", lambda *args, **kwargs: "preview prompt")
-    monkeypatch.setattr("questorharness.ui.runtime._resolve_api_client_from_settings", lambda settings: object())
+    monkeypatch.setattr("questorharness.capabilities.skills.load_skill_registry", lambda cwd, settings=None: _FakeSkillRegistry())
+    monkeypatch.setattr("questorharness.capabilities.tools.create_default_tool_registry", lambda: _FakeToolRegistry())
+    monkeypatch.setattr("questorharness.capabilities.context.prompts.context.build_runtime_system_prompt", lambda *args, **kwargs: "preview prompt")
+    monkeypatch.setattr("questorharness.bootstrap.runtime._resolve_api_client_from_settings", lambda settings: object())
 
     preview = cli._build_dry_run_preview(
         prompt="review this bug fix and grep for failing tests",
@@ -515,7 +515,7 @@ def test_autopilot_run_next_cli(monkeypatch, tmp_path: Path):
 
             return Result()
 
-    monkeypatch.setattr("questorharness.autopilot.RepoAutopilotStore", FakeStore)
+    monkeypatch.setattr("questorharness.runtime.autopilot.RepoAutopilotStore", FakeStore)
 
     result = runner.invoke(app, ["autopilot", "run-next", "--cwd", str(tmp_path)])
 
@@ -533,7 +533,7 @@ def test_autopilot_install_cron_cli(monkeypatch, tmp_path: Path):
         def install_default_cron(self):
             return ["autopilot.scan", "autopilot.tick"]
 
-    monkeypatch.setattr("questorharness.autopilot.RepoAutopilotStore", FakeStore)
+    monkeypatch.setattr("questorharness.runtime.autopilot.RepoAutopilotStore", FakeStore)
 
     result = runner.invoke(app, ["autopilot", "install-cron", "--cwd", str(tmp_path)])
 
@@ -551,7 +551,7 @@ def test_autopilot_export_dashboard_cli(monkeypatch, tmp_path: Path):
         def export_dashboard(self, output=None):
             return tmp_path / "docs" / "autopilot"
 
-    monkeypatch.setattr("questorharness.autopilot.RepoAutopilotStore", FakeStore)
+    monkeypatch.setattr("questorharness.runtime.autopilot.RepoAutopilotStore", FakeStore)
 
     result = runner.invoke(app, ["autopilot", "export-dashboard", "--cwd", str(tmp_path)])
 

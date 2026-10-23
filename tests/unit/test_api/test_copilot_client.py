@@ -7,19 +7,19 @@ from typing import AsyncIterator
 
 import pytest
 
-from questorharness.api.client import (
+from questorharness.providers.llm.client import (
     ApiMessageCompleteEvent,
     ApiMessageRequest,
     ApiStreamEvent,
     ApiTextDeltaEvent,
 )
-from questorharness.api.copilot_auth import (
+from questorharness.providers.llm.copilot_auth import (
     save_copilot_auth,
 )
-from questorharness.api.copilot_client import CopilotClient
-from questorharness.api.errors import AuthenticationFailure
-from questorharness.api.usage import UsageSnapshot
-from questorharness.engine.messages import ConversationMessage, TextBlock
+from questorharness.providers.llm.copilot_client import CopilotClient
+from questorharness.providers.llm.errors import AuthenticationFailure
+from questorharness.contracts.usage import UsageSnapshot
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 
 
 # ---------------------------------------------------------------------------

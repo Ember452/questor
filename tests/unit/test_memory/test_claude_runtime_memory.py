@@ -8,43 +8,43 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.api.client import ApiMessageCompleteEvent
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.client import ApiMessageCompleteEvent
+from questorharness.contracts.usage import UsageSnapshot
 from questorharness.commands.registry import CommandContext, create_default_command_registry
 from questorharness.config.settings import Settings
-from questorharness.engine.messages import ConversationMessage, ToolUseBlock
+from questorharness.contracts.domain.message import ConversationMessage, ToolUseBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.memory import add_memory_entry, get_project_memory_dir
-from questorharness.memory.agent import (
+from questorharness.capabilities.memory import add_memory_entry, get_project_memory_dir
+from questorharness.capabilities.memory.agent import (
     ensure_agent_memory_vault,
     get_agent_memory_entrypoint,
     initialize_agent_memory_from_snapshot,
 )
-from questorharness.memory.relevance import format_relevant_memories, select_relevant_memories
-from questorharness.memory.schema import (
+from questorharness.capabilities.memory.relevance import format_relevant_memories, select_relevant_memories
+from questorharness.capabilities.memory.schema import (
     memory_freshness_text,
     parse_memory_scope,
     parse_memory_type,
     truncate_entrypoint_content,
 )
-from questorharness.memory.team import (
+from questorharness.capabilities.memory.team import (
     check_team_memory_secrets,
     ensure_team_memory_vault,
     validate_team_memory_write_path,
 )
-from questorharness.permissions import PermissionChecker
-from questorharness.services.memory_extract import (
+from questorharness.capabilities.policy import PermissionChecker
+from questorharness.capabilities.memory.extract import (
     extract_memories_from_turn,
     has_memory_writes_since,
     parse_extraction_records,
     validate_extraction_tool_request,
 )
-from questorharness.services.session_memory import (
+from questorharness.capabilities.memory.session import (
     get_session_memory_content,
     get_session_memory_path,
     update_session_memory_file,
 )
-from questorharness.tools import create_default_tool_registry
+from questorharness.capabilities.tools import create_default_tool_registry
 
 
 class _FakeApiClient:

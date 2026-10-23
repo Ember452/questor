@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from questorharness.api.usage import UsageSnapshot
+from questorharness.contracts.usage import UsageSnapshot
 
 
 class CostTracker:

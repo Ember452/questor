@@ -6,13 +6,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from questorharness.coordinator.agent_definitions import AgentDefinition
-from questorharness.mcp.types import McpServerConfig
+from questorharness.contracts.agent import AgentDefinition
+from questorharness.contracts.mcp import McpServerConfig
 from questorharness.plugins.schemas import PluginManifest
-from questorharness.skills.types import SkillDefinition
+from questorharness.capabilities.skills.types import SkillDefinition
 
 if TYPE_CHECKING:
-    from questorharness.tools.base import BaseTool
+    from questorharness.capabilities.tools.base import BaseTool
 
 
 @dataclass(frozen=True)

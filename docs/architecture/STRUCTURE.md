@@ -52,9 +52,13 @@ questor/
 ├─ src/
 │  ├─ questorharness/                 # 引擎：headless、可独立装配
 │  │  ├─ api.py                       # 唯一公开门面（只 re-export）
+│  │  ├─ platform/                    # 最底层：OS 检测与路径解析（无策略，可被所有层 import）
+│  │  │  ├─ __init__.py               # PlatformName / PlatformCapabilities / detect_platform
+│  │  │  └─ paths.py                  # 配置 / 数据 / 日志 / 任务 / 会话目录
 │  │  ├─ contracts/                   # 词表 + Port（无实现、无 IO）
 │  │  │  ├─ ids.py                    # SessionId / RunId / TurnId / ProfileId
 │  │  │  ├─ errors.py
+│  │  │  ├─ task.py subagent.py agent.py hooks.py policy.py  # 共享词表
 │  │  │  ├─ commands/                 # session.py run.py turn.py profile.py
 │  │  │  ├─ events/                   # session.py run.py memory.py tool.py
 │  │  │  ├─ domain/                   # session.py run.py message.py tool_call.py
@@ -69,19 +73,25 @@ questor/
 │  │  │  ├─ sequence.py               # per-run seq + per-session change_version
 │  │  │  ├─ lease.py                  # 本地写者租约；跨进程不支持（见 §11）
 │  │  │  └─ errors.py
-│  │  ├─ runtime/                     # B环：run/turn 控制与循环策略
-│  │  │  ├─ run/                      # controller.py state.py recovery.py
-│  │  │  ├─ turn/                     # loop.py tool_cycle.py stop.py stream.py
-│  │  │  ├─ session/                  # fork.py rewind.py index.py
-│  │  │  ├─ tasks/                    # task_manager.py local_agent.py local_shell.py
-│  │  │  ├─ budget/                   # tokens.py cost.py
-│  │  │  ├─ extension/                # points.py chain.py
-│  │  │  ├─ delegation/               # subagent.py dag.py（留缝）
-│  │  │  └─ autopilot/                # policy.py loop.py triggers.py state.py
+│  │  ├─ engine/                      # 编排层：run/turn 循环（组合 capabilities + providers + runtime）
+│  │  │  ├─ query.py                  # 单轮循环、工具执行、压缩触发
+│  │  │  ├─ query_engine.py           # 会话引擎（历史、预算、自动 dream 调度）
+│  │  │  └─ cost_tracker.py
+│  │  ├─ commands/                    # 应用层：slash 命令分派（组合根，不进八层矩阵）
+│  │  ├─ runtime/                     # 有状态运行时服务
+│  │  │  ├─ session/                  # 会话后端与存储衔接
+│  │  │  ├─ services/                 # 端口实现（task / subagent）
+│  │  │  ├─ tasks/                    # 后台任务与输出
+│  │  │  ├─ hooks/                    # hook 注册与执行
+│  │  │  ├─ autopilot/                # 自动巡检
+│  │  │  ├─ coordinator/              # agent 定义、协调模式、团队
+│  │  │  ├─ swarm/                    # 多 agent 后端（subprocess / in_process / tmux）
+│  │  │  └─ bridge/                   # 外部会话桥接
 │  │  ├─ capabilities/                # 能力域（每个子域一个叶子语法）
-│  │  │  ├─ context/                  # assemble.py compact/ budget.py
+│  │  │  ├─ context/                  # prompts/（system prompt 组装） compact/ budget.py
 │  │  │  ├─ memory/                   # recall/ write/ consolidate/ backends/
 │  │  │  ├─ tools/                    # fs/ shell/ web/ task/ agent/ mcp/ media/ cron/
+│  │  │  ├─ skills/                   # 技能发现 / 解析 / bundled 数据
 │  │  │  ├─ policy/                   # permission.py sandbox.py approval.py
 │  │  │  ├─ delivery/                 # D环（留缝）
 │  │  │  ├─ schedule/                 # E环
@@ -150,24 +160,38 @@ questor/
 
 ### 2.1 允许的依赖
 
-| from \ may import | contracts | kernel | runtime | capabilities | providers | surfaces | profiles | bootstrap |
-|---|---|---|---|---|---|---|---|---|
-| `kernel` | ✅ | — | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `runtime` | ✅ | ✅ | — | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `capabilities` | ✅ | ❌ | ❌ | — | ❌ | ❌ | ❌ | ❌ |
-| `providers` | ✅ | ❌ | ❌ | ❌ | — | ❌ | ❌ | ❌ |
-| `surfaces` | ✅ | ❌ | ❌（facade 注入） | ❌ | ❌ | — | ❌ | ❌ |
-| `profiles` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | — | ❌ |
-| `bootstrap` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| `questor`（产品） | api only | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+实际生效的层序（`.importlinter` 的 `layers` 契约，自上而下，上层可依赖下层）：
+
+```
+bootstrap
+  surfaces
+    commands
+      engine
+        runtime
+          execution
+            providers
+              config
+                platform
+                  contracts
+```
+
+不在层序内、由单独契约管的包：
+
+| 包 | 归属 | 约束 |
+|---|---|---|
+| `capabilities` | 横切能力层 | `capabilities-are-leaf`：只可 import contracts / config / platform / execution / plugins |
+| `plugins` | 扩展层 | `plugins-stay-an-extension-layer`：不 import app / surfaces / commands / engine / bootstrap |
+| `state`、`keybindings`、`themes`、`vim`、`output_styles` | 叶子 | 任何层可读；它们不向外依赖 |
 
 关键点：
 
-- `runtime` **不 import 任何能力实现**。它只认 `contracts/ports` 与 `kernel` 的公开入口，由 `bootstrap` 注入。
-- `capabilities` **不 import providers**。它只依赖 Port；适配器由 `bootstrap` 注入。
-- `surfaces` **不 import runtime/capabilities**。它只认 `contracts` 和注入的 facade。
-- `profiles` 是纯数据：只引用注册表 ID，不含 import。
-- `kernel` 不 import `runtime`；`runtime` 不 import `kernel` 的内部模块，只用 `kernel` 的公开入口。
+- `contracts` 是纯数据契约（模型、协议、异常），零内部依赖。历史上混进来的 `shell` / `network` / `locking` / `session_storage` / `io` 已下沉到 `platform`，否则 `contracts → config/providers` 会让层序无法成立。
+- `platform` 只放标准库级工具（平台检测、路径、原子写、文件锁），不读配置。
+- `config` 是设置模型与加载，只依赖 `platform` + `contracts`；`resolve_auth` 已移到 `providers.auth.resolver`，`config → providers` 归零。
+- `execution` 是需要配置与沙箱的执行基础设施（子进程、HTTP 抓取）。它必须在 `providers` 之上、`runtime` 之下，因为 capabilities 的工具也要用它。
+- `runtime` 不 import `capabilities` 的实现；`capabilities` 通过 `capabilities/ports.py` 反向拿服务。
+- `engine` 是编排层，`commands` 是应用层分派器，都在层序里，但允许依赖其下所有层。
+- 唯一登记的例外：`runtime.swarm.in_process → engine.query`（一个 teammate 要跑一轮引擎），在 `.importlinter` 里以 `ignore_imports` 显式命名。
 
 ### 2.2 强制方式
 
@@ -467,15 +491,16 @@ apps/web/
 | 现状 | 处置 | 去向 |
 |---|---|---|
 | `api/`、`auth/`、`sandbox/` | 降为适配器 | `providers/{llm,auth,sandbox}/` |
-| `engine/`、`commands/`、`coordinator/`、`swarm/`、`tasks/`、`autopilot/`、`hooks/` | 下沉到运行时 | `runtime/{turn,commands,delegation,tasks,autopilot,extension}/` |
+| `coordinator/`、`swarm/`、`tasks/`、`autopilot/`、`hooks/`、`bridge/` | 已完成：下沉到运行时 | `runtime/{coordinator,swarm,tasks,autopilot,hooks,bridge}/` |
+| `engine/`、`commands/` | **保留在顶层** | `engine/` 是编排层（循环必须组合 capabilities/providers/runtime），`commands/` 是应用层分派器；`commands/registry.py` 已按命令族拆到 `commands/families/`（主文件 107 行） |
 | `state/` | Phase 1 **不动**，Phase 2 再拆 | 事实状态 → `kernel/`（durable 立项后）；UI 可观察状态 → 前端 store |
 | `services/*` | 解散 | `capabilities/{context,memory,schedule}/`、`providers/lsp/`、`runtime/budget/` |
-| `plugins/`、`skills/` | 拆代码与数据 | loader/registry → `capabilities/tools/`；`bundled/*.md` → 根 `plugins/`（包数据，`importlib.resources` 读取） |
-| `personalization/` | 升级为记忆能力 | `capabilities/memory/personalization/`（Phase 3） |
+| `skills/`、`plugins/` | `skills/` 已归位 `capabilities/skills/`（含 bundled 数据）；`AgentDefinition` 已入 `contracts/agent.py` | `plugins/` 仍依赖 coordinator 的私有解析函数，暂留顶层作为扩展层 |
+| `personalization/` | 已完成：归位为记忆能力 | `capabilities/memory/personalization/` |
 | `memory/`、`permissions/`、`channels/`、`mcp/` | 升级为能力/传输 | `capabilities/{memory,policy,tools/mcp}/`、`surfaces/channels/`、`providers/mcp/` |
-| `ui/`、`keybindings/`、`themes/`、`vim/`、`output_styles/` | Phase 1 冻结，Phase 2 移除（ADR-0005） | 不迁 `surfaces/terminal/`；先解耦再删 |
+| `ui/` | 已完成并删除：组合根 → `bootstrap/runtime.py`，进程宿主 → `bootstrap/hosts/`；textual 代码与依赖已移除 | `keybindings/`、`themes/`、`vim/`、`output_styles/` 保留 |
 | `voice/` | 下移为适配器 | `providers/voice/`（Phase 2） |
-| `utils/`、`config/`、`bridge/` | 解散/归位（Phase 2） | `kernel/`（锁）、`contracts/settings.py`（配置类型）+ `bootstrap/config/`（只做解析与注入）、`surfaces/`（bridge） |
+| `utils/`、`config/` | 解散/归位（Phase 2） | `kernel/`（锁）、`contracts/settings.py`（配置类型）+ `bootstrap/config/`（只做解析与注入）；`bridge/` 已归 `runtime/bridge/` |
 | `questor/gateway` | 拆产品策略与传输 | surfaces/gateway（协议路由）+ 产品包内的渠道策略目录 |
 
 `services/` 的 5 个子包都没有独立模块文件，逻辑全在 `__init__.py`：`compact`、`lsp`、`memory_extract`、`session_memory` 先迁到各自能力域，`oauth` 为空可直接删。
@@ -492,6 +517,8 @@ apps/web/
 | **Phase 3** | Capabilities：profiles、memory provider、Electron、第二模式 | 是 | 新能力半径 ≤1；新模式不改引擎核心 |
 
 详细移动表、阶段边界、回滚策略见 [MIGRATION](MIGRATION.md)。Phase 1 每包一个 PR；Phase 2 每个 god file 一个 PR；Phase 3 每个能力一个开关。
+
+当前进度（2026-10-23）：Phase 1 完成；Phase 2 的 W0–W7 完成——contracts 收下跨层词表（task / subagent / hooks / agent）、capabilities 改为端口注入（sandbox / llm / lsp / task / subagent / hook）、`coordinator` / `swarm` / `tasks` / `hooks` / `autopilot` / `bridge` 收拢进 `runtime/`。剩余：W8 配置与插件、W9 UI 解耦、W10 分层守卫与文档终验。
 
 ---
 

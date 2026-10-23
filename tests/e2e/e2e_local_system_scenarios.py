@@ -14,19 +14,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from questorharness.commands.registry import CommandContext, create_default_command_registry
 from questorharness.config.settings import Settings, load_settings
-from questorharness.engine.messages import ConversationMessage, TextBlock
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.mcp.client import McpClientManager
-from questorharness.mcp.config import load_mcp_server_configs
-from questorharness.mcp.types import McpStdioServerConfig
-from questorharness.permissions import PermissionChecker
+from questorharness.providers.mcp.client import McpClientManager
+from questorharness.providers.mcp.config import load_mcp_server_configs
+from questorharness.contracts.mcp import McpStdioServerConfig
+from questorharness.capabilities.policy import PermissionChecker
 from questorharness.plugins import load_plugins
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin
 from questorharness.state import AppState, AppStateStore
-from questorharness.bridge import build_sdk_url, decode_work_secret, encode_work_secret, spawn_session
-from questorharness.bridge.types import WorkSecret
-from questorharness.tools import create_default_tool_registry
-from questorharness.tools.base import ToolExecutionContext
+from questorharness.runtime.bridge import build_sdk_url, decode_work_secret, encode_work_secret, spawn_session
+from questorharness.runtime.bridge.types import WorkSecret
+from questorharness.capabilities.tools import create_default_tool_registry
+from questorharness.capabilities.tools.base import ToolExecutionContext
 
 
 FIXTURE_SERVER = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "fake_mcp_server.py"

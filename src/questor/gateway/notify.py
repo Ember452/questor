@@ -80,7 +80,7 @@ async def send_feishu_dm(*, user_open_id: str, content: str, workspace: str | Pa
 
 def register_handlers() -> None:
     """Register Questor's Feishu notification handler with the engine cron scheduler."""
-    from questorharness.services.cron_scheduler import register_notification_handler
+    from questorharness.api import register_notification_handler
 
     async def send_feishu_notification(
         _job: dict[str, Any],

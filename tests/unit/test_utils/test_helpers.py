@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from questorharness.utils.helpers import get_data_path, safe_filename, split_message
+from questorharness.surfaces.channels.helpers import get_data_path, safe_filename, split_message
 
 
 def test_split_message_prefers_word_boundaries() -> None:

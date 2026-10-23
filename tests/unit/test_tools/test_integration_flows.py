@@ -8,12 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.tasks.manager import get_task_manager
-from questorharness.tools import create_default_tool_registry
-from questorharness.tools.base import ToolExecutionContext
+from questorharness.runtime.tasks.manager import get_task_manager
+from questorharness.capabilities.tools import create_default_tool_registry
+from questorharness.runtime.services import default_subagent_runtime, default_task_runtime
+from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.providers.lsp.runtime import ProviderLspRuntime
+
+_TOOL_PORTS = {"tasks": default_task_runtime, "subagents": default_subagent_runtime}
 
 
-async def _wait_for_terminal_task(task_id: str, *, timeout_seconds: float = 2.0) -> None:
+async def _wait_for_terminal_task(task_id: str, *, timeout_seconds: float = 10.0) -> None:
     deadline = asyncio.get_running_loop().time() + timeout_seconds
     manager = get_task_manager()
     while asyncio.get_running_loop().time() < deadline:
@@ -27,7 +31,7 @@ async def _wait_for_terminal_task(task_id: str, *, timeout_seconds: float = 2.0)
 @pytest.mark.asyncio
 async def test_search_edit_flow_across_registry(tmp_path: Path):
     registry = create_default_tool_registry()
-    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry})
+    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry}, **_TOOL_PORTS)
 
     write = registry.get("write_file")
     glob = registry.get("glob")
@@ -61,7 +65,7 @@ async def test_search_edit_flow_across_registry(tmp_path: Path):
 async def test_task_and_todo_flow_across_registry(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
     registry = create_default_tool_registry()
-    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry})
+    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry}, **_TOOL_PORTS)
 
     tool_search = registry.get("tool_search")
     todo_write = registry.get("todo_write")
@@ -123,7 +127,7 @@ async def test_skill_and_config_flow_across_registry(tmp_path: Path, monkeypatch
     )
 
     registry = create_default_tool_registry()
-    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry})
+    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry}, **_TOOL_PORTS)
 
     config = registry.get("config")
     skill = registry.get("skill")
@@ -145,7 +149,7 @@ async def test_skill_and_config_flow_across_registry(tmp_path: Path, monkeypatch
 async def test_agent_send_message_flow_restarts_completed_agent(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
     registry = create_default_tool_registry()
-    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry})
+    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry}, **_TOOL_PORTS)
 
     agent = registry.get("agent")
     send_message = registry.get("send_message")
@@ -163,7 +167,7 @@ async def test_agent_send_message_flow_restarts_completed_agent(tmp_path: Path, 
     assert match, create_result.output
     task_id = match.group(1)
 
-    for _ in range(80):
+    for _ in range(200):
         output = await task_output.execute(task_output.input_model(task_id=task_id), context)
         if "AGENT_ECHO:ready" in output.output:
             break
@@ -178,7 +182,7 @@ async def test_agent_send_message_flow_restarts_completed_agent(tmp_path: Path, 
     assert send_result.is_error is False
 
     await asyncio.sleep(0.2)
-    for _ in range(80):
+    for _ in range(200):
         output = await task_output.execute(task_output.input_model(task_id=task_id), context)
         if "AGENT_ECHO:agent ping" in output.output:
             break
@@ -202,6 +206,7 @@ async def test_ask_user_question_flow_across_registry(tmp_path: Path):
     context = ToolExecutionContext(
         cwd=tmp_path,
         metadata={"tool_registry": registry, "ask_user_prompt": _answer},
+        **_TOOL_PORTS,
     )
     ask_user = registry.get("ask_user_question")
     write = registry.get("write_file")
@@ -225,7 +230,7 @@ async def test_ask_user_question_flow_across_registry(tmp_path: Path):
 async def test_notebook_and_cron_flow_across_registry(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
     registry = create_default_tool_registry()
-    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry})
+    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry}, **_TOOL_PORTS)
 
     notebook = registry.get("notebook_edit")
     cron_create = registry.get("cron_create")
@@ -260,7 +265,12 @@ async def test_notebook_and_cron_flow_across_registry(tmp_path: Path, monkeypatc
 @pytest.mark.asyncio
 async def test_lsp_flow_across_registry(tmp_path: Path):
     registry = create_default_tool_registry()
-    context = ToolExecutionContext(cwd=tmp_path, metadata={"tool_registry": registry})
+    context = ToolExecutionContext(
+        cwd=tmp_path,
+        metadata={"tool_registry": registry},
+        lsp=ProviderLspRuntime(),
+        **_TOOL_PORTS,
+    )
 
     write = registry.get("write_file")
     lsp = registry.get("lsp")

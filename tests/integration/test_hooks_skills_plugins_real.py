@@ -32,7 +32,7 @@ RESULTS: dict[str, tuple[bool, float]] = {}
 
 
 def collect(events):
-    from questorharness.engine.stream_events import (
+    from questorharness.contracts.domain.events import (
         AssistantTextDelta, AssistantTurnComplete,
         ToolExecutionStarted, ToolExecutionCompleted,
     )
@@ -63,20 +63,20 @@ async def task_hook_blocks_model_adapts():
     print("  Task 1: Hook blocks bash → model must adapt to glob/grep")
     print("=" * 70)
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
-    from questorharness.hooks.events import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
+    from questorharness.contracts.hooks import HookEvent
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.contracts.hooks import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
 
@@ -146,18 +146,18 @@ async def task_model_invokes_skill_tool():
     print("  Task 2: Model invokes skill tool, then follows skill instructions")
     print("=" * 70)
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
-    from questorharness.tools.skill_tool import SkillTool
-    import questorharness.skills.loader as sl
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
+    import questorharness.capabilities.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create a skill file that gives specific instructions
@@ -239,18 +239,18 @@ async def task_plugin_skill_in_agent_loop():
     print("  Task 3: Plugin-provided skill used through skill tool in agent loop")
     print("=" * 70)
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
-    from questorharness.tools.skill_tool import SkillTool
-    import questorharness.skills.loader as sl
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
+    import questorharness.capabilities.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create a plugin with a skill
@@ -343,24 +343,24 @@ async def task_hook_gates_writes_skill_guides():
     print("  Task 4: Hook gates file writes + skill guides refactoring workflow")
     print("=" * 70)
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.file_write_tool import FileWriteTool
-    from questorharness.tools.file_edit_tool import FileEditTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
-    from questorharness.tools.skill_tool import SkillTool
-    from questorharness.hooks.events import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
-    import questorharness.skills.loader as sl
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
+    from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
+    from questorharness.contracts.hooks import HookEvent
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.contracts.hooks import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
+    import questorharness.capabilities.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create skill
@@ -495,21 +495,21 @@ async def task_swarm_teammates_use_skills():
     print("  Task 5: 2 concurrent teammates each invoke different skills")
     print("=" * 70)
 
-    from questorharness.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
+    from questorharness.runtime.swarm.types import TeammateSpawnConfig
     from questorharness.engine.query import QueryContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
-    from questorharness.tools.skill_tool import SkillTool
-    from questorharness.tools.file_write_tool import FileWriteTool
-    import questorharness.skills.loader as sl
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
+    from questorharness.capabilities.tools.skill_tool import SkillTool
+    from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
+    import questorharness.capabilities.skills.loader as sl
 
     with tempfile.TemporaryDirectory() as tmpdir:
         skills_dir = Path(tmpdir) / "skills"

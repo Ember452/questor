@@ -5,17 +5,20 @@ from __future__ import annotations
 from pathlib import Path
 from typing import AsyncIterator
 
-from questorharness.api.client import SupportsStreamingMessages
+from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.engine.cost_tracker import CostTracker
-from questorharness.coordinator.coordinator_mode import get_coordinator_user_context
-from questorharness.engine.messages import ConversationMessage, TextBlock, ToolResultBlock, sanitize_conversation_messages
-from questorharness.engine.query import AskUserPrompt, PermissionPrompt, QueryContext, remember_user_goal, run_query
-from questorharness.engine.stream_events import AssistantTurnComplete, StreamEvent
+from questorharness.runtime.coordinator.coordinator_mode import get_coordinator_user_context
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock, ToolResultBlock, sanitize_conversation_messages
+from questorharness.engine.context import AskUserPrompt, PermissionPrompt, QueryContext
+from questorharness.engine.query import run_query
+from questorharness.engine.tool_metadata import remember_user_goal
+from questorharness.contracts.domain.events import AssistantTurnComplete, StreamEvent
 from questorharness.config.settings import Settings
-from questorharness.hooks import HookEvent, HookExecutor
-from questorharness.permissions.checker import PermissionChecker
-from questorharness.services.autodream.service import schedule_auto_dream
-from questorharness.tools.base import ToolRegistry
+from questorharness.runtime.hooks import HookEvent, HookExecutor
+from questorharness.capabilities.policy.checker import PermissionChecker
+from questorharness.capabilities.memory.consolidate.service import schedule_auto_dream
+from questorharness.runtime.services import default_task_runtime
+from questorharness.capabilities.tools.base import ToolRegistry
 
 
 class QueryEngine:
@@ -147,6 +150,7 @@ class QueryEngine:
         schedule_auto_dream(
             cwd=self._cwd,
             settings=self._settings,
+            tasks=default_task_runtime,
             model=self._model,
             current_session_id=str(self._tool_metadata.get("session_id") or ""),
             **kwargs,
@@ -159,7 +163,7 @@ class QueryEngine:
             return
         if not self._settings.memory.enabled:
             return
-        from questorharness.services.session_memory import prepare_session_memory_metadata
+        from questorharness.capabilities.memory.session import prepare_session_memory_metadata
 
         prepare_session_memory_metadata(
             self._cwd,
@@ -174,7 +178,7 @@ class QueryEngine:
             return
         if not self._settings.memory.enabled:
             return
-        from questorharness.services.session_memory import update_session_memory_file
+        from questorharness.capabilities.memory.session import update_session_memory_file
 
         update_session_memory_file(
             self._cwd,
@@ -190,7 +194,7 @@ class QueryEngine:
             return
         if not self._settings.memory.enabled:
             return
-        from questorharness.services.memory_extract import extract_memories_from_turn
+        from questorharness.capabilities.memory.extract import extract_memories_from_turn
 
         try:
             result = await extract_memories_from_turn(

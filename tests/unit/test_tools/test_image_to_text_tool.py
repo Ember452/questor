@@ -6,10 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.api.provider import is_model_multimodal
+from questorharness.providers.llm.provider import is_model_multimodal
 from questorharness.config.settings import VisionModelConfig
-from questorharness.tools.base import ToolExecutionContext
-from questorharness.tools.image_to_text_tool import ImageToTextTool, ImageToTextToolInput
+from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.media.image_to_text_tool import ImageToTextTool, ImageToTextToolInput
+from questorharness.providers.llm.tool_runtime import ProviderLlmToolRuntime
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +199,7 @@ async def test_execute_with_image_path(tmp_path: Path) -> None:
                 "base_url": "",
             }
         },
+        llm=ProviderLlmToolRuntime(),
     )
     result = await tool.execute(
         ImageToTextToolInput(image_path=str(png_path)),
@@ -268,7 +270,7 @@ class TestVisionModelConfig:
 
 def test_tool_registered() -> None:
     """image_to_text tool is registered in the default registry."""
-    from questorharness.tools import create_default_tool_registry
+    from questorharness.capabilities.tools import create_default_tool_registry
 
     registry = create_default_tool_registry()
     tool = registry.get("image_to_text")
@@ -276,4 +278,4 @@ def test_tool_registered() -> None:
     assert tool.name == "image_to_text"
     assert "vision" in tool.description.lower()
     assert tool.input_model.__name__ == "ImageToTextToolInput"
-    assert tool.input_model.__module__ == "questorharness.tools.image_to_text_tool"
+    assert tool.input_model.__module__ == "questorharness.capabilities.tools.media.image_to_text_tool"

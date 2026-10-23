@@ -10,8 +10,9 @@ from typing import Any
 import pytest
 
 from questorharness.config.settings import ImageGenerationConfig
-from questorharness.tools.base import ToolExecutionContext
-from questorharness.tools.image_generation_tool import ImageGenerationTool, ImageGenerationToolInput
+from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.media.image_generation_tool import ImageGenerationTool, ImageGenerationToolInput
+from questorharness.providers.llm.tool_runtime import ProviderLlmToolRuntime
 
 
 class _FakeStreamResponse:
@@ -118,7 +119,7 @@ async def test_execute_codex_hosted_generation(monkeypatch: pytest.MonkeyPatch, 
         ]
     )
     monkeypatch.setattr(
-        "questorharness.tools.image_generation_tool.httpx.AsyncClient",
+        "questorharness.capabilities.tools.media.image_generation_tool.httpx.AsyncClient",
         lambda *args, **kwargs: _FakeAsyncClient(response, sink),
     )
 
@@ -133,6 +134,7 @@ async def test_execute_codex_hosted_generation(monkeypatch: pytest.MonkeyPatch, 
                     "codex_model": "gpt-5.4",
                 }
             },
+            llm=ProviderLlmToolRuntime(),
         ),
     )
 
@@ -150,7 +152,8 @@ async def test_execute_codex_hosted_generation(monkeypatch: pytest.MonkeyPatch, 
 async def test_auto_provider_prefers_codex_when_token_available(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     image_b64 = base64.b64encode(b"codex").decode("ascii")
 
-    async def fake_codex(self, arguments, config):
+    async def fake_codex(self, arguments, config, llm):
+        del llm
         return [image_b64], None
 
     monkeypatch.setattr(ImageGenerationTool, "_generate_with_codex", fake_codex)

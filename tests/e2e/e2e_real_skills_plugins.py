@@ -48,7 +48,7 @@ def _run_oh(*args: str, timeout: int = 90, cwd: str | None = None) -> subprocess
 
 async def test_install_real_skills() -> tuple[bool, str]:
     """Copy real skills from anthropics/skills into questorharness user skills dir."""
-    from questorharness.config.paths import get_config_dir
+    from questorharness.platform.paths import get_config_dir
 
     if not SKILLS_REPO.exists():
         return False, f"Skills repo not found at {SKILLS_REPO}. Run: git clone https://github.com/anthropics/skills /tmp/anthropic-skills"
@@ -71,7 +71,7 @@ async def test_install_real_skills() -> tuple[bool, str]:
 
 async def test_real_skills_loaded() -> tuple[bool, str]:
     """Verify that the installed real skills are loaded by the registry."""
-    from questorharness.skills.loader import load_skill_registry
+    from questorharness.capabilities.skills.loader import load_skill_registry
 
     registry = load_skill_registry(cwd=".")
     skills = registry.list_skills()
@@ -87,7 +87,7 @@ async def test_real_skills_loaded() -> tuple[bool, str]:
 
 async def test_real_skill_content_quality() -> tuple[bool, str]:
     """Verify that real skills have substantial content (not stubs)."""
-    from questorharness.skills.loader import load_skill_registry
+    from questorharness.capabilities.skills.loader import load_skill_registry
 
     registry = load_skill_registry(cwd=".")
     issues = []
@@ -110,8 +110,8 @@ async def test_real_skill_content_quality() -> tuple[bool, str]:
 
 async def test_skill_tool_with_real_skill() -> tuple[bool, str]:
     """Test SkillTool with a real anthropic skill (pdf)."""
-    from questorharness.tools.skill_tool import SkillTool, SkillToolInput
-    from questorharness.tools.base import ToolExecutionContext
+    from questorharness.capabilities.tools.skill_tool import SkillTool, SkillToolInput
+    from questorharness.capabilities.tools.base import ToolExecutionContext
 
     tool = SkillTool()
     result = await tool.execute(
@@ -134,7 +134,7 @@ async def test_skill_tool_with_real_skill() -> tuple[bool, str]:
 async def test_skills_in_prompt_with_real() -> tuple[bool, str]:
     """Test that real skills appear in the system prompt."""
     from questorharness.config.settings import load_settings
-    from questorharness.prompts.context import build_runtime_system_prompt
+    from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
 
     prompt = build_runtime_system_prompt(load_settings(), cwd=".")
     if "Available Skills" not in prompt:

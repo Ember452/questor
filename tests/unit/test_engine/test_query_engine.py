@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.api.client import ApiMessageCompleteEvent, ApiRetryEvent, ApiTextDeltaEvent
-from questorharness.api.errors import RequestFailure
-from questorharness.api.usage import UsageSnapshot
+from questorharness.providers.llm.client import ApiMessageCompleteEvent, ApiRetryEvent, ApiTextDeltaEvent
+from questorharness.providers.llm.errors import RequestFailure
+from questorharness.contracts.usage import UsageSnapshot
 from questorharness.config.settings import PermissionSettings, Settings
-from questorharness.engine.messages import ConversationMessage, TextBlock, ToolUseBlock
+from questorharness.contracts.domain.message import ConversationMessage, TextBlock, ToolUseBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.prompts.context import build_runtime_system_prompt
-from questorharness.engine.stream_events import (
+from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
+from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     AssistantTurnComplete,
     CompactProgressEvent,
@@ -24,17 +24,17 @@ from questorharness.engine.stream_events import (
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
-from questorharness.permissions import PermissionChecker, PermissionMode
-from questorharness.tasks import get_task_manager
-from questorharness.tools import create_default_tool_registry
-from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult
-from questorharness.tools.glob_tool import GlobTool
-from questorharness.tools.grep_tool import GrepTool
+from questorharness.capabilities.policy import PermissionChecker, PermissionMode
+from questorharness.runtime.tasks import get_task_manager
+from questorharness.capabilities.tools import create_default_tool_registry
+from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolRegistry, ToolResult
+from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+from questorharness.capabilities.tools.fs.grep_tool import GrepTool
 from pydantic import BaseModel
-from questorharness.engine.messages import ToolResultBlock
-from questorharness.hooks import HookExecutionContext, HookExecutor, HookEvent
-from questorharness.hooks.loader import HookRegistry
-from questorharness.hooks.schemas import PromptHookDefinition
+from questorharness.contracts.domain.message import ToolResultBlock
+from questorharness.runtime.hooks import HookExecutionContext, HookExecutor, HookEvent
+from questorharness.runtime.hooks.loader import HookRegistry
+from questorharness.contracts.hooks import PromptHookDefinition
 from questorharness.engine.query import QueryContext, _execute_tool_call, _is_prompt_too_long_error
 
 
@@ -437,8 +437,8 @@ async def test_query_engine_surfaces_retry_status_events(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_query_engine_emits_compact_progress_before_reply(tmp_path: Path, monkeypatch):
     long_text = "alpha " * 50000
-    monkeypatch.setattr("questorharness.services.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
-    monkeypatch.setattr("questorharness.services.compact.should_autocompact", lambda *args, **kwargs: True)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.should_autocompact", lambda *args, **kwargs: True)
     engine = QueryEngine(
         api_client=FakeApiClient(
             [
@@ -483,8 +483,8 @@ async def test_query_engine_emits_compact_progress_before_reply(tmp_path: Path, 
 
 @pytest.mark.asyncio
 async def test_query_engine_reactive_compacts_after_prompt_too_long(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr("questorharness.services.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
-    monkeypatch.setattr("questorharness.services.compact.should_autocompact", lambda *args, **kwargs: False)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.should_autocompact", lambda *args, **kwargs: False)
     engine = QueryEngine(
         api_client=PromptTooLongThenSuccessApiClient(),
         tool_registry=create_default_tool_registry(),
@@ -701,7 +701,7 @@ class _RecordingHookExecutor:
         self.calls: list[tuple[HookEvent, dict]] = []
 
     async def execute(self, event: HookEvent, payload: dict):
-        from questorharness.hooks.types import AggregatedHookResult
+        from questorharness.contracts.hooks import AggregatedHookResult
 
         self.calls.append((event, dict(payload)))
         return AggregatedHookResult(results=[])
@@ -1274,7 +1274,7 @@ async def test_query_engine_persists_compacted_tool_turn_history(tmp_path: Path,
     """Compaction must not make a completed tool turn disappear from engine history."""
 
     monkeypatch.delenv("CLAUDE_CODE_COORDINATOR_MODE", raising=False)
-    monkeypatch.setattr("questorharness.services.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.try_session_memory_compaction", lambda *args, **kwargs: None)
     should_calls = {"count": 0}
 
     def _should_compact_once(*args, **kwargs):
@@ -1282,7 +1282,7 @@ async def test_query_engine_persists_compacted_tool_turn_history(tmp_path: Path,
         should_calls["count"] += 1
         return should_calls["count"] == 1
 
-    monkeypatch.setattr("questorharness.services.compact.should_autocompact", _should_compact_once)
+    monkeypatch.setattr("questorharness.capabilities.context.compact.should_autocompact", _should_compact_once)
 
     registry = ToolRegistry()
     registry.register(_OkTool())

@@ -10,30 +10,30 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.api.client import ApiMessageCompleteEvent
-from questorharness.api.usage import UsageSnapshot
-from questorharness.autopilot.service import RepoAutopilotStore
-from questorharness.bridge import get_bridge_manager
-from questorharness.channels.bus.events import InboundMessage
-from questorharness.channels.bus.queue import MessageBus
+from questorharness.providers.llm.client import ApiMessageCompleteEvent
+from questorharness.contracts.usage import UsageSnapshot
+from questorharness.runtime.autopilot.service import RepoAutopilotStore
+from questorharness.runtime.bridge import get_bridge_manager
+from questorharness.surfaces.channels.bus.events import InboundMessage
+from questorharness.surfaces.channels.bus.queue import MessageBus
 from questorharness.commands import CommandResult
 from questorharness.commands.registry import SlashCommand, create_default_command_registry
-from questorharness.config.paths import get_project_issue_file, get_project_pr_comments_file
+from questorharness.platform.paths import get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import PermissionSettings, ProviderProfile, Settings
-from questorharness.engine.messages import ConversationMessage, ImageBlock, TextBlock, ToolUseBlock
+from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock, ToolUseBlock
 from questorharness.engine.query_engine import QueryEngine
-from questorharness.engine.stream_events import (
+from questorharness.contracts.domain.events import (
     AssistantTextDelta,
     CompactProgressEvent,
     ErrorEvent,
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
-from questorharness.memory import add_memory_entry as add_project_memory_entry
-from questorharness.memory import list_memory_files as list_project_memory_files
-from questorharness.permissions import PermissionChecker, PermissionMode
-from questorharness.tasks.manager import get_task_manager
-from questorharness.tools.base import ToolExecutionContext, ToolRegistry
+from questorharness.capabilities.memory import add_memory_entry as add_project_memory_entry
+from questorharness.capabilities.memory import list_memory_files as list_project_memory_files
+from questorharness.capabilities.policy import PermissionChecker, PermissionMode
+from questorharness.runtime.tasks.manager import get_task_manager
+from questorharness.capabilities.tools.base import ToolExecutionContext, ToolRegistry
 
 from questor.gateway.bridge import QuestorGatewayBridge, _format_gateway_error
 from questor.gateway.config import load_gateway_config, save_gateway_config

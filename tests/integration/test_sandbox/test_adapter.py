@@ -11,13 +11,13 @@ from pathlib import Path
 import pytest
 
 from questorharness.config.settings import SandboxSettings, Settings
-from questorharness.sandbox.adapter import (
+from questorharness.providers.sandbox.adapter import (
     SandboxUnavailableError,
     build_sandbox_runtime_config,
     get_sandbox_availability,
     wrap_command_for_sandbox,
 )
-from questorharness.utils.shell import create_shell_subprocess
+from questorharness.execution.shell import create_shell_subprocess
 
 
 def test_build_sandbox_runtime_config_maps_settings():
@@ -39,7 +39,7 @@ def test_build_sandbox_runtime_config_maps_settings():
 
 def test_sandbox_availability_reports_native_windows_unsupported(monkeypatch):
     settings = Settings(sandbox=SandboxSettings(enabled=True))
-    monkeypatch.setattr("questorharness.sandbox.adapter.get_platform", lambda: "windows")
+    monkeypatch.setattr("questorharness.providers.sandbox.adapter.get_platform", lambda: "windows")
 
     availability = get_sandbox_availability(settings)
 
@@ -80,8 +80,8 @@ def test_wrap_command_for_sandbox_writes_settings_file(monkeypatch):
         }
         return mapping.get(name)
 
-    monkeypatch.setattr("questorharness.sandbox.adapter.get_platform", lambda: "linux")
-    monkeypatch.setattr("questorharness.sandbox.adapter.shutil.which", fake_which)
+    monkeypatch.setattr("questorharness.providers.sandbox.adapter.get_platform", lambda: "linux")
+    monkeypatch.setattr("questorharness.providers.sandbox.adapter.shutil.which", fake_which)
 
     command, settings_path = wrap_command_for_sandbox(["bash", "-lc", "echo hi"], settings=settings)
 
@@ -95,8 +95,8 @@ def test_wrap_command_for_sandbox_writes_settings_file(monkeypatch):
 
 def test_wrap_command_for_sandbox_raises_when_required(monkeypatch):
     settings = Settings(sandbox=SandboxSettings(enabled=True, fail_if_unavailable=True))
-    monkeypatch.setattr("questorharness.sandbox.adapter.get_platform", lambda: "linux")
-    monkeypatch.setattr("questorharness.sandbox.adapter.shutil.which", lambda name: None)
+    monkeypatch.setattr("questorharness.providers.sandbox.adapter.get_platform", lambda: "linux")
+    monkeypatch.setattr("questorharness.providers.sandbox.adapter.shutil.which", lambda name: None)
 
     with pytest.raises(SandboxUnavailableError):
         wrap_command_for_sandbox(["bash", "-lc", "echo hi"], settings=settings)
@@ -104,7 +104,7 @@ def test_wrap_command_for_sandbox_raises_when_required(monkeypatch):
 
 @pytest.mark.skipif(shutil.which("srt") is None or shutil.which("bwrap") is None, reason="Needs local sandbox runtime")
 def test_create_shell_subprocess_preserves_exit_code_with_sandbox(monkeypatch):
-    import questorharness.config.paths as config_paths
+    import questorharness.platform.paths as config_paths
 
     async def _run() -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

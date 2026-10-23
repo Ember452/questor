@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.sandbox.path_validator import validate_sandbox_path
+from questorharness.providers.sandbox.path_validator import validate_sandbox_path
 
 
 def test_path_within_cwd_allowed(tmp_path):

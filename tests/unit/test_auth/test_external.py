@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from questorharness.auth.external import (
+from questorharness.providers.auth.resolver import resolve_auth
+from questorharness.providers.auth.external import (
     CLAUDE_PROVIDER,
     CODEX_PROVIDER,
     ExternalAuthState,
@@ -18,7 +19,7 @@ from questorharness.auth.external import (
     load_external_credential,
     refresh_claude_oauth_credential,
 )
-from questorharness.auth.storage import ExternalAuthBinding, load_external_binding, store_external_binding
+from questorharness.providers.auth.storage import ExternalAuthBinding, load_external_binding, store_external_binding
 from questorharness.cli import app
 from questorharness.config.settings import Settings, load_settings
 
@@ -82,7 +83,7 @@ def test_load_claude_external_credential(monkeypatch, tmp_path: Path):
         encoding="utf-8",
     )
     monkeypatch.setenv("CLAUDE_HOME", str(claude_home))
-    monkeypatch.setattr("questorharness.auth.external.platform.system", lambda: "Linux")
+    monkeypatch.setattr("questorharness.providers.auth.external.platform.system", lambda: "Linux")
 
     binding = default_binding_for_provider(CLAUDE_PROVIDER)
     credential = load_external_credential(binding)
@@ -97,7 +98,7 @@ def test_load_claude_external_credential(monkeypatch, tmp_path: Path):
 def test_default_claude_binding_uses_keychain_on_macos(monkeypatch, tmp_path: Path):
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     monkeypatch.delenv("CLAUDE_HOME", raising=False)
-    monkeypatch.setattr("questorharness.auth.external.platform.system", lambda: "Darwin")
+    monkeypatch.setattr("questorharness.providers.auth.external.platform.system", lambda: "Darwin")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     binding = default_binding_for_provider(CLAUDE_PROVIDER)
@@ -109,7 +110,7 @@ def test_default_claude_binding_uses_keychain_on_macos(monkeypatch, tmp_path: Pa
 def test_default_claude_binding_prefers_config_dir_on_macos(monkeypatch, tmp_path: Path):
     config_dir = tmp_path / "claude-config"
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config_dir))
-    monkeypatch.setattr("questorharness.auth.external.platform.system", lambda: "Darwin")
+    monkeypatch.setattr("questorharness.providers.auth.external.platform.system", lambda: "Darwin")
 
     binding = default_binding_for_provider(CLAUDE_PROVIDER)
 
@@ -140,7 +141,7 @@ def test_load_claude_external_credential_from_keychain(monkeypatch, tmp_path: Pa
             )
         raise AssertionError(args)
 
-    monkeypatch.setattr("questorharness.auth.external.subprocess.check_output", _fake_check_output)
+    monkeypatch.setattr("questorharness.providers.auth.external.subprocess.check_output", _fake_check_output)
 
     credential = load_external_credential(
         ExternalAuthBinding(
@@ -187,7 +188,7 @@ def test_settings_resolve_auth_uses_external_binding(monkeypatch, tmp_path: Path
         )
     )
 
-    resolved = Settings(active_profile="claude-subscription").resolve_auth()
+    resolved = resolve_auth(Settings(active_profile="claude-subscription"))
 
     assert resolved.auth_kind == "auth_token"
     assert resolved.value == "bound-claude-token"
@@ -211,7 +212,7 @@ def test_settings_resolve_auth_refreshes_expired_external_binding(monkeypatch, t
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "questorharness.auth.external.refresh_claude_oauth_credential",
+        "questorharness.providers.auth.external.refresh_claude_oauth_credential",
         lambda refresh_token: {
             "access_token": "fresh-token",
             "refresh_token": refresh_token,
@@ -228,7 +229,7 @@ def test_settings_resolve_auth_refreshes_expired_external_binding(monkeypatch, t
         )
     )
 
-    resolved = Settings(active_profile="claude-subscription").resolve_auth()
+    resolved = resolve_auth(Settings(active_profile="claude-subscription"))
 
     assert resolved.value == "fresh-token"
     persisted = json.loads(source.read_text(encoding="utf-8"))
@@ -306,7 +307,7 @@ def test_cli_claude_login_binds_without_switching(monkeypatch, tmp_path: Path):
     )
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(config_dir))
     monkeypatch.setenv("CLAUDE_HOME", str(claude_home))
-    monkeypatch.setattr("questorharness.auth.external.platform.system", lambda: "Linux")
+    monkeypatch.setattr("questorharness.providers.auth.external.platform.system", lambda: "Linux")
 
     runner = CliRunner()
     result = runner.invoke(app, ["auth", "claude-login"])
@@ -342,9 +343,9 @@ def test_cli_claude_login_refreshes_expired_credentials(monkeypatch, tmp_path: P
     )
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(config_dir))
     monkeypatch.setenv("CLAUDE_HOME", str(claude_home))
-    monkeypatch.setattr("questorharness.auth.external.platform.system", lambda: "Linux")
+    monkeypatch.setattr("questorharness.providers.auth.external.platform.system", lambda: "Linux")
     monkeypatch.setattr(
-        "questorharness.auth.external.refresh_claude_oauth_credential",
+        "questorharness.providers.auth.external.refresh_claude_oauth_credential",
         lambda refresh_token: {
             "access_token": "fresh-token",
             "refresh_token": refresh_token,
@@ -390,10 +391,10 @@ def test_load_claude_external_credential_refreshes_expired_keychain(monkeypatch,
         writes.append(args)
         return None
 
-    monkeypatch.setattr("questorharness.auth.external.subprocess.check_output", _fake_check_output)
-    monkeypatch.setattr("questorharness.auth.external.subprocess.run", _fake_run)
+    monkeypatch.setattr("questorharness.providers.auth.external.subprocess.check_output", _fake_check_output)
+    monkeypatch.setattr("questorharness.providers.auth.external.subprocess.run", _fake_run)
     monkeypatch.setattr(
-        "questorharness.auth.external.refresh_claude_oauth_credential",
+        "questorharness.providers.auth.external.refresh_claude_oauth_credential",
         lambda refresh_token: {
             "access_token": "fresh-token",
             "refresh_token": refresh_token,
@@ -493,7 +494,7 @@ def test_settings_resolve_auth_rejects_third_party_base_url_for_claude_subscript
     ).sync_active_profile_from_flat_fields()
 
     with pytest.raises(ValueError, match="third-party"):
-        settings.resolve_auth()
+        resolve_auth(settings)
 
 
 def test_describe_external_binding_reports_refreshable_claude_token(tmp_path: Path):
@@ -554,7 +555,7 @@ def test_describe_external_binding_reports_configured_claude_keychain(
             )
         raise AssertionError(args)
 
-    monkeypatch.setattr("questorharness.auth.external.subprocess.check_output", _fake_check_output)
+    monkeypatch.setattr("questorharness.providers.auth.external.subprocess.check_output", _fake_check_output)
 
     state = describe_external_binding(
         ExternalAuthBinding(
@@ -599,8 +600,8 @@ def test_refresh_claude_oauth_credential(monkeypatch):
         seen["body"] = json.loads(request.data.decode("utf-8"))
         return _FakeResponse()
 
-    monkeypatch.setattr("questorharness.auth.external.urllib.request.urlopen", _fake_urlopen)
-    monkeypatch.setattr("questorharness.auth.external.time.time", lambda: 1000)
+    monkeypatch.setattr("questorharness.providers.auth.external.urllib.request.urlopen", _fake_urlopen)
+    monkeypatch.setattr("questorharness.providers.auth.external.time.time", lambda: 1000)
 
     refreshed = refresh_claude_oauth_credential("refresh-token")
 
@@ -631,7 +632,7 @@ def test_refresh_claude_oauth_credential_reports_invalid_grant(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "questorharness.auth.external.urllib.request.urlopen",
+        "questorharness.providers.auth.external.urllib.request.urlopen",
         lambda request, timeout=10: (_ for _ in ()).throw(error),
     )
 
@@ -645,9 +646,9 @@ def test_get_claude_code_version_uses_fallback(monkeypatch):
         stdout = ""
 
     monkeypatch.setattr(
-        "questorharness.auth.external.subprocess.run",
+        "questorharness.providers.auth.external.subprocess.run",
         lambda *args, **kwargs: _Result(),
     )
-    monkeypatch.setattr("questorharness.auth.external._claude_code_version_cache", None)
+    monkeypatch.setattr("questorharness.providers.auth.external._claude_code_version_cache", None)
 
     assert get_claude_code_version() == "2.1.92"

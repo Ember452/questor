@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from questorharness.config.paths import get_config_dir
+from questorharness.platform.paths import get_config_dir
 
 
 @dataclass(frozen=True)

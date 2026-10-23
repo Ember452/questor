@@ -1,11 +1,11 @@
-"""Tests for questorharness.prompts.environment."""
+"""Tests for questorharness.capabilities.context.prompts.environment."""
 
 from __future__ import annotations
 
 import subprocess
 from pathlib import Path
 
-from questorharness.prompts.environment import (
+from questorharness.capabilities.context.prompts.environment import (
     EnvironmentInfo,
     detect_git_info,
     detect_os,
@@ -67,7 +67,7 @@ def test_detect_git_info_uses_devnull_for_git_subprocess(monkeypatch):
             return _Completed(0, "true\n")
         return _Completed(0, "main\n")
 
-    monkeypatch.setattr("questorharness.prompts.environment.subprocess.run", _fake_run)
+    monkeypatch.setattr("questorharness.capabilities.context.prompts.environment.subprocess.run", _fake_run)
 
     is_git, branch = detect_git_info("/tmp/project")
 
@@ -98,7 +98,7 @@ def test_get_environment_info_detects_virtual_env_from_python_executable(monkeyp
     fake_python.write_text("", encoding="utf-8")
 
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
-    monkeypatch.setattr("questorharness.prompts.environment.sys.executable", str(fake_python))
+    monkeypatch.setattr("questorharness.capabilities.context.prompts.environment.sys.executable", str(fake_python))
 
     info = get_environment_info(cwd=str(tmp_path))
 

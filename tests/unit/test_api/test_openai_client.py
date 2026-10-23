@@ -8,8 +8,8 @@ import httpx
 
 import pytest
 
-from questorharness.api.client import ApiMessageRequest
-from questorharness.api.openai_client import (
+from questorharness.providers.llm.client import ApiMessageRequest
+from questorharness.providers.llm.openai_client import (
     OpenAICompatibleClient,
     _convert_assistant_message,
     _convert_messages_to_openai,
@@ -18,7 +18,7 @@ from questorharness.api.openai_client import (
     _strip_think_blocks,
     _token_limit_param_for_model,
 )
-from questorharness.engine.messages import (
+from questorharness.contracts.domain.message import (
     ConversationMessage,
     ImageBlock,
     TextBlock,
@@ -296,7 +296,7 @@ def test_openai_client_init_normalizes_base_url(monkeypatch):
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    monkeypatch.setattr("questorharness.api.openai_client.AsyncOpenAI", _StubAsyncOpenAI)
+    monkeypatch.setattr("questorharness.providers.llm.openai_client.AsyncOpenAI", _StubAsyncOpenAI)
     OpenAICompatibleClient(api_key="test-key", base_url="https://jarodfund.xyz/openai/v1/")
 
     assert captured["base_url"] == "https://jarodfund.xyz/openai/v1"
@@ -309,7 +309,7 @@ def test_openai_client_init_passes_timeout(monkeypatch):
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    monkeypatch.setattr("questorharness.api.openai_client.AsyncOpenAI", _StubAsyncOpenAI)
+    monkeypatch.setattr("questorharness.providers.llm.openai_client.AsyncOpenAI", _StubAsyncOpenAI)
     OpenAICompatibleClient(api_key="test-key", timeout=45.0)
 
     assert captured["timeout"] == 45.0

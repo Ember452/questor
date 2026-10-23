@@ -1,14 +1,9 @@
 """Configuration system for QuestorHarness.
 
-Provides settings management, path resolution, and API key handling.
+Provides settings management and API key handling. Path resolution lives in
+``questorharness.platform.paths``.
 """
 
-from questorharness.config.paths import (
-    get_config_dir,
-    get_config_file_path,
-    get_data_dir,
-    get_logs_dir,
-)
 from questorharness.config.settings import (
     ProviderProfile,
     Settings,
@@ -25,10 +20,6 @@ __all__ = [
     "auth_source_provider_name",
     "default_auth_source_for_provider",
     "default_provider_profiles",
-    "get_config_dir",
-    "get_config_file_path",
-    "get_data_dir",
-    "get_logs_dir",
     "load_settings",
     "save_settings",
 ]

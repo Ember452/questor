@@ -22,7 +22,7 @@
 | 阶段 | 内容 | 是否改行为 | 出口 |
 |---|---|---|---|
 | **Phase 0** | 文档 + 3 个可落地守卫 + AGENTS 地图 | 否 | 守卫能跑；文档合并 |
-| **Phase 1** | Move-only：**只含 W1/W1b/W2/W2b**（≈99 处 patch）；W3/W3b 移入 Phase 2 | 否 | 基线五项不变 |
+| **Phase 1** | Move-only：**只含 W1/W2/W2b**；W1b/W3/W3b 移入 Phase 2 | 否 | 基线五项不变 |
 | **Phase 2** | Code-shape + 语义归位：拆 god file、config 注入、state 拆分、plugins/skills 拆开、UI 移除 | 否 | 基线不变 + 尺寸阈值达标 |
 | **Phase 3** | Capabilities：profiles、memory provider、Electron、第二模式 | 是 | 新能力半径 ≤1；新模式不改引擎核心 |
 
@@ -48,17 +48,19 @@ Phase 1 有**时间盒**：≤10 个 PR 或 ≤2 周。超时不加班，先砍�
 
 ### 3.1 先冻结基线（每个 PR 都要重跑）
 
-基线必须写成“命令 + 期望输出”，不能写“测试全绿”。2026-10-22 在 `main` 上实测：
+基线必须写成“命令 + 期望输出”，不能写“测试全绿”。已固化为脚本：
 
-| # | 项 | 命令 | 期望 | 备注 |
-|---|---|---|---|---|
-| 1 | 测试通过集 | `uv run pytest -m "unit or integration" -q` | `1137 passed, 29 skipped, 10 deselected`（≈82s） | **必须用 `uv run`**；直接跑 `.venv\Scripts\python.exe -m pytest` 会得 `1135 passed, 2 failed`，因为 `tests/integration/test_import_boundaries.py` 用 `shutil.which("lint-imports")`，PATH 里没有 `.venv/Scripts` |
-| 2 | CLI 基线 | `uv run python -m questor --help`；`uv run questorharness --help` | 输出逐字不变 | 输出快照的存放位置随 Phase 0 交付物一起定（不建空目录） |
-| 3 | 旧快照能加载 | `tests/fixtures/snapshots/session-snapshot-v0.json` | `load_session_snapshot()` 返回 4 条消息 | 2026-10-22 用真实 `save_session_snapshot` API 生成（含 tool_use/tool_result）。**当前快照没有 `schema_version` 字段**，加载只靠 `_sanitize_snapshot_payload` 的宽容解析；加版本闸门前，“跨版本”只能靠字段可选 |
-| 4 | import 契约 | `uv run lint-imports` | `1 kept, 0 broken` | 增内层契约前先看 STRUCTURE §2.3 |
-| 5 | 冷导入 | `uv run python -c "import questorharness; import questor"` | 无输出、exit 0 | 已实测通过 |
+```bash
+uv run python scripts/baseline_check.py --record          # 重新冻结（新增测试 / 契约时）
+uv run python scripts/baseline_check.py --check           # 全量：pytest + node-id + lint + 冷导入 + help/dry-run/snapshot/doctor
+uv run python scripts/baseline_check.py --check --fast    # 跳过 pytest / node-id（约 18s），pre-push 用
+```
 
-Phase 1 结束时这五项必须逐项不变。第 1 项的调用方式必须写进 PR 模板，否则“红/绿”会因跑法不同而不可比。
+当前冻结值（2026-10-23）：`1144 passed, 29 skipped, 10 deselected`；`lint 6 kept, 0 broken`；`node-id 1173 = main 1166 + 7 allowed`；snapshot 4 条。fixture 在 `tests/fixtures/baseline/`。
+
+pre-push 钩子需要 `uv run pre-commit install --hook-type pre-push` 才会生效。
+
+第 1 项必须用 `uv run`：直接跑 `.venv\Scripts\python.exe -m pytest` 会因为 PATH 缺少 `.venv/Scripts` 导致 `test_import_boundaries` 失败。
 
 ### 3.2 建目录规则
 
@@ -74,16 +76,17 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 
 | 波次 | 内容 | patch 目标 | 说明 |
 |---|---|---|---|
-| **W1** | `tools/` 44 个平铺 → `capabilities/tools/` 下 fs / shell / web / task / agent / mcp / media / cron 八个子域 | ≈6 | 唯一 >30 文件的目录；工具彼此独立，失败响亮 |
-| **W1b** | `themes/`、`keybindings/`、`vim/`、`output_styles/` → `surfaces/terminal/presentation/`；`skills/`、`plugins/` → 根 `plugins/` | ≈6 | 表现层与数据包，几乎没人 patch |
-| **W2** | `memory/`(13) → `capabilities/memory/`；`permissions/` → `capabilities/policy/`；`mcp/` → `capabilities/tools/mcp/` + `providers/mcp/`；`prompts/` → `profiles/prompts/`（此时才建 `profiles`） | ≈31 | 领域清晰；`prompts` 有 3 处 patch |
-| **W2b** | `api/` → `providers/llm/`；`auth/` → `providers/auth/`；`sandbox/` → `providers/sandbox/`；`channels/` → `surfaces/channels/` | ≈56 | api 15、auth 19、sandbox 10、channels 少量；`api` 路径引用多但 patch 少 |
+| **W1** | `tools/` 44 个平铺 → `capabilities/tools/` 下 fs / shell / web / task / agent / mcp / media / cron 八个子域 | 9 | 唯一 >30 文件的目录；工具彼此独立，失败响亮 |
+| **W2** | `memory/`(13) → `capabilities/memory/`；`permissions/` → `capabilities/policy/`；`mcp/` → `providers/mcp/`（transport）+ `capabilities/tools/mcp/`（4 个工具适配器） | 0 | 领域清晰；三包均无字符串 patch 目标（2026-10-22 实测）；`prompts/` 因文本与 loader 要拆，移出 Phase 1 |
+| **W2b** | `api/` → `providers/llm/`；`auth/` → `providers/auth/`；`sandbox/` → `providers/sandbox/`；`channels/` → `surfaces/channels/` | 49 | api 20、auth 19、sandbox 10、channels 0（2026-10-22 实测）；`api` 路径引用多但 patch 少 |
 | **W3** | `hooks/` → `runtime/extension/`；`commands/` → `runtime/commands/`；`tasks/` → `runtime/tasks/`；`coordinator/` + `swarm/` → `runtime/delegation/` + `capabilities/policy/`；`state/` → `surfaces/terminal/state/` | ≈30 | 核心编排相关；路径引用要改，但 patch 目标不高 |
 | **W3b** | `services/` 解散（compact / lsp / memory_extract / session_memory / cron / token_estimation / tool_outputs / session_*）；`utils/` 归位；`config/` → `bootstrap/config/` | ≈47 | `services.compact` 11、`utils` 18、`config` 少量；空壳 `oauth` 直接删 |
 | **W4（推到 Phase 2）** | `engine/` → `runtime/turn/`；`ui/` → `surfaces/terminal/`；`autopilot/` → `runtime/autopilot/`；`bridge/` → `surfaces/bridge/` | ≈158 | engine 64、ui 62、autopilot 41、bridge 少量；这几处一动必然大片红，单独排期 |
 | **W5（Phase 1 完全不动）** | 产品包 `questor/gateway/`（拆到 surfaces/ 与产品策略） | 76 + 102 | 单点最贵；且属于产品包，不影响引擎结构收敛 |
 
-一句话：**W1 用 ~6 处 patch 成本解决你最痛的 44 平铺；W5 用 178 处成本解决一个可有可无的归位——先做前者。**
+**Phase 1 范围 = W1 + W2 + W2b。** `prompts/` 与 UI 目录（`themes/`、`keybindings/`、`vim/`、`output_styles/`）均属 Phase 2：前者是 prompt 文本与 loader 代码要拆的语义改动，后者按 ADR-0005 冻结后移除。
+
+一句话：**W1 用 9 处 patch 成本解决你最痛的 44 平铺；W5 用 178 处成本解决一个可有可无的归位——先做前者。** W1 + W2 + W2b 实测合计 **58 处** patch 改写（旧估算 ≈99 偏高）。
 
 ### 3.4 每个包的固定动作
 
@@ -106,24 +109,26 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `memory/`（13 平铺） | `capabilities/memory/` | 按 recall / write / consolidate / backends 拆 |
 | `permissions/` | `capabilities/policy/` | 按 permission / sandbox / approval 拆 |
 | `channels/` | `surfaces/channels/` | 按 channel 拆；`feishu.py` 1115 行拆子目录 |
-| `mcp/` | `capabilities/tools/mcp/` + `providers/mcp/` | 策略与 transport 分离 |
-| `prompts/` | prompt 文本 → `profiles/prompts/`；loader 代码 → `capabilities/context` | 按 profile 拆；`profiles` 保持纯数据 |
-| `skills/`、`plugins/` | loader/registry → `capabilities/tools/`；`bundled/*.md` → 根 `plugins/` | 代码与数据必须分开 |
+| `mcp/` | `providers/mcp/`（client / config / types）+ `capabilities/tools/mcp/`（4 个工具适配器） | 策略与 transport 分离 |
+| `prompts/` | `capabilities/context/prompts/`（已完成）；`coordinator_mode` 的纯模式/提示词部分下沉 `capabilities/context/coordinator.py` | prompt 文本仍内嵌，后续可按 profile 外置 |
+| `skills/`、`plugins/` | `skills/` → `capabilities/skills/`（已完成）；`AgentDefinition` → `contracts/agent.py`（已完成） | `plugins/` 仍依赖 coordinator 的私有解析函数（`_parse_agent_frontmatter` 等），暂留顶层作为扩展层 |
 | `state/`（UI store） | **Phase 1 不动**；Phase 2 再拆 | 事实状态层不建（durable 未立项） |
-| `engine/` | **Phase 1 不动**（W4） | `runtime/turn/{loop,tool_cycle,stop}` + `capabilities/context/assemble` |
-| `commands/` | `runtime/commands/` | `registry.py` 2586 行按命令族拆 |
-| `coordinator/`、`swarm/` | `runtime/delegation/` + `capabilities/policy/` | 按 team / permission 拆 |
-| `tasks/` | `runtime/tasks/` | 拆 task_manager / local_agent / local_shell |
-| `autopilot/` | **Phase 1 不动**（W4） | `runtime/autopilot/{policy,loop,triggers,state}`（service.py 2089） |
-| `hooks/` | `runtime/extension/` | 按 hook 类型拆 |
-| `ui/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `surfaces/terminal/`；先解耦再删 |
-| `keybindings/`、`themes/`、`vim/`、`output_styles/` | **Phase 1 冻结**；Phase 2 随 UI 一起移除（ADR-0005） | 不迁 `surfaces/terminal/` |
+| `engine/` | **保留在顶层**（编排层） | 循环组合 capabilities/providers/runtime；内核立项后再拆 `runtime/run` + `runtime/turn` |
+| `commands/` | **保留在顶层**（应用层分派器） | `registry.py` 已按命令族拆到 `commands/families/`：主文件 107 行，单族文件 ≤434 行 |
+| `coordinator/`、`swarm/` | `runtime/coordinator/` + `runtime/swarm/`（已完成） | 按 team / permission / backend 拆 |
+| `tasks/` | `runtime/tasks/`（已完成） | 拆 task_manager / local_agent / local_shell |
+| `autopilot/` | `runtime/autopilot/`（已完成，文件未拆） | 拆 `{policy,loop,triggers,state}`（service.py 2089） |
+| `hooks/` | `runtime/hooks/`（已完成） | 按 hook 类型拆 |
+| `ui/` | 已完成并删除：组合根 → `bootstrap/runtime.py`，进程宿主 → `bootstrap/hosts/`；textual 与 prompt-toolkit 已移除 | `keybindings/`、`themes/`、`vim/`、`output_styles/` 保留 |
+| `keybindings/`、`themes/`、`vim/`、`output_styles/` | **保留**（ADR-0005 已更新：不随 UI 删除） | 不迁 `surfaces/terminal/` |
 | `voice/` | `providers/voice/`（Phase 2） | 有策略时升 capabilities |
-| `utils/` | Phase 2 才归位；落 `providers/`（fs / shell / network_guard） | 解散，不留 utils |
-| `config/` | 类型 → `contracts/settings.py`；解析/注入 → `bootstrap/config/`（Phase 2） | 禁止下层 import `bootstrap` |
-| `bridge/` | **Phase 1 不动**（W4） | `surfaces/bridge/` |
+| `utils/` | 已达成：工具按职责分居 `platform/`（纯 stdlib）与 `execution/`（需要 config/sandbox） | 顶层无 `utils/` |
+| `config/` | 已收敛为叶子：模型与加载同包，只依赖 `platform` + `contracts`；`resolve_auth` 已移到 `providers.auth.resolver` | `config → providers` 已归零 |
+| `bridge/` | `runtime/bridge/`（已完成） | 有策略时再拆 |
 | `questor/gateway/` | **Phase 1 不动**（W5） | 协议路由进 `surfaces/gateway/`，产品策略留在产品包 |
 | `frontend/terminal/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `apps/terminal/`；wheel force-include 同步删除 |
+
+> `mcp` 不能整体挂在 eager 的 `capabilities/tools/__init__.py` 之下：`config.settings` 需要 `McpServerConfig`，导入 `capabilities.tools.mcp.types` 会执行整个工具门面，形成 `config → tools → agent_tool → swarm → tasks → config` 循环。Phase 1 实测后改为 transport 落 `providers/mcp/`，工具适配器留 `capabilities/tools/mcp/`；Phase 2 再做瘦身与策略拆分。
 
 `services/` 的 5 个子包都没有独立模块文件，逻辑全在 `__init__.py`：`compact`、`lsp`、`memory_extract`、`session_memory` 整体搬到各自能力域（Phase 2 再拆文件），`oauth` 为空可直接删。
 
@@ -132,7 +137,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 - 不拆任何 >800 行的文件（`commands/registry.py`、`cli.py`、`autopilot/service.py`、`services/compact/__init__.py` 全部保持整文件搬迁）；
 - 不改函数签名、不改协议、不改事件/快照类型；
 - 不引入新依赖；
-- 不建 `contracts/`、`kernel/`、`profiles/`（`profiles` 到 W2 装 prompt 文本时才建）；
+- 不建 `contracts/`、`kernel/`、`profiles/`；
 - 不动 `frontend/terminal/`、不建 `apps/desktop` / `apps/web`；
 - 不写 memory provider；ADR-0004 只记录契约，代码到 Phase 3。
 - **不做任何语义归位**（这些都不是 move-only，归 Phase 2）：config 注入、`state/` 拆分、`plugins/skills` 拆代码与数据、`prompts/` 重定位、`ui/` 移除、`utils/` 解散。
@@ -141,6 +146,7 @@ Phase 1 允许的临时例外（写进 layout 豁免清单，Phase 2 销账）�
 
 ```text
 capabilities/context/compact 的 __init__.py（约 1.5k 行，Phase 2 拆）
+capabilities/tools/__init__.py（108 行，含 `def create_default_tool_registry` 与全量工具 import；Phase 2 拆出门面）
 runtime/commands/registry.py（约 2.6k 行，Phase 2 拆）
 runtime/autopilot/service.py（约 2.1k 行，Phase 2 拆）
 surfaces/gateway/runtime.py（约 1.1k 行，Phase 2 拆）
@@ -155,7 +161,9 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 - `lint-imports` 绿；
 - `check_layout.py` 只报豁免清单里的已知项，**不新增违规**；
 - 每个已建目录有 `AGENTS.md`；
-- **时间盒**：≤10 PR / ≤2 周；单 PR ≤50 处 patch 改写 + ≤1 个包。超盒时先砍 W2b 的 `channels/`，再砍 W2b 的 `auth/`；W3/W3b/W4/W5 本来就不在本阶段。
+- **时间盒**：Phase 1 收在一个分支上，一包一 commit；单 commit 预算 = 1 个包 + 该包全部 patch 目标（本阶段最大 20，`api/`）。超盒时先砍 W2b 的 `channels/`，再砍 `auth/`；W1b/W3/W3b/W4/W5 本来就不在本阶段。
+
+> Phase 1 保持 `tests/` 文件路径不变：`tests/conftest.py` 的 Windows skip 表按 node-id 精确匹配（含 `tests/unit/test_tools/test_core_tools.py`），搬测试目录会改变 skipped 计数。只改 import 与 patch 字符串。
 
 ---
 
@@ -217,7 +225,7 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 |---|---|
 | durable spine（事件流 / 回放 / upcast / 租约） | 需要 rewind-as-facts、审计重放、跨端同会话续跑中的任一项被真实需求顶穿；**必须先立项 ADR + 预算** |
 | `contracts/` 层 | 出现第一个需要跨层共享的不可变类型（在此之前类型留在各自包里） |
-| `profiles/` | 第一个真实模式差异需要表达（W2 时因 `prompts/` 提前建目录，仅装数据） |
+| `profiles/` | 第一个真实模式差异需要表达 |
 | `MemoryPort` + provider | 第二次要换/接 memory 实现，或 personal 与 coding 记忆策略第一次冲突 |
 | 字段 canonical 守卫 | 统一 domain 词表建好之后 |
 | 事件版本 / wire codegen 守卫 | 事件版本化 / schema 定稿之后 |
@@ -233,14 +241,15 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 必需（目录存在时 9 个；Phase 3 后 11 个）：
 
 ```text
-src/questorharness/contracts/AGENTS.md        （contracts 建立后）
-src/questorharness/runtime/AGENTS.md
-src/questorharness/capabilities/AGENTS.md
-src/questorharness/providers/AGENTS.md
-src/questorharness/surfaces/AGENTS.md
+src/questorharness/contracts/AGENTS.md        （已建）
+src/questorharness/runtime/AGENTS.md          （已建）
+src/questorharness/engine/AGENTS.md           （待补：编排层）
+src/questorharness/capabilities/AGENTS.md     （已建）
+src/questorharness/providers/AGENTS.md        （已建）
+src/questorharness/surfaces/AGENTS.md         （已建）
 src/questorharness/profiles/AGENTS.md         （profiles 建立后）
-src/questorharness/bootstrap/AGENTS.md
-src/questor/AGENTS.md
+src/questorharness/bootstrap/AGENTS.md        （bootstrap 建立后）
+src/questor/AGENTS.md                         （待补：产品组合根）
 apps/desktop/AGENTS.md                        （Phase 3）
 apps/web/AGENTS.md                            （Phase 3）
 ```

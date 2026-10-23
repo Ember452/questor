@@ -41,18 +41,18 @@ RESULTS: dict[str, bool] = {}
 # ====================================================================
 
 def make_engine(system_prompt="You are a helpful assistant. Be concise.", cwd=None, tools=None):
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.file_write_tool import FileWriteTool
-    from questorharness.tools.file_edit_tool import FileEditTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
+    from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
     reg = ToolRegistry()
@@ -66,7 +66,7 @@ def make_engine(system_prompt="You are a helpful assistant. Be concise.", cwd=No
 
 
 def collect(events):
-    from questorharness.engine.stream_events import (
+    from questorharness.contracts.domain.events import (
         AssistantTextDelta, AssistantTurnComplete,
         ToolExecutionStarted, ToolExecutionCompleted,
     )
@@ -103,10 +103,10 @@ async def run_test(name, coro):
 # ====================================================================
 async def test_hooks_command_block():
     """Register a pre_tool_use command hook that blocks bash, verify it fires."""
-    from questorharness.hooks.events import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.contracts.hooks import HookEvent
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.contracts.hooks import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
 
     registry = HookRegistry()
     # Hook: run 'echo BLOCKED' when bash is used — block_on_failure means if exit!=0 it blocks
@@ -121,7 +121,7 @@ async def test_hooks_command_block():
     registry.register(HookEvent.PRE_TOOL_USE, hook)
     print(f"  Registered pre_tool_use hook: {hook}")
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
     ctx = HookExecutionContext(cwd=Path.cwd(), api_client=api, default_model=MODEL)
     executor = HookExecutor(registry, ctx)
@@ -148,10 +148,10 @@ async def test_hooks_command_block():
 # ====================================================================
 async def test_hooks_post_tool_use():
     """Register a post_tool_use hook that logs tool output, verify it runs."""
-    from questorharness.hooks.events import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.contracts.hooks import HookEvent
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.contracts.hooks import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
 
     registry = HookRegistry()
     hook = CommandHookDefinition(
@@ -161,7 +161,7 @@ async def test_hooks_post_tool_use():
     )
     registry.register(HookEvent.POST_TOOL_USE, hook)
 
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
     ctx = HookExecutionContext(cwd=Path.cwd(), api_client=api, default_model=MODEL)
     executor = HookExecutor(registry, ctx)
@@ -182,19 +182,19 @@ async def test_hooks_post_tool_use():
 @pytest.mark.skipif(_SKIP_REAL_API, reason="Needs real API + AutoAgent")
 async def test_hooks_in_agent_loop():
     """Hook that blocks 'rm' commands integrated into real agent loop."""
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query import QueryContext, run_query
-    from questorharness.engine.messages import ConversationMessage
-    from questorharness.engine.stream_events import AssistantTextDelta, ToolExecutionStarted, ToolExecutionCompleted
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.hooks.events import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.contracts.domain.message import ConversationMessage
+    from questorharness.contracts.domain.events import AssistantTextDelta, ToolExecutionStarted, ToolExecutionCompleted
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.contracts.hooks import HookEvent
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.contracts.hooks import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
 
@@ -241,8 +241,8 @@ async def test_hooks_in_agent_loop():
 # ====================================================================
 async def test_skills_load():
     """Create skill files, load them, verify registry."""
-    from questorharness.skills.registry import SkillRegistry
-    from questorharness.skills.loader import load_user_skills
+    from questorharness.capabilities.skills.registry import SkillRegistry
+    from questorharness.capabilities.skills.loader import load_user_skills
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create skill files
@@ -264,7 +264,7 @@ Fetch the PR diff, review for bugs, style issues, and security problems.
 """)
 
         # Monkey-patch skills dir
-        import questorharness.skills.loader as sl
+        import questorharness.capabilities.skills.loader as sl
         orig = sl.get_user_skills_dir
         sl.get_user_skills_dir = lambda: Path(tmpdir)
 
@@ -339,20 +339,20 @@ Build and deploy the app to production.
 # ====================================================================
 async def test_memory_lifecycle():
     """Test full memory lifecycle: add → list → search → remove."""
-    from questorharness.memory.manager import list_memory_files, add_memory_entry, remove_memory_entry
-    from questorharness.memory.search import find_relevant_memories
-    from questorharness.memory.scan import scan_memory_files
+    from questorharness.capabilities.memory.manager import list_memory_files, add_memory_entry, remove_memory_entry
+    from questorharness.capabilities.memory.search import find_relevant_memories
+    from questorharness.capabilities.memory.scan import scan_memory_files
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Monkey-patch memory dir
-        import questorharness.memory.paths as mp
+        import questorharness.capabilities.memory.paths as mp
         orig = mp.get_project_memory_dir
         mem_dir = Path(tmpdir) / ".questorharness" / "memory"
         mem_dir.mkdir(parents=True, exist_ok=True)
         mp.get_project_memory_dir = lambda cwd: mem_dir
 
         # Also patch entrypoint
-        import questorharness.memory.manager as mm
+        import questorharness.capabilities.memory.manager as mm
         orig_ep = mm.get_memory_entrypoint
         mm.get_memory_entrypoint = lambda cwd: mem_dir / "MEMORY.md"
 
@@ -392,12 +392,12 @@ async def test_memory_lifecycle():
 # ====================================================================
 async def test_session_storage():
     """Test session save/load/list/export cycle."""
-    from questorharness.services.session_storage import (
+    from questorharness.platform.session_storage import (
         save_session_snapshot, load_session_snapshot,
         list_session_snapshots, export_session_markdown,
     )
-    from questorharness.engine.messages import ConversationMessage, TextBlock
-    from questorharness.api.usage import UsageSnapshot
+    from questorharness.contracts.domain.message import ConversationMessage, TextBlock
+    from questorharness.contracts.usage import UsageSnapshot
 
     with tempfile.TemporaryDirectory() as tmpdir:
         messages = [
@@ -446,7 +446,7 @@ async def test_session_storage():
 async def test_config_settings():
     """Test settings loading, env var overrides, and path functions."""
     from questorharness.config.settings import Settings, load_settings
-    from questorharness.config.paths import (
+    from questorharness.platform.paths import (
         get_config_dir, get_sessions_dir, get_tasks_dir,
     )
 
@@ -543,8 +543,8 @@ async def test_commands_registry():
 @pytest.mark.skipif(_SKIP_REAL_API, reason="Needs real API + AutoAgent")
 async def test_web_fetch_real():
     """Agent fetches a real URL and summarizes it."""
-    from questorharness.tools.web_fetch_tool import WebFetchTool
-    from questorharness.tools.bash_tool import BashTool
+    from questorharness.capabilities.tools.web.web_fetch_tool import WebFetchTool
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
 
     engine = make_engine(
         "You are a web researcher. Fetch URLs when asked and summarize the content.",
@@ -565,7 +565,7 @@ async def test_web_fetch_real():
 @pytest.mark.skipif(_SKIP_REAL_API, reason="Needs local environment")
 async def test_worktree_real_git():
     """Create a real git worktree, list it, remove it."""
-    from questorharness.swarm.worktree import WorktreeManager
+    from questorharness.runtime.swarm.worktree import WorktreeManager
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Init a git repo
@@ -600,7 +600,7 @@ async def test_worktree_real_git():
 # ====================================================================
 async def test_mcp_types():
     """Test MCP config model validation."""
-    from questorharness.mcp.types import McpStdioServerConfig, McpToolInfo, McpConnectionStatus
+    from questorharness.contracts.mcp import McpStdioServerConfig, McpToolInfo, McpConnectionStatus
 
     # Stdio config
     stdio = McpStdioServerConfig(command="npx", args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"])
@@ -622,7 +622,7 @@ async def test_mcp_types():
 # ====================================================================
 async def test_config_paths():
     """Verify all config path functions return sensible paths."""
-    from questorharness.config.paths import (
+    from questorharness.platform.paths import (
         get_config_dir, get_config_file_path, get_data_dir,
         get_logs_dir, get_sessions_dir, get_tasks_dir,
     )
@@ -649,24 +649,24 @@ async def test_config_paths():
 @pytest.mark.skipif(_SKIP_REAL_API, reason="Needs real API + AutoAgent")
 async def test_combined_hooks_skills_agent():
     """Combined test: load skills, register hooks, run agent on AutoAgent."""
-    from questorharness.skills.registry import SkillRegistry
-    from questorharness.skills.types import SkillDefinition
-    from questorharness.hooks.events import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.capabilities.skills.registry import SkillRegistry
+    from questorharness.capabilities.skills.types import SkillDefinition
+    from questorharness.contracts.hooks import HookEvent
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.contracts.hooks import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query import QueryContext, run_query
-    from questorharness.engine.messages import ConversationMessage
-    from questorharness.engine.stream_events import AssistantTextDelta, ToolExecutionStarted
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
+    from questorharness.contracts.domain.message import ConversationMessage
+    from questorharness.contracts.domain.events import AssistantTextDelta, ToolExecutionStarted
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
 
     # Skills
     skill_reg = SkillRegistry()
@@ -721,21 +721,21 @@ async def test_combined_hooks_skills_agent():
 @pytest.mark.skipif(_SKIP_REAL_API, reason="Needs real API + AutoAgent")
 async def test_full_swarm_autoagent():
     """Spawn 2 in-process teammates working on AutoAgent with team management."""
-    from questorharness.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
+    from questorharness.runtime.swarm.types import TeammateSpawnConfig
     from questorharness.engine.query import QueryContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
-    from questorharness.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
-    import questorharness.swarm.mailbox as mb
-    import questorharness.swarm.team_lifecycle as tl
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
+    from questorharness.runtime.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
+    import questorharness.runtime.swarm.mailbox as mb
+    import questorharness.runtime.swarm.team_lifecycle as tl
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
 

@@ -35,19 +35,19 @@ RESULTS: dict[str, tuple[bool, float]] = {}
 # ====================================================================
 
 def make_engine(system_prompt, cwd=None, hook_executor=None, max_tokens=4096, max_turns=DEFAULT_MAX_TURNS):
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.engine.query_engine import QueryEngine
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.file_write_tool import FileWriteTool
-    from questorharness.tools.file_edit_tool import FileEditTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
-    from questorharness.tools.web_fetch_tool import WebFetchTool
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
+    from questorharness.capabilities.tools.fs.file_edit_tool import FileEditTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
+    from questorharness.capabilities.tools.web.web_fetch_tool import WebFetchTool
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
     reg = ToolRegistry()
@@ -63,7 +63,7 @@ def make_engine(system_prompt, cwd=None, hook_executor=None, max_tokens=4096, ma
 
 
 def collect(events):
-    from questorharness.engine.stream_events import (
+    from questorharness.contracts.domain.events import (
         AssistantTextDelta, AssistantTurnComplete,
         ToolExecutionStarted, ToolExecutionCompleted,
     )
@@ -94,11 +94,11 @@ async def task_security_audit_with_hooks():
     """Full security audit: agent reads code, fetches OWASP checklist, reports issues.
     Hooks log every tool use. Permission denies dangerous commands."""
 
-    from questorharness.hooks.events import HookEvent
-    from questorharness.hooks.loader import HookRegistry
-    from questorharness.hooks.schemas import CommandHookDefinition
-    from questorharness.hooks.executor import HookExecutor, HookExecutionContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.contracts.hooks import HookEvent
+    from questorharness.runtime.hooks.loader import HookRegistry
+    from questorharness.contracts.hooks import CommandHookDefinition
+    from questorharness.runtime.hooks.executor import HookExecutor, HookExecutionContext
+    from questorharness.providers.llm.client import AnthropicApiClient
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
 
@@ -169,25 +169,25 @@ async def task_security_audit_with_hooks():
 async def task_coordinator_code_review():
     """Coordinator delegates code review to 2 worker agents, synthesizes results."""
 
-    from questorharness.coordinator.coordinator_mode import (
+    from questorharness.runtime.coordinator.coordinator_mode import (
         get_coordinator_system_prompt, format_task_notification, TaskNotification,
     )
-    from questorharness.coordinator.agent_definitions import get_agent_definition
-    from questorharness.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.swarm.types import TeammateSpawnConfig
-    from questorharness.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
+    from questorharness.runtime.coordinator.agent_definitions import get_agent_definition
+    from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
+    from questorharness.runtime.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
     from questorharness.engine.query import QueryContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
-    import questorharness.swarm.mailbox as mb
-    import questorharness.swarm.team_lifecycle as tl
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
+    import questorharness.runtime.swarm.mailbox as mb
+    import questorharness.runtime.swarm.team_lifecycle as tl
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
 
@@ -298,13 +298,13 @@ async def task_migration_plan_with_memory():
     """Agent analyzes AutoAgent, saves findings to memory, creates migration plan,
     saves session for later resume."""
 
-    from questorharness.coordinator.agent_definitions import get_agent_definition
-    from questorharness.skills.registry import SkillRegistry
-    from questorharness.skills.types import SkillDefinition
-    from questorharness.memory.manager import add_memory_entry, list_memory_files, remove_memory_entry
-    from questorharness.services.session_storage import save_session_snapshot, export_session_markdown
-    import questorharness.memory.paths as mp
-    import questorharness.memory.manager as mm
+    from questorharness.runtime.coordinator.agent_definitions import get_agent_definition
+    from questorharness.capabilities.skills.registry import SkillRegistry
+    from questorharness.capabilities.skills.types import SkillDefinition
+    from questorharness.capabilities.memory.manager import add_memory_entry, list_memory_files, remove_memory_entry
+    from questorharness.platform.session_storage import save_session_snapshot, export_session_markdown
+    import questorharness.capabilities.memory.paths as mp
+    import questorharness.capabilities.memory.manager as mm
 
     with tempfile.TemporaryDirectory() as tmpdir:
         mem_dir = Path(tmpdir) / "memory"
@@ -418,7 +418,7 @@ async def task_migration_plan_with_memory():
 async def task_bugfix_in_worktree():
     """Agent creates a worktree, makes a fix in isolation, verifies it, cleans up."""
 
-    from questorharness.swarm.worktree import WorktreeManager
+    from questorharness.runtime.swarm.worktree import WorktreeManager
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create a test repo with a "buggy" file
@@ -517,28 +517,28 @@ if __name__ == "__main__":
 async def task_full_pipeline():
     """Simulate the full research→plan→implement→verify pipeline with coordinator."""
 
-    from questorharness.coordinator.coordinator_mode import (
+    from questorharness.runtime.coordinator.coordinator_mode import (
         get_coordinator_system_prompt, format_task_notification, TaskNotification,
     )
-    from questorharness.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.swarm.types import TeammateSpawnConfig
-    from questorharness.swarm.permission_sync import (
+    from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
+    from questorharness.runtime.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.permission_sync import (
         create_permission_request, write_permission_request,
         read_pending_permissions, resolve_permission, PermissionResolution,
     )
-    from questorharness.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
+    from questorharness.runtime.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
     from questorharness.engine.query import QueryContext
-    from questorharness.api.client import AnthropicApiClient
+    from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
-    from questorharness.permissions.checker import PermissionChecker
-    from questorharness.permissions.modes import PermissionMode
-    from questorharness.tools.base import ToolRegistry
-    from questorharness.tools.bash_tool import BashTool
-    from questorharness.tools.file_read_tool import FileReadTool
-    from questorharness.tools.glob_tool import GlobTool
-    from questorharness.tools.grep_tool import GrepTool
-    import questorharness.swarm.mailbox as mb
-    import questorharness.swarm.team_lifecycle as tl
+    from questorharness.capabilities.policy.checker import PermissionChecker
+    from questorharness.contracts.policy import PermissionMode
+    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.shell.bash_tool import BashTool
+    from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
+    from questorharness.capabilities.tools.fs.glob_tool import GlobTool
+    from questorharness.capabilities.tools.fs.grep_tool import GrepTool
+    import questorharness.runtime.swarm.mailbox as mb
+    import questorharness.runtime.swarm.team_lifecycle as tl
 
     api = AnthropicApiClient(api_key=API_KEY, base_url=BASE_URL)
 
@@ -665,7 +665,7 @@ async def task_full_pipeline():
 async def task_refactor_with_session():
     """Refactor code across 3 turns, save session, verify it can be loaded."""
 
-    from questorharness.services.session_storage import (
+    from questorharness.platform.session_storage import (
         save_session_snapshot, load_session_snapshot,
     )
 

@@ -7,10 +7,10 @@ import sys
 
 import pytest
 
-from questorharness.tasks.manager import BackgroundTaskManager
-from questorharness.tasks.types import TaskRecord
-from questorharness.swarm.subprocess_backend import SubprocessBackend
-from questorharness.swarm.types import TeammateSpawnConfig
+from questorharness.runtime.tasks.manager import BackgroundTaskManager
+from questorharness.contracts.task import TaskRecord
+from questorharness.runtime.swarm.subprocess_backend import SubprocessBackend
+from questorharness.runtime.swarm.types import TeammateSpawnConfig
 
 
 def _argv_str(captured: dict) -> str:
@@ -36,7 +36,7 @@ async def test_subprocess_backend_forwards_system_prompt_in_command(monkeypatch,
         )
 
     monkeypatch.setattr(BackgroundTaskManager, "create_agent_task", _fake_create_agent_task)
-    monkeypatch.setattr("questorharness.swarm.subprocess_backend.get_teammate_command", lambda: "/usr/bin/python3")
+    monkeypatch.setattr("questorharness.runtime.swarm.subprocess_backend.get_teammate_command", lambda: "/usr/bin/python3")
 
     backend = SubprocessBackend()
     config = TeammateSpawnConfig(
@@ -74,7 +74,7 @@ async def test_subprocess_backend_forwards_append_system_prompt_mode(monkeypatch
         )
 
     monkeypatch.setattr(BackgroundTaskManager, "create_agent_task", _fake_create_agent_task)
-    monkeypatch.setattr("questorharness.swarm.subprocess_backend.get_teammate_command", lambda: "/usr/bin/python3")
+    monkeypatch.setattr("questorharness.runtime.swarm.subprocess_backend.get_teammate_command", lambda: "/usr/bin/python3")
 
     backend = SubprocessBackend()
     config = TeammateSpawnConfig(
@@ -214,7 +214,7 @@ async def test_subprocess_backend_passes_env_via_kwarg(
 
     monkeypatch.setattr(BackgroundTaskManager, "create_agent_task", _fake_create_agent_task)
     monkeypatch.setattr(
-        "questorharness.swarm.subprocess_backend.get_teammate_command",
+        "questorharness.runtime.swarm.subprocess_backend.get_teammate_command",
         lambda: "/usr/bin/python3",
     )
 

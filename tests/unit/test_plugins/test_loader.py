@@ -7,10 +7,10 @@ import logging
 from pathlib import Path
 
 from questorharness.config.settings import Settings
-from questorharness.hooks.loader import load_hook_registry
+from questorharness.runtime.hooks.loader import load_hook_registry
 from questorharness.plugins import load_plugins
 from questorharness.plugins.loader import get_user_plugins_dir
-from questorharness.skills import load_skill_registry
+from questorharness.capabilities.skills import load_skill_registry
 
 
 def _write_plugin(root: Path) -> None:
@@ -88,7 +88,7 @@ def _write_tool_plugin(root: Path, *, enabled_by_default: bool = True) -> Path:
     )
     (tools_dir / "echo_tool.py").write_text(
         "from pydantic import BaseModel\n"
-        "from questorharness.tools.base import BaseTool, ToolExecutionContext, ToolResult\n\n"
+        "from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult\n\n"
         "class EchoArgs(BaseModel):\n"
         "    text: str = 'hello'\n\n"
         "class EchoTool(BaseTool):\n"

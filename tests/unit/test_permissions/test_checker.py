@@ -5,8 +5,8 @@ import logging
 import pytest
 
 from questorharness.config.settings import PathRuleConfig, PermissionSettings
-from questorharness.permissions import PermissionChecker, PermissionMode
-from questorharness.permissions.checker import SENSITIVE_PATH_PATTERNS
+from questorharness.capabilities.policy import PermissionChecker, PermissionMode
+from questorharness.capabilities.policy.checker import SENSITIVE_PATH_PATTERNS
 
 
 def test_default_mode_allows_read_only():
@@ -77,7 +77,7 @@ def _settings_with_rules(*rules) -> PermissionSettings:
 def test_invalid_pattern_rule_is_skipped_and_warns(bad_rule, caplog):
     """Rules with missing, empty, or non-string patterns are skipped with a warning."""
     settings = _settings_with_rules(bad_rule)
-    with caplog.at_level(logging.WARNING, logger="questorharness.permissions.checker"):
+    with caplog.at_level(logging.WARNING, logger="questorharness.capabilities.policy.checker"):
         checker = PermissionChecker(settings)
 
     assert checker._path_rules == []

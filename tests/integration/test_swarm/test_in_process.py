@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.swarm.in_process import (
+from questorharness.runtime.swarm.in_process import (
     InProcessBackend,
     TeammateContext,
     get_teammate_context,
     set_teammate_context,
 )
-from questorharness.swarm.types import TeammateMessage, TeammateSpawnConfig
+from questorharness.runtime.swarm.types import TeammateMessage, TeammateSpawnConfig
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +142,7 @@ async def test_send_message_writes_to_mailbox(backend, tmp_path, monkeypatch):
     await backend.send_message("rcvr@myteam", msg)
 
     # Verify the message was written to mailbox
-    from questorharness.swarm.mailbox import TeammateMailbox
+    from questorharness.runtime.swarm.mailbox import TeammateMailbox
     mailbox = TeammateMailbox(team_name="myteam", agent_id="rcvr")
     messages = await mailbox.read_all(unread_only=False)
     assert any(m.payload.get("content") == "work on it" for m in messages)

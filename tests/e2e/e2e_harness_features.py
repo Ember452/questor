@@ -42,7 +42,7 @@ def _run_oh(*args: str, timeout: int = 90) -> subprocess.CompletedProcess:
 
 async def test_api_retry_config() -> tuple[bool, str]:
     """Test that retry configuration is properly set up."""
-    from questorharness.api.client import MAX_RETRIES, RETRYABLE_STATUS_CODES, _get_retry_delay
+    from questorharness.providers.llm.client import MAX_RETRIES, RETRYABLE_STATUS_CODES, _get_retry_delay
 
     if MAX_RETRIES != 3:
         return False, f"Expected MAX_RETRIES=3, got {MAX_RETRIES}"
@@ -75,7 +75,7 @@ async def test_api_retry_real_call() -> tuple[bool, str]:
 
 async def test_skills_loaded() -> tuple[bool, str]:
     """Test that bundled skills are loaded from .md files."""
-    from questorharness.skills.bundled import get_bundled_skills
+    from questorharness.capabilities.skills.bundled import get_bundled_skills
 
     skills = get_bundled_skills()
     names = [s.name for s in skills]
@@ -93,7 +93,7 @@ async def test_skills_loaded() -> tuple[bool, str]:
 async def test_skills_in_system_prompt() -> tuple[bool, str]:
     """Test that skills metadata is injected into the system prompt."""
     from questorharness.config.settings import load_settings
-    from questorharness.prompts.context import build_runtime_system_prompt
+    from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
 
     prompt = build_runtime_system_prompt(load_settings(), cwd=".")
     if "Available Skills" not in prompt:
@@ -107,8 +107,8 @@ async def test_skills_in_system_prompt() -> tuple[bool, str]:
 
 async def test_skill_tool_invocation() -> tuple[bool, str]:
     """Test that SkillTool can load a skill's content."""
-    from questorharness.tools.skill_tool import SkillTool, SkillToolInput
-    from questorharness.tools.base import ToolExecutionContext
+    from questorharness.capabilities.tools.skill_tool import SkillTool, SkillToolInput
+    from questorharness.capabilities.tools.base import ToolExecutionContext
 
     tool = SkillTool()
     result = await tool.execute(
@@ -154,9 +154,9 @@ async def test_parallel_tools_code() -> tuple[bool, str]:
 
 async def test_path_permissions_deny() -> tuple[bool, str]:
     """Test that path-level deny rules work."""
-    from questorharness.permissions.checker import PermissionChecker
+    from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.config.settings import PermissionSettings, PathRuleConfig
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.contracts.policy import PermissionMode
 
     settings = PermissionSettings(
         mode=PermissionMode.FULL_AUTO,
@@ -179,9 +179,9 @@ async def test_path_permissions_deny() -> tuple[bool, str]:
 
 async def test_command_deny_pattern() -> tuple[bool, str]:
     """Test that command deny patterns work."""
-    from questorharness.permissions.checker import PermissionChecker
+    from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.config.settings import PermissionSettings
-    from questorharness.permissions.modes import PermissionMode
+    from questorharness.contracts.policy import PermissionMode
 
     settings = PermissionSettings(
         mode=PermissionMode.FULL_AUTO,

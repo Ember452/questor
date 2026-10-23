@@ -4,7 +4,7 @@ from pathlib import Path
 
 from questorharness.config.settings import load_settings
 from questorharness.plugins import load_plugins
-from questorharness.skills import load_skill_registry
+from questorharness.capabilities.skills import load_skill_registry
 
 from questor.runtime import run_questor_backend
 from questor.workspace import get_plugins_dir, get_skills_dir, initialize_workspace
