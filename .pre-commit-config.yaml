@@ -15,6 +15,12 @@ repos:
         language: system
         types: [python]
 
+      - id: import-contracts
+        name: import contracts
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+
       - id: secret-projection
         name: secret projection guard
         entry: uv run python scripts/guards/check_secret_projection.py --fail-on-empty
