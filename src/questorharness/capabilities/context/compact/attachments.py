@@ -333,3 +333,5 @@ def _build_compact_attachments(
     ]
     attachments.extend(attachment for attachment in builders if attachment is not None)
     return attachments
+
+# questor: allow R7 -- until W8 adds the mirror test

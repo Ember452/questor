@@ -209,3 +209,5 @@ def register_appearance_commands(registry: CommandRegistry) -> None:
     registry.register(SlashCommand("vim", "Show or update Vim mode", _vim_handler))
 
     registry.register(SlashCommand("voice", "Show or update voice mode", _voice_handler))
+
+# questor: allow R7 -- until W8 adds the mirror test

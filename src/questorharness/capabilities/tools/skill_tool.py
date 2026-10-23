@@ -41,3 +41,5 @@ class SkillTool(BaseTool):
                 is_error=True,
             )
         return ToolResult(output=skill.content)
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -69,3 +69,5 @@ def _recency_boost(header: MemoryHeader) -> float:
     if age <= timedelta(days=30):
         return 0.1
     return 0.0
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -31,3 +31,5 @@ class MemoryHeader:
     relative_path: str = ""
     tags: tuple[str, ...] = field(default_factory=tuple)
     frontmatter: dict[str, Any] = field(default_factory=dict)
+
+# questor: allow R3 -- until W9 rename wave

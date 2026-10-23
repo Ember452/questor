@@ -143,3 +143,5 @@ def _make_skill_slash_command(skill_name: str, description: str) -> SlashCommand
             skill_name=skill_name,
         ),
     )
+
+# questor: allow R3 -- until W9 rename wave

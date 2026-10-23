@@ -23,3 +23,5 @@ def configure_runtime_runner(runner: RuntimeRunner) -> None:
 def get_runtime_runner() -> RuntimeRunner | None:
     """Return the configured runner, or ``None`` when bootstrap has not wired one."""
     return _RUNTIME_RUNNER
+
+# questor: allow R7 -- until W8 adds the mirror test

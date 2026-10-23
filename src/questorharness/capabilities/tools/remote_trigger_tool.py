@@ -72,3 +72,5 @@ class RemoteTriggerTool(BaseTool):
             is_error=process.returncode != 0,
             metadata={"returncode": process.returncode},
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

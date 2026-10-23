@@ -245,3 +245,5 @@ def _resolve_memory_candidate(memory_dir: Path, candidate: str) -> tuple[Path | 
     except ValueError:
         return None, True
     return resolved, False
+
+# questor: allow R7 -- until W8 adds the mirror test

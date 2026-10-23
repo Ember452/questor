@@ -185,3 +185,5 @@ def is_model_multimodal(model: str) -> bool:
     if "/" in normalized:
         normalized = normalized.split("/", 1)[-1]
     return any(pattern.search(normalized) is not None for pattern in _MULTIMODAL_MODEL_PATTERNS)
+
+# questor: allow R7 -- until W8 adds the mirror test

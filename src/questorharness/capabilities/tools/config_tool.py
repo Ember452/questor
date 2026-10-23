@@ -52,3 +52,5 @@ class ConfigTool(BaseTool):
             save_settings(settings)
             return ToolResult(output=f"Updated {arguments.key}")
         return ToolResult(output="Usage: action=show or action=set with key/value", is_error=True)
+
+# questor: allow R7 -- until W8 adds the mirror test

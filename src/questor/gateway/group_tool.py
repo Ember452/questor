@@ -154,3 +154,6 @@ def _resolve_cwd(raw: str | None, base_cwd: Path) -> str | None:
     if not path.is_absolute():
         path = base_cwd / path
     return str(path.resolve())
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

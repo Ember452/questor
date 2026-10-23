@@ -26,3 +26,5 @@ class EnterPlanModeTool(BaseTool):
         settings.permission.mode = PermissionMode.PLAN
         save_settings(settings)
         return ToolResult(output="Permission mode set to plan")
+
+# questor: allow R7 -- until W8 adds the mirror test

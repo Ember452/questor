@@ -22,3 +22,5 @@ class PluginManifest(BaseModel):
     agents: str | list | None = None
     skills: str | list | None = None
     hooks: str | dict | list | None = None
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -151,3 +151,5 @@ def _normalize_usage_record(record: dict[str, Any]) -> dict[str, Any]:
         "use_count": use_count,
         "path": str(record.get("path") or ""),
     }
+
+# questor: allow R7 -- until W8 adds the mirror test

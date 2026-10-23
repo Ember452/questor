@@ -61,3 +61,5 @@ async def stop_docker_sandbox() -> None:
     if _active_session is not None:
         await _active_session.stop()
         _active_session = None
+
+# questor: allow R7 -- until W8 adds the mirror test

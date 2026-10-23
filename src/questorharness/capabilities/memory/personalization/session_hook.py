@@ -63,3 +63,5 @@ def update_rules_from_session(messages: list[ConversationMessage]) -> int:
         len(merged["facts"]),
     )
     return max(new_count, 0)
+
+# questor: allow R7 -- until W8 adds the mirror test

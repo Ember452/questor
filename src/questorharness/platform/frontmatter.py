@@ -110,3 +110,5 @@ def parse_positive_int(raw: Any) -> int | None:
         return val if val > 0 else None
     except (TypeError, ValueError):
         return None
+
+# questor: allow R7 -- until W8 adds the mirror test

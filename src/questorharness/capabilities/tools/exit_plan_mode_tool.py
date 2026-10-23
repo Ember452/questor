@@ -26,3 +26,5 @@ class ExitPlanModeTool(BaseTool):
         settings.permission.mode = PermissionMode.DEFAULT
         save_settings(settings)
         return ToolResult(output="Permission mode set to default")
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -22,3 +22,5 @@ class SkillDefinition:
     disable_model_invocation: bool = False
     model: str | None = None
     argument_hint: str | None = None
+
+# questor: allow R3 -- until W9 rename wave

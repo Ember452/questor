@@ -181,3 +181,5 @@ def _effective_signature(path: Path, existing_signature: str) -> str:
     memory_type = str(metadata.get("type") or "project")
     category = str(metadata.get("category") or "knowledge")
     return compute_memory_signature(body, memory_type, category)
+
+# questor: allow R3 -- until W9 rename wave

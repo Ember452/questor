@@ -114,3 +114,5 @@ def _metadata_from_header(header: MemoryHeader) -> dict[str, object]:
         "updated_at": header.updated_at,
         "ttl_days": header.ttl_days,
     }
+
+# questor: allow R7 -- until W8 adds the mirror test

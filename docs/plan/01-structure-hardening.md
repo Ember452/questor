@@ -553,3 +553,14 @@ W1–W10 把形态和门禁做对了，但**五条增长规则**还缺。它们�
 | 11 | 该标量不只跨机不稳，还随分支变 | 「`dryrun.txt` 的 `system prompt chars` 19008 → 18987」 | 切到 `ci/structure-hardening` 后同一台机器变为 **19005**（prompt 内嵌 git 分支名）；每次改分支就漂 20 上下 | 归一化为 `- system prompt chars: <VOLATILE>`；体积信号移交 W3 固定输入快照 | W1 |
 | 12 | pre-commit 五个守卫 hook 都指向单个脚本 | §4 W1「`layout` / `tree-map` 改为调用 **scripts/check.py**」 | 若只改两个 hook，`import-contracts`/`secret-projection`/`doc-cross-refs` 仍会与 `check.py` 分叉 | 五个 hook 合成一个 `repo-guards`（`--fast`），pre-push 改为全量 `scripts/check.py`；同时更新守卫 README 的入口说明 | W1 |
 | 13 | CI 里看不到四条实体命令的字面串 | §4 W1「`guards` job 的 step 列表包含上述四条实体命令」 | 单一入口后，命令只存在于 **scripts/check.py** 的 `STEPS` 表 | `guards` job 先跑 `scripts/check.py --list` 把完整 argv 表打进 CI 日志，再跑 `scripts/check.py`；断言依据从 `ci.yml` 文本改为「日志 + `STEPS` 表」 | W1 |
+| 14 | R5 存量 17，不是 16 | §4 W2「R5 16 处（8 个无 `__all__` 的顶层包 + 8 个导出 >10 的包）」 | 还有第 9 个无 `__all__` 的顶层包：`src/questor/gateway/__init__.py`（产品分发） | 预算改为 17；补 `__all__` 属公开面变更，本波次不做 | W2 |
+| 15 | R8 存量未给数，且启发式会高估 | §4 W2「R8 新增一个 CC 21 的函数 → 红」 | 简单 AST 启发式（含嵌套定义）估 50；改为排除嵌套 `def`/`class`/`lambda` 后是 **40 个函数 / 31 个文件** | `R8_EXEMPT_FUNCTIONS = 40`、`EXEMPTION_BUDGET["R8"] = 31`；两道上限都只能降 | W2 |
+| 16 | R6 的「关键文件」行混了非路径 token | ADR-0003 §8「AGENTS.md 的关键文件少于 2 个或路径不存在 → fail」 | `commands/AGENTS.md` 里写了类名 `CommandRegistry`，不是路径 | 只把含 `/` 或以 `.py` 结尾的 token 当路径；不存在的路径仍红 | W2 |
+| 17 | 豁免总量 | 计划只给了每规则条数 | 实际写入 **258 条注释 / 222 个文件**（R2 4 / R3 22 / R4 14 / R5 17 / R7 170 / R8 31） | 插入脚本 `scratch/annotate_layout_backlog.py` 不入库；commit body 记录了匹配正则与文件数 | W2 |
+| 18 | `--self-test` 条数 | §4 W2「`check_layout --self-test` 8 条全过」 | 实际是 **8 条规则 / 16 个用例**（每条规则红+绿） | 超过计划要求，保留；汇报里按「8 条规则、16 用例」记 | W2 |
+| 19 | R1 无存量且无 catalog | ADR-0003 §8「排除 migrations/schemas/generated」 | 仓内无此类目录 | `CATALOG_DIRS` 常量首版为空，扫描命中 0 → R1 只挡新增 | W2 |
+| 20 | 新增测试改变了 node-id 基线 | 计划 W2 未提 node ids | `tests/ci` 新增 22 个用例 → 1178 → **1200**；`test_files` 139 → **141** | 在 W2 末做一次 `--record`；审计确认 `dryrun.txt`/`help-*.txt`/`doctor.txt` **未变**，只有 `main_node_ids.txt` + `summary.json` 变；结构基线 `test_files` 经 `--refresh-baseline --reason` 更新 | W2 |
+| 21 | TREE.md 行数漂移 | `gen_tree` 用 `walk_py`（工作区） | 行内注释每文件 +2 行 → TREE.md 陈旧 | `gen_tree.py --write` 重生成；结构基线只比 `value`，`long_files.max` 1187 → 1190 经 `--refresh-baseline --reason` 刷新 | W2 |
+| 22 | ADR-0003 §2 阈值表已过时 | 计划 §1 B7 已改 1001–1500 / 1500 | ADR 表仍写 801–1200 / 1200 | 在 ADR §2 加一行「2026-10-23 修订」，指向 **scripts/guards/_layout_rules.py**；不改历史表格 | W2 |
+| 23 | `ci_guard_scripts.in_ci` 变空 | 计划未提 | 单一入口后 CI 不再直接调任何守卫脚本 | 该项只是记录字段（不设门）；`value` 仍为 5，门在 **scripts/check.py** | W2 |
+| 24 | `gen_namespaces --check` 未列入守卫 | §4 W2 只列了 R10 守卫 | 登记表是生成物，不加新鲜度检查就会再次变成手写事实 | `scripts/check.py` 增加 `namespace-doc` 步，与 `name-registries` 成对 | W2 |

@@ -135,3 +135,6 @@ def _dedupe(values) -> list[str]:
 
 def _seed_models(profile) -> list[str]:
     return _dedupe([*profile.allowed_models, profile.resolved_model])
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

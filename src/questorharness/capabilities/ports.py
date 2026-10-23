@@ -191,3 +191,5 @@ class HookRuntime(Protocol):
     """Hook execution consumed by compaction and subagent events."""
 
     async def execute(self, event: HookEvent, payload: dict[str, Any]) -> AggregatedHookResult: ...
+
+# questor: allow R7 -- until W8 adds the mirror test

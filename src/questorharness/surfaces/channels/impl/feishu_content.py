@@ -351,3 +351,6 @@ def _extract_post_text(content_json: dict) -> str:
     """
     text, _ = _extract_post_content(content_json)
     return text
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

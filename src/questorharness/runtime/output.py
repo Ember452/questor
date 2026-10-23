@@ -73,3 +73,5 @@ def format_pending_tool_results(messages: list[ConversationMessage]) -> str | No
 
     lines.append("To continue from these results, run: /continue [COUNT].")
     return "\n".join(lines)
+
+# questor: allow R7 -- until W8 adds the mirror test

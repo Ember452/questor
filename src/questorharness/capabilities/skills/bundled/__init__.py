@@ -73,3 +73,5 @@ def _parse_metadata(default_name: str, content: str) -> dict:
         "model": optional_frontmatter_str(frontmatter.get("model")),
         "argument_hint": optional_frontmatter_str(frontmatter.get("argument-hint")),
     }
+
+# questor: allow R4 -- until W8 facade split

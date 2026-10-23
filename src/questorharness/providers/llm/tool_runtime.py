@@ -62,3 +62,5 @@ class ProviderLlmToolRuntime:
                     collected_text = text
 
         return collected_text.strip() or "(no description returned)"
+
+# questor: allow R7 -- until W8 adds the mirror test

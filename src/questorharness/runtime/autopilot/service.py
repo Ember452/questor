@@ -701,4 +701,6 @@ class RepoAutopilotStore(StorageMixin, SourcesMixin, GitOperationsMixin, GitHubO
             pr_url=pr_url,
         )
 
-
+# questor: allow R3 -- until W9 rename wave
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

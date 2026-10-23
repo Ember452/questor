@@ -214,3 +214,5 @@ __all__ = [
     "list_document_symbols",
     "workspace_symbol_search",
 ]
+
+# questor: allow R4 -- until W8 facade split

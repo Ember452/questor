@@ -176,3 +176,5 @@ def register_session_commands(registry: CommandRegistry) -> None:
     registry.register(SlashCommand("cost", "Show token usage and estimated cost", _cost_handler))
     registry.register(SlashCommand("usage", "Show usage and token estimates", _usage_handler))
     registry.register(SlashCommand("stats", "Show session statistics", _stats_handler))
+
+# questor: allow R7 -- until W8 adds the mirror test

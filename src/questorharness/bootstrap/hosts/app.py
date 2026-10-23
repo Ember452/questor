@@ -318,3 +318,6 @@ async def run_print_mode(
             print(json.dumps(result))
     finally:
         await close_runtime(bundle)
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

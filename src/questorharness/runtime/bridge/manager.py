@@ -104,3 +104,4 @@ def get_bridge_manager() -> BridgeSessionManager:
         _DEFAULT_MANAGER = BridgeSessionManager()
     return _DEFAULT_MANAGER
 
+# questor: allow R3 -- until W9 rename wave

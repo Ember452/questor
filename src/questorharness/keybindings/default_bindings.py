@@ -9,3 +9,5 @@ DEFAULT_KEYBINDINGS: dict[str, str] = {
     "ctrl+v": "toggle_voice",
     "ctrl+t": "tasks",
 }
+
+# questor: allow R7 -- until W8 adds the mirror test

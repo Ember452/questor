@@ -1164,3 +1164,8 @@ __all__ = [
     "should_autocompact",
     "summarize_messages",
 ]
+
+# questor: allow R2 -- 1171 lines until W8 splits this file
+# questor: allow R4 -- until W8 facade split
+# questor: allow R5 -- until W8 public-face split
+# questor: allow R8 -- refactor the offenders in W8

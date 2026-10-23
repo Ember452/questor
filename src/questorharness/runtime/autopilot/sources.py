@@ -192,3 +192,5 @@ class SourcesMixin:
         if not repo:
             raise RuntimeError("Unable to resolve GitHub repository name with `gh repo view`.")
         return repo
+
+# questor: allow R7 -- until W8 adds the mirror test

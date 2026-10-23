@@ -102,3 +102,5 @@ def register_handlers() -> None:
 
     register_notification_handler("feishu_dm", send_feishu_notification)
     register_notification_handler("feishu", send_feishu_notification)
+
+# questor: allow R7 -- until W8 adds the mirror test

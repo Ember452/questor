@@ -88,3 +88,5 @@ def check_team_memory_secrets(content: str) -> str | None:
         f"Content contains potential secrets ({labels}) and cannot be written to team memory. "
         "Team memory is shared with project collaborators."
     )
+
+# questor: allow R7 -- until W8 adds the mirror test

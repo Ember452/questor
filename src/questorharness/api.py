@@ -136,3 +136,5 @@ __all__ = [
     "start_runtime",
     "utc_now",
 ]
+
+# questor: allow R7 -- until W8 adds the mirror test

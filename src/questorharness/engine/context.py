@@ -35,3 +35,5 @@ class QueryContext:
     max_turns: int | None = 200
     hook_executor: HookExecutor | None = None
     tool_metadata: dict[str, object] | None = None
+
+# questor: allow R7 -- until W8 adds the mirror test

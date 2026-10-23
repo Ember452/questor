@@ -30,3 +30,5 @@ class SleepTool(BaseTool):
         del context
         await asyncio.sleep(arguments.seconds)
         return ToolResult(output=f"Slept for {arguments.seconds} seconds")
+
+# questor: allow R7 -- until W8 adds the mirror test

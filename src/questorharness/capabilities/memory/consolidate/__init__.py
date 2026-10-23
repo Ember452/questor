@@ -32,3 +32,5 @@ __all__ = [
     "start_dream_now",
     "try_acquire_consolidation_lock",
 ]
+
+# questor: allow R5 -- until W8 public-face split

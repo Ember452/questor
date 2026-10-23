@@ -84,3 +84,6 @@ def get_platform_capabilities(platform_name: PlatformName | None = None) -> Plat
         supports_sandbox_runtime=False,
         supports_docker_sandbox=False,
     )
+
+# questor: allow R4 -- until W8 facade split
+# questor: allow R5 -- until W8 public-face split

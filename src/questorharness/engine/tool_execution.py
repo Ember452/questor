@@ -240,3 +240,5 @@ def _extract_permission_command(
         return value
 
     return None
+
+# questor: allow R7 -- until W8 adds the mirror test

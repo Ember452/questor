@@ -84,3 +84,5 @@ def register_policy_commands(registry: CommandRegistry) -> None:
             remote_admin_opt_in=True,
         )
     )
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -26,3 +26,5 @@ async def spawn_local_agent_task(
         api_key=api_key,
         command=command,
     )
+
+# questor: allow R7 -- until W8 adds the mirror test

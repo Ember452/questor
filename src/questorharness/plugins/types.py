@@ -57,3 +57,5 @@ class LoadedPlugin:
     @property
     def description(self) -> str:
         return self.manifest.description
+
+# questor: allow R3 -- until W9 rename wave

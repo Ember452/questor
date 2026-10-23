@@ -23,3 +23,5 @@ __all__ = [
     "scan_memory_files",
     "select_relevant_memories",
 ]
+
+# questor: allow R5 -- until W8 public-face split

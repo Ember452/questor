@@ -48,3 +48,5 @@ class TaskUpdateTool(BaseTool):
         if arguments.status_note:
             parts.append(f"note={task.metadata.get('status_note', '')}")
         return ToolResult(output=" ".join(parts))
+
+# questor: allow R7 -- until W8 adds the mirror test

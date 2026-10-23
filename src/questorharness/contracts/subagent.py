@@ -42,3 +42,5 @@ class TeammateMessage:
     color: str | None = None
     timestamp: str | None = None
     summary: str | None = None
+
+# questor: allow R7 -- until W8 adds the mirror test

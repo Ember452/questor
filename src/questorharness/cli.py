@@ -1185,3 +1185,6 @@ def main(
             effort=effort,
         )
     )
+
+# questor: allow R2 -- 1190 lines until W8 splits this file
+# questor: allow R8 -- refactor the offenders in W8

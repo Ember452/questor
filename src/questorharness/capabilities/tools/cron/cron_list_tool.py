@@ -67,3 +67,5 @@ class CronListTool(BaseTool):
                 f"     last: {last_run}{status_str}  next: {next_run}"
             )
         return ToolResult(output="\n".join(lines))
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -195,3 +195,6 @@ def save_settings(settings: Settings, config_path: Path | None = None) -> None:
             config_path,
             settings.model_dump_json(indent=2) + "\n",
         )
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

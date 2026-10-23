@@ -165,3 +165,6 @@ def _source_ref_number(source_ref: str, prefix: str) -> int | None:
         return int(normalized.split(":", 1)[1])
     except ValueError:
         return None
+
+# questor: allow R3 -- until W9 rename wave
+# questor: allow R7 -- until W8 adds the mirror test

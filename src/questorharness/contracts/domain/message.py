@@ -220,3 +220,6 @@ def assistant_message_from_api(raw_message: Any) -> ConversationMessage:
             )
 
     return ConversationMessage(role="assistant", content=content)
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

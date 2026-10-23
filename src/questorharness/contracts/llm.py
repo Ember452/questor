@@ -55,3 +55,5 @@ class SupportsStreamingMessages(Protocol):
 
     async def stream_message(self, request: ApiMessageRequest) -> AsyncIterator[ApiStreamEvent]:
         """Yield streamed events for the request."""
+
+# questor: allow R7 -- until W8 adds the mirror test

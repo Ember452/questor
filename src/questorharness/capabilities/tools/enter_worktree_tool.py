@@ -78,3 +78,5 @@ def _resolve_worktree_path(repo_root: Path, branch: str, path: str | None) -> Pa
         return resolved.resolve()
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", branch).strip("-") or "worktree"
     return (repo_root / ".questorharness" / "worktrees" / slug).resolve()
+
+# questor: allow R7 -- until W8 adds the mirror test

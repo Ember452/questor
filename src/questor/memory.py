@@ -217,3 +217,5 @@ def _effective_signature(path: Path, existing_signature: str) -> str:
     memory_type = str(metadata.get("type") or "personal")
     category = str(metadata.get("category") or "preference")
     return compute_memory_signature(body, memory_type, category)
+
+# questor: allow R7 -- until W8 adds the mirror test

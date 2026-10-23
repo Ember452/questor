@@ -116,3 +116,5 @@ class CommandRegistry:
     def list_commands(self) -> list[SlashCommand]:
         """Return canonical commands in registration order (aliases omitted)."""
         return [self._commands[name] for name in self._canonical_names]
+
+# questor: allow R3 -- until W9 rename wave

@@ -89,3 +89,5 @@ def _is_default_agent_index(path: Path) -> bool:
     except OSError:
         return False
     return text.startswith("# Memory Index\n")
+
+# questor: allow R7 -- until W8 adds the mirror test

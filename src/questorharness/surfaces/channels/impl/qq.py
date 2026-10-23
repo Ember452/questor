@@ -139,3 +139,4 @@ class QQChannel(BaseChannel):
         except Exception:
             logger.exception("Error handling QQ message")
 
+# questor: allow R7 -- until W8 adds the mirror test

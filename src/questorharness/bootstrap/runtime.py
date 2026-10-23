@@ -792,3 +792,6 @@ async def run_autopilot_prompt(
 from questorharness.runtime.autopilot.runner import configure_runtime_runner
 
 configure_runtime_runner(run_autopilot_prompt)
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

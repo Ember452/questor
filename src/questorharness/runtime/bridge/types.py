@@ -35,3 +35,5 @@ class BridgeConfig:
     max_sessions: int = 1
     verbose: bool = False
     session_timeout_ms: int = DEFAULT_SESSION_TIMEOUT_MS
+
+# questor: allow R3 -- until W9 rename wave

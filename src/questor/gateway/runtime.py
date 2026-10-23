@@ -1083,3 +1083,7 @@ def _prefers_chinese_progress(content: str) -> bool:
     if latin_count == 0:
         return True
     return cjk_count >= latin_count
+
+# questor: allow R2 -- 1089 lines until W8 splits this file
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

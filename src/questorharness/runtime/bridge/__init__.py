@@ -18,3 +18,5 @@ __all__ = [
     "get_bridge_manager",
     "spawn_session",
 ]
+
+# questor: allow R5 -- until W8 public-face split

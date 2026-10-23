@@ -90,3 +90,5 @@ class DefaultTaskRuntime:
 
     def register_completion_listener(self, listener: CompletionListener) -> Callable[[], None]:
         return self._manager.register_completion_listener(listener)
+
+# questor: allow R7 -- until W8 adds the mirror test

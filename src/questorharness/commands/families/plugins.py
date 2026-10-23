@@ -49,3 +49,5 @@ def register_plugin_commands(
                 _plugin_command_handler,
             )
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

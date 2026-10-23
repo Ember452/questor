@@ -31,3 +31,5 @@ class BriefTool(BaseTool):
         if len(text) <= arguments.max_chars:
             return ToolResult(output=text)
         return ToolResult(output=text[: arguments.max_chars].rstrip() + "...")
+
+# questor: allow R7 -- until W8 adds the mirror test

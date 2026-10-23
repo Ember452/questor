@@ -13,3 +13,5 @@ class SandboxUnavailableError(RuntimeError):
 
 class McpServerNotConnectedError(Exception):
     """Raised when an MCP server is not connected or its session has been lost."""
+
+# questor: allow R7 -- until W8 adds the mirror test

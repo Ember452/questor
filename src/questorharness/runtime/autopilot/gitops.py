@@ -111,3 +111,5 @@ class GitOperationsMixin:
             self._run_git(["checkout", "-B", head_branch, f"origin/{base_branch}"], cwd=cwd, check=True)
             return
         self._run_git(["checkout", head_branch], cwd=cwd, check=True)
+
+# questor: allow R7 -- until W8 adds the mirror test

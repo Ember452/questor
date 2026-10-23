@@ -93,3 +93,5 @@ def load_managed_group_record(
 def normalize_cwd(cwd: str | Path) -> str:
     """Normalize a cwd binding."""
     return str(Path(cwd).expanduser().resolve())
+
+# questor: allow R7 -- until W8 adds the mirror test

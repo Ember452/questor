@@ -36,3 +36,5 @@ class ToolSearchTool(BaseTool):
         if not matches:
             return ToolResult(output="(no matches)")
         return ToolResult(output="\n".join(f"{tool.name}: {tool.description}" for tool in matches))
+
+# questor: allow R7 -- until W8 adds the mirror test

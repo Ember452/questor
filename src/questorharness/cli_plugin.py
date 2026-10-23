@@ -48,3 +48,5 @@ def plugin_uninstall(
     except ValueError as exc:
         raise typer.BadParameter("invalid plugin name") from exc
     print(f"Uninstalled plugin: {name}")
+
+# questor: allow R7 -- until W8 adds the mirror test

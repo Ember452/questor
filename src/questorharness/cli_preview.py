@@ -737,3 +737,6 @@ def _format_dry_run_preview(preview: dict[str, object]) -> str:
         lines.extend(["", "System Prompt Preview", preview_text])
 
     return "\n".join(lines)
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

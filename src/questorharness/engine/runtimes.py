@@ -9,3 +9,5 @@ from questorharness.providers.sandbox.runtime import ProviderSandboxRuntime
 TOOL_SANDBOX_RUNTIME = ProviderSandboxRuntime()
 TOOL_LLM_RUNTIME = ProviderLlmToolRuntime()
 TOOL_LSP_RUNTIME = ProviderLspRuntime()
+
+# questor: allow R7 -- until W8 adds the mirror test

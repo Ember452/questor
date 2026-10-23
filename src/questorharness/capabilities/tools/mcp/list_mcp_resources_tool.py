@@ -34,3 +34,5 @@ class ListMcpResourcesTool(BaseTool):
         return ToolResult(
             output="\n".join(f"{item.server_name}:{item.uri} {item.description}".strip() for item in resources)
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

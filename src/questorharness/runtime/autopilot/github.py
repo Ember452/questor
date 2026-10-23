@@ -288,3 +288,5 @@ class GitHubOperationsMixin:
             cwd=self._cwd,
             check=True,
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

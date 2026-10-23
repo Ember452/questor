@@ -405,3 +405,5 @@ class CodexApiClient:
         if isinstance(exc, httpx.HTTPError):
             return RequestFailure(str(exc))
         return RequestFailure(str(exc))
+
+# questor: allow R8 -- refactor the offenders in W8

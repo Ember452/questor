@@ -50,3 +50,5 @@ def _vision_token_budget_per_image() -> int:
         except ValueError:
             log.warning("Ignoring invalid QUESTORHARNESS_IMAGE_TOKEN_ESTIMATE=%r", raw)
     return _DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE
+
+# questor: allow R7 -- until W8 adds the mirror test

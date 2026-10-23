@@ -137,3 +137,5 @@ def _summarize_message(message: ConversationMessage) -> str:
     if any(isinstance(block, ToolResultBlock) for block in message.content):
         return f"{message.role}: tool results returned"
     return f"{message.role}: [non-text content]"
+
+# questor: allow R4 -- until W8 facade split

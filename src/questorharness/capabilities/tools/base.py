@@ -90,3 +90,5 @@ class ToolRegistry:
     def to_api_schema(self) -> list[dict[str, Any]]:
         """Return all tool schemas in API format."""
         return [tool.to_api_schema() for tool in self._tools.values()]
+
+# questor: allow R3 -- until W9 rename wave

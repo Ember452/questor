@@ -453,3 +453,6 @@ class StorageMixin:
             "superseded": 12,
         }
         return order.get(status, 99)
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

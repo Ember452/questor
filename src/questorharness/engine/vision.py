@@ -85,3 +85,5 @@ async def _preprocess_images_in_messages(
     for msg_idx, blk_idx, description in results:
         msg = messages[msg_idx]
         msg.content[blk_idx] = TextBlock(text=description)
+
+# questor: allow R7 -- until W8 adds the mirror test

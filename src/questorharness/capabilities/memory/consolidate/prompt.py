@@ -126,3 +126,5 @@ Stale candidates:
 ```
 
 If nothing changed, say so and explain why.{extra_section}"""
+
+# questor: allow R7 -- until W8 adds the mirror test

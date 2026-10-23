@@ -259,3 +259,5 @@ def _is_read_only_shell(command: str) -> bool:
         return False
     first = lowered.split(maxsplit=1)[0]
     return first in {"ls", "pwd", "cat", "head", "tail", "rg", "grep", "find", "git", "wc", "sed", "awk", "stat"}
+
+# questor: allow R4 -- until W8 facade split

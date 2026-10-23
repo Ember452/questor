@@ -55,3 +55,5 @@ class SendMessageTool(BaseTool):
             logger.error("Failed to send message to %s: %s", agent_id, exc)
             return ToolResult(output=str(exc), is_error=True)
         return ToolResult(output=f"Sent message to agent {agent_id}")
+
+# questor: allow R7 -- until W8 adds the mirror test

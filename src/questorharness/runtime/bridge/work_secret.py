@@ -39,3 +39,5 @@ def build_sdk_url(api_base_url: str, session_id: str) -> str:
     version = "v2" if is_local else "v1"
     host = api_base_url.replace("https://", "").replace("http://", "").rstrip("/")
     return f"{protocol}://{host}/{version}/session_ingress/ws/{session_id}"
+
+# questor: allow R7 -- until W8 adds the mirror test

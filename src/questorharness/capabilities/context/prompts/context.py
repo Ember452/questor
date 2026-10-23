@@ -202,3 +202,6 @@ def build_runtime_system_prompt(
                 sections.append(format_relevant_memories(relevant))
 
     return "\n\n".join(section for section in sections if section.strip())
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

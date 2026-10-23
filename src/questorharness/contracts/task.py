@@ -35,3 +35,5 @@ class TaskRecord:
 
 CompletionListener = Callable[[TaskRecord], Awaitable[None]]
 """Callback fired when a background task reaches a terminal state."""
+
+# questor: allow R7 -- until W8 adds the mirror test

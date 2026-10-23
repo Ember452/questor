@@ -44,3 +44,5 @@ async def spawn_session(
         stderr=asyncio.subprocess.STDOUT,
     )
     return SessionHandle(session_id=session_id, process=process, cwd=resolved_cwd)
+
+# questor: allow R7 -- until W8 adds the mirror test

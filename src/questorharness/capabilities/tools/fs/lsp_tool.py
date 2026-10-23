@@ -148,3 +148,4 @@ def _format_references(results: list[tuple[Path, int, str]], root: Path) -> str:
         return "(no results)"
     return "\n".join(f"{_display_path(path, root)}:{line}:{text}" for path, line, text in results)
 
+# questor: allow R7 -- until W8 adds the mirror test

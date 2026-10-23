@@ -84,3 +84,5 @@ def _exclusive_windows_lock(lock_path: Path) -> Iterator[None]:
         finally:
             lock_file.seek(0)
             msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+
+# questor: allow R7 -- until W8 adds the mirror test

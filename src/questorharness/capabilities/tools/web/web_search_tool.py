@@ -117,3 +117,5 @@ def _clean_html(fragment: str) -> str:
     text = html.unescape(text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+# questor: allow R7 -- until W8 adds the mirror test

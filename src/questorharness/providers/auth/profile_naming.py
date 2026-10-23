@@ -14,3 +14,5 @@ def default_credential_slot_for_profile(name: str, auth_source: str) -> str | No
     if not auth_source_uses_api_key(auth_source):
         return None
     return name
+
+# questor: allow R7 -- until W8 adds the mirror test

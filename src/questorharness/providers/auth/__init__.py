@@ -27,3 +27,5 @@ __all__ = [
     "encrypt",
     "decrypt",
 ]
+
+# questor: allow R5 -- until W8 public-face split

@@ -139,3 +139,5 @@ def _split_preserving_tool_pairs(
     older = list(messages[:split_index])
     newer = sanitize_conversation_messages(list(messages[split_index:]))
     return older, newer
+
+# questor: allow R7 -- until W8 adds the mirror test

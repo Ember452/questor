@@ -144,3 +144,5 @@ def provider_remove(
         print(f"Error: {exc}", file=sys.stderr)
         raise typer.Exit(1)
     print(f"Removed provider profile: {name}", flush=True)
+
+# questor: allow R7 -- until W8 adds the mirror test

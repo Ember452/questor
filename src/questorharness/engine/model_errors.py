@@ -76,3 +76,5 @@ class MaxTurnsExceeded(RuntimeError):
     def __init__(self, max_turns: int) -> None:
         super().__init__(f"Exceeded maximum turn limit ({max_turns})")
         self.max_turns = max_turns
+
+# questor: allow R7 -- until W8 adds the mirror test

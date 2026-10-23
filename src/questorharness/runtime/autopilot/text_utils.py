@@ -26,3 +26,5 @@ def _json_default(value: object) -> object:
 
 def _bilingual_lines(zh: str, en: str) -> str:
     return f"{zh}\n{en}".strip()
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -122,3 +122,5 @@ class AgentTool(BaseTool):
                 "description": arguments.description,
             },
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

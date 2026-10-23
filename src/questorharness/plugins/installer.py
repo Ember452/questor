@@ -37,3 +37,5 @@ def uninstall_plugin(name: str) -> bool:
         return False
     shutil.rmtree(path)
     return True
+
+# questor: allow R7 -- until W8 adds the mirror test

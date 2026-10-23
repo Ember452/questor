@@ -37,3 +37,5 @@ class ReadMcpResourceTool(BaseTool):
         except McpServerNotConnectedError as exc:
             return ToolResult(output=str(exc), is_error=True)
         return ToolResult(output=output)
+
+# questor: allow R7 -- until W8 adds the mirror test

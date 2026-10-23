@@ -29,3 +29,5 @@ def session_key_for_message(message: InboundMessage) -> str:
     if is_shared_chat:
         return f"{message.channel}:{message.chat_id}:{sender_id}"
     return f"{message.channel}:{message.chat_id}"
+
+# questor: allow R7 -- until W8 adds the mirror test

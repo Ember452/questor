@@ -728,3 +728,5 @@ def _load_plugin_tools(path: Path, manifest: PluginManifest) -> list:
                 except Exception:
                     logger.debug("Failed to instantiate tool %s from %s", attr_name, py_file, exc_info=True)
     return tools
+
+# questor: allow R8 -- refactor the offenders in W8

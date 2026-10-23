@@ -172,3 +172,5 @@ class ChannelManager:
     def enabled_channels(self) -> list[str]:
         """Get list of enabled channel names."""
         return list(self.channels.keys())
+
+# questor: allow R3 -- until W9 rename wave

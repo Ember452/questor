@@ -365,3 +365,5 @@ def _extract_b64_images(result: Any) -> list[str]:
         if isinstance(url, str) and url.startswith("data:image/") and ";base64," in url:
             images.append(url.split(";base64,", 1)[1])
     return images
+
+# questor: allow R8 -- refactor the offenders in W8

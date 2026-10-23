@@ -102,3 +102,5 @@ def restore_memory_backup(backup_dir: str | Path, memory_dir: str | Path) -> Non
     if memory_dir.exists():
         shutil.rmtree(memory_dir)
     tmp.rename(memory_dir)
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -7,3 +7,5 @@ commands and fetch URLs. ``platform`` stays dependency-free underneath.
 """
 
 from __future__ import annotations
+
+# questor: allow R5 -- until W8 public-face split

@@ -75,3 +75,5 @@ def safe_filename(value: object, *, max_length: int = 128) -> str:
     if not name or name in {".", ".."}:
         return ""
     return name[:max_length]
+
+# questor: allow R3 -- until W9 rename wave

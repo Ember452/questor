@@ -172,3 +172,5 @@ async def _glob(root: Path, pattern: str, *, limit: int, session=None) -> list[s
         str(path.relative_to(root))
         for path in root.glob(pattern)
     )[:limit]
+
+# questor: allow R7 -- until W8 adds the mirror test

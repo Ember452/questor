@@ -64,3 +64,5 @@ def mcp_remove(
     del settings.mcp_servers[name]
     save_settings(settings)
     print(f"Removed MCP server: {name}")
+
+# questor: allow R7 -- until W8 adds the mirror test

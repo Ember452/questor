@@ -216,3 +216,5 @@ async def run_questor_print_mode(
         return 1 if saw_error else 0
     finally:
         os.chdir(previous_cwd)
+
+# questor: allow R7 -- until W8 adds the mirror test

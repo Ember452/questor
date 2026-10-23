@@ -131,3 +131,5 @@ def cron_logs_cmd(
     tail = content.splitlines()[-lines:]
     for line in tail:
         print(line)
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -943,3 +943,6 @@ def _edit_approval_reply_from_request(request: FrontendRequest) -> str:
     if reply in {"once", "always", "reject"}:
         return reply
     return "once" if bool(request.allowed) else "reject"
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

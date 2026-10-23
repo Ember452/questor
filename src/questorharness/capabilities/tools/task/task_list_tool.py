@@ -33,3 +33,5 @@ class TaskListTool(BaseTool):
         return ToolResult(
             output="\n".join(f"{task.id} {task.type} {task.status} {task.description}" for task in tasks)
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

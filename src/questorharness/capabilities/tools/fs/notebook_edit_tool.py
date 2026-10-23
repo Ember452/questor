@@ -95,3 +95,5 @@ def _normalize_source(source: str | list[str]) -> str:
     if isinstance(source, list):
         return "".join(source)
     return str(source)
+
+# questor: allow R7 -- until W8 adds the mirror test

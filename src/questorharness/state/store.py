@@ -38,3 +38,5 @@ class AppStateStore:
                 self._listeners.remove(listener)
 
         return _unsubscribe
+
+# questor: allow R7 -- until W8 adds the mirror test

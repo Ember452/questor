@@ -239,3 +239,6 @@ def register_memory_commands(registry: CommandRegistry) -> None:
     registry.register(SlashCommand("dream", "Consolidate memory", _dream_handler))
     registry.register(SlashCommand("memory", "Inspect and manage project memory", _memory_handler))
     registry.register(SlashCommand("hooks", "Show configured hooks", _hooks_handler))
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

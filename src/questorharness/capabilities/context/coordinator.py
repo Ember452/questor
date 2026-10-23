@@ -364,3 +364,5 @@ User:
 
 You:
   Fix for the new test is in progress. Still waiting to hear back about the test suite."""
+
+# questor: allow R7 -- until W8 adds the mirror test

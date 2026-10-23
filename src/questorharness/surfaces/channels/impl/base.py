@@ -133,3 +133,5 @@ class BaseChannel(ABC):
     def is_running(self) -> bool:
         """Check if the channel is running."""
         return self._running
+
+# questor: allow R3 -- until W9 rename wave
