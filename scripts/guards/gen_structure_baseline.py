@@ -339,12 +339,12 @@ def collect() -> dict[str, dict[str, object]]:
     capabilities = [path for path in src_modules if path.startswith("src/questorharness/capabilities/")]
     tools_dir = [path for path in capabilities if path.startswith("src/questorharness/capabilities/tools/")]
     subdirs: dict[str, int] = {}
+    root_dir = "src/questorharness/capabilities"
     for path in capabilities:
-        parent_segments = path.rsplit("/", 1)[0].split("/")
-        if len(parent_segments) < 5:
+        parent = path.rsplit("/", 1)[0]
+        if parent == root_dir:
             continue
-        key = "/".join(parent_segments[:5])
-        subdirs[key] = subdirs.get(key, 0) + 1
+        subdirs[parent] = subdirs.get(parent, 0) + 1
     wide_subdirs = sorted(key for key, count in subdirs.items() if count >= 2)
 
     return {
@@ -428,6 +428,9 @@ def collect() -> dict[str, dict[str, object]]:
             len(capabilities),
             "git ls-files src | non-__init__ under capabilities/",
             tool_files=len(tools_dir),
+            # B17 caliber: every directory under capabilities/ (any depth) with at
+            # least two non-__init__ sources. Counting only depth-2 directories
+            # misses flat families such as capabilities/tools/*.py -> 12 instead of 16.
             subdirs_ge2=len(wide_subdirs),
             ratio=round(100 * len(capabilities) / len(src_modules), 1) if src_modules else 0.0,
         ),

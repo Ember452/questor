@@ -104,7 +104,7 @@ run `uv run python scripts/guards/gen_tree.py --write` instead.
 | `src/questorharness/capabilities/tools/media/__init__.py` | 1 |
 | `src/questorharness/capabilities/tools/media/image_generation_tool.py` | 371 |
 | `src/questorharness/capabilities/tools/media/image_to_text_tool.py` | 185 |
-| `src/questorharness/capabilities/tools/registry.py` | 198 |
+| `src/questorharness/capabilities/tools/registry.py` | 202 |
 | `src/questorharness/capabilities/tools/remote_trigger_tool.py` | 78 |
 | `src/questorharness/capabilities/tools/shell/__init__.py` | 1 |
 | `src/questorharness/capabilities/tools/shell/bash_tool.py` | 224 |

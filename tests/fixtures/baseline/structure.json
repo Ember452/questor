@@ -20,7 +20,7 @@
       "caliber": "git ls-files src | non-__init__ under capabilities/",
       "gate": true,
       "ratio": 31.5,
-      "subdirs_ge2": 12,
+      "subdirs_ge2": 16,
       "tool_files": 44,
       "value": 81
     },
@@ -138,7 +138,7 @@
     }
   },
   "pin": {
-    "commit": "53b15e9d81757cadd7ad86a94bed7b35d5d5fe28",
+    "commit": "b89e4602edcadecf8bdd614d326086085987177e",
     "date": "2026-10-23"
   }
 }

@@ -28,6 +28,10 @@ from questorharness.capabilities.tools.base import BaseTool, ToolRegistry
 # Registration order is the prompt order. Adding a tool means one new module plus
 # one line here; scripts/guards/check_tool_radius.py fails when a discovered tool
 # is missing from this tuple.
+#
+# Growth note (plan 01 W11 / P5): this tuple is linear in tool count and the file
+# has a 250-line budget. Past ~100 tools the explicit order should become
+# "sorted by family + an exception table for the few tools whose order matters".
 _BUILTIN_CLASSES: tuple[str, ...] = (
     "BashTool",
     "AskUserQuestionTool",

@@ -88,7 +88,11 @@
 
 ## vacuous-contracts
 
-目标模块不存在、因而恒判 KEPT 的契约目标：**11**
+目标模块不存在、因而恒判 KEPT 的契约目标：**11**（共声明 86 个目标，实际生效 75 个）
+
+这 11 条来自 5 条契约的空条款：`Capabilities may import contracts only` / `Config must not import runtime, capabilities, engine, ui or plugins` / `Product imports the public engine face only` / `Providers must not import runtime, kernel or capabilities` / `Surfaces may import contracts, config and platform only`；涉及的顶层包：`questorharness.kernel`, `questorharness.personalization`, `questorharness.profiles`, `questorharness.prompts`, `questorharness.skills`, `questorharness.ui`。它们读起来像约束，实际没有可约束对象（Phase 1 已迁走或从未存在）。
+
+目标不存在时契约**保持被跳过而不是失败**，所以这个数量靠本文逐字比对锁住：`--check` 对整篇文档做相等比较，多一条空条款就会红。
 
 - `questorharness.kernel` (declared by Capabilities may import contracts only)
 - `questorharness.kernel` (declared by Config must not import runtime, capabilities, engine, ui or plugins)

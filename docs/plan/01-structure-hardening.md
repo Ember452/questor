@@ -545,7 +545,7 @@ W1–W10 把形态和门禁做对了，但**五条增长规则**还缺。它们�
 | 3 | B1 采集命令与数字不自洽 | §1「`git ls-files 'src/**/*.py'`」= 319 | 该命令实得 **318**（`**/` 不匹配 `src/__init__.py`）；319 需 `git ls-files src` 过滤 `.py` | `caliber` 记后者；`src_files` = 319 / `modules` = 256 | W0 |
 | 4 | B11 节点数漂移 | 1177 用例 | **1178**（`summary.json` 已在 e779133 更新） | 按实测记录，`gate=false`（节点集合由 `baseline_check.py` 拥有） | W0 |
 | 5 | B15 行数漂移 | 118 行 / 8646 字节 | **119 行** / 8646 字节 | 按实测记录 | W0 |
-| 6 | B17 二级目录数 | 16 个二级目录 | **12**（口径：`capabilities/` 下二级目录且 ≥2 个非 `__init__` 文件） | 按实测记录，`caliber` 写明口径 | W0 |
+| 6 | B17 二级目录数（**本行先记错，已改正**） | §1 B17「≥2 个非 `__init__` 源文件」的二级目录 = 16 | 计划值 16 正确；W0 的实现只数了 depth-2 目录（`capabilities/<X>/<Y>`）得 12，漏掉 `capabilities/tools/*.py` 这类平铺族 | W0 记 12 是实现错，不是口径差异。已将 `collect()` 改为「任意深度目录、≥2 个非 init」→ 实测 16；`subdirs_ge2` 刷新为 16；详见 #48 | W0 / 复核修正 |
 | 7 | B9 工具半径的"registry ×2 处" | 半径 5，含 `registry.py` ×2 处 | `registry.py` 里没有工具名字面量（只有类实例化），字面量命中的是 4 个消费方 | 半径 = 注册点（恒计） + 字面量消费方 = **5**，另记 `literal_hits` = 4 | W0 |
 | 8 | B13 "CI 只跑 3 个"会成为易变项 | 守卫 5 / CI 3 | 计数会随 W1 把守卫搬进 CI 而变 | `ci_guard_scripts.value` 固定为基线守卫数 5；`in_ci` 只记录不设门（真正的门是 **scripts/check.py** + `ci.yml`） | W0 |
 | 9 | `--check` 的 expected/got 语义 | 「expected 319, got 320」 | 常规写法是 expected=基线、got=实测，与该证据串相反 | 按证据串实现：`expected` = 现场实测，`got` = 基线文件记录值；输出追加 `(recorded baseline is stale)` 消歧 | W0 |
@@ -587,3 +587,7 @@ W1–W10 把形态和门禁做对了，但**五条增长规则**还缺。它们�
 | 45 | prompt_surface 的插件隔离方式变了 | §4 E3「注入 NullPluginSource」 | 原先 patch `plugins.loader.load_plugins`，Port 之后不再经过它 | 改为 `configure_plugin_source(NullPluginSource())`；四份快照逐字未变（证明隔离等价） | W6 |
 | 46 | 契约数变了会打红旧 summary | `.importlinter` 从 9 → 10 | `baseline_check` 的 `summary.json` 记的 `lint.kept` 是 9 | W6 末做一次 `--record`；`dryrun.txt`/`help-*.txt`/`doctor.txt` 均未变 | W6 |
 | 47 | `src_files` 变 320 | W0 基线 319 | `plugins/source.py` 是新增源文件 | `--refresh-baseline --reason`；`test_files` 142、`tool_radius` 1 同步 | W6 |
+| 48 | 复核发现「二级目录」口径实现错 | §1 B17 = 16 | 旧实现按 `capabilities/<X>/<Y>` 深度过滤得 12；B17 的定义是**任意目录** ≥2 个非 `__init__` 源文件 = **16**（`capabilities/tools` 下 13 个平铺工具文件被整段漏掉） | 修 `gen_structure_baseline.collect()`：统计 `capabilities/` 下任意深度目录；`subdirs_ge2` 重新刷新为 16；#6 已同步改正 | 复核修正 |
+| 49 | registry 的「手工列表归零」只是换形态 | §4 W5-A「新增工具只动 2 文件」 | 实现是 `pkgutil` 发现 + 39 条显式类名顺序 + 双向校验（未发现/未登记/重名）；`registry.py` 198 行，随工具数线性增长，约 500 工具时会撞 250 行 `FILE_BUDGETS` | 半径契约（I1 = 1）成立，不算违约；已在 `registry.py` 写明「>100 工具时改为族内按名排序 + 例外表」，作为 W11/P5 的输入 | 复核补充 |
+| 50 | vacuous 11 会被误读成「11 条约束在生效」 | §4 W6「目标模块不存在而恒判 KEPT」 | 11 条全部来自 **5 条老契约**的空目标：`kernel`(×5)/`profiles`/`ui`(×2)/`prompts`/`skills`/`personalization`；共声明 86 个目标，**实际生效 75 个**；新契约没有产生空条款 | `gen_graph` 在 vacuous 段输出「共声明/实际生效」与契约/模块出处，数字由生成器计算，不手写；逐字比对仍锁住增量 | 复核补充 |
+| 51 | 单次耗时不能当基线 | 报告写「25.2s」 | 同机复跑 29.4s（缓存/负载浮动） | 判据只写「21 步、预算 90s」；耗时按区间（25–30s）记，不把单次值当基线 | 复核修正 |

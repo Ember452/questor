@@ -147,10 +147,12 @@ def _cycle_label(component: list[str], edges: dict[str, set[str]], registered: s
     return "**未登记**"
 
 
-def _vacuous_contracts(root: Path) -> list[str]:
+def _vacuous_contracts(root: Path) -> tuple[list[str], int]:
+    """Return the vacuous targets plus the total number of declared targets."""
     parser = configparser.ConfigParser()
     parser.read(root / ".importlinter", encoding="utf-8")
     vacuous: list[str] = []
+    declared = 0
     for section in parser.sections():
         if not section.startswith("importlinter:contract:"):
             continue
@@ -160,10 +162,11 @@ def _vacuous_contracts(root: Path) -> list[str]:
             raw = parser[section].get(key, "")
             targets.extend(line.strip() for line in raw.splitlines() if line.strip())
         for target in targets:
+            declared += 1
             relative = Path("src") / Path(*target.split("."))
             if not relative.with_suffix(".py").exists() and not relative.is_dir():
                 vacuous.append(f"`{target}` (declared by {name})")
-    return sorted(set(vacuous))
+    return sorted(set(vacuous)), declared
 
 
 def _kind(relative: str) -> str:
@@ -269,15 +272,33 @@ def render(root: Path) -> str:
     else:
         lines.append("- 无")
 
-    vacuous = _vacuous_contracts(root)
+    vacuous, declared_targets = _vacuous_contracts(root)
+    vacuous_contract_names = sorted(
+        {entry.rsplit("(declared by ", 1)[1].rstrip(")") for entry in vacuous} if vacuous else set()
+    )
+    vacuous_modules = sorted({entry.split("`")[1] for entry in vacuous} if vacuous else set())
     lines += [
         "",
         "## vacuous-contracts",
         "",
-        f"目标模块不存在、因而恒判 KEPT 的契约目标：**{len(vacuous)}**",
+        f"目标模块不存在、因而恒判 KEPT 的契约目标：**{len(vacuous)}**（共声明 {declared_targets} 个目标，"
+        f"实际生效 {declared_targets - len(vacuous)} 个）",
         "",
     ]
     if vacuous:
+        lines.append(
+            f"这 {len(vacuous)} 条来自 {len(vacuous_contract_names)} 条契约的空条款："
+            + " / ".join(f"`{name}`" for name in vacuous_contract_names)
+            + "；涉及的顶层包："
+            + ", ".join(f"`{module}`" for module in vacuous_modules)
+            + "。它们读起来像约束，实际没有可约束对象（Phase 1 已迁走或从未存在）。"
+        )
+        lines.append("")
+        lines.append(
+            "目标不存在时契约**保持被跳过而不是失败**，所以这个数量靠本文逐字比对锁住："
+            "`--check` 对整篇文档做相等比较，多一条空条款就会红。"
+        )
+        lines.append("")
         lines.extend(f"- {item}" for item in vacuous)
     else:
         lines.append("- 无")
