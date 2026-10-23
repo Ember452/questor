@@ -97,9 +97,12 @@ CRITICAL_PACKAGES = (
 
 DISTRIBUTIONS = ("questorharness", "questor")
 
-# Exemption budgets: the number of inline comments each rule is allowed to have.
-# Lowering a number is always fine; raising one is a reviewed decision that shows
-# up in the diff of this file.
+# Exemption budgets: the exact number of inline comments each rule may have.
+# This is a ratchet, not a cap: ``collect_with_budgets`` fails when the real
+# count differs from the budget in **either** direction, so paying off a piece of
+# debt without lowering its number here fails just as loudly as taking on new
+# debt. Raising a number is therefore impossible to hide — it turns the check
+# red until the matching comment is also removed.
 # R5 is 17 rather than 16: the product distribution's ``questor/gateway`` package
 # also has no ``__all__`` and is covered by the same rule.
 EXEMPTION_BUDGET: dict[str, int] = {
@@ -112,7 +115,7 @@ EXEMPTION_BUDGET: dict[str, int] = {
 }
 
 # Functions above the complexity limit that live in files carrying an R8
-# exemption. Pinned after measuring; raising it needs a reviewed diff.
+# exemption. Held to an exact count for the same reason as the budgets above.
 R8_EXEMPT_FUNCTIONS = 40
 
 PINNED_LINES_RE = re.compile(r"(\d+)\s+lines")
@@ -444,17 +447,53 @@ def collect(root: Path) -> list[Violation]:
     return violations
 
 
-def collect_with_budgets(root: Path) -> tuple[list[Violation], list[str]]:
-    """Run the rules and also check exemption syntax and per-rule budgets."""
+def budget_problems(
+    counts: dict[str, int],
+    exempted_functions: int,
+    budget: dict[str, int] | None = None,
+    pinned_functions: int | None = None,
+) -> list[str]:
+    """Compare live exemption counts to the pinned ratchet, both directions.
+
+    Kept as a pure function so the contract tests can prove the ``<`` direction
+    (debt paid, budget not lowered) without rewriting the real repository.
+    """
+    budget = EXEMPTION_BUDGET if budget is None else budget
+    pinned = R8_EXEMPT_FUNCTIONS if pinned_functions is None else pinned_functions
+    problems: list[str] = []
+    if exempted_functions != pinned:
+        problems.append(
+            f"R8: {exempted_functions} exempted complex functions != pinned {pinned} "
+            "(simplify one and lower the number in the same change)"
+        )
+    for rule, limit in sorted(budget.items()):
+        actual = counts.get(rule, 0)
+        if actual > limit:
+            problems.append(f"{rule}: {actual} exemptions > budget {limit} — debt was added")
+        elif actual < limit:
+            problems.append(
+                f"{rule}: {actual} exemptions < budget {limit} — the debt is gone but the "
+                "budget was not lowered in the same change"
+            )
+    return problems
+
+
+def collect_with_budgets(
+    root: Path,
+    *,
+    budget: dict[str, int] | None = None,
+    pinned_functions: int | None = None,
+) -> tuple[list[Violation], list[str]]:
+    """Run the rules and also check exemption syntax and per-rule budgets.
+
+    ``budget`` / ``pinned_functions`` exist so the contract tests can drive a
+    synthetic repository (which has no exemptions at all) against the empty
+    ratchet; the CLI leaves them unset and gets the real one.
+    """
     violations = collect(root)
     problems: list[str] = []
 
-    r8_violations, r8_exempted = rule_r8_complexity(root)
-    del r8_violations
-    if r8_exempted > R8_EXEMPT_FUNCTIONS:
-        problems.append(
-            f"R8: {r8_exempted} exempted complex functions > pinned budget {R8_EXEMPT_FUNCTIONS}"
-        )
+    _, r8_exempted = rule_r8_complexity(root)
 
     counts: Counter[str] = Counter()
     for path in _source_files(root):
@@ -463,9 +502,14 @@ def collect_with_budgets(root: Path) -> tuple[list[Violation], list[str]]:
         for rule in parse_exemptions(path):
             counts[rule] += 1
 
-    for rule, budget in sorted(EXEMPTION_BUDGET.items()):
-        if counts[rule] > budget:
-            problems.append(f"{rule}: {counts[rule]} exemptions > budget {budget} (exemptions may only go down)")
+    problems.extend(
+        budget_problems(
+            dict(counts),
+            r8_exempted,
+            budget=budget,
+            pinned_functions=pinned_functions,
+        )
+    )
     return violations, problems
 
 
@@ -487,6 +531,7 @@ __all__ = [
     "EXEMPTION_BUDGET",
     "R8_EXEMPT_FUNCTIONS",
     "Violation",
+    "budget_problems",
     "collect",
     "collect_with_budgets",
     "exemptions_by_rule",

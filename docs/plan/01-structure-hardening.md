@@ -591,3 +591,9 @@ W1–W10 把形态和门禁做对了，但**五条增长规则**还缺。它们�
 | 49 | registry 的「手工列表归零」只是换形态 | §4 W5-A「新增工具只动 2 文件」 | 实现是 `pkgutil` 发现 + 39 条显式类名顺序 + 双向校验（未发现/未登记/重名）；`registry.py` 198 行，随工具数线性增长，约 500 工具时会撞 250 行 `FILE_BUDGETS` | 半径契约（I1 = 1）成立，不算违约；已在 `registry.py` 写明「>100 工具时改为族内按名排序 + 例外表」，作为 W11/P5 的输入 | 复核补充 |
 | 50 | vacuous 11 会被误读成「11 条约束在生效」 | §4 W6「目标模块不存在而恒判 KEPT」 | 11 条全部来自 **5 条老契约**的空目标：`kernel`(×5)/`profiles`/`ui`(×2)/`prompts`/`skills`/`personalization`；共声明 86 个目标，**实际生效 75 个**；新契约没有产生空条款 | `gen_graph` 在 vacuous 段输出「共声明/实际生效」与契约/模块出处，数字由生成器计算，不手写；逐字比对仍锁住增量 | 复核补充 |
 | 51 | 单次耗时不能当基线 | 报告写「25.2s」 | 同机复跑 29.4s（缓存/负载浮动） | 判据只写「21 步、预算 90s」；耗时按区间（25–30s）记，不把单次值当基线 | 复核修正 |
+| 52 | 窗口 2 提示词的 commit 数过期 | 自检表写「9 个 commit」 | 实测 **10**（多了 `9244ebf` 复核修正刀） | 以实测为准；提示词不改成能过的数字 | W2 自检 |
+| 53 | 窗口 2 提示词的台账行数过期 | 「§10 台账（47 行）」 | **51 行**（#48–#51 是复核修正） | 以实测为准，并继续在本节追加 | W2 自检 |
+| 54 | 「一文件一 PR」与「不 push」互斥 | 提示词两处要求 | 本轮 push ✗，无法开 PR | 一个分支 + 每单元一个 commit + 结束一个 PR；单元边界由 commit 保证 | W2 自检 |
+| 55 | `EXEMPTION_BUDGET` 只判上界 | 提示词核心规则「每销一笔账必须同 PR 下调预算」 | 旧实现只判 `count > budget`：清完账不下调预算**不会红**，纪律靠人记 | 改为**等值棘轮**：新增纯函数 `_layout_rules.budget_problems()`，`>` 报「debt was added」、`<` 报「budget was not lowered in the same change」；`R8_EXEMPT_FUNCTIONS` 同步改为等值比较 | W2-§1 |
+| 56 | 基线多一份「可见副本」 | 提示词只要求预算在守卫里 | `structure.json` 新增 `layout_exemptions`（`gate=false`），预算变化在此可见可 diff | 真源仍是 `EXEMPTION_BUDGET`；此字段只记录不设门 | W2-§1 |
+| 57 | 合成仓库无豁免会撞等值棘轮 | — | `tests/ci/test_guards_contract.py` 的临时仓库豁免数为 0，真实预算会报「偏高」 | `collect_with_budgets(root, *, budget=None, pinned_functions=None)`：测试传空预算，CLI 用默认（新增 2 个用例专测两个方向） | W2-§1 |

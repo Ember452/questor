@@ -50,6 +50,18 @@
       "gate": true,
       "value": 14
     },
+    "layout_exemptions": {
+      "caliber": "inline 'questor: allow' comments per rule (see _layout_rules.EXEMPTION_BUDGET)",
+      "gate": false,
+      "value": {
+        "R2": 4,
+        "R3": 22,
+        "R4": 14,
+        "R5": 17,
+        "R7": 170,
+        "R8": 31
+      }
+    },
     "long_files": {
       "caliber": "len(read_text(path).splitlines()) over tracked src/*.py",
       "gate": true,
@@ -138,7 +150,7 @@
     }
   },
   "pin": {
-    "commit": "b89e4602edcadecf8bdd614d326086085987177e",
+    "commit": "9244ebf2d6b2be905bdf92465dbddc82dc282801",
     "date": "2026-10-23"
   }
 }

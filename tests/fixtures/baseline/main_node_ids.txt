@@ -1,4 +1,5 @@
 tests/ci/test_guards_contract.py::test_base_repo_is_green
+tests/ci/test_guards_contract.py::test_budget_ratchet_is_silent_when_counts_match
 tests/ci/test_guards_contract.py::test_every_rule_has_a_green_counterpart[R1]
 tests/ci/test_guards_contract.py::test_every_rule_has_a_green_counterpart[R2]
 tests/ci/test_guards_contract.py::test_every_rule_has_a_green_counterpart[R3]
@@ -7,6 +8,7 @@ tests/ci/test_guards_contract.py::test_every_rule_has_a_green_counterpart[R5]
 tests/ci/test_guards_contract.py::test_every_rule_has_a_green_counterpart[R6]
 tests/ci/test_guards_contract.py::test_every_rule_has_a_green_counterpart[R7]
 tests/ci/test_guards_contract.py::test_every_rule_has_a_green_counterpart[R8]
+tests/ci/test_guards_contract.py::test_exemption_budget_cannot_be_left_high
 tests/ci/test_guards_contract.py::test_exemption_budget_cannot_grow
 tests/ci/test_guards_contract.py::test_exemption_without_reason_is_red
 tests/ci/test_guards_contract.py::test_r1_fanout_red_then_green

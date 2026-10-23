@@ -335,6 +335,11 @@ def collect() -> dict[str, dict[str, object]]:
             in_ci.add(match.group(1))
 
     archive = _tracked("docs-pre-reset-v1")
+    try:
+        from ._layout_rules import exemptions_by_rule
+    except ImportError:  # direct script execution
+        from _layout_rules import exemptions_by_rule
+    exempt_counts = exemptions_by_rule(REPO_ROOT)
     root_agents = REPO_ROOT / "AGENTS.md"
     capabilities = [path for path in src_modules if path.startswith("src/questorharness/capabilities/")]
     tools_dir = [path for path in capabilities if path.startswith("src/questorharness/capabilities/tools/")]
@@ -412,6 +417,14 @@ def collect() -> dict[str, dict[str, object]]:
             len(BASELINE_GUARDS),
             "guards present at the baseline; gen_* generators are excluded",
             in_ci=sorted(in_ci),
+        ),
+        # Window 2 ratchet visibility: the exemption counts ride along in the
+        # baseline so a budget change shows up as a diff here too. gate=False:
+        # the enforcing source of truth is _layout_rules.EXEMPTION_BUDGET.
+        "layout_exemptions": _metric(
+            exempt_counts,
+            "inline 'questor: allow' comments per rule (see _layout_rules.EXEMPTION_BUDGET)",
+            gate=False,
         ),
         "archive_files": _metric(len(archive), "git ls-files docs-pre-reset-v1"),
         "root_agents": _metric(

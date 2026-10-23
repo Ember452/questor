@@ -73,7 +73,9 @@ def _repo(tmp_path: Path, extra: dict[str, str] | None = None) -> Path:
 def test_base_repo_is_green(tmp_path: Path) -> None:
     """The fixture itself must be clean, otherwise every red case is meaningless."""
     root = _repo(tmp_path)
-    violations, problems = rules.collect_with_budgets(root)
+    # Synthetic repositories hold no exemptions, so the ratchet is switched off
+    # here; test_budget_ratchet_is_silent_when_counts_match covers the real one.
+    violations, problems = rules.collect_with_budgets(root, budget={}, pinned_functions=0)
     assert violations == [], [item.render() for item in violations]
     assert problems == [], problems
 
@@ -138,7 +140,7 @@ def test_exemption_without_reason_is_red(tmp_path: Path) -> None:
     """A comment without a deletion condition is not an exemption."""
     source = "VALUE = 1\n# questor: allow R7\n"
     root = _repo(tmp_path, {"src/questorharness/engine/unreasoned.py": source})
-    _, problems = rules.collect_with_budgets(root)
+    _, problems = rules.collect_with_budgets(root, budget={}, pinned_functions=0)
     assert any("malformed exemption" in item for item in problems), problems
 
 
@@ -151,7 +153,24 @@ def test_exemption_budget_cannot_grow(tmp_path: Path) -> None:
         )
     root = _repo(tmp_path, extra)
     _, problems = rules.collect_with_budgets(root)
-    assert any("exemptions > budget" in item for item in problems), problems
+    assert any("debt was added" in item for item in problems), problems
+
+
+def test_exemption_budget_cannot_be_left_high() -> None:
+    """Paying off debt without lowering the budget is the same size of failure."""
+    budget = {"R3": 22}
+    stale = rules.budget_problems({"R3": 21}, 0, budget=budget, pinned_functions=0)
+    assert any("R3: 21 exemptions < budget 22" in item for item in stale), stale
+    assert any("budget was not lowered" in item for item in stale), stale
+
+
+def test_budget_ratchet_is_silent_when_counts_match() -> None:
+    """The ratchet must not fire when the budget matches reality in both fields."""
+    counts = rules.exemptions_by_rule(REPO_ROOT.resolve())
+    pinned = rules.R8_EXEMPT_FUNCTIONS
+    assert rules.budget_problems(counts, pinned) == [], rules.budget_problems(counts, pinned)
+    off_by_one = rules.budget_problems(counts, pinned + 1)
+    assert off_by_one and all(item.startswith("R8") for item in off_by_one), off_by_one
 
 
 @pytest.mark.parametrize("rule", ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"])
