@@ -104,6 +104,10 @@ files = [
     # whitelist instead of inflating the deferred pool (plan 01 P3: pool counts
     # may only shrink).
     "src/questorharness/capabilities/skills/bundled/discovery.py",
+    # W8 unit 2: both halves of the split lsp helpers join the strict whitelist
+    # instead of enlarging the deferred pool.
+    "src/questorharness/providers/lsp/python_index.py",
+    "src/questorharness/providers/lsp/symbol_queries.py",
 ]
 plugins = ["pydantic.mypy"]
 

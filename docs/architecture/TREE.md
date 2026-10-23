@@ -219,8 +219,10 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/providers/llm/provider.py` | 189 |
 | `src/questorharness/providers/llm/registry.py` | 437 |
 | `src/questorharness/providers/llm/tool_runtime.py` | 66 |
-| `src/questorharness/providers/lsp/__init__.py` | 218 |
+| `src/questorharness/providers/lsp/__init__.py` | 36 |
+| `src/questorharness/providers/lsp/python_index.py` | 128 |
 | `src/questorharness/providers/lsp/runtime.py` | 77 |
+| `src/questorharness/providers/lsp/symbol_queries.py` | 91 |
 | `src/questorharness/providers/mcp/__init__.py` | 81 |
 | `src/questorharness/providers/mcp/client.py` | 295 |
 | `src/questorharness/providers/mcp/config.py` | 34 |

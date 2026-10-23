@@ -113,11 +113,12 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # tables plus runtime.swarm's eager-import hybrid), one was split (skills.bundled
 # -> discovery.py), and platform is a reviewed implementation facade held by a
 # line cap in FACADE_IMPLEMENTATION_PACKAGES. Four facades still carry behavior
-# worth relocating: providers.lsp, memory.extract, memory.session, context.compact.
+# worth relocating: memory.extract, memory.session, context.compact (providers.lsp
+# was split into python_index.py + symbol_queries.py).
 EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 4,
     "R3": 22,
-    "R4": 4,
+    "R4": 3,
     "R5": 17,
     "R7": 170,
     "R8": 31,
