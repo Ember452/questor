@@ -1,6 +1,7 @@
 # runtime — Agent Contract
 
 职责：有状态运行时服务（session / services / tasks / hooks / autopilot / coordinator / swarm / bridge）。
+不负责：工具实现与能力策略在 `src/questorharness/capabilities`，协议词表在 `src/questorharness/contracts`。
 公开入口：各子包 `__init__.py`；`services/__init__.py` 提供 `default_task_runtime` / `default_subagent_runtime`。
 拥有的数据：后台任务与输出文件、hook 注册与执行、团队与 agent 生命周期、worktree、bridge 会话。
 允许依赖：目标只有 `contracts` 与同层 runtime；当前仍存在少量惰性边，见“已知债”。

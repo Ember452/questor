@@ -19,17 +19,9 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "guards"))
 
 import _layout_rules as rules  # noqa: E402
 
-CRITICAL = (
-    "bootstrap",
-    "capabilities",
-    "commands",
-    "config",
-    "contracts",
-    "engine",
-    "providers",
-    "runtime",
-    "surfaces",
-)
+# The fixture has to cover exactly the packages R6 requires, so it reads the list
+# the guard enforces instead of keeping a second copy here.
+MAPPED_PACKAGES = rules.CRITICAL_PACKAGES
 
 
 def _init_repo(root: Path) -> None:
@@ -45,12 +37,11 @@ def _write(root: Path, relative: str, text: str) -> Path:
 
 
 def _base_repo(root: Path) -> None:
-    """A tree that passes R1-R8: nine mapped packages, one mirrored module each."""
+    """A tree that passes R1-R8: one mapped package per R6 entry, one mirrored module each."""
     _write(root, "tests/unit/test_thing.py", "def test_thing():\n    assert True\n")
     _write(root, "tests/unit/test_ok.py", "def test_ok():\n    assert True\n")
     _write(root, "tests/unit/test_registry.py", "def test_registry():\n    assert True\n")
-    for package in CRITICAL:
-        base = f"src/questorharness/{package}"
+    for base in MAPPED_PACKAGES:
         _write(root, f"{base}/__init__.py", '"""Facade."""\n\n__all__ = ["thing"]\n')
         _write(root, f"{base}/thing.py", '"""Leaf."""\n\nthing = 1\n')
         _write(root, f"{base}/AGENTS.md", "# map\n\n关键文件：`__init__.py`、`thing.py`\n")

@@ -1,6 +1,7 @@
 # contracts — Agent Contract
 
 职责：全仓共享词表与 Port；不承载业务实现。
+不负责：一切行为实现都在 `src/questorharness/engine` 与 `src/questorharness/runtime`；本包只有词表与协议。
 公开入口：按模块导入（`contracts.task` / `contracts.subagent` / `contracts.hooks` / `contracts.domain.*`），包级 `__init__.py` 只做标记。
 拥有的数据：消息与事件模型、任务/子代理/agent 定义/hook/policy 词表、hook 配置 schema、usage、工具输出阈值。
 允许依赖：标准库与 pydantic；不得 import `capabilities` / `runtime` / `engine` / `surfaces` / `ui`。

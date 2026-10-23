@@ -1,119 +1,87 @@
-# AGENTS.md — Questor Operating Rules
+# AGENTS.md — Questor Signpost
 
-Behavioral and operating rules for anyone (human or AI) working in this repo. These bias toward
-**caution over speed** — for trivial tasks, use judgment.
+Route to the right file, then read the doc that owns the decision. Behavioral rules are **not**
+here: §0–§6 of the old file moved verbatim to [docs/CONVENTIONS.md](./docs/CONVENTIONS.md).
+Priority: user instruction → [ARCHITECTURE](./docs/ARCHITECTURE.md) → [docs/adr](./docs/adr)
+→ [docs/architecture](./docs/architecture) → [docs/plan](./docs/plan) → elsewhere. The rulebook's
+own §5.5 still cites the pre-reset doc set (`docs/design/`, `docs/ROADMAP.md`, `docs/pitfalls.md`);
+those files now live under `docs-pre-reset-v1/` — see the 勘误 block at the top of CONVENTIONS.md.
+Never work from memory: these links are the truth, and they move.
 
-Authoritative project content lives in `docs/` — this file is the always-on rulebook, not a copy of
-the design. **Read the linked docs for the current truth; never work from memory or from this file
-alone** (they evolve). Priority: user instruction → §0 + [HARD-CONSTRAINTS](./docs/design/HARD-CONSTRAINTS.md)
-→ [VISION](./docs/VISION.md)/[ROADMAP](./docs/ROADMAP.md)/[design](./docs/design)/[adr](./docs/adr) → elsewhere.
-<!-- 本文件在仓库根，文档真源在 docs/：链接必须带 ./docs/，否则点开不到。 -->
+## 顶层结构
 
----
+```
+src/questorharness   engine: contracts → platform → config → providers / execution →
+                     runtime → engine → capabilities → commands → surfaces → bootstrap,
+                     plus plugins (extension layer) and the appearance leaves
+src/questor          product composition root: gateway, groups, personal memory
+docs/architecture    STRUCTURE (intent) · GRAPH (generated graph) · TREE (generated tree)
+                     · NAMESPACES (registry) · MIGRATION · APPEARANCE
+tests                unit / integration / e2e / ci (guard contracts) / fixtures/baseline
+```
 
-## 0. Completeness — no shortcuts when reading or writing
+Package edges, cycles, most-imported files and over-budget files exist only in
+[GRAPH.md](./docs/architecture/GRAPH.md) and [TREE.md](./docs/architecture/TREE.md). Both are
+generated; drawing them by hand is a red build.
 
-> The most expensive failures here come from *doing less than the task requires to look like progress*.
+## 依赖铁律
 
-- **Read fully, don't skim.** When analyzing any project/file/spec, cover the **complete relevant
-  scope** — never just "part of the core" and assume the rest. Partial reads hide the coupling,
-  edge cases, and call sites that cause subtle bugs. If something is out of scope, say so explicitly;
-  don't silently sample.
-- **Write fully, don't under-build to save effort.** Do not omit required logic, edge cases,
-  error handling, validation, or tests just to write fewer lines. "Concise" means *no throwaway
-  complexity* (§2), **not** missing necessary work.
-- **Verify, don't assume.** Ground claims in evidence (`file:line`, a run, a test). If you'd have to
-  guess, go read/run it instead.
-- **§0 vs §2:** §2 = don't add speculative extras; §0 = don't skip what's needed. Both hold —
-  the line is *necessary vs gratuitous*, not *more vs less*.
+`.importlinter` owns the rules; CI's `guards` job keeps every contract KEPT:
 
-## 1. Think Before Coding
-- State assumptions explicitly; if uncertain, ask.
-- If multiple interpretations exist, present them — don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name it. Ask.
+- `layers`
+- `plugins-stay-an-extension-layer`
+- `engine-app-boundary`
+- `capabilities-are-leaf`
+- `lower-layers-do-not-import-capabilities`
+- `product-uses-public-face`
+- `config-is-leaf`
+- `providers-are-adapters`
+- `surfaces-are-thin`
+- `command-families-are-leaf`
 
-## 2. Simplicity First — minimum code that solves the problem
-- No features beyond what was asked; no abstractions for single-use code.
-- No unrequested "flexibility/configurability"; no error handling for impossible scenarios.
-- 200 lines that could be 50 → rewrite. Ask: would a senior engineer call this overcomplicated?
+Before adding an edge, read GRAPH.md's 冻结的间接入口 section: the five
+`capabilities → execution` edges and the `providers.sandbox` pair are registered
+exceptions, and one more is a failure.
 
-## 3. Surgical Changes — touch only what you must
-- Don't "improve" adjacent code/comments/formatting; don't refactor what isn't broken; match existing style.
-- Unrelated dead code → mention, don't delete. Remove only orphans *your* change created.
-- Every changed line traces to the request.
+## 路由表
 
-## 4. Goal-Driven Execution — loop until verified
-- "Add validation" → tests for invalid inputs, then pass. "Fix bug" → a failing repro, then pass.
-  "Refactor X" → tests pass before and after.
-- Multi-step: state `step → verify: check`. Strong DoDs let you loop independently.
+| 想改什么 | 去哪里 |
+| --- | --- |
+| 系统提示词与技能清单 | `src/questorharness/capabilities/context/prompts/context.py` |
+| 压缩与微压缩 | `src/questorharness/capabilities/context/compact` |
+| 工具注册表与能力索引 | `src/questorharness/capabilities/tools/registry.py` |
+| 工具能力声明本体 | `src/questorharness/capabilities/tools/base.py` |
+| 权限判定与策略 | `src/questorharness/capabilities/policy` |
+| swarm 权限同步 | `src/questorharness/runtime/swarm/permission_sync.py` |
+| 回合循环 | `src/questorharness/engine/query.py` |
+| 工具执行与结果处理 | `src/questorharness/engine/tool_execution.py` |
+| 工具携带式元数据 | `src/questorharness/engine/tool_metadata.py` |
+| 斜杠命令注册 | `src/questorharness/commands/registry.py` |
+| 事件与消息协议 | `src/questorharness/contracts/domain/events.py` |
+| 配置模型与环境变量 | `src/questorharness/config/settings_models.py` |
+| 会话存储与快照 | `src/questorharness/platform/session_storage.py` |
+| 命令行入口 | `src/questorharness/cli.py` |
+| 运行时装配根 | `src/questorharness/bootstrap/runtime.py` |
+| 桌面 / 后端宿主 | `src/questorharness/bootstrap/hosts/backend_host.py` |
+| 渠道适配（飞书 / QQ） | `src/questorharness/surfaces/channels` |
+| 产品网关与群策略 | `src/questor/gateway/runtime.py` |
+| 名字是否重名 | `docs/architecture/NAMESPACES.md` |
+| 门禁都跑什么 | `scripts/check.py` |
 
-## 4.5 Self-reliance — build on our own contracts
-Questor is built from scratch on its own layered contracts. Implement a capability by designing it
-against **our** `contracts/` Ports and layer boundaries (HARD-CONSTRAINTS C1/C14) — do not gate or
-steer implementation on external/reference projects. If you consult an outside implementation for
-inspiration, it stays inspiration: the merged code carries no external source/license/attribution
-marker, and the plan records only *our* design decision and where it lives.
+## 全局禁令与命令
 
-## 5. Quality Bar (Definition of Done) — never "looks done", only "verifiably works"
-A change is done only when, as applicable: it **compiles + passes tests + lints clean + cold-imports
-(`uv run python -c "import <mod>")` + violates no HARD-CONSTRAINT boundary**, and the relevant
-**DoD in [ROADMAP](./docs/ROADMAP.md) or the active plan** is met (a manually reproducible behavior, not a vague claim).
-- Follow the design contracts in `docs/design/`; any deviation → update the doc + (order/scope changes)
-  file an ADR (ROADMAP §5). New fields/params: additive only (HARD-CONSTRAINTS C6/C11).
-- Enforce the red lines with *mechanism*, not discipline: single-writer, read-only state view (COW),
-  only `Command` mutates, events append-only & internal-not-stored-as-external, permission/sandbox
-  live in the Harness (C1–C20).
-- **A change is not done until its implied doc updates are made** (see §5.5).
+- 行为守则、注释规范、Git 纪律、完成定义：只在 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md) 维护。
+- 结构红线（1500 行、30 文件扇出、禁用名、门面零逻辑、命名空间唯一、文档不撒谎）由
+  `scripts/guards` 机械执行，不靠自觉；每条都能构造违规判红。
+- 本地一条命令跑完全部阻断门禁：`uv run python scripts/check.py`（pre-commit 走 `--fast`，CI 走全量）。
 
-## 5.5 Living Docs — maintain `docs/` as you code, don't defer
-Docs are the source of truth the *next* session reads; stale docs cause wrong work. Update or add
-**the moment reality changes**, not "later", and ship the doc edit in the same change:
-- **Hard-to-reverse decision taken** → add/update an **ADR** (`docs/adr/`) with rationale + rejected options.
-- **A contract changes** (layering / state / event / tool / loop) → update `docs/design/*` (keep the
-  locked-vs-draft markers honest).
-- **New engineering red-line discovered** → add a `C…` entry to `HARD-CONSTRAINTS.md`.
-- **Architectural trap that will bite again** (cross-subsystem + high comprehension cost + recurring
-  trigger) → add it to the right section of [`docs/pitfalls.md`](./docs/pitfalls.md): 现象 / 触发条件 /
-  为什么容易复发 / 纪律 / 关联. **Ordinary bugs do NOT go here** — they go to a GitHub Issue labelled
-  `bug`, fixed by a commit whose body says `Fixes #N` (auto-closed on merge to `main`). If a pitfall has
-  a one-line enforceable rule, that rule belongs in `HARD-CONSTRAINTS.md` (a `C…` entry), not in pitfalls.
-- **Reality diverges from plan** → follow the reality-wins principle and **write the deviation back**;
-  update the active `docs/plan/NN-*.md` (archived phase plans in `docs/plan-archive/` are history — don't edit them back).
-- **Structural/irreversible change** (contract, layering, phase order) → record an **ADR first**, then edit
-  `ROADMAP.md` (ROADMAP §5); implementation-detail-only changes go to the active plan, not ROADMAP.
-- `CLAUDE.md` stays a thin pointer — only touch it when the doc *map* changes.
-> "Code merged, docs stale" = not done.
+## 第一个 PR
 
-## 5.6 Code Comments — standardized, **in Chinese**
-Identifiers, log messages and API names stay English, but **all code comments and docstrings are written in
-Chinese**. Detailed conventions live in [`CONTRIBUTING.md`](./CONTRIBUTING.md)（注释规范）; minimum bar:
-- **File/module header**: one-line responsibility + which layer (L0–L7) it belongs to + what it may import.
-- **Docstring (Chinese) on every public class / Port / function**: what it does, how to use it, dependencies,
-  invariants / pre-post conditions, and **failure semantics**.
-- **Explain *why*, not *what*** at non-obvious decisions. Cite **our own** artifacts inline: `ADR-0005`,
-  `HARD C2`, `docs/design/02-event-protocol.md §10`.
-- **Mandatory comments** at: permission checks, fail-closed branches, cancel/rollback paths, event-persistence
-  boundaries, and concurrency/gate/lease code.
-- **No bare `TODO`**: every TODO/FIXME carries context + owning plan/ADR/Issue; `NotImplementedError` states what
-  implements it (plan/ADR/issue).
-- Don't comment self-evident lines (§2); **when behavior changes, update its comment** — a stale comment is a
-  doc defect (§5.5).
-Non-compliant comments = the change is **not done** (§5).
-
-## 6. Git — English, and NEVER without permission
-- **Commit / push messages in English**, Conventional Commits (`feat/fix/refactor/chore/docs/test/spike:`);
-  describe the real engineering action; **do not fabricate timestamps or authorship**.
-- **Never run `git commit` or `git push` without the user's explicit, in-turn permission.** Staging and
-  preparing are fine; committing/pushing require an ask-and-yes every time (§3.2 of the repo rules).
-- Never `--no-verify`; never force-push to a shared branch unless explicitly requested.
-- **Branch policy** (ADR-0012, switched to plan **B** on 2026-10-16): everything goes through branch + PR — the
-  maintainer no longer pushes `main` directly either. The gate is CI's independent blocking `boundaries` job
-  (layering guards / cold import / protocol drift / guard self-tests), not human review. Until `boundaries` is
-  marked *required* in GitHub settings and admin bypass is disallowed, "no direct pushes to main" is a
-  convention rather than an enforced block — see the ADR's switch record.
+1. 用上面的路由表定位文件，改前先 `uv run python scripts/check.py --fast` 看清基线。
+2. 只改请求触及的东西；行为变更必须先有一个红用例，模型可见面变更看
+   `scripts/ci/prompt_surface.py --check` 与 `tests/fixtures/baseline/tool_metadata_golden.json`。
+3. 提交前跑 `uv run python scripts/check.py` 与 `uv run pytest -q`；提交信息用 Conventional
+   Commits，subject 小写开头；未获授权不 push。
 
 ---
-**These rules are working when:** every diff traces to the request, few rewrites happen from
-overcomplication or from under-building, clarifying questions come *before* implementation, nothing
-is committed without a yes, and no bug ever traces back to a skimmed read or a skipped check.
+**完整行为守则（§0–§6 原文）在 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md)。**

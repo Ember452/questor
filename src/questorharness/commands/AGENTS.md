@@ -1,6 +1,7 @@
 # commands — Agent Contract
 
 职责：slash 命令注册与应用层分派。
+不负责：能力实现与状态变更在 `src/questorharness/capabilities`，CLI 参数解析在 `src/questorharness/cli.py`。
 公开入口：`create_default_command_registry()`、`CommandRegistry`、`CommandContext`、`CommandResult`、`lookup_skill_slash_command()`。
 拥有的数据：命令名、别名、描述、handler 及其注册顺序。
 允许依赖：`contracts` / `capabilities` / `providers` / `runtime` / `engine`；这是应用层，允许组合。

@@ -80,9 +80,8 @@ BANNED_NAMES = frozenset(
 # directory appears (migrations / schemas / vendor).
 CATALOG_DIRS: tuple[str, ...] = ()
 
-# The packages that already carry a map today. W7 extends this to execution,
-# platform, plugins and src/questor; adding them here before the maps exist
-# would only make the guard red.
+# The packages that must carry a map: 12 engine domains plus the product package
+# (plan 01 W7). Shrinking this list is a reviewed decision, not a refactor.
 CRITICAL_PACKAGES = (
     "src/questorharness/bootstrap",
     "src/questorharness/capabilities",
@@ -90,9 +89,13 @@ CRITICAL_PACKAGES = (
     "src/questorharness/config",
     "src/questorharness/contracts",
     "src/questorharness/engine",
+    "src/questorharness/execution",
+    "src/questorharness/platform",
+    "src/questorharness/plugins",
     "src/questorharness/providers",
     "src/questorharness/runtime",
     "src/questorharness/surfaces",
+    "src/questor",
 )
 
 DISTRIBUTIONS = ("questorharness", "questor")

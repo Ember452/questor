@@ -86,12 +86,16 @@
         "src/questorharness/config/AGENTS.md",
         "src/questorharness/contracts/AGENTS.md",
         "src/questorharness/engine/AGENTS.md",
+        "src/questorharness/execution/AGENTS.md",
+        "src/questorharness/platform/AGENTS.md",
+        "src/questorharness/plugins/AGENTS.md",
         "src/questorharness/providers/AGENTS.md",
         "src/questorharness/runtime/AGENTS.md",
-        "src/questorharness/surfaces/AGENTS.md"
+        "src/questorharness/surfaces/AGENTS.md",
+        "src/questor/AGENTS.md"
       ],
       "gate": true,
-      "value": 9
+      "value": 13
     },
     "packages_without_all": {
       "caliber": "top-level packages under src/questorharness without a literal __all__",
@@ -114,10 +118,10 @@
       "value": 1178
     },
     "root_agents": {
-      "bytes": 8646,
+      "bytes": 4680,
       "caliber": "len(read_text('AGENTS.md').splitlines())",
       "gate": true,
-      "value": 119
+      "value": 87
     },
     "src_files": {
       "caliber": "git ls-files src | *.py",
@@ -150,7 +154,7 @@
     }
   },
   "pin": {
-    "commit": "9244ebf2d6b2be905bdf92465dbddc82dc282801",
+    "commit": "2be50d7516cced1cd01e9d70a8f5890f4cedd3a7",
     "date": "2026-10-23"
   }
 }

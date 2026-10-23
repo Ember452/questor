@@ -1,7 +1,8 @@
 # engine — Agent Contract
 
 职责：编排层：把会话历史、工具注册表、权限、上下文压缩与模型调用串成一轮循环。
-公开入口：`__init__.py`（`run_query` / `QueryEngine` / `CostTracker` 等）；产品只通过 `questorharness.api` 使用。
+不负责：工具能力本体在 `src/questorharness/capabilities/tools`，宿主装配在 `src/questorharness/bootstrap`。
+公开入口：`__init__.py`（`QueryEngine`）；`query.py`（`run_query`）；产品只通过 `questorharness.api` 使用。
 拥有的数据：单轮运行上下文（`QueryContext`）、工具调用中间态、成本累计；不持久化。
 允许依赖：`contracts` / `capabilities` / `providers` / `runtime` / `config`；这是唯一允许同时组合这四层的包。
 不变式：永不 import 产品包；工具执行必须经 `capabilities/tools/base.py::ToolExecutionContext`，端口在这里注入。

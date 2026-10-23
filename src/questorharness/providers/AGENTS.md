@@ -1,6 +1,7 @@
 # providers — Agent Contract
 
 职责：引擎适配器（LLM 客户端、认证、沙箱、MCP transport）。
+不负责：权限与策略判定在 `src/questorharness/capabilities/policy`，回合循环在 `src/questorharness/engine/query.py`。
 公开入口：各子包门面 `llm/__init__.py`、`auth/__init__.py`、`sandbox/__init__.py`、`mcp/__init__.py`。
 拥有的数据：供应商凭据句柄、sandbox 会话、MCP 连接与配置。
 允许依赖：`contracts` + `platform`（最底层，允许）；当前仍有 `config` 存量依赖，后续波次收敛。

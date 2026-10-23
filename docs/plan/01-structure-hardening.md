@@ -1,5 +1,8 @@
 # 计划 01：结构加固（面向千文件规模）
 
+<!-- known-stale-refs: docs/ROADMAP.md, docs/VISION.md, docs/design/, docs/pitfalls.md, docs/plan-archive/ -->
+<!-- 本申报只为§10 台账：它必须能指名旧文档树的死链（见 #59）；正文其余部分不引用这些路径。 -->
+
 - 状态：Active
 - 日期：2026-10-23
 - 基线：`b8632fd`（分支 `refactor/phase1-move-only`）上的快照；**2026-10-23 该分支已作为 PR #217 合入 `main`（merge `8d9f9ae`）**，执行窗口一律从 `main` 开分支，基线以 W0 复测值为准
@@ -597,3 +600,11 @@ W1–W10 把形态和门禁做对了，但**五条增长规则**还缺。它们�
 | 55 | `EXEMPTION_BUDGET` 只判上界 | 提示词核心规则「每销一笔账必须同 PR 下调预算」 | 旧实现只判 `count > budget`：清完账不下调预算**不会红**，纪律靠人记 | 改为**等值棘轮**：新增纯函数 `_layout_rules.budget_problems()`，`>` 报「debt was added」、`<` 报「budget was not lowered in the same change」；`R8_EXEMPT_FUNCTIONS` 同步改为等值比较 | W2-§1 |
 | 56 | 基线多一份「可见副本」 | 提示词只要求预算在守卫里 | `structure.json` 新增 `layout_exemptions`（`gate=false`），预算变化在此可见可 diff | 真源仍是 `EXEMPTION_BUDGET`；此字段只记录不设门 | W2-§1 |
 | 57 | 合成仓库无豁免会撞等值棘轮 | — | `tests/ci/test_guards_contract.py` 的临时仓库豁免数为 0，真实预算会报「偏高」 | `collect_with_budgets(root, *, budget=None, pinned_functions=None)`：测试传空预算，CLI 用默认（新增 2 个用例专测两个方向） | W2-§1 |
+| 58 | 并发窗口写同一工作区 | 计划假设单写者 | 另一窗口同时改了 `ci.yml` / `_layout_rules` / `gen_structure_baseline` / `check.py`；一次 here-string 卡在 PowerShell 续行提示符上，后续命令被乱序重放，导致 AGENTS.md 半截写入、sha 不等 | 所有写入改为**落盘脚本 + 写后自校验**（`scratch/w7_apply.py` 的 `verify()`、`scratch/state_probe.py` 用签名串定归属）；守则迁移的源改用 `git show HEAD:AGENTS.md`，不受工作区污染 | W7 |
+| 59 | 守则引用的整棵文档树已不存在 | §4 W7「原文整段迁」+「逐段 sha256 相等」 | `docs/ROADMAP.md`、`docs/VISION.md`、`docs/design/`、`docs/pitfalls.md`、`docs/plan-archive/` 都不在活动文档区（旧版在 `docs-pre-reset-v1/`）；因 `check_doc_cross_refs` 只扫 `docs/`，根 `AGENTS.md` 里的这些坏链一直隐身 | 正文保持逐字（region sha `f6bd42ea` 不变），坏链用文件内 `<!-- known-stale-refs: … -->` **逐条登记**；守卫按「登记项若不再报错就要求删除」收缩，不是笼统豁免；新写的根 AGENTS 指针改为活路径。台账本身要写出这些路径，所以本文件头部也加了一行 `known-stale-refs` 申报；守卫只读前 30 行，“在正文里描述这个机制”不会被当成申报（新增自测用例锁定）。 | W7 |
+| 60 | `CLAUDE.md` 是模型可见提示的一部分 | §4 W7 陷阱③「只许一行指针」 | `prompt_surface` 的 cwd 在仓内，`load_claude_md_prompt` 向上找到 `CLAUDE.md` → 那 41 行死链索引一直在系统提示里；改指针后 4 份快照必须重录 | 重录并逐 hunk 核对：每份恰在第 99 行一处 −41 行（就是 CLAUDE.md 块），其余零变化 | W7 |
+| 61 | C2 自身两处判据缺陷 | §4 W7「集合比对；无 `__all__` 用 `dir()` 回退」 | ①分词把 `memory/__init__.py` 拆出幽灵名 `memory`；②「导出了但未声明」方向是我自己加的，计划只要求「名字写错要红」 | 引用名字前先剔除路径 span（`PATH_SPAN_RE`）；只保留「声明名 ⊆ 所引模块公开面」+ 路径存在，并在 docstring 写明为何不判反向（否则边界图退化成 API 清单） | W7 |
+| 62 | `engine` 的公开入口地图是假的 | C2 的存在理由 | `engine/__init__.py` 的 `__all__` 不含 `run_query` / `CostTracker`，而 `AGENTS.md` 写着「`__init__.py`（`run_query` / `QueryEngine` / `CostTracker` 等）」 | 按事实改写为 `__init__.py`（`QueryEngine`）+ `query.py`（`run_query`） | W7 |
+| 63 | 「关键包」清单存了三份 | §3 红线「不制造第二真源」 | `_layout_rules.CRITICAL_PACKAGES`、`gen_structure_baseline.PACKAGE_MAP_DIRS`、`check_agents_docs.PACKAGE_MAPS`，另加本文件的 `BANNED_NAMES` 重复定义 | 全部改为引用 `_layout_rules`；测试 fixture 的短名表 `CRITICAL` 也改成读同一来源（否则 R6 扩容时 fixture 自己先红） | W7 |
+| 64 | Windows 控制台吞掉守卫证据 | 窗口提示词「Windows 环境注意」 | `prompt_surface --check` 打印含 `↔` 的 diff 时 `UnicodeEncodeError`，先崩后才知道有 diff；这个缺陷从 W3 就在，只是此前快照不会红 | `_guard_kit` 导入时把 stdout/stderr reconfigure 为 UTF-8（`errors=replace`）；`prompt_surface` 不经 `_guard_kit`，自带一份 | W7 |
+| 65 | 撤掉为不存在的检查铺路的 CI 配置 | 规范 C4 = `CLAUDE.md` 一行指针 | 另一窗口给 guards job 加了 `fetch-depth: 0` + `QUESTOR_DIFF_BASE`，服务于一个盘上不存在的「C4 变更联动」检查（`git grep QUESTOR_DIFF_BASE` 只命中 ci.yml） | 已回滚；将来若真要做该检查，随实现一起提，不留「看着有约束、实际没对象」的配置 | W7 |

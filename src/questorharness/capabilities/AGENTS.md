@@ -1,6 +1,7 @@
 # capabilities — Agent Contract
 
 职责：模型可见的能力域（context / memory / policy / tools / skills），每个子域一个叶子。
+不负责：会话与任务运行时在 `src/questorharness/runtime`，模型与沙箱适配器在 `src/questorharness/providers`。
 公开入口：`__init__.py` 只做包标记；公开面在子域门面（`memory/__init__.py`、`policy/__init__.py`、`tools/__init__.py`）。
 拥有的数据：记忆文件与索引、权限模式、工具 schema 与注册表、技能定义与 bundled 内容。
 允许依赖：`contracts` + `platform`（最底层，允许）；当前仍有 `config` 存量依赖，后续波次收敛。

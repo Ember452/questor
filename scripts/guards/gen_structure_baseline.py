@@ -46,25 +46,17 @@ except ImportError:  # direct script execution
         read_text,
     )
 
+# R3's banned names and R6's critical packages are owned by _layout_rules; this
+# file records measurements, so it must not keep a second copy of either list.
+try:
+    from ._layout_rules import BANNED_NAMES as RULE_BANNED_NAMES, CRITICAL_PACKAGES
+except ImportError:  # direct script execution
+    from _layout_rules import BANNED_NAMES as RULE_BANNED_NAMES, CRITICAL_PACKAGES
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TARGET = REPO_ROOT / "tests/fixtures/baseline/structure.json"
 
-BANNED_NAMES = frozenset(
-    {
-        "utils.py",
-        "helpers.py",
-        "common.py",
-        "base.py",
-        "manager.py",
-        "service.py",
-        "handler.py",
-        "processor.py",
-        "misc.py",
-        "core.py",
-        "types.py",
-        "constants.py",
-    }
-)
+BANNED_NAMES = RULE_BANNED_NAMES
 
 # B9: the shared files a new tool has to touch today. ``registry.py`` is the
 # registration point; the other three used to keep their own tool-name lists.
@@ -78,18 +70,10 @@ TOOL_RADIUS_FILES = (
     "src/questorharness/engine/tool_metadata.py",
 )
 
-# B15/B16: the package maps that must exist next to the code.
-PACKAGE_MAP_DIRS = (
-    "src/questorharness/bootstrap",
-    "src/questorharness/capabilities",
-    "src/questorharness/commands",
-    "src/questorharness/config",
-    "src/questorharness/contracts",
-    "src/questorharness/engine",
-    "src/questorharness/providers",
-    "src/questorharness/runtime",
-    "src/questorharness/surfaces",
-)
+# B15/B16: the package maps that must exist next to the code. Single source is
+# _layout_rules.CRITICAL_PACKAGES (R6), so the baseline can never drift from the
+# guard that enforces the same list.
+PACKAGE_MAP_DIRS = CRITICAL_PACKAGES
 
 LONG_BANDS = ((1500, "over_limit"), (1000, "over_soft_limit"), (800, "warning_band"))
 

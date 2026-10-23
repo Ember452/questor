@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
+import sys
 import tempfile
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -14,6 +15,26 @@ from pathlib import Path
 EXIT_OK = 0
 EXIT_RED = 1
 EXIT_CONFIG = 2
+
+
+def _force_utf8_streams() -> None:
+    """Print diffs on Windows consoles without dying on a non-GBK character.
+
+    Guards report Chinese evidence and box-drawing symbols; a cp936 console made
+    ``print`` raise UnicodeEncodeError and hide the very diff the developer needs
+    (seen live in prompt_surface --check). Output is still bytes on the wire, so
+    the parent runner keeps decoding UTF-8 regardless.
+    """
+
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):  # already replaced or not a terminal stream
+                pass
+
+
+_force_utf8_streams()
 
 EXEMPTION_RE = re.compile(r"#\s*questor:\s*allow\s+(R\d+)\s*--\s*(.+?)\s*$")
 EXEMPTION_REASON_RE = re.compile(r"(until|when|W\d+)", re.IGNORECASE)

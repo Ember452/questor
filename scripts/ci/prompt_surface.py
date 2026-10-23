@@ -36,6 +36,15 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.baseline_check import _normalize  # noqa: E402
 
+# Diffs contain box-drawing and CJK text; a cp936 console made print() raise
+# UnicodeEncodeError and swallow the evidence this command exists to show.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
 SNAPSHOT_DIR = REPO_ROOT / "tests" / "fixtures" / "baseline" / "prompt_surface"
 SCRATCH = REPO_ROOT / ".tmp-baseline" / "prompt-surface"
 

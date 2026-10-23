@@ -17,17 +17,9 @@
 
 ## 0. 一页结论
 
-```text
-                 ┌── profiles（纯数据，只依赖 contracts）
-                 │
-contracts ──┬── kernel ── runtime ── capabilities ── surfaces ── bootstrap
-            │
-            └── providers（适配器，只依赖 contracts）
-
-箭头方向：右边依赖左边；bootstrap 是唯一装配点。
-apps/desktop + apps/web + apps/terminal  ← 宿主，只装配，不含领域逻辑
-src/questor                                ← 产品组合根 + 产品策略
-```
+依赖与目录的**事实**不在本文：包级边、环、被 import Top10 与超阈值清单由
+`scripts/guards/gen_graph.py` 生成到 [GRAPH.md](GRAPH.md)，目录与行数由 `scripts/guards/gen_tree.py`
+生成到 [TREE.md](TREE.md)。本文只写意图与理由；手画依赖边会被 `check_agents_docs.py` 的 C6 判红。
 
 七条结构约束：
 
@@ -162,18 +154,9 @@ questor/
 
 实际生效的层序（`.importlinter` 的 `layers` 契约，自上而下，上层可依赖下层）：
 
-```
-bootstrap
-  surfaces
-    commands
-      engine
-        runtime
-          execution
-            providers
-              config
-                platform
-                  contracts
-```
+层序自上而下：`bootstrap > surfaces > commands > engine > runtime > execution > providers >
+config > platform > contracts`（`.importlinter` 的 `layers` 契约）。逐包的实际边请看
+[GRAPH.md](GRAPH.md) 的包级邻接表，本文不再重画。
 
 不在层序内、由单独契约管的包：
 
