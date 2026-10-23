@@ -1,7 +1,7 @@
 """Tests for personalization fact extraction."""
 
-from questorharness.personalization.extractor import extract_facts_from_text, facts_to_rules_markdown
-from questorharness.personalization.rules import merge_facts
+from questorharness.capabilities.memory.personalization.extractor import extract_facts_from_text, facts_to_rules_markdown
+from questorharness.capabilities.memory.personalization.rules import merge_facts
 
 
 class TestExtractFacts:

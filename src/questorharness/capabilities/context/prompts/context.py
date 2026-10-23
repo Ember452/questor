@@ -15,7 +15,7 @@ from questorharness.capabilities.context.coordinator import get_coordinator_syst
 from questorharness.capabilities.memory import load_memory_prompt
 from questorharness.capabilities.memory.relevance import format_relevant_memories, select_relevant_memories
 from questorharness.capabilities.memory.usage import mark_memory_used
-from questorharness.personalization.rules import load_local_rules
+from questorharness.capabilities.memory.personalization.rules import load_local_rules
 from questorharness.contracts.policy import PermissionMode
 from questorharness.platform import get_platform
 from questorharness.capabilities.context.prompts.claudemd import load_claude_md_prompt

@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 
 from questorharness.contracts.domain.message import ConversationMessage
-from questorharness.personalization.extractor import (
+from questorharness.capabilities.memory.personalization.extractor import (
     extract_facts_from_text,
     facts_to_rules_markdown,
 )
-from questorharness.personalization.rules import (
+from questorharness.capabilities.memory.personalization.rules import (
     load_facts,
     merge_facts,
     save_facts,
