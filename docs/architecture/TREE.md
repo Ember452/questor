@@ -52,7 +52,9 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/memory/scan.py` | 118 |
 | `src/questorharness/capabilities/memory/schema.py` | 443 |
 | `src/questorharness/capabilities/memory/search.py` | 73 |
-| `src/questorharness/capabilities/memory/session/__init__.py` | 141 |
+| `src/questorharness/capabilities/memory/session/__init__.py` | 33 |
+| `src/questorharness/capabilities/memory/session/document.py` | 79 |
+| `src/questorharness/capabilities/memory/session/store.py` | 75 |
 | `src/questorharness/capabilities/memory/team.py` | 92 |
 | `src/questorharness/capabilities/memory/types.py` | 35 |
 | `src/questorharness/capabilities/memory/usage.py` | 155 |

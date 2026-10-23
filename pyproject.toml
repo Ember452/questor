@@ -108,6 +108,9 @@ files = [
     # instead of enlarging the deferred pool.
     "src/questorharness/providers/lsp/python_index.py",
     "src/questorharness/providers/lsp/symbol_queries.py",
+    # W8: the two halves of the split session-memory facade.
+    "src/questorharness/capabilities/memory/session/document.py",
+    "src/questorharness/capabilities/memory/session/store.py",
 ]
 plugins = ["pydantic.mypy"]
 

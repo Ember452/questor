@@ -754,6 +754,11 @@ tests/unit/test_memory/test_claude_runtime_memory.py::test_relevance_formats_sta
 tests/unit/test_memory/test_claude_runtime_memory.py::test_schema_truncation_and_freshness
 tests/unit/test_memory/test_claude_runtime_memory.py::test_session_memory_file_round_trip
 tests/unit/test_memory/test_claude_runtime_memory.py::test_team_memory_guards_and_agent_memory
+tests/unit/test_memory/test_document.py::test_compact_text_is_prefixed_or_empty
+tests/unit/test_memory/test_document.py::test_document_lists_state_sections_in_order
+tests/unit/test_memory/test_document.py::test_empty_state_and_no_messages_render_placeholders
+tests/unit/test_memory/test_document.py::test_facade_reexports_the_same_objects
+tests/unit/test_memory/test_document.py::test_recent_lines_are_capped_and_truncation_is_noted
 tests/unit/test_memory/test_memdir.py::test_add_memory_entry_writes_schema_and_dedupes
 tests/unit/test_memory/test_memdir.py::test_find_relevant_memories
 tests/unit/test_memory/test_memdir.py::test_load_memory_prompt_includes_entrypoint
@@ -770,6 +775,11 @@ tests/unit/test_memory/test_memdir.py::test_search_finds_body_content
 tests/unit/test_memory/test_memdir.py::test_search_handles_cjk_queries
 tests/unit/test_memory/test_memdir.py::test_search_prefers_metadata_over_body
 tests/unit/test_memory/test_memdir.py::test_usage_index_marks_recalled_memories_and_stale_candidates
+tests/unit/test_memory/test_store.py::test_prepare_records_the_path_in_metadata
+tests/unit/test_memory/test_store.py::test_reading_missing_memory_yields_empty_string
+tests/unit/test_memory/test_store.py::test_session_id_is_sanitized_into_a_file_name
+tests/unit/test_memory/test_store.py::test_session_memory_dir_is_project_scoped_and_created
+tests/unit/test_memory/test_store.py::test_update_writes_the_rendered_document
 tests/unit/test_permissions/test_checker.py::TestSensitivePathProtection::test_allowed_tools_does_not_bypass_sensitive_paths
 tests/unit/test_permissions/test_checker.py::TestSensitivePathProtection::test_every_builtin_pattern_has_coverage[*0]
 tests/unit/test_permissions/test_checker.py::TestSensitivePathProtection::test_every_builtin_pattern_has_coverage[*1]
