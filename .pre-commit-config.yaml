@@ -32,3 +32,10 @@ repos:
         entry: uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
         language: system
         pass_filenames: false
+
+      - id: baseline-fast
+        name: baseline (fast)
+        entry: uv run python scripts/baseline_check.py --check --fast
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

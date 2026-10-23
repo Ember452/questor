@@ -155,19 +155,20 @@ def _snapshot() -> tuple[int, str]:
     return int(match.group(1)), ""
 
 
-def _collect_outputs() -> tuple[dict[str, object], list[str]]:
+def _collect_outputs(*, fast: bool = False) -> tuple[dict[str, object], list[str]]:
     errors: list[str] = []
     outputs: dict[str, object] = {}
 
-    counts, error = _pytest_counts()
-    if error:
-        errors.append(error)
-    outputs["pytest"] = counts
+    if not fast:
+        counts, error = _pytest_counts()
+        if error:
+            errors.append(error)
+        outputs["pytest"] = counts
 
-    node_ids, error = _node_ids()
-    if error:
-        errors.append(error)
-    outputs["node_ids"] = node_ids
+        node_ids, error = _node_ids()
+        if error:
+            errors.append(error)
+        outputs["node_ids"] = node_ids
 
     lint, error = _lint()
     if error:
@@ -282,18 +283,19 @@ def _diff(name: str, expected: str, actual: str) -> list[str]:
     return [f"--- {name} differs ---", *list(diff)[:60]]
 
 
-def check() -> int:
+def check(*, fast: bool = False) -> int:
     if not (BASELINE_DIR / "summary.json").exists():
         print("no baseline recorded; run with --record first")
         return 2
 
-    outputs, errors = _collect_outputs()
+    outputs, errors = _collect_outputs(fast=fast)
     failures: list[str] = list(errors)
 
     summary = json.loads((BASELINE_DIR / "summary.json").read_text(encoding="utf-8"))
-    expected_counts = summary["pytest"]
-    if outputs["pytest"] != expected_counts:
-        failures.append(f"pytest counts changed: {expected_counts} -> {outputs['pytest']}")
+    if not fast:
+        expected_counts = summary["pytest"]
+        if outputs["pytest"] != expected_counts:
+            failures.append(f"pytest counts changed: {expected_counts} -> {outputs['pytest']}")
     if outputs["lint"] != summary["lint"]:
         failures.append(f"lint changed: {summary['lint']} -> {outputs['lint']}")
     if outputs["cold_import"] != summary["cold_import"]:
@@ -314,22 +316,23 @@ def check() -> int:
         failures.extend(_diff(name, expected, str(outputs[name])))
 
     allowed = set(_read_allowed())
-    main_ids = set(
-        line.strip()
-        for line in (BASELINE_DIR / "main_node_ids.txt").read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    )
-    current = set(outputs["node_ids"])  # type: ignore[arg-type]
-    added = sorted(current - main_ids)
-    removed = sorted(main_ids - current)
-    unexpected_added = sorted(set(added) - allowed)
-    missing_allowed = sorted(allowed - current)
-    if unexpected_added:
-        failures.append("unexpected new node ids:\n  " + "\n  ".join(unexpected_added))
-    if removed:
-        failures.append("removed node ids:\n  " + "\n  ".join(removed))
-    if missing_allowed:
-        failures.append("allowed node ids missing:\n  " + "\n  ".join(missing_allowed))
+    if not fast:
+        main_ids = set(
+            line.strip()
+            for line in (BASELINE_DIR / "main_node_ids.txt").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+        current = set(outputs["node_ids"])  # type: ignore[arg-type]
+        added = sorted(current - main_ids)
+        removed = sorted(main_ids - current)
+        unexpected_added = sorted(set(added) - allowed)
+        missing_allowed = sorted(allowed - current)
+        if unexpected_added:
+            failures.append("unexpected new node ids:\n  " + "\n  ".join(unexpected_added))
+        if removed:
+            failures.append("removed node ids:\n  " + "\n  ".join(removed))
+        if missing_allowed:
+            failures.append("allowed node ids missing:\n  " + "\n  ".join(missing_allowed))
 
     if failures:
         print("BASELINE CHECK FAILED")
@@ -347,8 +350,15 @@ def main() -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--record", action="store_true", help="record the current tree as baseline")
     group.add_argument("--check", action="store_true", help="compare the current tree to baseline")
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="skip the pytest and node-id checks (CI guard mode)",
+    )
     args = parser.parse_args()
-    return record() if args.record else check()
+    if args.fast and args.record:
+        parser.error("--fast cannot be combined with --record")
+    return check(fast=args.fast) if args.check else record()
 
 
 if __name__ == "__main__":

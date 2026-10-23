@@ -48,17 +48,19 @@ Phase 1 有**时间盒**：≤10 个 PR 或 ≤2 周。超时不加班，先砍�
 
 ### 3.1 先冻结基线（每个 PR 都要重跑）
 
-基线必须写成“命令 + 期望输出”，不能写“测试全绿”。2026-10-22 在 `main` 上实测：
+基线必须写成“命令 + 期望输出”，不能写“测试全绿”。已固化为脚本：
 
-| # | 项 | 命令 | 期望 | 备注 |
-|---|---|---|---|---|
-| 1 | 测试通过集 | `uv run pytest -m "unit or integration" -q` | `1137 passed, 29 skipped, 10 deselected`（≈82s） | **必须用 `uv run`**；直接跑 `.venv\Scripts\python.exe -m pytest` 会得 `1135 passed, 2 failed`，因为 `tests/integration/test_import_boundaries.py` 用 `shutil.which("lint-imports")`，PATH 里没有 `.venv/Scripts` |
-| 2 | CLI 基线 | `uv run python -m questor --help`；`uv run questorharness --help` | 输出逐字不变 | 输出快照的存放位置随 Phase 0 交付物一起定（不建空目录） |
-| 3 | 旧快照能加载 | `tests/fixtures/snapshots/session-snapshot-v0.json` | `load_session_snapshot()` 返回 4 条消息 | 2026-10-22 用真实 `save_session_snapshot` API 生成（含 tool_use/tool_result）。**当前快照没有 `schema_version` 字段**，加载只靠 `_sanitize_snapshot_payload` 的宽容解析；加版本闸门前，“跨版本”只能靠字段可选 |
-| 4 | import 契约 | `uv run lint-imports` | `1 kept, 0 broken` | 增内层契约前先看 STRUCTURE §2.3 |
-| 5 | 冷导入 | `uv run python -c "import questorharness; import questor"` | 无输出、exit 0 | 已实测通过 |
+```bash
+uv run python scripts/baseline_check.py --record          # 重新冻结（新增测试 / 契约时）
+uv run python scripts/baseline_check.py --check           # 全量：pytest + node-id + lint + 冷导入 + help/dry-run/snapshot/doctor
+uv run python scripts/baseline_check.py --check --fast    # 跳过 pytest / node-id（约 18s），pre-push 用
+```
 
-Phase 1 结束时这五项必须逐项不变。第 1 项的调用方式必须写进 PR 模板，否则“红/绿”会因跑法不同而不可比。
+当前冻结值（2026-10-23）：`1144 passed, 29 skipped, 10 deselected`；`lint 6 kept, 0 broken`；`node-id 1173 = main 1166 + 7 allowed`；snapshot 4 条。fixture 在 `tests/fixtures/baseline/`。
+
+pre-push 钩子需要 `uv run pre-commit install --hook-type pre-push` 才会生效。
+
+第 1 项必须用 `uv run`：直接跑 `.venv\Scripts\python.exe -m pytest` 会因为 PATH 缺少 `.venv/Scripts` 导致 `test_import_boundaries` 失败。
 
 ### 3.2 建目录规则
 
