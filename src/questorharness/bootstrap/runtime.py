@@ -798,3 +798,54 @@ async def _render_command_result(
                 await render_event(AssistantTurnComplete(message=msg, usage=UsageSnapshot()))
     if result.message and not result.replay_messages:
         await print_system(result.message)
+
+
+async def run_autopilot_prompt(
+    prompt: str,
+    *,
+    model: str | None,
+    max_turns: int,
+    permission_mode: str,
+    cwd: Path | None = None,
+) -> str:
+    """Run one headless agent prompt for autopilot."""
+    from questorharness.contracts.domain.events import (
+        AssistantTextDelta,
+        AssistantTurnComplete,
+        ErrorEvent,
+    )
+
+    async def _allow(_tool_name: str, _reason: str) -> bool:
+        return True
+
+    async def _ask(_question: str) -> str:
+        return ""
+
+    bundle = await build_runtime(
+        cwd=str(cwd) if cwd is not None else None,
+        model=model,
+        max_turns=max_turns,
+        permission_prompt=_allow,
+        ask_user_prompt=_ask,
+        permission_mode=permission_mode,
+    )
+    await start_runtime(bundle)
+    collected: list[str] = []
+    try:
+        async for event in bundle.engine.submit_message(prompt):
+            if isinstance(event, AssistantTextDelta):
+                collected.append(event.text)
+            elif isinstance(event, AssistantTurnComplete):
+                text = event.message.text.strip()
+                if text and not "".join(collected).strip():
+                    collected.append(text)
+            elif isinstance(event, ErrorEvent):
+                raise RuntimeError(event.message)
+    finally:
+        await close_runtime(bundle)
+    return "".join(collected).strip()
+
+
+from questorharness.runtime.autopilot.service import configure_runtime_runner
+
+configure_runtime_runner(run_autopilot_prompt)

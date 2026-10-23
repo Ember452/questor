@@ -123,7 +123,7 @@ async def submit_follow_up(
     print_system,
     render_event,
 ) -> None:
-    from questorharness.ui.runtime import _format_pending_tool_results
+    from questorharness.bootstrap.runtime import _format_pending_tool_results
 
     settings = bundle.current_settings()
     if bundle.enforce_max_turns:

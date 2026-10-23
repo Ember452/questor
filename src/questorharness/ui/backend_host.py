@@ -35,7 +35,7 @@ from questorharness.output_styles import load_output_styles
 from questorharness.runtime.tasks import get_task_manager
 from questorharness.ui.coordinator_drain import drain_coordinator_async_agents
 from questorharness.ui.protocol import BackendEvent, FrontendImageAttachment, FrontendRequest, TranscriptItem
-from questorharness.ui.runtime import build_runtime, close_runtime, handle_line, start_runtime
+from questorharness.bootstrap.runtime import build_runtime, close_runtime, handle_line, start_runtime
 from questorharness.runtime.session.backend import SessionBackend
 
 log = logging.getLogger(__name__)

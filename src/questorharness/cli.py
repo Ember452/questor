@@ -416,7 +416,7 @@ def _build_dry_run_preview(
     from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
     from questorharness.capabilities.skills import load_skill_registry
     from questorharness.capabilities.tools import create_default_tool_registry
-    from questorharness.ui.runtime import _resolve_api_client_from_settings
+    from questorharness.bootstrap.runtime import _resolve_api_client_from_settings
 
     resolved_cwd = str(Path(cwd).expanduser().resolve())
     settings = load_settings().merge_cli_overrides(

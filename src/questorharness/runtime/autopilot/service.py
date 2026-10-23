@@ -9,6 +9,7 @@ import shlex
 import subprocess
 import tempfile
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from hashlib import sha1
 from html import escape
@@ -221,6 +222,15 @@ def _source_ref_number(source_ref: str, prefix: str) -> int | None:
 
 def _bilingual_lines(zh: str, en: str) -> str:
     return f"{zh}\n{en}".strip()
+
+
+_RUNTIME_RUNNER: Callable[..., Awaitable[str]] | None = None
+
+
+def configure_runtime_runner(runner: Callable[..., Awaitable[str]]) -> None:
+    """Install the composition-root runner used to execute agent prompts."""
+    global _RUNTIME_RUNNER
+    _RUNTIME_RUNNER = runner
 
 
 class RepoAutopilotStore:
@@ -2047,37 +2057,16 @@ class RepoAutopilotStore:
         permission_mode: str,
         cwd: Path | None = None,
     ) -> str:
-        from questorharness.ui.runtime import build_runtime, close_runtime, start_runtime
-
-        async def _allow(_tool_name: str, _reason: str) -> bool:
-            return True
-
-        async def _ask(_question: str) -> str:
-            return ""
-
-        bundle = await build_runtime(
-            cwd=str(cwd or self._cwd),
+        runner = _RUNTIME_RUNNER
+        if runner is None:
+            raise RuntimeError("autopilot runtime runner is not configured")
+        return await runner(
+            prompt,
             model=model,
             max_turns=max_turns,
-            permission_prompt=_allow,
-            ask_user_prompt=_ask,
             permission_mode=permission_mode,
+            cwd=cwd or self._cwd,
         )
-        await start_runtime(bundle)
-        collected: list[str] = []
-        try:
-            async for event in bundle.engine.submit_message(prompt):
-                if isinstance(event, AssistantTextDelta):
-                    collected.append(event.text)
-                elif isinstance(event, AssistantTurnComplete):
-                    text = event.message.text.strip()
-                    if text and not "".join(collected).strip():
-                        collected.append(text)
-                elif isinstance(event, ErrorEvent):
-                    raise RuntimeError(event.message)
-        finally:
-            await close_runtime(bundle)
-        return "".join(collected).strip()
 
     def _verification_commands(self, policies: dict[str, Any]) -> list[_VerificationCommand]:
         configured = policies.get("verification", {}).get("commands", [])

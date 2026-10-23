@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from questorharness.config.settings import load_settings
-from questorharness.ui.runtime import _resolve_api_client_from_settings, build_runtime
+from questorharness.bootstrap.runtime import _resolve_api_client_from_settings, build_runtime
 
 
 @pytest.mark.asyncio

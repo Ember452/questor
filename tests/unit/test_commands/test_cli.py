@@ -364,7 +364,7 @@ def test_build_dry_run_preview_classifies_slash_command_and_flags_bad_mcp(monkey
     monkeypatch.setattr("questorharness.plugins.load_plugins", lambda settings, cwd: [])
     monkeypatch.setattr("questorharness.capabilities.skills.load_skill_registry", lambda cwd, settings=None: _FakeSkillRegistry())
     monkeypatch.setattr("questorharness.capabilities.context.prompts.context.build_runtime_system_prompt", lambda *args, **kwargs: "preview prompt")
-    monkeypatch.setattr("questorharness.ui.runtime._resolve_api_client_from_settings", lambda settings: object())
+    monkeypatch.setattr("questorharness.bootstrap.runtime._resolve_api_client_from_settings", lambda settings: object())
 
     preview = cli._build_dry_run_preview(
         prompt="/plugin list",
@@ -409,7 +409,7 @@ def test_build_dry_run_preview_sets_blocked_when_model_prompt_lacks_auth(monkeyp
     def fake_resolve_api_client(settings):
         raise SystemExit(1)
 
-    monkeypatch.setattr("questorharness.ui.runtime._resolve_api_client_from_settings", fake_resolve_api_client)
+    monkeypatch.setattr("questorharness.bootstrap.runtime._resolve_api_client_from_settings", fake_resolve_api_client)
 
     preview = cli._build_dry_run_preview(
         prompt="fix the failing tests",
@@ -475,7 +475,7 @@ def test_build_dry_run_preview_recommends_matching_skills_and_tools(monkeypatch,
     monkeypatch.setattr("questorharness.capabilities.skills.load_skill_registry", lambda cwd, settings=None: _FakeSkillRegistry())
     monkeypatch.setattr("questorharness.capabilities.tools.create_default_tool_registry", lambda: _FakeToolRegistry())
     monkeypatch.setattr("questorharness.capabilities.context.prompts.context.build_runtime_system_prompt", lambda *args, **kwargs: "preview prompt")
-    monkeypatch.setattr("questorharness.ui.runtime._resolve_api_client_from_settings", lambda settings: object())
+    monkeypatch.setattr("questorharness.bootstrap.runtime._resolve_api_client_from_settings", lambda settings: object())
 
     preview = cli._build_dry_run_preview(
         prompt="review this bug fix and grep for failing tests",

@@ -22,7 +22,7 @@ from questorharness.ui.backend_host import (
     run_backend_host,
 )
 from questorharness.ui.protocol import BackendEvent, FrontendImageAttachment, FrontendRequest
-from questorharness.ui.runtime import build_runtime, close_runtime, start_runtime
+from questorharness.bootstrap.runtime import build_runtime, close_runtime, start_runtime
 
 
 class StaticApiClient:

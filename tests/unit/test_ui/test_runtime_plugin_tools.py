@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.ui.runtime import build_runtime, close_runtime
+from questorharness.bootstrap.runtime import build_runtime, close_runtime
 
 
 class _StaticApiClient:
@@ -56,7 +56,7 @@ async def test_build_runtime_registers_enabled_plugin_tools(tmp_path: Path, monk
 
     from questorharness.config.settings import Settings
 
-    monkeypatch.setattr("questorharness.ui.runtime.load_settings", lambda: Settings(allow_project_plugins=True))
+    monkeypatch.setattr("questorharness.bootstrap.runtime.load_settings", lambda: Settings(allow_project_plugins=True))
 
     bundle = await build_runtime(cwd=str(project), api_client=_StaticApiClient())
     try:

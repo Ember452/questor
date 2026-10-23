@@ -13,7 +13,7 @@ from questorharness.contracts.domain.events import StreamEvent
 from questorharness.ui.backend_host import run_backend_host
 from questorharness.ui.coordinator_drain import drain_coordinator_async_agents
 from questorharness.ui.react_launcher import launch_react_tui
-from questorharness.ui.runtime import build_runtime, close_runtime, handle_line, start_runtime
+from questorharness.bootstrap.runtime import build_runtime, close_runtime, handle_line, start_runtime
 
 
 def _decode_task_worker_line(raw: str) -> str:

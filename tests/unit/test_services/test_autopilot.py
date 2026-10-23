@@ -5,7 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from types import MethodType, SimpleNamespace
 
+import pytest
+
 from questorharness.runtime.autopilot import RepoAutopilotStore, RepoVerificationStep
+from questorharness.runtime.autopilot import service as autopilot_service
 from questorharness.runtime.autopilot.service import _DEFAULT_VERIFICATION_POLICY
 from questorharness.platform.paths import (
     get_project_active_repo_context_path,
@@ -617,3 +620,51 @@ def test_merge_pull_request_does_not_request_branch_deletion(tmp_path: Path, mon
 
     assert captured["args"] == ["pr", "merge", "41", "--squash"]
     assert captured["check"] is True
+
+
+async def test_run_agent_prompt_fails_closed_without_runner(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(autopilot_service, "_RUNTIME_RUNNER", None)
+    store = RepoAutopilotStore(tmp_path)
+
+    with pytest.raises(RuntimeError, match="not configured"):
+        await store._run_agent_prompt(
+            "hello",
+            model=None,
+            max_turns=1,
+            permission_mode="full_auto",
+        )
+
+
+async def test_run_agent_prompt_uses_configured_runner(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    async def runner(prompt, *, model, max_turns, permission_mode, cwd):
+        captured.update(
+            {
+                "prompt": prompt,
+                "model": model,
+                "max_turns": max_turns,
+                "permission_mode": permission_mode,
+                "cwd": cwd,
+            }
+        )
+        return "runner output"
+
+    monkeypatch.setattr(autopilot_service, "_RUNTIME_RUNNER", runner)
+    store = RepoAutopilotStore(tmp_path)
+
+    result = await store._run_agent_prompt(
+        "hello",
+        model="test-model",
+        max_turns=3,
+        permission_mode="plan",
+    )
+
+    assert result == "runner output"
+    assert captured == {
+        "prompt": "hello",
+        "model": "test-model",
+        "max_turns": 3,
+        "permission_mode": "plan",
+        "cwd": tmp_path,
+    }

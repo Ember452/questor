@@ -12,7 +12,7 @@ from questorharness.ui.coordinator_drain import (
     drain_coordinator_async_agents,
     pending_async_agent_entries,
 )
-from questorharness.ui.runtime import build_runtime, close_runtime, start_runtime
+from questorharness.bootstrap.runtime import build_runtime, close_runtime, start_runtime
 
 from .test_react_backend import StaticApiClient
 
