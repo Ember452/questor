@@ -488,7 +488,7 @@ apps/web/
 | `skills/`、`plugins/` | `skills/` 已归位 `capabilities/skills/`（含 bundled 数据）；`AgentDefinition` 已入 `contracts/agent.py` | `plugins/` 仍依赖 coordinator 的私有解析函数，暂留顶层作为扩展层 |
 | `personalization/` | 升级为记忆能力 | `capabilities/memory/personalization/`（Phase 3） |
 | `memory/`、`permissions/`、`channels/`、`mcp/` | 升级为能力/传输 | `capabilities/{memory,policy,tools/mcp}/`、`surfaces/channels/`、`providers/mcp/` |
-| `ui/`、`keybindings/`、`themes/`、`vim/`、`output_styles/` | Phase 1 冻结，Phase 2 移除（ADR-0005） | 不迁 `surfaces/terminal/`；先解耦再删 |
+| `ui/` | 已完成：组合根 → `bootstrap/runtime.py`，宿主 → `surfaces/ipc/` | 不删除；`keybindings/`、`themes/`、`vim/`、`output_styles/` 保留 |
 | `voice/` | 下移为适配器 | `providers/voice/`（Phase 2） |
 | `utils/`、`config/` | 解散/归位（Phase 2） | `kernel/`（锁）、`contracts/settings.py`（配置类型）+ `bootstrap/config/`（只做解析与注入）；`bridge/` 已归 `runtime/bridge/` |
 | `questor/gateway` | 拆产品策略与传输 | surfaces/gateway（协议路由）+ 产品包内的渠道策略目录 |

@@ -119,7 +119,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `tasks/` | `runtime/tasks/`（已完成） | 拆 task_manager / local_agent / local_shell |
 | `autopilot/` | `runtime/autopilot/`（已完成，文件未拆） | 拆 `{policy,loop,triggers,state}`（service.py 2089） |
 | `hooks/` | `runtime/hooks/`（已完成） | 按 hook 类型拆 |
-| `ui/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `surfaces/terminal/`；先解耦再删 |
+| `ui/` | 已完成：`bootstrap/runtime.py` + `surfaces/ipc/` | 不删除（ADR-0005 已更新）；`keybindings/`、`themes/`、`vim/`、`output_styles/` 保留 |
 | `keybindings/`、`themes/`、`vim/`、`output_styles/` | **Phase 1 冻结**；Phase 2 随 UI 一起移除（ADR-0005） | 不迁 `surfaces/terminal/` |
 | `voice/` | `providers/voice/`（Phase 2） | 有策略时升 capabilities |
 | `utils/` | Phase 2 才归位；落 `providers/`（fs / shell / network_guard） | 解散，不留 utils |
