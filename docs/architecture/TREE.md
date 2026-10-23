@@ -188,7 +188,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/keybindings/resolver.py` | 15 |
 | `src/questorharness/output_styles/__init__.py` | 5 |
 | `src/questorharness/output_styles/loader.py` | 42 |
-| `src/questorharness/platform/__init__.py` | 89 |
+| `src/questorharness/platform/__init__.py` | 88 |
 | `src/questorharness/platform/frontmatter.py` | 114 |
 | `src/questorharness/platform/io.py` | 100 |
 | `src/questorharness/platform/locking.py` | 88 |

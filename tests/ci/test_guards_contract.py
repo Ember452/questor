@@ -22,6 +22,7 @@ import _layout_rules as rules  # noqa: E402
 # The fixture has to cover exactly the packages R6 requires, so it reads the list
 # the guard enforces instead of keeping a second copy here.
 MAPPED_PACKAGES = rules.CRITICAL_PACKAGES
+_PLATFORM = "src/questorharness/platform"
 
 
 def _init_repo(root: Path) -> None:
@@ -48,6 +49,14 @@ def _base_repo(root: Path) -> None:
     _write(root, "src/questorharness/surfaces/channels/__init__.py", '"""Adapters."""\n')
     _write(root, "src/questorharness/commands/registry.py", '"""Registry."""\n')
     _write(root, "src/questorharness/commands/families/ok.py", '"""Family."""\n')
+    # The real platform entry point is a reviewed implementation facade, so the
+    # fixture mirrors that shape; a clean facade there would mean the exception
+    # is no longer needed and R4 says so.
+    _write(
+        root,
+        f"{_PLATFORM}/__init__.py",
+        '"""Platform detection."""\n\n__all__ = ["thing"]\n\n\nclass Capabilities:\n    thing = 1\n',
+    )
     _init_repo(root)
 
 
@@ -209,6 +218,34 @@ def test_r4_lazy_facade_size_bound_tracks_exports(tmp_path: Path) -> None:
     assert any(f"(lazy facade limit)" in item.message and str(limit) in item.message for item in hits), [
         item.render() for item in hits
     ]
+
+
+def test_r4_reviewed_implementation_facade_is_held_by_a_cap(tmp_path: Path) -> None:
+    """An allowed implementation facade may not grow without limit."""
+    big = '"""Facade."""\n\n__all__ = ["thing"]\n' + "\n".join(
+        f"# padding line {index}" for index in range(rules.FACADE_IMPLEMENTATION_PACKAGES[_PLATFORM] + 1)
+    )
+    root = _repo(tmp_path, {f"{_PLATFORM}/__init__.py": big})
+    hits = [item for item in rules.rule_r4_facade(root) if item.path.startswith(_PLATFORM)]
+    assert any("reviewed implementation facade grew" in item.message for item in hits), [
+        item.render() for item in hits
+    ]
+
+
+def test_r4_reviewed_facade_allowlist_cannot_go_stale(tmp_path: Path) -> None:
+    """A reviewed exception whose entry point vanished must be reported."""
+    root = _repo(tmp_path)
+    (root / _PLATFORM / "__init__.py").unlink()
+    hits = [item for item in rules.rule_r4_facade(root) if "lost its entry point" in item.message]
+    assert hits, [item.render() for item in rules.rule_r4_facade(root)]
+
+
+def test_r4_reviewed_exception_cannot_survive_the_split(tmp_path: Path) -> None:
+    """Splitting the behavior out must retire the exception in the same change."""
+    root = _repo(tmp_path)
+    _write(root, f"{_PLATFORM}/__init__.py", '"""Facade."""\n\n__all__ = ["thing"]\n')
+    hits = [item for item in rules.rule_r4_facade(root) if "no longer needed" in item.message]
+    assert hits, [item.render() for item in rules.rule_r4_facade(root)]
 
 
 @pytest.mark.parametrize("rule", ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"])

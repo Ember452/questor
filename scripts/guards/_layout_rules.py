@@ -108,14 +108,16 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # red until the matching comment is also removed.
 # R5 is 17 rather than 16: the product distribution's ``questor/gateway`` package
 # also has no ``__all__`` and is covered by the same rule.
-# R4 is 5 rather than 14: W8 found that eight of the exempted entries are facades
-# that only re-export (seven pure lazy ``__getattr__`` tables plus runtime.swarm's
-# eager-imports-and-dispatch hybrid), so they were never debt; skills.bundled was
-# split into discovery.py. The remaining five facades still hold behavior.
+# R4 is 4 rather than 14: W8 examined every exempted facade instead of assuming
+# each one needed splitting. Eight only re-export (seven pure lazy __getattr__
+# tables plus runtime.swarm's eager-import hybrid), one was split (skills.bundled
+# -> discovery.py), and platform is a reviewed implementation facade held by a
+# line cap in FACADE_IMPLEMENTATION_PACKAGES. Four facades still carry behavior
+# worth relocating: providers.lsp, memory.extract, memory.session, context.compact.
 EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 4,
     "R3": 22,
-    "R4": 5,
+    "R4": 4,
     "R5": 17,
     "R7": 170,
     "R8": 31,
@@ -148,6 +150,16 @@ NESTABLE_STATEMENTS: tuple[type[ast.AST], ...] = COMPUTING_STATEMENTS + (
 # of exported names instead of a constant that ignores them.
 LAZY_FACADE_BASE_LINES = 40
 LAZY_FACADE_LINES_PER_EXPORT = 8
+
+# Reviewed R4 exceptions: leaf utility packages whose entry point *is* the
+# implementation of one cohesive concern. W8 inspected each candidate and chose
+# not to split these, because moving the definition off the package attribute
+# would silently break the ``questorharness.platform.*`` patch targets that tests
+# rely on, while adding an indirection readers do not need to find the code.
+# The value is a hard line cap: grow past it and the entry point is debt again.
+FACADE_IMPLEMENTATION_PACKAGES: dict[str, int] = {
+    "src/questorharness/platform": 120,
+}
 
 
 def _facade_shape(tree: ast.Module) -> tuple[str, str, int]:
@@ -355,8 +367,13 @@ def rule_r4_facade(root: Path) -> list[Violation]:
     """
 
     violations: list[Violation] = []
+    seen_allowed: set[str] = set()
     for path in _source_files(root):
         if path.name != "__init__.py":
+            continue
+        if not path.exists():
+            # git ls-files lists staged paths; a file deleted but not yet unstaged
+            # must not crash the guard.
             continue
         text = read_text(path)
         try:
@@ -365,6 +382,37 @@ def rule_r4_facade(root: Path) -> list[Violation]:
             continue
         shape, detail, exported = _facade_shape(tree)
         lines = len(text.splitlines())
+        relative = _relative(path, root)
+        # The allowlist is keyed by package, because the reviewed decision is
+        # about the package's entry point, not about one accidental file path.
+        package_key = relative[: -len("/__init__.py")] if relative.endswith("/__init__.py") else relative
+        allowed_lines = FACADE_IMPLEMENTATION_PACKAGES.get(package_key)
+        if allowed_lines is not None:
+            seen_allowed.add(package_key)
+            if lines > allowed_lines:
+                violations.append(
+                    Violation(
+                        "R4",
+                        relative,
+                        f"reviewed implementation facade grew to {lines} > {allowed_lines};"
+                        " split it or raise the cap in review",
+                    )
+                )
+                continue
+            # The exception exists because the entry point holds behavior. Once it
+            # would pass the ordinary facade test, the exception is doing nothing
+            # and must be dropped rather than inherited forever.
+            limit = _facade_line_limit(shape, exported)
+            if shape != "behavior" and lines <= limit:
+                violations.append(
+                    Violation(
+                        "R4",
+                        relative,
+                        "reviewed implementation exception no longer needed (entry point is a clean"
+                        " facade); drop the FACADE_IMPLEMENTATION_PACKAGES entry",
+                    )
+                )
+            continue
         limit = _facade_line_limit(shape, exported)
         if shape == "behavior":
             problem = f"facade contains behavior ({detail})"
@@ -374,7 +422,15 @@ def rule_r4_facade(root: Path) -> list[Violation]:
             continue
         if "R4" in parse_exemptions(path):
             continue
-        violations.append(Violation("R4", _relative(path, root), problem))
+        violations.append(Violation("R4", relative, problem))
+    # A missing package directory means we are scanning a partial or synthetic
+    # tree, not that the reviewed exception went stale.
+    for package in sorted(set(FACADE_IMPLEMENTATION_PACKAGES) - seen_allowed):
+        if not (root / package).is_dir():
+            continue
+        violations.append(
+            Violation("R4", package, "reviewed implementation facade lost its entry point; drop the allowlist entry")
+        )
     return violations
 
 
