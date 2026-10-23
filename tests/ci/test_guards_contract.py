@@ -248,6 +248,30 @@ def test_r4_reviewed_exception_cannot_survive_the_split(tmp_path: Path) -> None:
     assert hits, [item.render() for item in rules.rule_r4_facade(root)]
 
 
+def _aggregate_facade(count: int) -> str:
+    names = ", ".join(f'"name{index}"' for index in range(count))
+    return f'"""Aggregate facade."""\n\n__all__ = [{names}]\n'
+
+
+def test_r5_aggregate_facade_cap_is_enforced(tmp_path: Path) -> None:
+    """An aggregate facade may reach its pinned cap and no further."""
+    package = "src/questorharness/capabilities/memory"
+    cap = rules.AGGREGATE_FACADE_EXPORT_CAPS[package]
+    root = _repo(tmp_path, {f"{package}/__init__.py": _aggregate_facade(cap + 1)})
+    hits = [item for item in rules.rule_r5_exports(root) if item.path.startswith(package)]
+    assert any("aggregate facade cap" in item.message for item in hits), [
+        item.render() for item in hits
+    ]
+
+
+def test_r5_aggregate_cap_retires_when_the_facade_shrinks(tmp_path: Path) -> None:
+    """Fitting the ordinary limit must remove the exception, not keep it warm."""
+    package = "src/questorharness/runtime/bridge"
+    root = _repo(tmp_path, {f"{package}/__init__.py": _aggregate_facade(3)})
+    hits = [item for item in rules.rule_r5_exports(root) if item.path.startswith(package)]
+    assert any("no longer needed" in item.message for item in hits), [item.render() for item in hits]
+
+
 @pytest.mark.parametrize("rule", ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"])
 def test_every_rule_has_a_green_counterpart(rule: str, tmp_path: Path) -> None:
     """Every rule must be silent on the clean fixture."""

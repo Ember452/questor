@@ -78,4 +78,3 @@ def __getattr__(name: str):
         }[name]
     raise AttributeError(name)
 
-# questor: allow R5 -- until W8 public-face split

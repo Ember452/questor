@@ -31,4 +31,3 @@ __all__ = [
     "wrap_command_for_sandbox",
 ]
 
-# questor: allow R5 -- until W8 public-face split

@@ -24,4 +24,3 @@ __all__ = [
     "select_relevant_memories",
 ]
 
-# questor: allow R5 -- until W8 public-face split

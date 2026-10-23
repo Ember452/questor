@@ -106,8 +106,12 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # debt without lowering its number here fails just as loudly as taking on new
 # debt. Raising a number is therefore impossible to hide — it turns the check
 # red until the matching comment is also removed.
-# R5 is 17 rather than 16: the product distribution's ``questor/gateway`` package
-# also has no ``__all__`` and is covered by the same rule.
+# R5 is 10 rather than 17: nine top-level packages still owe a literal __all__
+# (including the product distribution's ``questor/gateway``), and context.compact
+# still exports too much from a behavior facade. Seven pure aggregate facades
+# (swarm, memory, consolidate, auth, mcp, sandbox, bridge) re-export a family of
+# siblings and define nothing themselves; pruning them would push callers inside
+# the package, so they carry a pinned cap in AGGREGATE_FACADE_EXPORT_CAPS instead.
 # R4 is 4 rather than 14: W8 examined every exempted facade instead of assuming
 # each one needed splitting. Eight only re-export (seven pure lazy __getattr__
 # tables plus runtime.swarm's eager-import hybrid), one was split (skills.bundled
@@ -119,7 +123,7 @@ EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 4,
     "R3": 22,
     "R4": 3,
-    "R5": 17,
+    "R5": 10,
     "R7": 170,
     "R8": 31,
 }
@@ -160,6 +164,19 @@ LAZY_FACADE_LINES_PER_EXPORT = 8
 # The value is a hard line cap: grow past it and the entry point is debt again.
 FACADE_IMPLEMENTATION_PACKAGES: dict[str, int] = {
     "src/questorharness/platform": 120,
+}
+
+# Pure aggregate facades: ``__init__.py`` declares no names of its own and only
+# re-exports a family of siblings. Their export count is the point of the package,
+# so it gets a pinned, shrink-only cap instead of an inline exemption (W8).
+AGGREGATE_FACADE_EXPORT_CAPS: dict[str, int] = {
+    "src/questorharness/capabilities/memory": 12,
+    "src/questorharness/capabilities/memory/consolidate": 13,
+    "src/questorharness/providers/auth": 11,
+    "src/questorharness/providers/mcp": 11,
+    "src/questorharness/providers/sandbox": 12,
+    "src/questorharness/runtime/bridge": 11,
+    "src/questorharness/runtime/swarm": 23,
 }
 
 
@@ -436,7 +453,15 @@ def rule_r4_facade(root: Path) -> list[Violation]:
 
 
 def rule_r5_exports(root: Path) -> list[Violation]:
-    """Exports: top-level packages need ``__all__``; nobody exports more than the limit."""
+    """Exports: top-level packages need ``__all__``; nobody exports more than the limit.
+
+    A pure aggregate facade (zero own definitions, re-exporting a family of
+    siblings) is allowed a per-package cap instead of an inline exemption:
+    pruning its names would push callers past the facade and onto module paths
+    inside the package, which is the opposite of what a facade is for. The cap
+    may only be met, never exceeded, and must be dropped once it stops mattering.
+    """
+
     violations: list[Violation] = []
     top_level: list[Path] = []
     for distribution in DISTRIBUTIONS:
@@ -465,14 +490,43 @@ def rule_r5_exports(root: Path) -> list[Violation]:
         exports = _literal_exports(ast.parse(read_text(path)))
         if exports is None:
             continue
-        limit = EXPORT_LIMIT_CONTRACTS if "/contracts/" in _relative(path, root) else EXPORT_LIMIT
+        relative = _relative(path, root)
+        package_key = relative[: -len("/__init__.py")] if relative.endswith("/__init__.py") else relative
+        limit = EXPORT_LIMIT_CONTRACTS if "/contracts/" in relative else EXPORT_LIMIT
+        pinned = AGGREGATE_FACADE_EXPORT_CAPS.get(package_key)
+        if pinned is not None:
+            if len(exports) > pinned:
+                violations.append(
+                    Violation(
+                        "R5",
+                        relative,
+                        f"{len(exports)} exports > aggregate facade cap {pinned} for {package_key}",
+                    )
+                )
+            elif len(exports) <= limit:
+                # The cap exists because this facade legitimately aggregates a
+                # family. Once it fits the ordinary limit the exception is dead
+                # weight and must be removed rather than kept as a free pass.
+                violations.append(
+                    Violation(
+                        "R5",
+                        relative,
+                        f"aggregate facade cap is no longer needed ({len(exports)} exports <= {limit});"
+                        " drop the AGGREGATE_FACADE_EXPORT_CAPS entry",
+                    )
+                )
+            continue
         if len(exports) <= limit:
             continue
         if "R5" in parse_exemptions(path):
             continue
         violations.append(
-            Violation("R5", _relative(path, root), f"{len(exports)} exports > {limit}")
+            Violation("R5", relative, f"{len(exports)} exports > {limit}")
         )
+    # No staleness report for caps whose package is absent from this tree: an
+    # unused cap grants nothing (it only participates when the facade is present),
+    # and demanding every scanned tree contain all seven packages would make the
+    # rule unusable on partial checkouts.
     return violations
 
 

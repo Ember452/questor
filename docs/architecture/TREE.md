@@ -32,9 +32,9 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/context/prompts/context.py` | 207 |
 | `src/questorharness/capabilities/context/prompts/environment.py` | 135 |
 | `src/questorharness/capabilities/context/prompts/system_prompt.py` | 109 |
-| `src/questorharness/capabilities/memory/__init__.py` | 27 |
+| `src/questorharness/capabilities/memory/__init__.py` | 26 |
 | `src/questorharness/capabilities/memory/agent.py` | 93 |
-| `src/questorharness/capabilities/memory/consolidate/__init__.py` | 36 |
+| `src/questorharness/capabilities/memory/consolidate/__init__.py` | 35 |
 | `src/questorharness/capabilities/memory/consolidate/backup.py` | 106 |
 | `src/questorharness/capabilities/memory/consolidate/lock.py` | 140 |
 | `src/questorharness/capabilities/memory/consolidate/prompt.py` | 130 |
@@ -202,7 +202,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/plugins/source.py` | 55 |
 | `src/questorharness/plugins/types.py` | 61 |
 | `src/questorharness/providers/__init__.py` | 3 |
-| `src/questorharness/providers/auth/__init__.py` | 31 |
+| `src/questorharness/providers/auth/__init__.py` | 30 |
 | `src/questorharness/providers/auth/external.py` | 610 |
 | `src/questorharness/providers/auth/flows.py` | 189 |
 | `src/questorharness/providers/auth/manager.py` | 485 |
@@ -223,10 +223,10 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/providers/lsp/python_index.py` | 128 |
 | `src/questorharness/providers/lsp/runtime.py` | 77 |
 | `src/questorharness/providers/lsp/symbol_queries.py` | 91 |
-| `src/questorharness/providers/mcp/__init__.py` | 81 |
+| `src/questorharness/providers/mcp/__init__.py` | 80 |
 | `src/questorharness/providers/mcp/client.py` | 295 |
 | `src/questorharness/providers/mcp/config.py` | 34 |
-| `src/questorharness/providers/sandbox/__init__.py` | 34 |
+| `src/questorharness/providers/sandbox/__init__.py` | 33 |
 | `src/questorharness/providers/sandbox/adapter.py` | 145 |
 | `src/questorharness/providers/sandbox/docker_backend.py` | 232 |
 | `src/questorharness/providers/sandbox/docker_image.py` | 103 |
@@ -250,7 +250,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/runtime/autopilot/text_utils.py` | 30 |
 | `src/questorharness/runtime/autopilot/types.py` | 93 |
 | `src/questorharness/runtime/autopilot/verification.py` | 268 |
-| `src/questorharness/runtime/bridge/__init__.py` | 22 |
+| `src/questorharness/runtime/bridge/__init__.py` | 21 |
 | `src/questorharness/runtime/bridge/manager.py` | 107 |
 | `src/questorharness/runtime/bridge/session_runner.py` | 48 |
 | `src/questorharness/runtime/bridge/types.py` | 39 |
@@ -270,7 +270,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/runtime/services/task_runtime.py` | 94 |
 | `src/questorharness/runtime/session/__init__.py` | 1 |
 | `src/questorharness/runtime/session/backend.py` | 99 |
-| `src/questorharness/runtime/swarm/__init__.py` | 72 |
+| `src/questorharness/runtime/swarm/__init__.py` | 71 |
 | `src/questorharness/runtime/swarm/in_process.py` | 693 |
 | `src/questorharness/runtime/swarm/lockfile.py` | 24 |
 | `src/questorharness/runtime/swarm/mailbox.py` | 522 |

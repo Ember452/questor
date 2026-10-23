@@ -19,4 +19,3 @@ __all__ = [
     "spawn_session",
 ]
 
-# questor: allow R5 -- until W8 public-face split

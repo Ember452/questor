@@ -21,6 +21,8 @@ tests/ci/test_guards_contract.py::test_r4_rejects_a_facade_that_computes
 tests/ci/test_guards_contract.py::test_r4_reviewed_exception_cannot_survive_the_split
 tests/ci/test_guards_contract.py::test_r4_reviewed_facade_allowlist_cannot_go_stale
 tests/ci/test_guards_contract.py::test_r4_reviewed_implementation_facade_is_held_by_a_cap
+tests/ci/test_guards_contract.py::test_r5_aggregate_cap_retires_when_the_facade_shrinks
+tests/ci/test_guards_contract.py::test_r5_aggregate_facade_cap_is_enforced
 tests/ci/test_guards_contract.py::test_r5_exports_red_then_green
 tests/ci/test_guards_contract.py::test_r6_map_red_then_green
 tests/ci/test_guards_contract.py::test_r7_mirror_red_then_green

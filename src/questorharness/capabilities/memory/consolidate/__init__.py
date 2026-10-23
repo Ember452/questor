@@ -33,4 +33,3 @@ __all__ = [
     "try_acquire_consolidation_lock",
 ]
 
-# questor: allow R5 -- until W8 public-face split
