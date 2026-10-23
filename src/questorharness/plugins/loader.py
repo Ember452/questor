@@ -14,13 +14,13 @@ from typing import Any, Iterable
 import yaml
 
 from questorharness.platform.paths import get_config_dir
+from questorharness.contracts.agent import AgentDefinition
 from questorharness.runtime.coordinator.agent_definitions import (
     AGENT_COLORS,
     EFFORT_LEVELS,
     ISOLATION_MODES,
     MEMORY_SCOPES,
     PERMISSION_MODES,
-    AgentDefinition,
     _parse_agent_frontmatter,
     _parse_positive_int,
     _parse_str_list,

@@ -485,7 +485,7 @@ apps/web/
 | `engine/`、`commands/` | **保留在顶层** | `engine/` 是编排层（循环必须组合 capabilities/providers/runtime），`commands/` 是应用层分派器；内核立项后再拆 `runtime/run` + `runtime/turn` |
 | `state/` | Phase 1 **不动**，Phase 2 再拆 | 事实状态 → `kernel/`（durable 立项后）；UI 可观察状态 → 前端 store |
 | `services/*` | 解散 | `capabilities/{context,memory,schedule}/`、`providers/lsp/`、`runtime/budget/` |
-| `skills/`、`plugins/` | `skills/` 已归位 `capabilities/skills/`（含 bundled 数据）；`plugins/` 代码待归位 | plugins loader 与 coordinator 有环：先把 `AgentDefinition` 收进 contracts，再决定放 capabilities 还是独立扩展层 |
+| `skills/`、`plugins/` | `skills/` 已归位 `capabilities/skills/`（含 bundled 数据）；`AgentDefinition` 已入 `contracts/agent.py` | `plugins/` 仍依赖 coordinator 的私有解析函数，暂留顶层作为扩展层 |
 | `personalization/` | 升级为记忆能力 | `capabilities/memory/personalization/`（Phase 3） |
 | `memory/`、`permissions/`、`channels/`、`mcp/` | 升级为能力/传输 | `capabilities/{memory,policy,tools/mcp}/`、`surfaces/channels/`、`providers/mcp/` |
 | `ui/`、`keybindings/`、`themes/`、`vim/`、`output_styles/` | Phase 1 冻结，Phase 2 移除（ADR-0005） | 不迁 `surfaces/terminal/`；先解耦再删 |
