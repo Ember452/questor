@@ -409,7 +409,8 @@ def _build_dry_run_preview(
 ) -> dict[str, object]:
     from questorharness.providers.llm.provider import auth_status, detect_provider
     from questorharness.commands import create_default_command_registry
-    from questorharness.config import get_config_file_path, load_settings
+    from questorharness.platform.paths import get_config_file_path
+    from questorharness.config import load_settings
     from questorharness.providers.mcp.config import load_mcp_server_configs
     from questorharness.plugins import load_plugins
     from questorharness.prompts.context import build_runtime_system_prompt
@@ -994,7 +995,7 @@ def cron_logs_cmd(
     lines: int = typer.Option(30, "--lines", "-n", help="Number of lines to show"),
 ) -> None:
     """Show recent cron scheduler log output."""
-    from questorharness.config.paths import get_logs_dir
+    from questorharness.platform.paths import get_logs_dir
 
     log_path = get_logs_dir() / "cron_scheduler.log"
     if not log_path.exists():

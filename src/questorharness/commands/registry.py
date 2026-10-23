@@ -17,7 +17,7 @@ import pyperclip
 
 from questorharness.runtime.autopilot import RepoAutopilotStore
 from questorharness.providers.auth.manager import AuthManager
-from questorharness.config.paths import (
+from questorharness.platform.paths import (
     get_config_dir,
     get_data_dir,
     get_feedback_log_path,

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Awaitable, Callable
 from uuid import uuid4
 
-from questorharness.config.paths import get_tasks_dir
+from questorharness.platform.paths import get_tasks_dir
 from questorharness.contracts.task import TaskRecord, TaskStatus, TaskType
 from questorharness.contracts.shell import create_shell_subprocess
 

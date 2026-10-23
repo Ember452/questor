@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from questorharness.config.settings import Settings
-from questorharness.platforms import get_platform
+from questorharness.platform import get_platform
 from questorharness.prompts.context import build_runtime_system_prompt
 
 

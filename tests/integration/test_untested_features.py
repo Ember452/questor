@@ -446,7 +446,7 @@ async def test_session_storage():
 async def test_config_settings():
     """Test settings loading, env var overrides, and path functions."""
     from questorharness.config.settings import Settings, load_settings
-    from questorharness.config.paths import (
+    from questorharness.platform.paths import (
         get_config_dir, get_sessions_dir, get_tasks_dir,
     )
 
@@ -622,7 +622,7 @@ async def test_mcp_types():
 # ====================================================================
 async def test_config_paths():
     """Verify all config path functions return sensible paths."""
-    from questorharness.config.paths import (
+    from questorharness.platform.paths import (
         get_config_dir, get_config_file_path, get_data_dir,
         get_logs_dir, get_sessions_dir, get_tasks_dir,
     )

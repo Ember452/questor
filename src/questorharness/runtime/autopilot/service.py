@@ -27,7 +27,7 @@ from questorharness.runtime.autopilot.types import (
     RepoTaskStatus,
     RepoVerificationStep,
 )
-from questorharness.config.paths import (
+from questorharness.platform.paths import (
     get_project_active_repo_context_path,
     get_project_autopilot_policy_path,
     get_project_autopilot_registry_path,

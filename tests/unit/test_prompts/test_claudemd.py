@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.config.paths import (
+from questorharness.platform.paths import (
     get_project_active_repo_context_path,
     get_project_issue_file,
     get_project_pr_comments_file,

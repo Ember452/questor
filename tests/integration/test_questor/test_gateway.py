@@ -18,7 +18,7 @@ from questorharness.surfaces.channels.bus.events import InboundMessage
 from questorharness.surfaces.channels.bus.queue import MessageBus
 from questorharness.commands import CommandResult
 from questorharness.commands.registry import SlashCommand, create_default_command_registry
-from questorharness.config.paths import get_project_issue_file, get_project_pr_comments_file
+from questorharness.platform.paths import get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import PermissionSettings, ProviderProfile, Settings
 from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock, ToolUseBlock
 from questorharness.engine.query_engine import QueryEngine

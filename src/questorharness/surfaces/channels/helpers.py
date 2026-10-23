@@ -11,7 +11,7 @@ import re
 import unicodedata
 from pathlib import Path
 
-from questorharness.config.paths import get_data_dir
+from questorharness.platform.paths import get_data_dir
 
 __all__ = ["get_data_path", "safe_filename", "split_message"]
 

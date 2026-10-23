@@ -10,7 +10,7 @@ from typing import Any
 
 from croniter import croniter
 
-from questorharness.config.paths import get_cron_registry_path
+from questorharness.platform.paths import get_cron_registry_path
 from questorharness.contracts.locking import exclusive_file_lock
 from questorharness.contracts.io import atomic_write_text
 

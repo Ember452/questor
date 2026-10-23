@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Iterable
 
-from questorharness.config.paths import get_config_dir
+from questorharness.platform.paths import get_config_dir
 from questorharness.config.settings import load_settings
 from questorharness.skills._frontmatter import (
     optional_frontmatter_str,

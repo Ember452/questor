@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from questorharness.config import Settings, load_settings
-from questorharness.platforms import PlatformName, get_platform
+from questorharness.platform import PlatformName, get_platform
 from questorharness.providers.sandbox import wrap_command_for_sandbox
 
 

@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from questorharness.config.paths import get_config_dir
+from questorharness.platform.paths import get_config_dir
 from questorharness.contracts.locking import exclusive_file_lock
 from questorharness.contracts.io import atomic_write_text
 

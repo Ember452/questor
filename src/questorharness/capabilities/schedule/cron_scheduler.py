@@ -24,8 +24,8 @@ from pathlib import Path
 from types import FrameType
 from typing import Any
 
-from questorharness.config.paths import get_data_dir, get_logs_dir
-from questorharness.platforms import get_platform
+from questorharness.platform.paths import get_data_dir, get_logs_dir
+from questorharness.platform import get_platform
 from questorharness.capabilities.schedule.cron import (
     load_cron_jobs,
     mark_job_run,

@@ -51,7 +51,7 @@ forbidden_modules =
     questorharness.vim
     questorharness.output_styles
     questorharness.personalization
-    questorharness.platforms
+    questorharness.platform
     questorharness.cli
 # The facade re-exports these modules; only direct product imports are forbidden.
 allow_indirect_imports = True

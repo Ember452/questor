@@ -21,7 +21,8 @@ from questorharness.commands import (
     create_default_command_registry,
     lookup_skill_slash_command,
 )
-from questorharness.config import get_config_file_path, load_settings
+from questorharness.platform.paths import get_config_file_path
+from questorharness.config import load_settings
 from questorharness.engine import QueryEngine
 from questorharness.contracts.domain.message import (
     ConversationMessage,

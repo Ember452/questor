@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.config.paths import get_config_dir
+from questorharness.platform.paths import get_config_dir
 from questorharness.keybindings.parser import parse_keybindings
 from questorharness.keybindings.resolver import resolve_keybindings
 

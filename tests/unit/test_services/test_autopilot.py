@@ -7,7 +7,7 @@ from types import MethodType, SimpleNamespace
 
 from questorharness.runtime.autopilot import RepoAutopilotStore, RepoVerificationStep
 from questorharness.runtime.autopilot.service import _DEFAULT_VERIFICATION_POLICY
-from questorharness.config.paths import (
+from questorharness.platform.paths import (
     get_project_active_repo_context_path,
     get_project_autopilot_policy_path,
     get_project_release_policy_path,

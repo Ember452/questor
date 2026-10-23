@@ -23,7 +23,7 @@ from questorharness.providers.llm.tool_runtime import ProviderLlmToolRuntime
 from questorharness.providers.lsp.runtime import ProviderLspRuntime
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.providers.sandbox.runtime import ProviderSandboxRuntime
-from questorharness.config.paths import get_data_dir
+from questorharness.platform.paths import get_data_dir
 from questorharness.contracts.domain.message import (
     ConversationMessage,
     ImageBlock,

@@ -48,7 +48,7 @@ def _run_oh(*args: str, timeout: int = 90, cwd: str | None = None) -> subprocess
 
 async def test_install_real_skills() -> tuple[bool, str]:
     """Copy real skills from anthropics/skills into questorharness user skills dir."""
-    from questorharness.config.paths import get_config_dir
+    from questorharness.platform.paths import get_config_dir
 
     if not SKILLS_REPO.exists():
         return False, f"Skills repo not found at {SKILLS_REPO}. Run: git clone https://github.com/anthropics/skills /tmp/anthropic-skills"

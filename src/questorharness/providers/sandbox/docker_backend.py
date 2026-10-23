@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from questorharness.config import Settings
-from questorharness.platforms import get_platform, get_platform_capabilities
+from questorharness.platform import get_platform, get_platform_capabilities
 from questorharness.providers.sandbox.adapter import SandboxAvailability, SandboxUnavailableError
 
 logger = logging.getLogger(__name__)

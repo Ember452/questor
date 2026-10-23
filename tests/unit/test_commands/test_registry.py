@@ -15,7 +15,7 @@ from questorharness.commands.registry import (
     lookup_skill_slash_command,
 )
 from questorharness.runtime.autopilot import RepoVerificationStep
-from questorharness.config.paths import get_feedback_log_path, get_project_issue_file, get_project_pr_comments_file
+from questorharness.platform.paths import get_feedback_log_path, get_project_issue_file, get_project_pr_comments_file
 from questorharness.config.settings import load_settings, save_settings, Settings
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 from questorharness.engine.query_engine import QueryEngine

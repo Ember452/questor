@@ -12,7 +12,7 @@ from typing import Any
 
 from questorharness.config import Settings, load_settings
 from questorharness.contracts.errors import SandboxUnavailableError
-from questorharness.platforms import get_platform, get_platform_capabilities
+from questorharness.platform import get_platform, get_platform_capabilities
 
 
 @dataclass(frozen=True)

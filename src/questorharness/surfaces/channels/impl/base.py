@@ -8,7 +8,7 @@ from typing import Any
 
 from questorharness.surfaces.channels.bus.events import InboundMessage, OutboundMessage
 from questorharness.surfaces.channels.bus.queue import MessageBus
-from questorharness.config.paths import get_data_dir
+from questorharness.platform.paths import get_data_dir
 
 logger = logging.getLogger(__name__)
 

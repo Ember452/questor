@@ -13,7 +13,7 @@ from typing import Any, Iterable
 
 import yaml
 
-from questorharness.config.paths import get_config_dir
+from questorharness.platform.paths import get_config_dir
 from questorharness.runtime.coordinator.agent_definitions import (
     AGENT_COLORS,
     EFFORT_LEVELS,

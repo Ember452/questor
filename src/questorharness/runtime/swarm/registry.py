@@ -7,7 +7,7 @@ import os
 import shutil
 from typing import TYPE_CHECKING, Any
 
-from questorharness.platforms import get_platform, get_platform_capabilities
+from questorharness.platform import get_platform, get_platform_capabilities
 from questorharness.runtime.swarm.spawn_utils import is_tmux_available
 from questorharness.runtime.swarm.types import BackendDetectionResult, BackendType, TeammateExecutor
 

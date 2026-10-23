@@ -9,7 +9,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, Field
 
-from questorharness.config.paths import get_config_dir
+from questorharness.platform.paths import get_config_dir
 
 logger = logging.getLogger(__name__)
 

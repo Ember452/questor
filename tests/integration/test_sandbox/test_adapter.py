@@ -104,7 +104,7 @@ def test_wrap_command_for_sandbox_raises_when_required(monkeypatch):
 
 @pytest.mark.skipif(shutil.which("srt") is None or shutil.which("bwrap") is None, reason="Needs local sandbox runtime")
 def test_create_shell_subprocess_preserves_exit_code_with_sandbox(monkeypatch):
-    import questorharness.config.paths as config_paths
+    import questorharness.platform.paths as config_paths
 
     async def _run() -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

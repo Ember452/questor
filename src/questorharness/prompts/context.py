@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from questorharness.config.paths import (
+from questorharness.platform.paths import (
     get_project_active_repo_context_path,
     get_project_issue_file,
     get_project_pr_comments_file,
@@ -17,7 +17,7 @@ from questorharness.capabilities.memory.relevance import format_relevant_memorie
 from questorharness.capabilities.memory.usage import mark_memory_used
 from questorharness.personalization.rules import load_local_rules
 from questorharness.capabilities.policy.modes import PermissionMode
-from questorharness.platforms import get_platform
+from questorharness.platform import get_platform
 from questorharness.prompts.claudemd import load_claude_md_prompt
 from questorharness.prompts.system_prompt import build_system_prompt
 from questorharness.skills.loader import load_skill_registry

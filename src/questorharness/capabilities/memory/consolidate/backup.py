@@ -7,7 +7,7 @@ import shutil
 import time
 from pathlib import Path
 
-from questorharness.config.paths import get_data_dir
+from questorharness.platform.paths import get_data_dir
 
 
 def default_backup_root(memory_dir: str | Path, *, app_label: str = "questorharness") -> Path:
