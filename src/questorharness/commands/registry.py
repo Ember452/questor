@@ -700,12 +700,11 @@ def register_plugin_commands(
         )
 
 
-def create_default_command_registry(
-    plugin_commands: Iterable[PluginCommandDefinition] | None = None,
-) -> CommandRegistry:
-    """Create the built-in command registry."""
-    registry = CommandRegistry()
-
+def register_remaining_commands(
+    registry: CommandRegistry,
+    plugin_commands: Iterable[PluginCommandDefinition] | None,
+) -> None:
+    """Register the remaining commands after the split families."""
 
     async def _resume_handler(args: str, context: CommandContext) -> CommandResult:
         tokens = args.strip().split()
@@ -2437,6 +2436,15 @@ def create_default_command_registry(
     )
 
     register_plugin_commands(registry, plugin_commands)
+
+
+def create_default_command_registry(
+    plugin_commands: Iterable[PluginCommandDefinition] | None = None,
+) -> CommandRegistry:
+    """Create the built-in command registry."""
+    registry = CommandRegistry()
+
+    register_remaining_commands(registry, plugin_commands)
     return registry
 
 
