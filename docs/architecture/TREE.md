@@ -64,7 +64,8 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/schedule/cron_scheduler.py` | 612 |
 | `src/questorharness/capabilities/skills/__init__.py` | 45 |
 | `src/questorharness/capabilities/skills/_frontmatter.py` | 99 |
-| `src/questorharness/capabilities/skills/bundled/__init__.py` | 77 |
+| `src/questorharness/capabilities/skills/bundled/__init__.py` | 10 |
+| `src/questorharness/capabilities/skills/bundled/discovery.py` | 81 |
 | `src/questorharness/capabilities/skills/loader.py` | 263 |
 | `src/questorharness/capabilities/skills/registry.py` | 29 |
 | `src/questorharness/capabilities/skills/types.py` | 26 |
@@ -267,7 +268,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/runtime/services/task_runtime.py` | 94 |
 | `src/questorharness/runtime/session/__init__.py` | 1 |
 | `src/questorharness/runtime/session/backend.py` | 99 |
-| `src/questorharness/runtime/swarm/__init__.py` | 73 |
+| `src/questorharness/runtime/swarm/__init__.py` | 72 |
 | `src/questorharness/runtime/swarm/in_process.py` | 693 |
 | `src/questorharness/runtime/swarm/lockfile.py` | 24 |
 | `src/questorharness/runtime/swarm/mailbox.py` | 522 |

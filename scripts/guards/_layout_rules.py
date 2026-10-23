@@ -108,13 +108,14 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # red until the matching comment is also removed.
 # R5 is 17 rather than 16: the product distribution's ``questor/gateway`` package
 # also has no ``__all__`` and is covered by the same rule.
-# R4 is 7 rather than 14: W8 found that seven of the exempted entries are pure
-# lazy ``__getattr__`` name tables (re-export, not behavior), so they were never
-# debt; the remaining seven facades do contain behavior and stay registered.
+# R4 is 5 rather than 14: W8 found that eight of the exempted entries are facades
+# that only re-export (seven pure lazy ``__getattr__`` tables plus runtime.swarm's
+# eager-imports-and-dispatch hybrid), so they were never debt; skills.bundled was
+# split into discovery.py. The remaining five facades still hold behavior.
 EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 4,
     "R3": 22,
-    "R4": 7,
+    "R4": 5,
     "R5": 17,
     "R7": 170,
     "R8": 31,

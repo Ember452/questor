@@ -58,6 +58,17 @@ def _package_key(relative: str) -> str:
     return "/".join(parts[:2])
 
 
+def _is_inside(relative: str, root: str) -> bool:
+    """A whitelist entry is either a package directory or one specific module.
+
+    Treating every entry as a directory made a single-file root invisible: the
+    module counted toward the deferred pool while the checked-file count stayed
+    one short of what mypy actually reported.
+    """
+
+    return relative == root or relative.startswith(f"{root}/")
+
+
 def _module_counts(roots: Sequence[str]) -> tuple[int, dict[str, int]]:
     inside = 0
     outside: Counter[str] = Counter()
@@ -65,7 +76,7 @@ def _module_counts(roots: Sequence[str]) -> tuple[int, dict[str, int]]:
         if path.name == "__init__.py":
             continue
         relative = path.relative_to(REPO_ROOT).as_posix()
-        if any(relative.startswith(f"{root}/") for root in roots):
+        if any(_is_inside(relative, root) for root in roots):
             inside += 1
         else:
             outside[_package_key(relative)] += 1
@@ -76,7 +87,7 @@ def _ignore_problems(roots: Sequence[str]) -> list[str]:
     problems: list[str] = []
     for path in tracked_files(REPO_ROOT, ("src",)):
         relative = path.relative_to(REPO_ROOT).as_posix()
-        if not any(relative.startswith(f"{root}/") for root in roots):
+        if not any(_is_inside(relative, root) for root in roots):
             continue
         for number, line in enumerate(read_text(path).splitlines(), start=1):
             if "type: ignore" not in line:

@@ -100,6 +100,10 @@ files = [
     "src/questorharness/contracts",
     "src/questorharness/platform",
     "src/questorharness/config",
+    # W8 unit 1 moved bundled discovery into a new module; it joins the strict
+    # whitelist instead of inflating the deferred pool (plan 01 P3: pool counts
+    # may only shrink).
+    "src/questorharness/capabilities/skills/bundled/discovery.py",
 ]
 plugins = ["pydantic.mypy"]
 

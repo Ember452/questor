@@ -69,5 +69,4 @@ def __getattr__(name: str):
     globals()[name] = value
     return value
 
-# questor: allow R4 -- until W8 facade split
 # questor: allow R5 -- until W8 public-face split

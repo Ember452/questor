@@ -19,8 +19,9 @@
     "src/questorharness/vim": 1
   },
   "pinned_at": "741c3840979376ffa2bd5de398a7f81b0977601a",
-  "whitelist_modules": 22,
+  "whitelist_modules": 23,
   "whitelist_roots": [
+    "src/questorharness/capabilities/skills/bundled/discovery.py",
     "src/questorharness/config",
     "src/questorharness/contracts",
     "src/questorharness/platform"
