@@ -6,3 +6,6 @@ tests/unit/test_tools/test_tool_ports.py::test_task_list_uses_injected_task_runt
 tests/unit/test_tools/test_tool_ports.py::test_team_create_uses_injected_subagent_runtime
 tests/unit/test_tools/test_tools_facade.py::test_tools_facade_is_lazy
 tests/unit/test_config/test_settings.py::test_load_settings_accepts_utf8_bom
+tests/unit/test_commands/test_registry_snapshot.py::test_help_text_snapshot
+tests/unit/test_commands/test_registry_snapshot.py::test_command_order_snapshot
+tests/unit/test_commands/test_registry_snapshot.py::test_alias_shares_the_canonical_command
