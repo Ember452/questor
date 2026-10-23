@@ -441,12 +441,8 @@ def register_session_commands(registry: CommandRegistry) -> None:
     registry.register(SlashCommand("stats", "Show session statistics", _stats_handler))
 
 
-def create_default_command_registry(
-    plugin_commands: Iterable[PluginCommandDefinition] | None = None,
-) -> CommandRegistry:
-    """Create the built-in command registry."""
-    registry = CommandRegistry()
-
+def register_memory_commands(registry: CommandRegistry) -> None:
+    """Register memory and hook inspection commands."""
 
     async def _dream_handler(args: str, context: CommandContext) -> CommandResult:
         settings = getattr(context.engine, "_settings", None) or load_settings().materialize_active_profile()
@@ -661,6 +657,18 @@ def create_default_command_registry(
 
     async def _hooks_handler(_: str, context: CommandContext) -> CommandResult:
         return CommandResult(message=context.hooks_summary or "No hooks configured.")
+
+    registry.register(SlashCommand("dream", "Consolidate memory", _dream_handler))
+    registry.register(SlashCommand("memory", "Inspect and manage project memory", _memory_handler))
+    registry.register(SlashCommand("hooks", "Show configured hooks", _hooks_handler))
+
+
+def create_default_command_registry(
+    plugin_commands: Iterable[PluginCommandDefinition] | None = None,
+) -> CommandRegistry:
+    """Create the built-in command registry."""
+    registry = CommandRegistry()
+
 
     async def _resume_handler(args: str, context: CommandContext) -> CommandResult:
         tokens = args.strip().split()
@@ -2186,9 +2194,8 @@ def create_default_command_registry(
 
     register_session_commands(registry)
 
-    registry.register(SlashCommand("dream", "Consolidate memory", _dream_handler))
-    registry.register(SlashCommand("memory", "Inspect and manage project memory", _memory_handler))
-    registry.register(SlashCommand("hooks", "Show configured hooks", _hooks_handler))
+    register_memory_commands(registry)
+
     registry.register(
         SlashCommand(
             "resume",
