@@ -33,10 +33,27 @@ uv run python scripts/guards/check_thread_leak.py --fail-on-empty
 uv run python scripts/guards/check_secret_projection.py --fail-on-empty
 uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
 uv run python scripts/guards/check_layout.py --fail-on-empty
+uv run python scripts/guards/check_tool_radius.py --fail-on-empty
+uv run python scripts/guards/check_name_registries.py --fail-on-empty
+uv run python scripts/guards/check_mypy_scope.py --fail-on-empty
 uv run python scripts/guards/gen_tree.py --check
 uv run python scripts/guards/gen_structure_baseline.py --check
+uv run python scripts/guards/gen_namespaces.py --check
+uv run python scripts/guards/gen_graph.py --check
 uv run lint-imports
+uv run mypy
 ```
+
+## Generated documents
+
+Three documents are generated and must never be edited by hand; each `--check`
+fails on any difference, which is also how the frozen values work:
+
+| document | generator | what the check really proves |
+| --- | --- | --- |
+| `docs/architecture/TREE.md` | `gen_tree.py` | the tree map still matches the source |
+| `docs/architecture/NAMESPACES.md` | `gen_namespaces.py` | no name exists in code without a row |
+| `docs/architecture/GRAPH.md` | `gen_graph.py` | cycles, vacuous contracts and the frozen indirect edges did not grow |
 
 ## `_guard_kit.py`
 
