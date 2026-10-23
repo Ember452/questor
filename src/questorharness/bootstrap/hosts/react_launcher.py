@@ -56,6 +56,18 @@ def resolve_tsx(frontend_dir: Path) -> tuple[str, ...]:
     return (resolve_npm(), "exec", "--", "tsx")
 
 
+def _package_root() -> Path:
+    """Return the ``questorharness`` package directory.
+
+    Located by name rather than by ``__file__`` depth so that moving this module
+    between subpackages cannot silently point the launcher at the wrong folder.
+    """
+    for parent in Path(__file__).resolve().parents:
+        if parent.name == "questorharness":
+            return parent
+    return Path(__file__).resolve().parent
+
+
 def get_frontend_dir() -> Path:
     """Return the React terminal frontend directory.
 
@@ -64,15 +76,15 @@ def get_frontend_dir() -> Path:
     2. Development repo layout (source checkout)
     """
     # 1. 包内捆绑：questorharness/_frontend/
-    pkg_frontend = Path(__file__).resolve().parent.parent / "_frontend"
+    pkg_frontend = _package_root() / "_frontend"
     if (pkg_frontend / "package.json").exists():
         return pkg_frontend
 
     # 2. 开发仓库：<repo>/frontend/terminal/
-    repo_root = Path(__file__).resolve().parents[3]
-    dev_frontend = repo_root / "frontend" / "terminal"
-    if (dev_frontend / "package.json").exists():
-        return dev_frontend
+    for parent in _package_root().parents:
+        dev_frontend = parent / "frontend" / "terminal"
+        if (dev_frontend / "package.json").exists():
+            return dev_frontend
 
     # 回退到包内路径（会给出清晰错误）
     return pkg_frontend

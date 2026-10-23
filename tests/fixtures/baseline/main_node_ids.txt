@@ -1110,6 +1110,7 @@ tests/unit/test_ui/test_react_backend.py::test_read_requests_resolves_permission
 tests/unit/test_ui/test_react_backend.py::test_run_active_request_recovers_from_cancel
 tests/unit/test_ui/test_react_backend.py::test_run_backend_host_accepts_permission_mode
 tests/unit/test_ui/test_react_launcher.py::test_build_backend_command_includes_flags
+tests/unit/test_ui/test_react_launcher.py::test_frontend_dir_points_at_a_real_frontend
 tests/unit/test_ui/test_react_launcher.py::test_run_print_mode_passes_cwd_to_build_runtime
 tests/unit/test_ui/test_react_launcher.py::test_run_print_mode_waits_for_coordinator_async_agents
 tests/unit/test_ui/test_react_launcher.py::test_run_repl_uses_react_launcher_by_default

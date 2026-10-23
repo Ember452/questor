@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from questorharness.bootstrap.hosts.app import run_print_mode, run_repl, run_task_worker
 from questorharness.contracts.domain.events import AssistantTurnComplete
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock
-from questorharness.bootstrap.hosts.react_launcher import build_backend_command
+from questorharness.bootstrap.hosts.react_launcher import build_backend_command, get_frontend_dir
 
 
 class _AsyncIterator:
@@ -17,6 +17,18 @@ class _AsyncIterator:
 
     async def __anext__(self):
         raise StopAsyncIteration
+
+
+def test_frontend_dir_points_at_a_real_frontend():
+    """The resolved directory must contain package.json.
+
+    ``get_frontend_dir`` used ``__file__`` depth to find ``_frontend/`` and the
+    repo checkout; moving this module without updating that depth silently sent
+    the launcher at ``bootstrap/_frontend``.
+    """
+    frontend = get_frontend_dir()
+
+    assert (frontend / "package.json").exists(), frontend
 
 
 def test_build_backend_command_includes_flags():

@@ -178,7 +178,12 @@ async def start_dream_now(
         + stale_section
     )
     prompt = build_consolidation_prompt(resolved_memory_dir, resolved_session_dir, extra, preview=preview)
-    src_root = Path(__file__).resolve().parents[3]
+    # Locate the directory that holds the ``questorharness`` package by name, so
+    # moving this module cannot put the wrong root on the child's PYTHONPATH.
+    src_root = next(
+        (parent for parent in Path(__file__).resolve().parents if (parent / "questorharness").is_dir()),
+        Path(__file__).resolve().parents[3],
+    )
     existing_pythonpath = os.environ.get("PYTHONPATH", "")
     child_model = (model or settings.model or "").strip() or None
     env = {

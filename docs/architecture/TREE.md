@@ -16,7 +16,7 @@ run `uv run python scripts/guards/gen_tree.py --write` instead.
 | `src/questorharness/bootstrap/hosts/backend_host.py` | 945 |
 | `src/questorharness/bootstrap/hosts/coordinator_drain.py` | 197 |
 | `src/questorharness/bootstrap/hosts/protocol.py` | 247 |
-| `src/questorharness/bootstrap/hosts/react_launcher.py` | 179 |
+| `src/questorharness/bootstrap/hosts/react_launcher.py` | 191 |
 | `src/questorharness/bootstrap/runtime.py` | 794 |
 | `src/questorharness/capabilities/__init__.py` | 1 |
 | `src/questorharness/capabilities/context/__init__.py` | 1 |
@@ -38,7 +38,7 @@ run `uv run python scripts/guards/gen_tree.py --write` instead.
 | `src/questorharness/capabilities/memory/consolidate/backup.py` | 104 |
 | `src/questorharness/capabilities/memory/consolidate/lock.py` | 138 |
 | `src/questorharness/capabilities/memory/consolidate/prompt.py` | 128 |
-| `src/questorharness/capabilities/memory/consolidate/service.py` | 347 |
+| `src/questorharness/capabilities/memory/consolidate/service.py` | 352 |
 | `src/questorharness/capabilities/memory/extract/__init__.py` | 261 |
 | `src/questorharness/capabilities/memory/manager.py` | 183 |
 | `src/questorharness/capabilities/memory/memdir.py` | 52 |
