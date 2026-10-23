@@ -45,6 +45,8 @@ def _encode_task_worker_payload(data: str) -> bytes:
 
 CompletionListener = Callable[[TaskRecord], Awaitable[None] | None]
 
+_TERMINAL_TASK_STATUSES = frozenset({"completed", "failed", "killed"})
+
 
 class BackgroundTaskManager:
     """Manage shell and agent subprocess tasks."""
@@ -221,7 +223,7 @@ class BackgroundTaskManager:
             process.stdin.write(payload)
             try:
                 await process.stdin.drain()
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                 if task.type not in {"local_agent", "remote_agent", "in_process_teammate"}:
                     raise ValueError(f"Task {task_id} does not accept input") from None
                 process = await self._restart_agent_task(task)
@@ -337,7 +339,15 @@ class BackgroundTaskManager:
         task: TaskRecord,
     ) -> asyncio.subprocess.Process:
         process = self._processes.get(task.id)
-        if process is not None and process.stdin is not None and process.returncode is None:
+        # A task that already reached a terminal state must restart even if the OS
+        # has not reported the exit code yet: writing into the dying process's
+        # stdin silently drops the payload and the follow-up output never appears.
+        if (
+            process is not None
+            and process.stdin is not None
+            and process.returncode is None
+            and task.status not in _TERMINAL_TASK_STATUSES
+        ):
             return process
         if task.type not in {"local_agent", "remote_agent", "in_process_teammate"}:
             raise ValueError(f"Task {task.id} does not accept input")

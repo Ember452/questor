@@ -280,7 +280,7 @@ run `uv run python scripts/guards/gen_tree.py --write` instead.
 | `src/questorharness/runtime/tasks/__init__.py` | 18 |
 | `src/questorharness/runtime/tasks/local_agent_task.py` | 28 |
 | `src/questorharness/runtime/tasks/local_shell_task.py` | 17 |
-| `src/questorharness/runtime/tasks/manager.py` | 475 |
+| `src/questorharness/runtime/tasks/manager.py` | 485 |
 | `src/questorharness/runtime/tasks/stop_task.py` | 11 |
 | `src/questorharness/state/__init__.py` | 6 |
 | `src/questorharness/state/app_state.py` | 30 |

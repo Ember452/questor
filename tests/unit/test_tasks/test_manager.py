@@ -8,7 +8,49 @@ from pathlib import Path
 
 import pytest
 
+from questorharness.contracts.task import TaskRecord
 from questorharness.runtime.tasks.manager import BackgroundTaskManager, _encode_task_worker_payload
+
+
+@pytest.mark.asyncio
+async def test_completed_task_restarts_even_when_stale_process_is_still_mapped(tmp_path: Path) -> None:
+    """A finished task must restart on write, even before the OS reaps it.
+
+    Regression for a CI-only flake: sending a message to a completed agent wrote
+    into the dying process's stdin instead of restarting it, so the payload was
+    lost and the follow-up output never appeared.
+    """
+    manager = BackgroundTaskManager()
+    task = TaskRecord(
+        id="agent-1",
+        type="local_agent",
+        status="completed",
+        description="echo agent",
+        cwd=str(tmp_path),
+        output_file=tmp_path / "agent-1.log",
+        command="python -c pass",
+    )
+    manager._tasks[task.id] = task
+    manager._output_locks[task.id] = asyncio.Lock()
+    manager._input_locks[task.id] = asyncio.Lock()
+
+    class _StaleProcess:
+        stdin = object()  # writable handle still present
+        returncode = None  # not reaped yet, but the task already finished
+
+    manager._processes[task.id] = _StaleProcess()  # type: ignore[assignment]
+
+    restarted: list[str] = []
+
+    async def _fake_restart(record: TaskRecord):
+        restarted.append(record.id)
+        return _StaleProcess()
+
+    manager._restart_agent_task = _fake_restart  # type: ignore[method-assign]
+
+    await manager._ensure_writable_process(task)
+
+    assert restarted == [task.id]
 
 
 @pytest.mark.asyncio
