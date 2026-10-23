@@ -87,13 +87,28 @@ forbidden_modules =
 allow_indirect_imports = True
 
 [importlinter:contract:surfaces-are-thin]
-name = Channel surfaces may import contracts only
+name = Surfaces may import contracts, config and platform only
 type = forbidden
 source_modules =
-    questorharness.surfaces.channels
+    questorharness.surfaces
 forbidden_modules =
     questorharness.kernel
     questorharness.runtime
     questorharness.capabilities
     questorharness.providers
+    questorharness.engine
+    questorharness.commands
+    questorharness.plugins
+    questorharness.bootstrap
+allow_indirect_imports = True
+
+[importlinter:contract:command-families-are-leaf]
+name = Command families and helpers do not import the registry
+type = forbidden
+source_modules =
+    questorharness.commands.families
+    questorharness.commands.helpers
+    questorharness.commands.memory_commands
+forbidden_modules =
+    questorharness.commands.registry
 allow_indirect_imports = True

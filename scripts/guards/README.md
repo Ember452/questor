@@ -9,6 +9,7 @@ uv run python scripts/guards/_guard_kit.py --self-test
 uv run python scripts/guards/check_thread_leak.py --self-test
 uv run python scripts/guards/check_secret_projection.py --self-test
 uv run python scripts/guards/check_doc_cross_refs.py --self-test
+uv run python scripts/guards/check_layout.py --self-test
 ```
 
 Run the real checks:
@@ -17,6 +18,7 @@ Run the real checks:
 uv run python scripts/guards/check_thread_leak.py --fail-on-empty
 uv run python scripts/guards/check_secret_projection.py --fail-on-empty
 uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
+uv run python scripts/guards/check_layout.py --fail-on-empty
 uv run lint-imports
 ```
 
@@ -60,3 +62,14 @@ Checks:
 - empty documentation sets or reference sets when `--fail-on-empty` is used
 
 The v1 archive in `docs-pre-reset-v1/` is excluded.
+
+## `check_layout.py`
+
+Pins the Phase 2 layout so it cannot silently regress:
+
+- removed packages (`ui/`, `personalization/`, `surfaces/ipc/`) must not come back with Python sources
+- `surfaces/` may only contain renderer adapters (`channels/`), never a process host
+- `textual` / `prompt_toolkit` must not be imported anywhere under `src/`
+- `commands/registry.py` stays ≤250 lines and each `commands/families/*.py` stays ≤600
+
+Per-file limits are deliberately generous: they catch a god file being rebuilt, not normal growth.

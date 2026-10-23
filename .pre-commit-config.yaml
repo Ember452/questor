@@ -33,6 +33,12 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: layout
+        name: layout guard (removed packages, thin surfaces, file budgets)
+        entry: uv run python scripts/guards/check_layout.py --fail-on-empty
+        language: system
+        pass_filenames: false
+
       - id: baseline-fast
         name: baseline (fast)
         entry: uv run python scripts/baseline_check.py --check --fast

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import configparser
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 CONTRACT_SECTION = "importlinter:contract:engine-app-boundary"
+MINIMUM_CONTRACTS = 7
 
 
 def _project_root() -> Path:
@@ -42,7 +44,9 @@ def test_import_linter_contracts_pass() -> None:
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "Engine must not import the product app KEPT" in output
-    assert "Contracts: 6 kept, 0 broken." in output
+    summary = re.search(r"Contracts: (\d+) kept, 0 broken\.", output)
+    assert summary is not None, output
+    assert int(summary.group(1)) >= MINIMUM_CONTRACTS, output
     assert "BROKEN" not in output
 
 
