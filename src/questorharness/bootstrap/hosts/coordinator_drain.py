@@ -20,6 +20,7 @@ from questorharness.runtime.coordinator.coordinator_mode import (
 from questorharness.engine.query import MaxTurnsExceeded
 from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
 from questorharness.runtime.tasks.manager import get_task_manager
+from questorharness.runtime.output import format_pending_tool_results
 
 
 _TERMINAL_TASK_STATUSES = frozenset({"completed", "failed", "killed"})
@@ -123,8 +124,6 @@ async def submit_follow_up(
     print_system,
     render_event,
 ) -> None:
-    from questorharness.bootstrap.runtime import _format_pending_tool_results
-
     settings = bundle.current_settings()
     if bundle.enforce_max_turns:
         bundle.engine.set_max_turns(settings.max_turns)
@@ -142,7 +141,7 @@ async def submit_follow_up(
             await render_event(event)
     except MaxTurnsExceeded as exc:
         await print_system(f"Stopped after {exc.max_turns} turns (max_turns).")
-        pending = _format_pending_tool_results(bundle.engine.messages)
+        pending = format_pending_tool_results(bundle.engine.messages)
         if pending:
             await print_system(pending)
     bundle.session_backend.save_snapshot(

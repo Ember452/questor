@@ -1,8 +1,7 @@
-"""Shared runtime assembly for headless and Textual UIs."""
+"""Shared runtime assembly for the headless CLI and the IPC hosts."""
 
 from __future__ import annotations
 
-import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,8 +25,6 @@ from questorharness.config import load_settings
 from questorharness.engine import QueryEngine
 from questorharness.contracts.domain.message import (
     ConversationMessage,
-    ToolResultBlock,
-    ToolUseBlock,
     sanitize_conversation_messages,
 )
 from questorharness.engine.query import MaxTurnsExceeded
@@ -41,6 +38,7 @@ from questorharness.plugins import load_plugins
 from questorharness.capabilities.context.prompts import build_runtime_system_prompt
 from questorharness.state import AppState, AppStateStore
 from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, SessionBackend
+from questorharness.runtime.output import format_pending_tool_results
 from questorharness.capabilities.tools import ToolRegistry, create_default_tool_registry
 from questorharness.keybindings import load_keybindings
 
@@ -487,7 +485,7 @@ async def close_runtime(bundle: RuntimeBundle) -> None:
     await stop_docker_sandbox()
     # 关闭会话前提取本地环境规则
     try:
-        from questorharness.personalization.session_hook import update_rules_from_session
+        from questorharness.capabilities.memory.personalization.session_hook import update_rules_from_session
         update_rules_from_session(bundle.engine.messages)
     except Exception:
         pass  # 个性化处理尽力而为，绝不阻塞会话结束
@@ -507,62 +505,6 @@ def _last_user_text(messages: list[ConversationMessage]) -> str:
         if msg.role == "user" and msg.text.strip():
             return msg.text.strip()
     return ""
-
-
-def _truncate(text: str, limit: int) -> str:
-    if len(text) <= limit:
-        return text
-    return text[:limit] + "…"
-
-
-def _format_pending_tool_results(messages: list[ConversationMessage]) -> str | None:
-    """Render a compact summary when we stop after tool execution but before the follow-up model turn."""
-    if not messages:
-        return None
-
-    last = messages[-1]
-    if last.role != "user":
-        return None
-    tool_results = [block for block in last.content if isinstance(block, ToolResultBlock)]
-    if not tool_results:
-        return None
-
-    tool_uses_by_id: dict[str, ToolUseBlock] = {}
-    assistant_text = ""
-    for msg in reversed(messages[:-1]):
-        if msg.role != "assistant":
-            continue
-        if not msg.tool_uses:
-            continue
-        assistant_text = msg.text.strip()
-        for tu in msg.tool_uses:
-            tool_uses_by_id[tu.id] = tu
-        break
-
-    lines: list[str] = [
-        "Pending continuation: tool results were produced, but the model did not get a chance to respond yet."
-    ]
-    if assistant_text:
-        lines.append(f"Last assistant message: {_truncate(assistant_text, 400)}")
-
-    max_results = 3
-    for tr in tool_results[:max_results]:
-        tu = tool_uses_by_id.get(tr.tool_use_id)
-        if tu is not None:
-            raw_input = json.dumps(tu.input, ensure_ascii=True, sort_keys=True)
-            lines.append(
-                f"- {tu.name} {_truncate(raw_input, 200)} -> {_truncate(tr.content.strip(), 400)}"
-            )
-        else:
-            lines.append(
-                f"- tool_result[{tr.tool_use_id}] -> {_truncate(tr.content.strip(), 400)}"
-            )
-
-    if len(tool_results) > max_results:
-        lines.append(f"(+{len(tool_results) - max_results} more tool results)")
-
-    lines.append("To continue from these results, run: /continue [COUNT].")
-    return "\n".join(lines)
 
 
 def sync_app_state(bundle: RuntimeBundle) -> None:
@@ -681,7 +623,7 @@ async def handle_line(
                     await render_event(event)
             except MaxTurnsExceeded as exc:
                 await print_system(f"Stopped after {exc.max_turns} turns (max_turns).")
-                pending = _format_pending_tool_results(bundle.engine.messages)
+                pending = format_pending_tool_results(bundle.engine.messages)
                 if pending:
                     await print_system(pending)
             finally:
@@ -715,7 +657,7 @@ async def handle_line(
                     await render_event(event)
             except MaxTurnsExceeded as exc:
                 await print_system(f"Stopped after {exc.max_turns} turns (max_turns).")
-                pending = _format_pending_tool_results(bundle.engine.messages)
+                pending = format_pending_tool_results(bundle.engine.messages)
                 if pending:
                     await print_system(pending)
             bundle.session_backend.save_snapshot(
@@ -748,7 +690,7 @@ async def handle_line(
             await render_event(event)
     except MaxTurnsExceeded as exc:
         await print_system(f"Stopped after {exc.max_turns} turns (max_turns).")
-        pending = _format_pending_tool_results(bundle.engine.messages)
+        pending = format_pending_tool_results(bundle.engine.messages)
         if pending:
             await print_system(pending)
         bundle.session_backend.save_snapshot(

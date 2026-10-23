@@ -33,8 +33,8 @@ from questorharness.contracts.domain.events import (
 )
 from questorharness.output_styles import load_output_styles
 from questorharness.runtime.tasks import get_task_manager
-from questorharness.surfaces.ipc.coordinator_drain import drain_coordinator_async_agents
-from questorharness.surfaces.ipc.protocol import BackendEvent, FrontendImageAttachment, FrontendRequest, TranscriptItem
+from questorharness.bootstrap.hosts.coordinator_drain import drain_coordinator_async_agents
+from questorharness.bootstrap.hosts.protocol import BackendEvent, FrontendImageAttachment, FrontendRequest, TranscriptItem
 from questorharness.bootstrap.runtime import build_runtime, close_runtime, handle_line, start_runtime
 from questorharness.runtime.session.backend import SessionBackend
 

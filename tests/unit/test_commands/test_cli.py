@@ -213,7 +213,7 @@ def test_dangerously_skip_permissions_passes_full_auto_to_run_repl(monkeypatch):
     async def fake_run_repl(**kwargs):
         captured.update(kwargs)
 
-    monkeypatch.setattr("questorharness.surfaces.ipc.app.run_repl", fake_run_repl)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.app.run_repl", fake_run_repl)
 
     result = runner.invoke(app, ["--dangerously-skip-permissions"])
 
@@ -228,7 +228,7 @@ def test_task_worker_flag_routes_to_run_task_worker(monkeypatch):
     async def fake_run_task_worker(**kwargs):
         captured.update(kwargs)
 
-    monkeypatch.setattr("questorharness.surfaces.ipc.app.run_task_worker", fake_run_task_worker)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.app.run_task_worker", fake_run_task_worker)
 
     result = runner.invoke(app, ["--task-worker", "--model", "kimi-k2.5"])
 
@@ -276,7 +276,7 @@ def test_dry_run_uses_preview_builder_and_skips_repl(monkeypatch):
         raise AssertionError(f"run_repl should not be called during dry-run: {kwargs}")
 
     monkeypatch.setattr("questorharness.cli._build_dry_run_preview", fake_build_dry_run_preview)
-    monkeypatch.setattr("questorharness.surfaces.ipc.app.run_repl", fake_run_repl)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.app.run_repl", fake_run_repl)
 
     result = runner.invoke(app, ["--dry-run", "--print", "ship it", "--model", "gpt-5.4"])
 

@@ -482,13 +482,13 @@ apps/web/
 |---|---|---|
 | `api/`、`auth/`、`sandbox/` | 降为适配器 | `providers/{llm,auth,sandbox}/` |
 | `coordinator/`、`swarm/`、`tasks/`、`autopilot/`、`hooks/`、`bridge/` | 已完成：下沉到运行时 | `runtime/{coordinator,swarm,tasks,autopilot,hooks,bridge}/` |
-| `engine/`、`commands/` | **保留在顶层** | `engine/` 是编排层（循环必须组合 capabilities/providers/runtime），`commands/` 是应用层分派器；内核立项后再拆 `runtime/run` + `runtime/turn` |
+| `engine/`、`commands/` | **保留在顶层** | `engine/` 是编排层（循环必须组合 capabilities/providers/runtime），`commands/` 是应用层分派器；`commands/registry.py` 已按命令族拆到 `commands/families/`（主文件 107 行） |
 | `state/` | Phase 1 **不动**，Phase 2 再拆 | 事实状态 → `kernel/`（durable 立项后）；UI 可观察状态 → 前端 store |
 | `services/*` | 解散 | `capabilities/{context,memory,schedule}/`、`providers/lsp/`、`runtime/budget/` |
 | `skills/`、`plugins/` | `skills/` 已归位 `capabilities/skills/`（含 bundled 数据）；`AgentDefinition` 已入 `contracts/agent.py` | `plugins/` 仍依赖 coordinator 的私有解析函数，暂留顶层作为扩展层 |
-| `personalization/` | 升级为记忆能力 | `capabilities/memory/personalization/`（Phase 3） |
+| `personalization/` | 已完成：归位为记忆能力 | `capabilities/memory/personalization/` |
 | `memory/`、`permissions/`、`channels/`、`mcp/` | 升级为能力/传输 | `capabilities/{memory,policy,tools/mcp}/`、`surfaces/channels/`、`providers/mcp/` |
-| `ui/` | 已完成：组合根 → `bootstrap/runtime.py`，宿主 → `surfaces/ipc/` | 不删除；`keybindings/`、`themes/`、`vim/`、`output_styles/` 保留 |
+| `ui/` | 已完成并删除：组合根 → `bootstrap/runtime.py`，进程宿主 → `bootstrap/hosts/`；textual 代码与依赖已移除 | `keybindings/`、`themes/`、`vim/`、`output_styles/` 保留 |
 | `voice/` | 下移为适配器 | `providers/voice/`（Phase 2） |
 | `utils/`、`config/` | 解散/归位（Phase 2） | `kernel/`（锁）、`contracts/settings.py`（配置类型）+ `bootstrap/config/`（只做解析与注入）；`bridge/` 已归 `runtime/bridge/` |
 | `questor/gateway` | 拆产品策略与传输 | surfaces/gateway（协议路由）+ 产品包内的渠道策略目录 |

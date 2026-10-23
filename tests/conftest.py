@@ -68,9 +68,6 @@ _WINDOWS_ENVIRONMENT_SKIPS = {
     "tests/unit/test_tools/test_core_tools.py::test_cron_and_remote_trigger_tools": (
         "trigger command uses POSIX printf on native Windows"
     ),
-    "tests/unit/test_ui/test_modes.py::test_input_session_updates_prompt_modes": (
-        "prompt_toolkit requires an interactive Windows console"
-    ),
     "tests/unit/test_utils/test_shell.py::test_create_shell_subprocess_defaults_stdin_to_devnull": (
         "test assumes bash, but native Windows resolves to cmd.exe or PowerShell"
     ),

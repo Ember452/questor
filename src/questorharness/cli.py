@@ -2006,7 +2006,7 @@ def _config_coerce_value(current: object, raw: str) -> object:
 @config_app.command("show")
 def config_show() -> None:
     """Print the resolved settings JSON."""
-    from questorharness.commands.registry import _settings_json_for_display
+    from questorharness.commands.helpers import _settings_json_for_display
     from questorharness.config.settings import load_settings
 
     print(_settings_json_for_display(load_settings()), flush=True)
@@ -2395,7 +2395,7 @@ def main(
         settings.theme = theme
         save_settings(settings)
 
-    from questorharness.surfaces.ipc.app import run_print_mode, run_repl, run_task_worker
+    from questorharness.bootstrap.hosts.app import run_print_mode, run_repl, run_task_worker
 
     if dry_run and (continue_session or resume is not None):
         print("Error: --dry-run does not support --continue/--resume yet.", file=sys.stderr)

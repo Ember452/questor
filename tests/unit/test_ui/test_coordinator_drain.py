@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import pytest
 
-from questorharness.surfaces.ipc import coordinator_drain
-from questorharness.surfaces.ipc.backend_host import BackendHostConfig, ReactBackendHost
-from questorharness.surfaces.ipc.coordinator_drain import (
+from questorharness.bootstrap.hosts import coordinator_drain
+from questorharness.bootstrap.hosts.backend_host import BackendHostConfig, ReactBackendHost
+from questorharness.bootstrap.hosts.coordinator_drain import (
     drain_coordinator_async_agents,
     pending_async_agent_entries,
 )
@@ -101,8 +101,8 @@ async def test_react_backend_drains_async_agents_in_coordinator_mode(tmp_path, m
         del bundle, line, print_system, render_event, clear_output
         return True
 
-    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.handle_line", _fake_handle_line)
-    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.is_coordinator_mode", lambda: True)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.handle_line", _fake_handle_line)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.is_coordinator_mode", lambda: True)
 
     drain_calls: list[dict[str, object]] = []
 
@@ -115,7 +115,7 @@ async def test_react_backend_drains_async_agents_in_coordinator_mode(tmp_path, m
         )
 
     monkeypatch.setattr(
-        "questorharness.surfaces.ipc.backend_host.drain_coordinator_async_agents",
+        "questorharness.bootstrap.hosts.backend_host.drain_coordinator_async_agents",
         _fake_drain,
     )
 
@@ -149,15 +149,15 @@ async def test_react_backend_skips_drain_when_not_coordinator(tmp_path, monkeypa
         del bundle, line, print_system, render_event, clear_output
         return True
 
-    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.handle_line", _fake_handle_line)
-    monkeypatch.setattr("questorharness.surfaces.ipc.backend_host.is_coordinator_mode", lambda: False)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.handle_line", _fake_handle_line)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.is_coordinator_mode", lambda: False)
 
     async def _fake_drain(*args, **kwargs):  # pragma: no cover
         del args, kwargs
         raise AssertionError("drain must not be called outside coordinator mode")
 
     monkeypatch.setattr(
-        "questorharness.surfaces.ipc.backend_host.drain_coordinator_async_agents",
+        "questorharness.bootstrap.hosts.backend_host.drain_coordinator_async_agents",
         _fake_drain,
     )
 

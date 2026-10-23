@@ -10,9 +10,9 @@ from questorharness.runtime.coordinator.coordinator_mode import is_coordinator_m
 
 from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.contracts.domain.events import StreamEvent
-from questorharness.surfaces.ipc.backend_host import run_backend_host
-from questorharness.surfaces.ipc.coordinator_drain import drain_coordinator_async_agents
-from questorharness.surfaces.ipc.react_launcher import launch_react_tui
+from questorharness.bootstrap.hosts.backend_host import run_backend_host
+from questorharness.bootstrap.hosts.coordinator_drain import drain_coordinator_async_agents
+from questorharness.bootstrap.hosts.react_launcher import launch_react_tui
 from questorharness.bootstrap.runtime import build_runtime, close_runtime, handle_line, start_runtime
 
 

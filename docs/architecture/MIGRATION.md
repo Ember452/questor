@@ -114,13 +114,13 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `skills/`、`plugins/` | `skills/` → `capabilities/skills/`（已完成）；`AgentDefinition` → `contracts/agent.py`（已完成） | `plugins/` 仍依赖 coordinator 的私有解析函数（`_parse_agent_frontmatter` 等），暂留顶层作为扩展层 |
 | `state/`（UI store） | **Phase 1 不动**；Phase 2 再拆 | 事实状态层不建（durable 未立项） |
 | `engine/` | **保留在顶层**（编排层） | 循环组合 capabilities/providers/runtime；内核立项后再拆 `runtime/run` + `runtime/turn` |
-| `commands/` | **保留在顶层**（应用层分派器） | `registry.py` 2586 行按命令族拆（未做） |
+| `commands/` | **保留在顶层**（应用层分派器） | `registry.py` 已按命令族拆到 `commands/families/`：主文件 107 行，单族文件 ≤434 行 |
 | `coordinator/`、`swarm/` | `runtime/coordinator/` + `runtime/swarm/`（已完成） | 按 team / permission / backend 拆 |
 | `tasks/` | `runtime/tasks/`（已完成） | 拆 task_manager / local_agent / local_shell |
 | `autopilot/` | `runtime/autopilot/`（已完成，文件未拆） | 拆 `{policy,loop,triggers,state}`（service.py 2089） |
 | `hooks/` | `runtime/hooks/`（已完成） | 按 hook 类型拆 |
-| `ui/` | 已完成：`bootstrap/runtime.py` + `surfaces/ipc/` | 不删除（ADR-0005 已更新）；`keybindings/`、`themes/`、`vim/`、`output_styles/` 保留 |
-| `keybindings/`、`themes/`、`vim/`、`output_styles/` | **Phase 1 冻结**；Phase 2 随 UI 一起移除（ADR-0005） | 不迁 `surfaces/terminal/` |
+| `ui/` | 已完成并删除：组合根 → `bootstrap/runtime.py`，进程宿主 → `bootstrap/hosts/`；textual 与 prompt-toolkit 已移除 | `keybindings/`、`themes/`、`vim/`、`output_styles/` 保留 |
+| `keybindings/`、`themes/`、`vim/`、`output_styles/` | **保留**（ADR-0005 已更新：不随 UI 删除） | 不迁 `surfaces/terminal/` |
 | `voice/` | `providers/voice/`（Phase 2） | 有策略时升 capabilities |
 | `utils/` | Phase 2 才归位；落 `providers/`（fs / shell / network_guard） | 解散，不留 utils |
 | `config/` | 已收敛为叶子：模型与加载同包，只依赖 `contracts` | `Settings.resolve_auth()` 的 provider 惰性边待销账 |

@@ -8,4 +8,4 @@
 已知债（逐条销账）：`hooks/executor.py` → `providers.llm`/`providers.sandbox`（顶层）；`swarm/in_process.py` → `engine.query`（函数内，环）；`swarm/permission_sync.py` → `capabilities.policy`（函数内）；`autopilot/service.py` → `capabilities.schedule`（函数内；agent 执行走 bootstrap 注入的 runner，已无 ui 依赖）；`coordinator/agent_definitions.py` → `plugins.loader`（函数内）。
 禁止：不要把 `engine/` 或 `commands/` 搬进来——循环是编排层，命令分派是应用层（见 STRUCTURE.md §8）。
 测试：`uv run pytest tests/unit/test_services tests/unit/test_hooks tests/integration/test_swarm -q`
-关键文件：`tasks/manager.py`、`hooks/executor.py`、`services/task_runtime.py`、`services/subagent_runtime.py`
+关键文件：`tasks/manager.py`、`hooks/executor.py`、`services/task_runtime.py`、`services/subagent_runtime.py`、`output.py`（引擎消息 → 终端摘要，宿主共用）
