@@ -89,3 +89,21 @@ target-version = "py311"
 [tool.mypy]
 python_version = "3.11"
 strict = true
+# ``src/__init__.py`` makes ``src`` a package, so mypy would otherwise name the
+# same file ``src.questorharness...`` and ``questorharness...``. Pin the base.
+mypy_path = "src"
+explicit_package_bases = true
+# Whitelist, never an exclusion list: a package joins here after it reaches zero
+# errors, and scripts/guards/check_mypy_scope.py keeps new modules from silently
+# staying outside. W4 starts with contracts + platform + config (22 modules).
+files = [
+    "src/questorharness/contracts",
+    "src/questorharness/platform",
+    "src/questorharness/config",
+]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# PyYAML ships no stubs; remove this override once types-PyYAML is a dependency.
+module = ["yaml"]
+ignore_missing_imports = true

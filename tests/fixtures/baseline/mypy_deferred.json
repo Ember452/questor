@@ -1,0 +1,28 @@
+{
+  "caliber": "non-__init__ modules per package outside the mypy whitelist; counts may only go down",
+  "packages": {
+    "src/questor": 19,
+    "src/questorharness": 10,
+    "src/questorharness/bootstrap": 6,
+    "src/questorharness/capabilities": 81,
+    "src/questorharness/commands": 16,
+    "src/questorharness/engine": 9,
+    "src/questorharness/execution": 2,
+    "src/questorharness/keybindings": 4,
+    "src/questorharness/output_styles": 1,
+    "src/questorharness/plugins": 4,
+    "src/questorharness/providers": 27,
+    "src/questorharness/runtime": 40,
+    "src/questorharness/state": 2,
+    "src/questorharness/surfaces": 9,
+    "src/questorharness/themes": 3,
+    "src/questorharness/vim": 1
+  },
+  "pinned_at": "741c3840979376ffa2bd5de398a7f81b0977601a",
+  "whitelist_modules": 22,
+  "whitelist_roots": [
+    "src/questorharness/config",
+    "src/questorharness/contracts",
+    "src/questorharness/platform"
+  ]
+}

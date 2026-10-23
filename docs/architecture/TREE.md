@@ -192,7 +192,7 @@ run `uv run python scripts/guards/gen_tree.py --write` instead.
 | `src/questorharness/platform/io.py` | 100 |
 | `src/questorharness/platform/locking.py` | 88 |
 | `src/questorharness/platform/paths.py` | 160 |
-| `src/questorharness/platform/session_storage.py` | 230 |
+| `src/questorharness/platform/session_storage.py` | 234 |
 | `src/questorharness/plugins/__init__.py` | 55 |
 | `src/questorharness/plugins/bundled/__init__.py` | 0 |
 | `src/questorharness/plugins/installer.py` | 41 |
