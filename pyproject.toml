@@ -118,6 +118,10 @@ files = [
     # W8/W10: the terminal-prompt layer split out of the CLI entry point joins the
     # strict whitelist for the same reason as the other split halves above.
     "src/questorharness/bootstrap/cli/cli_prompts.py",
+    # W8 second cut: the wizard and the auth group leave the entry point with their
+    # annotations intact, so they join the whitelist rather than the deferred pool.
+    "src/questorharness/bootstrap/cli/setup.py",
+    "src/questorharness/bootstrap/cli/auth_commands.py",
 ]
 plugins = ["pydantic.mypy"]
 

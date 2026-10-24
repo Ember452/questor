@@ -54,11 +54,11 @@
 
 | module | imported by | 类型 |
 | --- | ---: | --- |
-| `questorharness.config.settings` | 40 | 契约/原语/实现 |
+| `questorharness.config.settings` | 41 | 契约/原语/实现 |
 | `questorharness.platform.paths` | 31 | 契约/原语/实现 |
 | `questorharness.api` | 28 | 契约/原语/实现 |
 | `questorharness.contracts.domain.message` | 28 | 契约/原语/实现 |
-| `questorharness.providers.auth.auth_manager` | 17 | 契约/原语/实现 |
+| `questorharness.providers.auth.auth_manager` | 18 | 契约/原语/实现 |
 | `questorharness.config` | 15 | 契约/原语/实现 |
 | `questorharness.contracts.domain.events` | 15 | 契约/原语/实现 |
 | `questorharness.contracts.hooks` | 14 | 契约/原语/实现 |
@@ -72,7 +72,6 @@
 - `src/questorharness/capabilities/context/compact/__init__.py`: 1171 lines
 - `src/questorharness/runtime/swarm/permission_sync.py`: 1162 lines
 - `src/questor/gateway/runtime.py`: 1089 lines
-- `src/questorharness/bootstrap/cli/main.py`: 1086 lines
 
 ### 目录（>=17 个非 init 源文件）
 

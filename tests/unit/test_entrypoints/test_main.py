@@ -2,7 +2,6 @@
 
 import json
 import re
-import sys
 import types
 from pathlib import Path
 
@@ -12,7 +11,6 @@ import questorharness.bootstrap.cli.main as cli
 from questorharness.config import load_settings
 from questorharness.config.settings import Settings
 from questorharness.contracts.mcp import McpStdioServerConfig
-
 
 app = cli.app
 
@@ -46,9 +44,9 @@ def test_setup_flow_selects_profile_and_model(tmp_path: Path, monkeypatch):
     def fake_login(provider):
         logged_in.append(provider)
 
-    monkeypatch.setattr("questorharness.bootstrap.cli.main._select_setup_workflow", fake_select)
-    monkeypatch.setattr("questorharness.bootstrap.cli.main._prompt_model_for_profile", lambda profile: "gpt-5.4")
-    monkeypatch.setattr("questorharness.bootstrap.cli.main._login_provider", fake_login)
+    monkeypatch.setattr("questorharness.bootstrap.cli.setup._select_setup_workflow", fake_select)
+    monkeypatch.setattr("questorharness.bootstrap.cli.setup._prompt_model_for_profile", lambda profile: "gpt-5.4")
+    monkeypatch.setattr("questorharness.bootstrap.cli.setup._login_provider", fake_login)
 
     result = runner.invoke(app, ["setup"])
     assert result.exit_code == 0
@@ -58,38 +56,6 @@ def test_setup_flow_selects_profile_and_model(tmp_path: Path, monkeypatch):
     settings = load_settings()
     assert settings.active_profile == "codex"
     assert settings.resolve_profile()[1].last_model == "gpt-5.4"
-
-
-def test_select_from_menu_uses_questionary_when_tty(monkeypatch):
-    answers = []
-
-    class _Prompt:
-        def ask(self):
-            return "codex"
-
-    fake_questionary = types.SimpleNamespace(
-        Choice=lambda title, value, checked=False: {
-            "title": title,
-            "value": value,
-            "checked": checked,
-        },
-        select=lambda title, choices, default=None: answers.append((title, choices, default)) or _Prompt(),
-    )
-
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
-    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
-    monkeypatch.setattr(cli.sys, "__stdin__", sys.stdin)
-    monkeypatch.setattr(cli.sys, "__stdout__", sys.stdout)
-    monkeypatch.setitem(sys.modules, "questionary", fake_questionary)
-
-    result = cli._select_from_menu(
-        "Choose a provider workflow:",
-        [("codex", "Codex"), ("claude-api", "Claude API")],
-        default_value="codex",
-    )
-
-    assert result == "codex"
-    assert answers
 
 
 def test_setup_flow_existing_api_key_profile_can_update_secret(tmp_path: Path, monkeypatch):
@@ -104,11 +70,11 @@ def test_setup_flow_existing_api_key_profile_can_update_secret(tmp_path: Path, m
     manager.store_profile_credential("openai-compatible", "api_key", "old-key")
 
     selections = iter(["openai-compatible", "openai-compatible"])
-    monkeypatch.setattr("questorharness.bootstrap.cli.main._select_setup_workflow", lambda *args, **kwargs: next(selections))
-    monkeypatch.setattr("questorharness.bootstrap.cli.main._select_from_menu", lambda *args, **kwargs: next(selections))
-    monkeypatch.setattr("questorharness.bootstrap.cli.main._confirm_prompt", lambda *args, **kwargs: True)
+    monkeypatch.setattr("questorharness.bootstrap.cli.setup._select_setup_workflow", lambda *args, **kwargs: next(selections))
+    monkeypatch.setattr("questorharness.bootstrap.cli.setup._select_from_menu", lambda *args, **kwargs: next(selections))
+    monkeypatch.setattr("questorharness.bootstrap.cli.setup._confirm_prompt", lambda *args, **kwargs: True)
     monkeypatch.setattr("questorharness.providers.auth.flows.ApiKeyFlow.run", lambda self: "new-key")
-    monkeypatch.setattr("questorharness.bootstrap.cli.main._prompt_model_for_profile", lambda profile: "gpt-4.1")
+    monkeypatch.setattr("questorharness.bootstrap.cli.setup._prompt_model_for_profile", lambda profile: "gpt-4.1")
 
     result = runner.invoke(app, ["setup"])
 
@@ -132,9 +98,9 @@ def test_setup_flow_creates_kimi_profile_with_profile_scoped_key(tmp_path: Path,
         ]
     )
 
-    monkeypatch.setattr("questorharness.bootstrap.cli.main._select_setup_workflow", lambda *args, **kwargs: next(selections))
-    monkeypatch.setattr("questorharness.bootstrap.cli.main._select_from_menu", lambda *args, **kwargs: next(selections))
-    monkeypatch.setattr("questorharness.bootstrap.cli.main._text_prompt", lambda *args, **kwargs: next(prompts))
+    monkeypatch.setattr("questorharness.bootstrap.cli.setup._select_setup_workflow", lambda *args, **kwargs: next(selections))
+    monkeypatch.setattr("questorharness.bootstrap.cli.setup._select_from_menu", lambda *args, **kwargs: next(selections))
+    monkeypatch.setattr("questorharness.bootstrap.cli.setup._text_prompt", lambda *args, **kwargs: next(prompts))
     monkeypatch.setattr("questorharness.providers.auth.flows.ApiKeyFlow.run", lambda self: "sk-kimi-test")
 
     result = runner.invoke(app, ["setup"])

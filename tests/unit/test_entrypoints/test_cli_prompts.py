@@ -201,3 +201,33 @@ def test_every_provider_and_auth_source_has_a_readable_label() -> None:
     # The labels the wizard shows are keyed by the same identifiers settings use.
     assert _PROVIDER_LABELS["anthropic"] == "Anthropic (Claude API)"
     assert _AUTH_SOURCE_LABELS["openai_api_key"] == "OpenAI API key"
+def test_questionary_select_gets_the_title_choices_and_default(monkeypatch, with_questionary) -> None:
+    """The interactive menu hands questionary the title, the choices and the default."""
+    recorded: list[tuple[object, object, object]] = []
+
+    class _Prompt:
+        def ask(self) -> str:
+            return "codex"
+
+    def fake_select(title: str, *, choices: list[object], default: object = None) -> _Prompt:
+        recorded.append((title, choices, default))
+        return _Prompt()
+
+    monkeypatch.setattr(with_questionary, "select", fake_select, raising=False)
+    monkeypatch.setattr(
+        with_questionary,
+        "Choice",
+        lambda *, title, value, checked=False: {"title": title, "value": value, "checked": checked},
+        raising=False,
+    )
+
+    options = [("codex", "Codex"), ("claude-api", "Claude API")]
+    assert _select_from_menu("Choose a provider workflow:", options, default_value="codex") == "codex"
+
+    title, choices, default = recorded[0]
+    assert (title, default) == ("Choose a provider workflow:", "codex")
+    assert choices == [
+        {"title": "Codex", "value": "codex", "checked": True},
+        {"title": "Claude API", "value": "claude-api", "checked": False},
+    ]
+    assert len(recorded) == 1
