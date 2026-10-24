@@ -52,6 +52,12 @@ LINT_LINE = re.compile(r"^Contracts: (\d+) kept, (\d+) broken\.")
 MESSAGES_LINE = re.compile(r"^messages= (\d+)$", re.MULTILINE)
 GIT_LINE = re.compile(r"^\s*-\s*Git:\s*yes \(branch:.*\)\s*$")
 
+# rich 控制台的渲染宽度;typer 经 ``TERMINAL_WIDTH`` 读到它。见 ``_child_env``。
+RENDER_WIDTH = "80"
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+_BOX_CORNERS = str.maketrans({"╭": "┌", "╮": "┐", "╰": "└", "╯": "┘"})
+_VERTICAL_BORDERS = ("│", "┃")
+
 SNAPSHOT_SCRIPT = """
 import os, shutil, tempfile
 from pathlib import Path
@@ -75,6 +81,10 @@ def _child_env() -> dict[str, str]:
             env.pop(key)
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
+    # typer 把 ``TERMINAL_WIDTH`` 当作 rich 控制台的显式宽度(rich_utils.MAX_WIDTH)。
+    # 不钉住时宽度取自终端:legacy Windows 控制台取的是终端宽减一(79),Linux runner
+    # 取 80,于是每个面板的换行点和右侧补白整块漂一格。钉成 80,两边同宽。
+    env["TERMINAL_WIDTH"] = RENDER_WIDTH
     return env
 
 
@@ -88,14 +98,28 @@ def _normalize(text: str) -> str:
     # Pin its presence, not its value: prompt content is covered by
     # scripts/ci/prompt_surface.py with fixed rendering inputs.
     text = re.sub(r"(?m)^- system prompt chars: \d+$", "- system prompt chars: <VOLATILE>", text)
-    # 含掩码的行是机器路径行:整行统一分隔符,Windows 的 ``\`` 与 Linux 的
+    # rich 在 legacy Windows 控制台上把圆角框降级成方角(box 的 safe 替换),Linux
+    # 保持圆角:同一份 help 文本在两台机器上的角字符天然不同。只统一字形,不动内容。
+    # ANSI 同理:typer 在 GITHUB_ACTIONS 下强制终端(rich_utils.FORCE_TERMINAL),
+    # 本机管道不强制,颜色转义不该进入快照。
+    text = _ANSI_ESCAPE.sub("", text).translate(_BOX_CORNERS)
+    # 含掩码的行是机器路径行:整行统一分隔符,Windows 的 ``\\`` 与 Linux 的
     # ``/`` 不再造成假差异;不含掩码的正文一字不动。prompt_surface 也经由
     # 本函数获得同一口径。
+    #
+    # 掩码换掉的是长度不同的真实路径(checkout 路径 31 格,CI 的 33 格),rich
+    # 面板右侧的补白因此跟着漂:含掩码的行去掉行尾竖线再 rstrip,内容照旧比对,
+    # 纯补白不参与。
     trailing_newline = text.endswith("\n")
-    lines = [
-        line.replace("\\", "/") if ("<REPO>" in line or "<HOME>" in line) else line
-        for line in text.splitlines()
-    ]
+    lines = []
+    for line in text.splitlines():
+        if "<REPO>" not in line and "<HOME>" not in line:
+            lines.append(line)
+            continue
+        line = line.replace("\\", "/")
+        if line.endswith(_VERTICAL_BORDERS):
+            line = line[:-1]
+        lines.append(line.rstrip())
     text = "\n".join(lines) + ("\n" if trailing_newline else "")
     return text
 
