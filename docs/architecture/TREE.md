@@ -27,7 +27,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/app.py` | 326 |
 | `src/questorharness/bootstrap/hosts/coordinator_drain.py` | 196 |
 | `src/questorharness/bootstrap/hosts/serve/__init__.py` | 23 |
-| `src/questorharness/bootstrap/hosts/serve/auth.py` | 117 |
+| `src/questorharness/bootstrap/hosts/serve/auth.py` | 123 |
 | `src/questorharness/bootstrap/hosts/serve/authority.py` | 223 |
 | `src/questorharness/bootstrap/hosts/serve/broadcaster.py` | 131 |
 | `src/questorharness/bootstrap/hosts/serve/eventstream.py` | 46 |

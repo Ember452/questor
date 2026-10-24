@@ -10,6 +10,7 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import httpx
 import pytest
@@ -17,6 +18,7 @@ import pytest
 from questorharness.bootstrap.hosts.serve import ServeHost, auth
 from questorharness.bootstrap.hosts.serve.authority import Authority
 from questorharness.bootstrap.hosts.serve.http_server import HttpServer
+from questorharness.contracts.domain.events import StatusEvent
 
 PROFILE_YAML = "name: coding\ndescription: loopback\nui:\n  capabilities:\n    chat: ready\n"
 
@@ -100,7 +102,7 @@ def test_loopback_auth_matrix_and_client_ownership(tmp_path: Path, monkeypatch) 
                     cookies=cookie,
                 )
                 assert owner.status_code == 200
-                await asyncio.gather(*host._tasks.values(), return_exceptions=True)  # noqa: SLF001
+                await asyncio.gather(*host._tasks.values(), return_exceptions=True)
         finally:
             await server.close()
 
@@ -126,6 +128,83 @@ def test_settled_prompt_is_rejected_twice(tmp_path: Path) -> None:
                 )
                 assert response.status_code == 409
                 assert response.json()["code"] == "approval.already_settled"
+        finally:
+            await server.close()
+
+    asyncio.run(scenario())
+
+
+def test_two_clients_race_the_same_approval(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """同一个审批 id：再答一次 → already_settled；非持有者 → not_owner。"""
+
+    holder: dict[str, Any] = {}
+
+    async def prompt_turn(
+        bundle, line, *, print_system, render_event, clear_output, user_message=None
+    ):  # type: ignore[no-untyped-def]
+        host = holder["host"]
+        allowed = await host.authority.permission_prompt("bash", "danger")
+        await render_event(StatusEvent(message=f"allowed={allowed}"))
+        return True
+
+    from questorharness.bootstrap import runtime as runtime_module
+
+    monkeypatch.setattr(runtime_module, "handle_line", prompt_turn, raising=True)
+
+    async def wait_for_prompt(host: ServeHost) -> str:
+        for _ in range(200):
+            for _, frame in host.broadcaster.replay(0).frames:
+                if frame["kind"] == "approval_request":
+                    return str(frame["id"])
+            await asyncio.sleep(0.01)
+        raise AssertionError("approval_request never arrived")
+
+    async def scenario() -> None:
+        host = _host(tmp_path)
+        holder["host"] = host
+        credential = auth.LaunchCredential.issue()
+        server = HttpServer(host.router, credential)
+        port = await server.start()
+        base = f"http://127.0.0.1:{port}"
+        origin = {"Origin": base}
+        cookie = {auth.COOKIE_NAME: credential.token}
+        try:
+            async with httpx.AsyncClient() as client:
+                submit = await client.post(
+                    f"{base}/rt/r1/submit",
+                    headers={**origin, auth.CLIENT_HEADER: "owner"},
+                    cookies=cookie,
+                    json={"line": "needs approval", "clientRequestId": "appr-1"},
+                )
+                assert submit.status_code == 202
+                prompt_id = await wait_for_prompt(host)
+
+                intruder = await client.post(
+                    f"{base}/rt/r1/approve",
+                    headers={**origin, auth.CLIENT_HEADER: "intruder"},
+                    cookies=cookie,
+                    json={"id": prompt_id, "decision": "approve"},
+                )
+                assert intruder.status_code == 409
+                assert intruder.json()["code"] == "approval.not_owner"
+
+                first = await client.post(
+                    f"{base}/rt/r1/approve",
+                    headers={**origin, auth.CLIENT_HEADER: "owner"},
+                    cookies=cookie,
+                    json={"id": prompt_id, "decision": "approve"},
+                )
+                assert first.status_code == 200
+
+                second = await client.post(
+                    f"{base}/rt/r1/approve",
+                    headers={**origin, auth.CLIENT_HEADER: "owner"},
+                    cookies=cookie,
+                    json={"id": prompt_id, "decision": "deny"},
+                )
+                assert second.status_code == 409
+                assert second.json()["code"] == "approval.already_settled"
+                await asyncio.wait_for(asyncio.gather(*host._tasks.values()), timeout=30)
         finally:
             await server.close()
 

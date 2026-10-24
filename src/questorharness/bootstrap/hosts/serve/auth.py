@@ -78,9 +78,11 @@ class ParentLease:
         self._thread: threading.Thread | None = None
         self._stopped = threading.Event()
         self._fired = False
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def start(self) -> None:
-        """启动两个探针（stdin EOF 线程 + ppid 轮询任务）。"""
+        """启动 stdin EOF 探针；记住事件循环以便工作线程安全唤醒。"""
+        self._loop = asyncio.get_running_loop()
         self._thread = threading.Thread(
             target=self._watch_stdin, name="serve-parent-lease", daemon=True
         )
@@ -98,11 +100,15 @@ class ParentLease:
             self._fire()
 
     def _fire(self) -> None:
-        """只触发一次退出回调。"""
+        """只触发一次退出回调（工作线程 → 事件循环线程安全调度）。"""
         if self._fired:
             return
         self._fired = True
-        self._on_exit()
+        loop = self._loop
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(self._on_exit)
+        else:
+            self._on_exit()
 
     async def watch_parent(self, interval: float = 0.5) -> None:
         """轮询父 pid；父进程消失即触发退出回调。"""

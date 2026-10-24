@@ -129,11 +129,11 @@
     },
     "test_files": {
       "caliber": "git ls-files tests | *.py",
-      "e2e": 14,
+      "e2e": 15,
       "gate": true,
       "integration": 32,
       "unit": 152,
-      "value": 210
+      "value": 211
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
@@ -152,7 +152,7 @@
     }
   },
   "pin": {
-    "commit": "ed6bb3db2c3b61ae3eb7abc47efd0357b535c891",
+    "commit": "95a5b9bf6721eba5e2b6a9f3197c1863cede7d00",
     "date": "2026-10-25"
   }
 }
