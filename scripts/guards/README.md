@@ -17,7 +17,7 @@ Every step prints its name before it runs and the run ends with a
 `step / result / seconds` table, so a red build names the guard that failed.
 
 Run every guard's self-test by hand — that is exactly what `--fast` already
-does for you, via the ten `*-self-test` steps:
+does for you, via the eleven `*-self-test` steps:
 
 ```bash
 uv run python scripts/check.py --fast
@@ -32,6 +32,7 @@ uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
 uv run python scripts/guards/check_layout.py --fail-on-empty
 uv run python scripts/guards/check_tool_radius.py --fail-on-empty
 uv run python scripts/guards/check_name_registries.py --fail-on-empty
+uv run python scripts/guards/check_test_infra_policy.py
 uv run python scripts/guards/check_mypy_scope.py --fail-on-empty
 uv run python scripts/guards/gen_tree.py --check
 uv run python scripts/guards/gen_structure_baseline.py --check
@@ -104,6 +105,21 @@ Pins the Phase 2 layout so it cannot silently regress:
 - `commands/registry.py` stays ≤250 lines and each `commands/families/*.py` stays ≤600
 
 Per-file limits are deliberately generous: they catch a god file being rebuilt, not normal growth. Every source file is also held to the ADR-0003 red line of 1200 lines.
+
+## `check_test_infra_policy.py`
+
+Ties test-infrastructure adoption to the suite scale that justifies it
+(`docs/operations/ci.md` is the policy text; this guard is its teeth):
+
+- below the sharding threshold (pinned at 5,000 selected tests, read from the
+  committed pytest baseline summary — one file read, never a pytest run),
+  `pytest-xdist`, `pytest-testmon`, `pytest-picked`, `pytest-split`, any
+  `-n`/`--splits` in pytest `addopts`, and any `.test_durations*` file are red
+- at or above the threshold, the absence of sharding (dependency, addopts,
+  Makefile, or CI workflow) is red
+
+Moving the threshold means changing this guard and `docs/operations/ci.md`
+in the same commit.
 
 ## `gen_tree.py`
 

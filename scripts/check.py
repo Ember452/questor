@@ -34,7 +34,7 @@ class Step:
     slow: bool = False
 
 
-# Order: ten guard self-tests first (each proves its guard can still go red),
+# Order: eleven guard self-tests first (each proves its guard can still go red),
 # then the live guards, then the generated-doc byte compares, then the
 # type/surface checks, and finally baseline-check — the only slow step, which
 # additionally pins pytest collection counts and node ids in CI.
@@ -49,6 +49,7 @@ STEPS: tuple[Step, ...] = (
     Step("agents-size-self-test", (PYTHON, "scripts/guards/check_agents_md_size.py", "--self-test")),
     Step("codeowners-self-test", (PYTHON, "scripts/guards/check_codeowners.py", "--self-test")),
     Step("orphan-self-test", (PYTHON, "scripts/guards/check_orphan_modules.py", "--self-test")),
+    Step("test-infra-self-test", (PYTHON, "scripts/guards/check_test_infra_policy.py", "--self-test")),
     Step("thread-leak", (PYTHON, "scripts/guards/check_thread_leak.py", "--fail-on-empty")),
     Step("secret-projection", (PYTHON, "scripts/guards/check_secret_projection.py", "--fail-on-empty")),
     Step("doc-cross-refs", (PYTHON, "scripts/guards/check_doc_cross_refs.py", "--fail-on-empty")),
@@ -61,6 +62,7 @@ STEPS: tuple[Step, ...] = (
     Step("orphan-report", (PYTHON, "scripts/guards/check_orphan_modules.py", "--fail-on-empty")),
     Step("tool-radius", (PYTHON, "scripts/guards/check_tool_radius.py", "--fail-on-empty")),
     Step("name-registries", (PYTHON, "scripts/guards/check_name_registries.py", "--fail-on-empty")),
+    Step("test-infra-policy", (PYTHON, "scripts/guards/check_test_infra_policy.py")),
     Step("namespace-doc", (PYTHON, "scripts/guards/gen_namespaces.py", "--check")),
     Step("tree-map", (PYTHON, "scripts/guards/gen_tree.py", "--check")),
     Step("structure-baseline", (PYTHON, "scripts/guards/gen_structure_baseline.py", "--check")),
