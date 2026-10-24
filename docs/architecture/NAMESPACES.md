@@ -23,7 +23,7 @@
 | config | `src/questorharness/capabilities/tools/config_tool.py` | `src/questor/cli.py` / `src/questor/gateway/bridge.py` |
 | cron_create | `src/questorharness/capabilities/tools/cron/cron_create_tool.py` | — |
 | cron_delete | `src/questorharness/capabilities/tools/cron/cron_delete_tool.py` | — |
-| cron_list | `src/questorharness/capabilities/tools/cron/cron_list_tool.py` | `src/questorharness/runtime/swarm/permission_sync.py` |
+| cron_list | `src/questorharness/capabilities/tools/cron/cron_list_tool.py` | — |
 | cron_toggle | `src/questorharness/capabilities/tools/cron/cron_toggle_tool.py` | — |
 | edit_file | `src/questorharness/capabilities/tools/fs/file_edit_tool.py` | `src/questorharness/capabilities/context/compact/limits.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
 | enter_plan_mode | `src/questorharness/capabilities/tools/enter_plan_mode_tool.py` | `src/questorharness/engine/tool_metadata.py` |
@@ -46,8 +46,8 @@
 | skill | `src/questorharness/capabilities/tools/skill_tool.py` | `src/questorharness/capabilities/context/compact/attachments.py` / `src/questorharness/capabilities/context/coordinator.py` |
 | sleep | `src/questorharness/capabilities/tools/shell/sleep_tool.py` | `src/questor/gateway/gateway_process.py` / `src/questorharness/bootstrap/hosts/coordinator_drain.py` |
 | task_create | `src/questorharness/capabilities/tools/task/task_create_tool.py` | `src/questorharness/capabilities/context/coordinator.py` |
-| task_get | `src/questorharness/capabilities/tools/task/task_get_tool.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/runtime/swarm/permission_sync.py` |
-| task_list | `src/questorharness/capabilities/tools/task/task_list_tool.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/runtime/swarm/permission_sync.py` |
+| task_get | `src/questorharness/capabilities/tools/task/task_get_tool.py` | `src/questorharness/capabilities/context/coordinator.py` |
+| task_list | `src/questorharness/capabilities/tools/task/task_list_tool.py` | `src/questorharness/capabilities/context/coordinator.py` |
 | task_output | `src/questorharness/capabilities/tools/task/task_output_tool.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/capabilities/context/prompts/context.py` |
 | task_stop | `src/questorharness/capabilities/tools/task/task_stop_tool.py` | `src/questorharness/capabilities/context/coordinator.py` |
 | task_update | `src/questorharness/capabilities/tools/task/task_update_tool.py` | — |

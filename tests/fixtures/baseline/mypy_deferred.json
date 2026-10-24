@@ -19,7 +19,7 @@
     "src/questorharness/vim": 1
   },
   "pinned_at": "741c3840979376ffa2bd5de398a7f81b0977601a",
-  "whitelist_modules": 37,
+  "whitelist_modules": 36,
   "whitelist_roots": [
     "src/questorharness/surfaces/channels/filenames.py",
     "src/questorharness/surfaces/channels/message_chunks.py",
@@ -37,7 +37,6 @@
     "src/questorharness/contracts",
     "src/questorharness/platform",
     "src/questorharness/providers/lsp/python_index.py",
-    "src/questorharness/providers/lsp/symbol_queries.py",
-    "src/questorharness/runtime/swarm/permission_models.py"
+    "src/questorharness/providers/lsp/symbol_queries.py"
   ]
 }

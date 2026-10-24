@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from questorharness.surfaces.channels.filenames import safe_filename
+from questorharness.surfaces.channels.filenames import dedupe_filename, safe_filename
 
 
 def test_path_separators_and_shell_metacharacters_are_removed() -> None:
@@ -36,14 +36,32 @@ def test_fullwidth_characters_are_normalised_before_filtering() -> None:
     assert safe_filename("ａｂ-1.txt") == "ab-1.txt"
 
 
-def test_a_non_ascii_stem_leaves_only_the_extension_behind() -> None:
-    """Pinned, not blessed: the dot is a safe character, the CJK stem is not.
+def test_a_non_ascii_stem_survives_sanitisation() -> None:
+    """CJK names are the common case on Feishu, not an attack.
 
-    ``"季度报告.pdf"`` becomes ``"pdf"`` -- the stem collapses to a single underscore that
-    the strip then removes, so what is left reads like a name without an extension. The
-    Feishu adapter only checks for an *empty* result, so this value is used as-is.
+    The ASCII-only character class used to collapse ``"季度报告.pdf"`` to ``"pdf"``: the
+    stem became one underscore, the strip removed it together with the dot, and two
+    different Chinese attachments in one message then silently overwrote each other.
+    Word characters (Unicode) survive; separators, metacharacters and control
+    characters still do not.
     """
-    assert safe_filename("季度报告.pdf") == "pdf"
+    assert safe_filename("季度报告.pdf") == "季度报告.pdf"
+    assert safe_filename("计划 与执行.md") == "计划_与执行.md"
+    assert safe_filename("bad\x00name.txt") == "bad_name.txt"
+
+
+def test_dedupe_filename_passes_through_when_the_name_is_free() -> None:
+    assert dedupe_filename("a.pdf", exists=lambda _name: False) == "a.pdf"
+
+
+def test_dedupe_filename_appends_a_counter_until_the_name_is_free() -> None:
+    taken = {"季度报告.pdf", "季度报告-1.pdf"}
+    assert dedupe_filename("季度报告.pdf", exists=taken.__contains__) == "季度报告-2.pdf"
+
+
+def test_dedupe_filename_handles_names_without_an_extension() -> None:
+    taken = {"README"}
+    assert dedupe_filename("README", exists=taken.__contains__) == "README-1"
 
 
 def test_the_result_is_cut_to_the_configured_length() -> None:

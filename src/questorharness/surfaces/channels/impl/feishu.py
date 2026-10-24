@@ -15,7 +15,7 @@ from questorharness.surfaces.channels.bus.queue import MessageBus
 from questorharness.surfaces.channels.impl.base_channel import BaseChannel
 from questorharness.surfaces.channels.impl.base_channel import resolve_channel_media_dir
 from questorharness.config.schema import FeishuConfig
-from questorharness.surfaces.channels.filenames import safe_filename
+from questorharness.surfaces.channels.filenames import dedupe_filename, safe_filename
 
 import importlib.util
 import logging
@@ -583,6 +583,8 @@ class FeishuChannel(BaseChannel):
                 return None, f"[{msg_type}: download failed]"
 
             media_root = media_dir.resolve()
+            # 同一条消息里两个附件可能洗出同一个安全名,补一个计数后缀而不是互相覆盖
+            safe_name = dedupe_filename(safe_name, exists=lambda candidate: (media_root / candidate).exists())
             file_path = (media_root / safe_name).resolve()
             if not file_path.is_relative_to(media_root):
                 logger.warning("Rejected %s download outside media directory: %r", msg_type, filename)

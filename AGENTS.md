@@ -53,7 +53,6 @@ exceptions, and one more is a failure.
 | 工具注册表与能力索引 | `src/questorharness/capabilities/tools/registry.py` |
 | 工具能力声明本体 | `src/questorharness/capabilities/tools/contract.py` |
 | 权限判定与策略 | `src/questorharness/capabilities/policy` |
-| swarm 权限同步 | `src/questorharness/runtime/swarm/permission_sync.py` |
 | 回合循环 | `src/questorharness/engine/query.py` |
 | 工具执行与结果处理 | `src/questorharness/engine/tool_execution.py` |
 | 工具携带式元数据 | `src/questorharness/engine/tool_metadata.py` |

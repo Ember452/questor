@@ -6,9 +6,10 @@ Three assertions:
 1. every ``BaseTool`` subclass carries an explicit ``capabilities =
    ToolCapabilities(...)`` line — a class-level default cannot distinguish
    "declared False" from "forgot to declare";
-2. the four former shared lists (compaction, coordinator, swarm permissions,
-   carry-over) no longer hold tool names: no list/set literal with two or more
-   tool names, and no ``== "<tool name>"`` comparison;
+2. the former shared lists (compaction, coordinator, carry-over) no longer hold
+   tool names: no list/set literal with two or more tool names, and no
+   ``== "<tool name>"`` comparison; the fourth (swarm permissions) left the
+   repository together with its dead protocol;
 3. discovery and the explicit registration order agree, so a tool cannot be
    silently dropped by an import error.
 
@@ -32,11 +33,12 @@ except ImportError:  # direct script execution
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The files that used to be edited whenever a tool was added.
+# The files that used to be edited whenever a tool was added. The fourth
+# former shared list (swarm permissions) left the repository together with
+# its dead protocol.
 CONSUMERS = (
     "src/questorharness/capabilities/context/compact/limits.py",
     "src/questorharness/capabilities/context/coordinator.py",
-    "src/questorharness/runtime/swarm/permission_sync.py",
     "src/questorharness/engine/tool_metadata.py",
 )
 # Worker capability policy, not per-tool metadata.
