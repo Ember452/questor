@@ -64,14 +64,14 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/memory/personalization/extractor.py` | 138 |
 | `src/questorharness/capabilities/memory/personalization/rules.py` | 66 |
 | `src/questorharness/capabilities/memory/personalization/session_hook.py` | 67 |
-| `src/questorharness/capabilities/memory/relevance.py` | 147 |
+| `src/questorharness/capabilities/memory/relevance.py` | 145 |
 | `src/questorharness/capabilities/memory/scan.py` | 118 |
 | `src/questorharness/capabilities/memory/schema.py` | 443 |
 | `src/questorharness/capabilities/memory/search.py` | 73 |
 | `src/questorharness/capabilities/memory/session/__init__.py` | 33 |
 | `src/questorharness/capabilities/memory/session/document.py` | 79 |
 | `src/questorharness/capabilities/memory/session/store.py` | 75 |
-| `src/questorharness/capabilities/memory/team.py` | 92 |
+| `src/questorharness/capabilities/memory/team.py` | 90 |
 | `src/questorharness/capabilities/memory/usage.py` | 155 |
 | `src/questorharness/capabilities/policy/__init__.py` | 27 |
 | `src/questorharness/capabilities/policy/checker.py` | 202 |
@@ -337,7 +337,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questor/gateway/router.py` | 33 |
 | `src/questor/gateway/runtime.py` | 1089 |
 | `src/questor/gateway/stream_update.py` | 15 |
-| `src/questor/group_registry.py` | 97 |
+| `src/questor/group_registry.py` | 95 |
 | `src/questor/memory.py` | 221 |
 | `src/questor/prompts.py` | 74 |
 | `src/questor/runtime.py` | 220 |

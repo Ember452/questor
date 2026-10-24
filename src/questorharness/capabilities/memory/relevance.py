@@ -143,5 +143,3 @@ def _apply_selector(
             if (header.relative_path or header.path.name) not in seen
         )
     return selected[:max_results]
-
-# questor: allow R7 -- until W8 adds the mirror test
