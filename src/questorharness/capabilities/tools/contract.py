@@ -98,6 +98,14 @@ class ToolRegistry:
         """Register a tool instance."""
         self._tools[tool.name] = tool
 
+    def unregister(self, name: str) -> BaseTool | None:
+        """Remove a tool by name and return it (``None`` when absent).
+
+        The public face for teardown; callers must not reach into the
+        registry's internal mapping to drop a tool.
+        """
+        return self._tools.pop(name, None)
+
     def get(self, name: str) -> BaseTool | None:
         """Return a registered tool by name."""
         return self._tools.get(name)

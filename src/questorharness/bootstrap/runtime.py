@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Iterable
+from typing import Any, AsyncIterator, Awaitable, Callable, Iterable
 
 from questorharness.providers.llm.client import AnthropicApiClient, SupportsStreamingMessages
 from questorharness.providers.llm.codex_client import CodexApiClient
@@ -566,6 +566,41 @@ def refresh_runtime_client(bundle: RuntimeBundle) -> None:
     sync_app_state(bundle)
 
 
+async def _run_engine_turn(
+    bundle: RuntimeBundle,
+    stream: AsyncIterator[StreamEvent],
+    *,
+    print_system: SystemPrinter,
+    render_event: StreamRenderer,
+    snapshot_model: str,
+    system_prompt: str,
+) -> None:
+    """Drain one engine turn, then snapshot whatever the session now holds.
+
+    三个提交路径(命令 submit_prompt、continue_pending、普通消息)共用这段
+    协议:消费事件流、把 MaxTurnsExceeded 变成用户可见的停止说明并展示悬空
+    工具结果、最后无条件保存快照。*snapshot_model* 由调用方决定——命令的
+    submit_model 路径要在模型恢复之后再落快照。
+    """
+    try:
+        async for event in stream:
+            await render_event(event)
+    except MaxTurnsExceeded as exc:
+        await print_system(f"Stopped after {exc.max_turns} turns (max_turns).")
+        pending = format_pending_tool_results(bundle.engine.messages)
+        if pending:
+            await print_system(pending)
+    bundle.session_backend.save_snapshot(
+        cwd=bundle.cwd,
+        model=snapshot_model,
+        system_prompt=system_prompt,
+        messages=bundle.engine.messages,
+        usage=bundle.engine.total_usage,
+        session_id=bundle.session_id,
+        tool_metadata=bundle.engine.tool_metadata,
+    )
+
+
 async def handle_line(
     bundle: RuntimeBundle,
     line: str,
@@ -624,25 +659,18 @@ async def handle_line(
             )
             bundle.engine.set_system_prompt(system_prompt)
             try:
-                async for event in bundle.engine.submit_message(submit_prompt):
-                    await render_event(event)
-            except MaxTurnsExceeded as exc:
-                await print_system(f"Stopped after {exc.max_turns} turns (max_turns).")
-                pending = format_pending_tool_results(bundle.engine.messages)
-                if pending:
-                    await print_system(pending)
+                # 快照记录恢复后的模型,所以在切换前捕获 original_model。
+                await _run_engine_turn(
+                    bundle,
+                    bundle.engine.submit_message(submit_prompt),
+                    print_system=print_system,
+                    render_event=render_event,
+                    snapshot_model=original_model,
+                    system_prompt=system_prompt,
+                )
             finally:
                 if result.submit_model:
                     bundle.engine.set_model(original_model)
-            bundle.session_backend.save_snapshot(
-                cwd=bundle.cwd,
-                model=bundle.engine.model,
-                system_prompt=system_prompt,
-                messages=bundle.engine.messages,
-                usage=bundle.engine.total_usage,
-                session_id=bundle.session_id,
-                tool_metadata=bundle.engine.tool_metadata,
-            )
         if result.continue_pending:
             settings = bundle.current_settings()
             if bundle.enforce_max_turns:
@@ -657,22 +685,13 @@ async def handle_line(
             )
             bundle.engine.set_system_prompt(system_prompt)
             turns = result.continue_turns if result.continue_turns is not None else bundle.engine.max_turns
-            try:
-                async for event in bundle.engine.continue_pending(max_turns=turns):
-                    await render_event(event)
-            except MaxTurnsExceeded as exc:
-                await print_system(f"Stopped after {exc.max_turns} turns (max_turns).")
-                pending = format_pending_tool_results(bundle.engine.messages)
-                if pending:
-                    await print_system(pending)
-            bundle.session_backend.save_snapshot(
-                cwd=bundle.cwd,
-                model=settings.model,
+            await _run_engine_turn(
+                bundle,
+                bundle.engine.continue_pending(max_turns=turns),
+                print_system=print_system,
+                render_event=render_event,
+                snapshot_model=settings.model,
                 system_prompt=system_prompt,
-                messages=bundle.engine.messages,
-                usage=bundle.engine.total_usage,
-                session_id=bundle.session_id,
-                tool_metadata=bundle.engine.tool_metadata,
             )
         sync_app_state(bundle)
         return not result.should_exit
@@ -690,33 +709,13 @@ async def handle_line(
         include_project_memory=bundle.include_project_memory,
     )
     bundle.engine.set_system_prompt(system_prompt)
-    try:
-        async for event in bundle.engine.submit_message(user_message or line):
-            await render_event(event)
-    except MaxTurnsExceeded as exc:
-        await print_system(f"Stopped after {exc.max_turns} turns (max_turns).")
-        pending = format_pending_tool_results(bundle.engine.messages)
-        if pending:
-            await print_system(pending)
-        bundle.session_backend.save_snapshot(
-            cwd=bundle.cwd,
-            model=settings.model,
-            system_prompt=system_prompt,
-            messages=bundle.engine.messages,
-            usage=bundle.engine.total_usage,
-            session_id=bundle.session_id,
-            tool_metadata=bundle.engine.tool_metadata,
-        )
-        sync_app_state(bundle)
-        return True
-    bundle.session_backend.save_snapshot(
-        cwd=bundle.cwd,
-        model=settings.model,
+    await _run_engine_turn(
+        bundle,
+        bundle.engine.submit_message(user_message or line),
+        print_system=print_system,
+        render_event=render_event,
+        snapshot_model=settings.model,
         system_prompt=system_prompt,
-        messages=bundle.engine.messages,
-        usage=bundle.engine.total_usage,
-        session_id=bundle.session_id,
-        tool_metadata=bundle.engine.tool_metadata,
     )
     sync_app_state(bundle)
     return True

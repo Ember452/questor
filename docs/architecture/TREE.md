@@ -29,10 +29,10 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/coordinator_drain.py` | 197 |
 | `src/questorharness/bootstrap/hosts/protocol.py` | 249 |
 | `src/questorharness/bootstrap/hosts/react_launcher.py` | 191 |
-| `src/questorharness/bootstrap/runtime.py` | 801 |
+| `src/questorharness/bootstrap/runtime.py` | 800 |
 | `src/questorharness/capabilities/__init__.py` | 7 |
 | `src/questorharness/capabilities/context/__init__.py` | 1 |
-| `src/questorharness/capabilities/context/compact/__init__.py` | 1171 |
+| `src/questorharness/capabilities/context/compact/__init__.py` | 1148 |
 | `src/questorharness/capabilities/context/compact/attachments.py` | 339 |
 | `src/questorharness/capabilities/context/compact/collapse.py` | 143 |
 | `src/questorharness/capabilities/context/compact/limits.py` | 98 |
@@ -96,7 +96,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/tools/agent/tool_search_tool.py` | 42 |
 | `src/questorharness/capabilities/tools/brief_tool.py` | 37 |
 | `src/questorharness/capabilities/tools/config_tool.py` | 58 |
-| `src/questorharness/capabilities/tools/contract.py` | 111 |
+| `src/questorharness/capabilities/tools/contract.py` | 119 |
 | `src/questorharness/capabilities/tools/cron/__init__.py` | 1 |
 | `src/questorharness/capabilities/tools/cron/cron_create_tool.py` | 109 |
 | `src/questorharness/capabilities/tools/cron/cron_delete_tool.py` | 36 |
@@ -167,7 +167,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/contracts/domain/__init__.py` | 1 |
 | `src/questorharness/contracts/domain/events.py` | 92 |
 | `src/questorharness/contracts/domain/message.py` | 225 |
-| `src/questorharness/contracts/errors.py` | 17 |
+| `src/questorharness/contracts/errors.py` | 48 |
 | `src/questorharness/contracts/hooks.py` | 117 |
 | `src/questorharness/contracts/llm.py` | 59 |
 | `src/questorharness/contracts/mcp.py` | 81 |
@@ -178,11 +178,11 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/contracts/tool_outputs.py` | 55 |
 | `src/questorharness/contracts/usage.py` | 19 |
 | `src/questorharness/engine/__init__.py` | 81 |
-| `src/questorharness/engine/context.py` | 39 |
+| `src/questorharness/engine/context.py` | 45 |
 | `src/questorharness/engine/cost_tracker.py` | 26 |
-| `src/questorharness/engine/model_errors.py` | 80 |
+| `src/questorharness/engine/model_errors.py` | 62 |
 | `src/questorharness/engine/query.py` | 299 |
-| `src/questorharness/engine/query_engine.py` | 310 |
+| `src/questorharness/engine/query_engine.py` | 316 |
 | `src/questorharness/engine/runtimes.py` | 13 |
 | `src/questorharness/engine/tool_execution.py` | 244 |
 | `src/questorharness/engine/tool_metadata.py` | 400 |
@@ -336,7 +336,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questor/gateway/provider_commands.py` | 140 |
 | `src/questor/gateway/redaction.py` | 343 |
 | `src/questor/gateway/router.py` | 33 |
-| `src/questor/gateway/runtime.py` | 774 |
+| `src/questor/gateway/runtime.py` | 773 |
 | `src/questor/gateway/stream_update.py` | 15 |
 | `src/questor/group_registry.py` | 95 |
 | `src/questor/memory.py` | 221 |

@@ -4,31 +4,13 @@ from __future__ import annotations
 
 import re
 
+from questorharness.contracts.errors import is_prompt_too_long_error
 
 MAX_SAFE_COMPLETION_TOKENS = 128_000
 
-def _is_prompt_too_long_error(exc: Exception) -> bool:
-    text = str(exc).lower()
-    return any(
-        needle in text
-        for needle in (
-            "prompt too long",
-            "context_length_exceeded",
-            "context length",
-            "maximum context",
-            "context window",
-            "input tokens exceed",
-            "messages resulted in",
-            "reduce the length of the messages",
-            "configured limit",
-            "too many tokens",
-            "too large for the model",
-            "maximum context length",
-            "exceed_context",
-            "exceeds the available context size",
-            "available context size",
-        )
-    )
+# 单一定义处在 contracts.errors;引擎侧保留下划线名,query.py 与测试都从
+# 本模块取它,分类口径不变。
+_is_prompt_too_long_error = is_prompt_too_long_error
 
 
 def _bounded_completion_tokens(max_tokens: int, context_window_tokens: int | None = None) -> int:

@@ -137,6 +137,19 @@ def test_registering_the_same_name_twice_replaces_the_first() -> None:
     assert registry.get("echo").description == "Second implementation wins"
 
 
+def test_unregister_returns_the_tool_and_forgets_the_name() -> None:
+    """公开面必须覆盖注销;调用方(产品网关)不该伸手进 ``_tools`` 摸实现细节。"""
+    registry = ToolRegistry()
+    echo = _Echo()
+    registry.register(echo)
+
+    assert registry.unregister("echo") is echo
+    assert registry.get("echo") is None
+    assert registry.list_tools() == []
+    assert registry.unregister("echo") is None
+    assert registry.unregister("never-registered") is None
+
+
 def test_registry_schema_list_follows_registration_order() -> None:
     registry = ToolRegistry()
     registry.register(_Writer())

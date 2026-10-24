@@ -144,7 +144,7 @@ EXEMPTION_BUDGET: dict[str, int] = {
 
 # Functions above the complexity limit that live in files carrying an R8
 # exemption. Held to an exact count for the same reason as the budgets above.
-R8_EXEMPT_FUNCTIONS = 40
+R8_EXEMPT_FUNCTIONS = 39
 
 PINNED_LINES_RE = re.compile(r"(\d+)\s+lines")
 

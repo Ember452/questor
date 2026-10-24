@@ -372,6 +372,80 @@ async def test_query_engine_coordinator_mode_uses_coordinator_prompt_and_runs_ag
 
 
 @pytest.mark.asyncio
+async def test_coordinator_context_survives_a_rewritten_prompt_opener(tmp_path: Path, monkeypatch):
+    """协调者分支由显式标志驱动,不靠系统提示词第一句的前缀嗅探。
+
+    回归背景:query.py 曾用 ``system_prompt.startswith("You are a **coordinator**.")``
+    决定是否弹出/重插 worker 上下文消息——任何人润色提示词开头,该功能就静默失效。
+    判别器:工具循环的第二轮请求里,重插的上下文消息必须排在携带 tool_use 的
+    assistant 消息**之后**;嗅探失效时它原样停留在 assistant 之前。
+    """
+    monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CLAUDE_CODE_COORDINATOR_MODE", "1")
+    sample = tmp_path / "note.txt"
+    sample.write_text("alpha\n", encoding="utf-8")
+
+    class _ToolLoopApiClient:
+        def __init__(self) -> None:
+            self.requests = []
+            self._calls = 0
+
+        async def stream_message(self, request):
+            self.requests.append(request)
+            self._calls += 1
+            if self._calls == 1:
+                yield ApiMessageCompleteEvent(
+                    message=ConversationMessage(
+                        role="assistant",
+                        content=[
+                            TextBlock(text="Reading the file."),
+                            ToolUseBlock(
+                                id="toolu_ctx_1",
+                                name="read_file",
+                                input={"path": str(sample), "offset": 0, "limit": 1},
+                            ),
+                        ],
+                    ),
+                    usage=UsageSnapshot(input_tokens=2, output_tokens=2),
+                    stop_reason=None,
+                )
+                return
+            yield ApiMessageCompleteEvent(
+                message=ConversationMessage(role="assistant", content=[TextBlock(text="done")]),
+                usage=UsageSnapshot(input_tokens=2, output_tokens=2),
+                stop_reason=None,
+            )
+
+    api_client = _ToolLoopApiClient()
+    engine = QueryEngine(
+        api_client=api_client,
+        tool_registry=create_default_tool_registry(),
+        permission_checker=PermissionChecker(PermissionSettings(mode=PermissionMode.FULL_AUTO)),
+        cwd=tmp_path,
+        model="claude-test",
+        system_prompt="You are a plain assistant with a completely different opener.",
+    )
+
+    events = [event async for event in engine.submit_message("read the note")]
+
+    assert len(api_client.requests) == 2
+    assert isinstance(events[-1], AssistantTurnComplete)
+    second_request = api_client.requests[1].messages
+    ctx_positions = [
+        index
+        for index, message in enumerate(second_request)
+        if "Coordinator User Context" in message.text
+    ]
+    assistant_positions = [
+        index
+        for index, message in enumerate(second_request)
+        if message.role == "assistant" and message.tool_uses
+    ]
+    assert ctx_positions and assistant_positions
+    assert min(ctx_positions) > max(assistant_positions)
+
+
+@pytest.mark.asyncio
 async def test_query_engine_allows_unbounded_turns_when_max_turns_is_none(tmp_path: Path):
     sample = tmp_path / "hello.txt"
     sample.write_text("alpha\nbeta\n", encoding="utf-8")

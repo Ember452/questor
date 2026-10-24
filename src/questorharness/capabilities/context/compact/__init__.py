@@ -59,6 +59,7 @@ from questorharness.capabilities.context.compact.tokens import (  # noqa: F401
 )
 from questorharness.capabilities.ports import HookRuntime
 from questorharness.contracts.domain.events import CompactProgressEvent
+from questorharness.contracts.errors import is_prompt_too_long_error as _is_prompt_too_long_error
 from questorharness.contracts.domain.message import (
     ContentBlock,
     ConversationMessage,
@@ -169,30 +170,6 @@ async def _emit_progress(
             attempt=attempt,
             checkpoint=checkpoint,
             metadata=_sanitize_metadata(metadata) if metadata else None,
-        )
-    )
-
-
-def _is_prompt_too_long_error(exc: Exception) -> bool:
-    text = str(exc).lower()
-    return any(
-        needle in text
-        for needle in (
-            "prompt too long",
-            "context_length_exceeded",
-            "context length",
-            "maximum context",
-            "context window",
-            "input tokens exceed",
-            "messages resulted in",
-            "reduce the length of the messages",
-            "configured limit",
-            "too many tokens",
-            "too large for the model",
-            "maximum context length",
-            "exceed_context",
-            "exceeds the available context size",
-            "available context size",
         )
     )
 

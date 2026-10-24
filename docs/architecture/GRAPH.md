@@ -69,7 +69,7 @@
 
 ### 文件（>1000 行）
 
-- `src/questorharness/capabilities/context/compact/__init__.py`: 1171 lines
+- `src/questorharness/capabilities/context/compact/__init__.py`: 1148 lines
 
 ### 目录（>=17 个非 init 源文件）
 

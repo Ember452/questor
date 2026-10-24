@@ -64,11 +64,11 @@
     "long_files": {
       "caliber": "len(read_text(path).splitlines()) over tracked src/*.py",
       "gate": true,
-      "max": 1171,
+      "max": 1148,
       "max_file": "src/questorharness/capabilities/context/compact/__init__.py",
       "over_limit": 0,
       "value": 1,
-      "warning_band": 5
+      "warning_band": 4
     },
     "mypy_errors": {
       "caliber": "uv run mypy src (historical pin; gate lives in check_mypy_scope.py from W4)",
@@ -152,7 +152,7 @@
     }
   },
   "pin": {
-    "commit": "c70dedf0250c4456d74bc371a758dbacb7c3c626",
+    "commit": "974ef0973d75dc163de1a53132c8979d346e80cc",
     "date": "2026-10-23"
   }
 }

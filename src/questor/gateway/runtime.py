@@ -719,9 +719,8 @@ class QuestorSessionRuntimePool:
     @staticmethod
     def _unregister_group_tool(bundle: RuntimeBundle) -> None:
         registry = getattr(bundle, "tool_registry", None)
-        tools = getattr(registry, "_tools", None)
-        if isinstance(tools, dict):
-            tools.pop(_GROUP_TOOL_NAME, None)
+        if registry is not None:
+            registry.unregister(_GROUP_TOOL_NAME)
 
     def _set_group_request_context(
         self,
