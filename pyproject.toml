@@ -39,7 +39,12 @@ dev = [
     "mypy>=1.10.0",
     "pre-commit>=3.7.0",
     "import-linter>=2.0.0",
+    "pytest-timeout>=2.4.0",
 ]
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
 
 [project.scripts]
 questorharness = "questorharness.bootstrap.cli.main:app"
@@ -75,7 +80,10 @@ exclude = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-m 'not e2e'"
+# 每个用例 60s 硬上限（thread 法：Windows 没有 signal）——挂死的测试立刻带着
+# 全线程栈死掉，而不是烧光整个 30 分钟的 CI tests job。规模触发的扩容手段
+# （分片/xdist）见 docs/operations/ci.md，由 scripts/guards/check_test_infra_policy.py 把关。
+addopts = "-m 'not e2e' --timeout=60 --timeout-method=thread"
 markers = [
     "unit: fast, isolated tests",
     "integration: tests that cross process, filesystem, transport, or service boundaries",
