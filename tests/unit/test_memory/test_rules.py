@@ -162,12 +162,35 @@ def test_merging_nothing_leaves_the_existing_facts_intact() -> None:
     assert merged == {"facts": [{"key": "a", "value": 1}]}
 
 
-def test_an_existing_entry_missing_its_key_crashes_the_whole_merge() -> None:
-    """Pinned, not blessed: new entries tolerate a missing key, stored ones do not.
+def test_a_stored_entry_without_a_key_is_kept_instead_of_breaking_every_merge() -> None:
+    """Fixed (ledger #113): one hand-edited line must not poison memory permanently.
 
-    Facts reach this function from a file, so one hand-edited line is enough to break
-    every later merge. Recorded in the ledger as a memory-semantics fix to make
-    symmetric; asserted here so the change is deliberate.
+    Facts arrive from a file a human or an older writer may have touched, so the merge
+    has to survive a key-less entry. It is kept verbatim rather than dropped -- silently
+    deleting a stored fact would be a worse failure than the KeyError it replaces.
     """
-    with pytest.raises(KeyError):
-        merge_facts({"facts": [{"value": "no key"}]}, [])
+    merged = merge_facts({"facts": [{"value": "no key"}, {"key": "a", "value": 1}]}, [{"key": "b", "value": 2}])
+
+    assert merged == {"facts": [{"value": "no key"}, {"key": "a", "value": 1}, {"key": "b", "value": 2}]}
+
+
+def test_a_stored_entry_whose_key_is_null_or_empty_is_kept_and_not_merged_away() -> None:
+    merged = merge_facts({"facts": [{"key": None, "value": 1}, {"key": "", "value": 2}]}, [])
+
+    assert merged["facts"] == [{"key": None, "value": 1}, {"key": "", "value": 2}]
+
+
+def test_duplicate_stored_keys_still_collapse_onto_one_slot() -> None:
+    """The unkeyed fix must not turn into "keep every row": keyed dedup still holds."""
+    merged = merge_facts({"facts": [{"key": "a", "value": 1}, {"key": "a", "value": 2}]}, [])
+
+    assert merged["facts"] == [{"key": "a", "value": 2}]
+
+
+def test_an_unkeyed_stored_entry_still_shares_one_slot_with_a_new_fact() -> None:
+    merged = merge_facts(
+        {"facts": [{"value": "noise"}, {"key": "a", "value": "old", "confidence": 0.1}]},
+        [{"key": "a", "value": "new", "confidence": 0.8}],
+    )
+
+    assert merged["facts"] == [{"value": "noise"}, {"key": "a", "value": "new", "confidence": 0.8}]
