@@ -43,6 +43,8 @@
 - If multiple interpretations exist, present them — don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name it. Ask.
+- Weigh the long-term value before doing anything: if the benefit does not
+  justify the change surface, don't do it. No blind changes. *(added 2026-10-24)*
 
 ## 2. Simplicity First — minimum code that solves the problem
 - No features beyond what was asked; no abstractions for single-use code.

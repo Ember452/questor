@@ -116,10 +116,10 @@
       "value": 1178
     },
     "root_agents": {
-      "bytes": 6365,
+      "bytes": 6522,
       "caliber": "len(read_text('AGENTS.md').splitlines())",
       "gate": true,
-      "value": 108
+      "value": 109
     },
     "src_files": {
       "caliber": "git ls-files src | *.py",
@@ -152,7 +152,7 @@
     }
   },
   "pin": {
-    "commit": "ab374f24b8917645c8acd7696585033ea72c44ae",
+    "commit": "6ff05cf04cb937d6e1fa93df01f77062beb1f2e4",
     "date": "2026-10-24"
   }
 }
