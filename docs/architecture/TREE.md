@@ -303,7 +303,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/surfaces/channels/bus/__init__.py` | 6 |
 | `src/questorharness/surfaces/channels/bus/events.py` | 38 |
 | `src/questorharness/surfaces/channels/bus/queue.py` | 46 |
-| `src/questorharness/surfaces/channels/filenames.py` | 58 |
+| `src/questorharness/surfaces/channels/filenames.py` | 63 |
 | `src/questorharness/surfaces/channels/impl/__init__.py` | 6 |
 | `src/questorharness/surfaces/channels/impl/base_channel.py` | 135 |
 | `src/questorharness/surfaces/channels/impl/channel_manager.py` | 174 |

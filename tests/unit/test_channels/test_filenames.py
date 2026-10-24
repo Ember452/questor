@@ -27,6 +27,18 @@ def test_only_the_basename_of_a_windows_path_survives() -> None:
     assert safe_filename(r"C:\Users\me\Downloads\photo.jpg") == "photo.jpg"
 
 
+def test_the_basename_does_not_depend_on_the_host_separator() -> None:
+    """Both separators must split on every host.
+
+    ``Path(...).name`` only splits on the host's separator: the gateway runs on
+    POSIX while the names come from Windows clients, and the Windows-path case
+    above used to return the whole string there (the runner caught it, a Windows
+    developer box never could).
+    """
+    assert safe_filename("/var/lib/reports/季报.pdf") == "季报.pdf"
+    assert safe_filename(r"C:\Users\me\Downloads/photo.jpg") == "photo.jpg"
+
+
 def test_safe_characters_inside_the_name_are_kept() -> None:
     assert safe_filename("a-b_c.2.txt") == "a-b_c.2.txt"
 

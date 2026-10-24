@@ -11,9 +11,14 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Callable
-from pathlib import Path
 
 __all__ = ["dedupe_filename", "safe_filename"]
+
+# 名字来自网络另一侧,可能是 POSIX 路径、Windows 路径,或两者混着来。按两种分隔符
+# 切而不是用 ``Path(...).name``:后者的分隔符语义跟着宿主 OS 走,POSIX 上的
+# ``Path(r"C:\Users\me\photo.jpg").name`` 会原样返回整串(iOS/Android 客户端与
+# 网关所在的 Linux 正是 POSIX),同一个名字在 Windows 与 Linux 上就得到两个结果。
+_SEPARATORS = re.compile(r"[\\/]")
 
 
 def safe_filename(value: object, *, max_length: int = 128) -> str:
@@ -27,7 +32,7 @@ def safe_filename(value: object, *, max_length: int = 128) -> str:
 
     if value is None:
         return ""
-    name = Path(str(value)).name
+    name = _SEPARATORS.split(str(value))[-1]
     name = unicodedata.normalize("NFKC", name)
     name = re.sub(r"[^\w.-]+", "_", name, flags=re.UNICODE).strip("_.-")
     if not name or name in {".", ".."}:
