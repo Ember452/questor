@@ -151,7 +151,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/commands/families/plugin_management.py` | 140 |
 | `src/questorharness/commands/families/plugins.py` | 53 |
 | `src/questorharness/commands/families/policy.py` | 88 |
-| `src/questorharness/commands/families/project.py` | 171 |
+| `src/questorharness/commands/families/project.py` | 169 |
 | `src/questorharness/commands/families/session.py` | 180 |
 | `src/questorharness/commands/families/workspace.py` | 358 |
 | `src/questorharness/commands/memory_commands.py` | 249 |
