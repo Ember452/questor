@@ -19,5 +19,6 @@ class ProfileInfo:
     skill_dirs: tuple[str, ...] = ()
     plugin_roots: tuple[str, ...] = ()
     allowed_tools: tuple[str, ...] = ()
+    denied_tools: tuple[str, ...] = ()
     ui_capabilities: Mapping[str, str] = field(default_factory=dict)
     is_default: bool = False

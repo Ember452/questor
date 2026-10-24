@@ -281,8 +281,9 @@ DeepCode **src/rpc/contracts.ts** 的 `ClientRuntime` 方法清单与 Reasonix `
 第二次得到 `turn.busy`（不得静默排队，也不得双写）；**幂等判红用例**：同一
 `clientRequestId` 连发两次 → 只产生一个回合，第二次拿回同一 turn id；`gen_wire_py --check`
 与 `gen_wire_ts --check` 双绿；kind 覆盖守卫绿；持久化版本守卫绿（v1 旧文件可读）；
-`/profile` 的 capabilities 与分表一致，且两个 profile 的 `allowed_tools` 可枚举、互不相同
-（判红：personal 形态下 coding 专属工具仍可见）。
+`/profile` 的 capabilities 与分表一致，且两个 profile 的工具面可枚举、互不相同
+（`coding` 全空；`personal` 显式放行 `ask_user_question` 并硬拒 `bash/edit_file/...`，
+由 `tests/unit/test_permissions/test_profile_tool_surface.py` 判红：personal 下 `bash` 必须被拒）。
 **验收红**：改任一 kind 字符串/字段名 → fixture 测试红；可丢帧不编号用例红；改 schema
 不改生成物（两侧任一）→ 红；手改生成物 → 红；schema 新增 kind 但两侧映射与映射表均未
 登记 → kind 覆盖守卫红；打开 v1 旧版 settings 报错 → 持久化版本守卫红。

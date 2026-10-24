@@ -45,9 +45,9 @@ ADR-0005 定了唯一 renderer 与 Electron 壳，ADR-0006 定了 serve 宿主�
    重写为 SSE 实现；Tauri runtime 不进入本仓。
 4. **契约真源 = 单份 JSON Schema，双侧 codegen**。`protocol/app-wire.schema.json`（手写，
    36 kind，只加不改）是唯一真源；TS 侧用 `json-schema-to-typescript` 生成
-   `apps/web/src/generated/app-wire.ts`，Python 侧用仓内生成器产出
-   `bootstrap/hosts/serve/wire_types.py`；两侧都带 `--check` 并进入 `scripts/check.py`。
-   手写镜像文件与正则比对守卫作废（ADR-0006 §4 的意图保留，实现升级）。
+   **protocol/_gen/app-wire.ts**（分支一先落在仓根，4a 复制到 `apps/web/src/generated/`），
+   Python 侧用仓内生成器产出 **serve/wire_types.py**；两侧都带 `--check` 并进入
+   `scripts/check.py`。手写镜像文件与正则比对守卫作废（ADR-0006 §4 的意图保留，实现升级）。
 5. **§4.5 作用域例外**：vendored 代码只允许存在于 `apps/`（非 Python 宿主层）；`src/`
    内仍受 §4.5 约束。归属义务：保留上游 `LICENSE` 原件、仓根 `THIRD_PARTY_NOTICES.md`
    增条目、`apps/web/VENDOR.md` 记录**禁区清单**与每个文件/目录的归属（vendored / owned /

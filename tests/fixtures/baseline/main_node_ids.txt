@@ -46,7 +46,11 @@ tests/ci/test_tool_schemas.py::test_registry_is_not_empty
 tests/ci/test_wire_codegen.py::test_generated_edit_without_schema_is_red
 tests/ci/test_wire_codegen.py::test_missing_definition_is_red
 tests/ci/test_wire_codegen.py::test_repository_generated_file_is_current
+tests/ci/test_wire_codegen.py::test_repository_generated_typescript_is_current
 tests/ci/test_wire_codegen.py::test_schema_change_without_regeneration_is_red
+tests/ci/test_wire_codegen.py::test_typescript_guard_has_its_dependencies
+tests/ci/test_wire_codegen.py::test_typescript_hand_edit_is_red
+tests/ci/test_wire_codegen.py::test_typescript_schema_change_without_regeneration_is_red
 tests/ci/test_wire_codegen.py::test_unknown_keyword_fails_loudly
 tests/ci/test_wire_schema_shape.py::test_every_frame_has_kind_const
 tests/ci/test_wire_schema_shape.py::test_objects_are_closed
@@ -381,6 +385,12 @@ tests/unit/bootstrap/hosts/test_terminal_client.py::test_default_profile_root_ho
 tests/unit/bootstrap/hosts/test_terminal_client.py::test_sse_frame_parsing
 tests/unit/profiles/test_model.py::test_defaults_are_empty
 tests/unit/profiles/test_model.py::test_profile_is_frozen
+tests/unit/profiles/test_profile_loader.py::test_invalid_capability_state_is_rejected
+tests/unit/profiles/test_profile_loader.py::test_missing_profile_does_not_fallback
+tests/unit/profiles/test_profile_loader.py::test_personal_capabilities_are_declared_not_ready
+tests/unit/profiles/test_profile_loader.py::test_product_bundles_load
+tests/unit/profiles/test_profile_loader.py::test_tool_surface_differs_between_forms
+tests/unit/profiles/test_profile_loader.py::test_unknown_key_is_rejected
 tests/unit/test_api/test_client.py::test_anthropic_client_adds_claude_oauth_identity_headers
 tests/unit/test_api/test_client.py::test_anthropic_client_adds_oauth_beta_header
 tests/unit/test_api/test_client.py::test_anthropic_client_refreshes_claude_token_on_request
@@ -1368,6 +1378,8 @@ tests/unit/test_permissions/test_checker.py::test_plan_mode_blocks_mutating_tool
 tests/unit/test_permissions/test_checker.py::test_valid_allow_rule_is_added
 tests/unit/test_permissions/test_checker.py::test_valid_deny_rule_blocks_matching_path
 tests/unit/test_permissions/test_checker.py::test_valid_deny_rule_does_not_block_non_matching_path
+tests/unit/test_permissions/test_profile_tool_surface.py::test_personal_allows_question_tool_without_prompt
+tests/unit/test_permissions/test_profile_tool_surface.py::test_personal_denies_bash_and_coding_does_not
 tests/unit/test_personalization/test_extractor.py::TestExtractFacts::test_deduplicates
 tests/unit/test_personalization/test_extractor.py::TestExtractFacts::test_env_var_does_not_capture_secret_value
 tests/unit/test_personalization/test_extractor.py::TestExtractFacts::test_extracts_api_endpoint

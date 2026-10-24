@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://questor.dev/protocol/app-wire.schema.json",
   "title": "Questor app wire protocol",
-  "description": "Single source of truth for the studio wire protocol. One schema, two generators (Python now, TypeScript in the apps/web branch). Adding a kind is additive; renaming or removing one is a breaking change.",
+  "description": "Single source of truth for the studio wire protocol. One schema, two generators (Python serve/wire_types.py and TypeScript protocol/_gen/app-wire.ts). Adding a kind is additive; renaming or removing one is a breaking change.",
   "$comment": "Frames are derived from contracts/domain/events.py (7 StreamEvent types). No frame may carry a field the engine does not produce.",
   "oneOf": [
     { "$ref": "#/$defs/ServerFrame" }

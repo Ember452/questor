@@ -25,6 +25,7 @@ _ALLOWED_KEYS = frozenset(
         "skill_dirs",
         "plugin_roots",
         "allowed_tools",
+        "denied_tools",
         "ui",
     }
 )
@@ -97,6 +98,7 @@ def _parse(raw: Any, path: Path) -> ProfileInfo:
         skill_dirs=_string_tuple(raw.get("skill_dirs"), "skill_dirs", path),
         plugin_roots=_string_tuple(raw.get("plugin_roots"), "plugin_roots", path),
         allowed_tools=_string_tuple(raw.get("allowed_tools"), "allowed_tools", path),
+        denied_tools=_string_tuple(raw.get("denied_tools"), "denied_tools", path),
         ui_capabilities=_capabilities(raw.get("ui"), path),
         is_default=is_default,
     )

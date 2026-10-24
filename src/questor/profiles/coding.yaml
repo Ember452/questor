@@ -1,5 +1,5 @@
 # 编码形态：线程 / 工作台 / 检查器 / 设置。
-# allowed_tools 为空表示不做 profile 级工具限制（沿用既有策略）。
+# allowed_tools 为空 = 不做 profile 级显式放行；denied_tools 为空 = 不额外拒绝。
 name: coding
 description: 编码形态：对话线程、工作台、检查器与设置。
 is_default: true
@@ -8,6 +8,7 @@ provider: null
 skill_dirs: []
 plugin_roots: []
 allowed_tools: []
+denied_tools: []
 ui:
   capabilities:
     chat: ready

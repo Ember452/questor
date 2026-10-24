@@ -19,6 +19,7 @@ from rich.console import Console
 from questorharness.bootstrap.hosts.serve.authority import Authority
 from questorharness.bootstrap.hosts.serve.host import ServeHost
 from questorharness.bootstrap.runtime import build_runtime
+from questorharness.profiles import load_profile
 
 _PREFIX = "/rt/r1"
 
@@ -194,6 +195,11 @@ async def build_serve_host(
 ) -> ServeHost:
     """装配 runtime 与 serve 宿主（REPL 与 Studio 共用）。"""
     authority = Authority()
+    root = profile_root or default_profile_root()
+    profile = load_profile(root, profile_id)
+    extra: dict[str, Any] = dict(overrides or {})
+    extra.setdefault("allowed_tools", list(profile.allowed_tools))
+    extra.setdefault("denied_tools", list(profile.denied_tools))
     runtime = await build_runtime(
         cwd=cwd,
         model=model,
@@ -211,12 +217,12 @@ async def build_serve_host(
         permission_prompt=authority.permission_prompt,
         ask_user_prompt=authority.ask_user_prompt,
         edit_approval_prompt=authority.edit_approval_prompt,
-        **(dict(overrides or {})),
+        **extra,
     )
     return ServeHost(
         runtime,
         authority=authority,
-        profile_root=profile_root or default_profile_root(),
+        profile_root=root,
         profile_id=profile_id,
     )
 

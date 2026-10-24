@@ -73,6 +73,8 @@ STEPS: tuple[Step, ...] = (
     Step("import-contracts", ("uv", "run", "lint-imports")),
     # serve 契约三守卫：codegen 漂移 / kind 覆盖 / 持久化版本（各自带自证用例）。
     Step("wire-codegen", (PYTHON, "-m", "pytest", "tests/ci/test_wire_codegen.py", "-q")),
+    # TS 侧的同一份契约：schema → protocol/_gen/app-wire.ts，漂移即红。
+    Step("wire-codegen-ts", ("node", "scripts/codegen/gen_wire_ts.mjs", "--check")),
     Step("kind-coverage", (PYTHON, "-m", "pytest", "tests/ci/test_kind_coverage.py", "-q")),
     Step(
         "persistence-version",

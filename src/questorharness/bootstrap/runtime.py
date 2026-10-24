@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncIterator, Awaitable, Callable, Iterable
+from typing import Any
 
-from questorharness.providers.llm.client import AnthropicApiClient, SupportsStreamingMessages
-from questorharness.providers.llm.codex_client import CodexApiClient
-from questorharness.providers.llm.copilot_client import CopilotClient
-from questorharness.providers.llm.openai_client import OpenAICompatibleClient
-from questorharness.providers.llm.provider import auth_status, detect_provider
-from questorharness.providers.auth.resolver import resolve_auth
-from questorharness.runtime.bridge import get_bridge_manager
+from questorharness.capabilities.context.prompts import build_runtime_system_prompt
+from questorharness.capabilities.policy import PermissionChecker
+from questorharness.capabilities.tools import ToolRegistry, create_default_tool_registry
 from questorharness.commands import (
     CommandContext,
     CommandResult,
@@ -21,28 +18,37 @@ from questorharness.commands import (
     create_default_command_registry,
     lookup_skill_slash_command,
 )
-from questorharness.platform.paths import get_config_file_path
 from questorharness.config import load_settings
-from questorharness.engine import QueryEngine
+from questorharness.contracts.domain.events import StreamEvent
 from questorharness.contracts.domain.message import (
     ConversationMessage,
     sanitize_conversation_messages,
 )
+from questorharness.engine import QueryEngine
 from questorharness.engine.query import MaxTurnsExceeded
-from questorharness.contracts.domain.events import StreamEvent
-from questorharness.runtime.hooks import HookEvent, HookExecutionContext, HookExecutor, load_hook_registry
-from questorharness.runtime.hooks.hot_reload import HookReloader
-from questorharness.providers.mcp.client import McpClientManager
-from questorharness.providers.mcp.config import load_mcp_server_configs
-from questorharness.capabilities.policy import PermissionChecker
+from questorharness.keybindings import load_keybindings
+from questorharness.platform.paths import get_config_file_path
 from questorharness.plugins import load_plugins
 from questorharness.plugins.source import ensure_plugin_source
-from questorharness.capabilities.context.prompts import build_runtime_system_prompt
-from questorharness.state import AppState, AppStateStore
-from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, SessionBackend
+from questorharness.providers.auth.resolver import resolve_auth
+from questorharness.providers.llm.client import AnthropicApiClient, SupportsStreamingMessages
+from questorharness.providers.llm.codex_client import CodexApiClient
+from questorharness.providers.llm.copilot_client import CopilotClient
+from questorharness.providers.llm.openai_client import OpenAICompatibleClient
+from questorharness.providers.llm.provider import auth_status, detect_provider
+from questorharness.providers.mcp.client import McpClientManager
+from questorharness.providers.mcp.config import load_mcp_server_configs
+from questorharness.runtime.bridge import get_bridge_manager
+from questorharness.runtime.hooks import (
+    HookEvent,
+    HookExecutionContext,
+    HookExecutor,
+    load_hook_registry,
+)
+from questorharness.runtime.hooks.hot_reload import HookReloader
 from questorharness.runtime.output import format_pending_tool_results
-from questorharness.capabilities.tools import ToolRegistry, create_default_tool_registry
-from questorharness.keybindings import load_keybindings
+from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, SessionBackend
+from questorharness.state import AppState, AppStateStore
 
 PermissionPrompt = Callable[[str, str], Awaitable[bool]]
 AskUserPrompt = Callable[[str], Awaitable[str]]
@@ -187,7 +193,9 @@ class RuntimeBundle:
             if status.tools:
                 lines.append(f"  tools: {', '.join(tool.name for tool in status.tools)}")
             if status.resources:
-                lines.append(f"  resources: {', '.join(resource.uri for resource in status.resources)}")
+                lines.append(
+                    f"  resources: {', '.join(resource.uri for resource in status.resources)}"
+                )
         return "\n".join(lines)
 
 
@@ -208,7 +216,8 @@ def _resolve_api_client_from_settings(settings) -> SupportsStreamingMessages:
 
         copilot_model = (
             COPILOT_DEFAULT_MODEL
-            if settings.model in {"claude-sonnet-4-20250514", "claude-sonnet-4-6", "sonnet", "default"}
+            if settings.model
+            in {"claude-sonnet-4-20250514", "claude-sonnet-4-6", "sonnet", "default"}
             else settings.model
         )
         return CopilotClient(model=copilot_model)
@@ -293,6 +302,8 @@ async def build_runtime(
     enforce_max_turns: bool = True,
     session_backend: SessionBackend | None = None,
     permission_mode: str | None = None,
+    allowed_tools: list[str] | None = None,
+    denied_tools: list[str] | None = None,
     extra_skill_dirs: Iterable[str | Path] | None = None,
     extra_plugin_roots: Iterable[str | Path] | None = None,
     memory_backend: MemoryCommandBackend | None = None,
@@ -313,11 +324,17 @@ async def build_runtime(
         "api_format": api_format,
         "active_profile": active_profile,
         "permission_mode": permission_mode,
+        "allowed_tools": allowed_tools,
+        "denied_tools": denied_tools,
     }
     settings = load_settings().merge_cli_overrides(**settings_overrides)
     cwd = str(Path(cwd).expanduser().resolve()) if cwd else str(Path.cwd())
-    normalized_skill_dirs = tuple(str(Path(path).expanduser().resolve()) for path in (extra_skill_dirs or ()))
-    normalized_plugin_roots = tuple(str(Path(path).expanduser().resolve()) for path in (extra_plugin_roots or ()))
+    normalized_skill_dirs = tuple(
+        str(Path(path).expanduser().resolve()) for path in (extra_skill_dirs or ())
+    )
+    normalized_plugin_roots = tuple(
+        str(Path(path).expanduser().resolve()) for path in (extra_plugin_roots or ())
+    )
     plugins = load_plugins(settings, cwd, extra_roots=normalized_plugin_roots)
     if api_client:
         resolved_api_client = api_client
@@ -351,7 +368,9 @@ async def build_runtime(
             fast_mode=settings.fast_mode,
             effort=settings.effort,
             passes=settings.passes,
-            mcp_connected=sum(1 for status in mcp_manager.list_statuses() if status.state == "connected"),
+            mcp_connected=sum(
+                1 for status in mcp_manager.list_statuses() if status.state == "connected"
+            ),
             mcp_failed=sum(1 for status in mcp_manager.list_statuses() if status.state == "failed"),
             bridge_sessions=len(bridge_manager.list_sessions()),
             output_style=settings.output_style,
@@ -360,7 +379,9 @@ async def build_runtime(
     )
     hook_reloader = HookReloader(get_config_file_path())
     hook_executor = HookExecutor(
-        hook_reloader.current_registry() if api_client is None else load_hook_registry(settings, plugins),
+        hook_reloader.current_registry()
+        if api_client is None
+        else load_hook_registry(settings, plugins),
         HookExecutionContext(
             cwd=Path(cwd).resolve(),
             api_client=resolved_api_client,
@@ -409,10 +430,10 @@ async def build_runtime(
         model=settings.model,
         system_prompt=system_prompt_text,
         max_tokens=settings.max_tokens,
-        context_window_tokens=settings.context_window_tokens or settings.memory.context_window_tokens,
+        context_window_tokens=settings.context_window_tokens
+        or settings.memory.context_window_tokens,
         auto_compact_threshold_tokens=(
-            settings.auto_compact_threshold_tokens
-            or settings.memory.auto_compact_threshold_tokens
+            settings.auto_compact_threshold_tokens or settings.memory.auto_compact_threshold_tokens
         ),
         max_turns=engine_max_turns,
         permission_prompt=permission_prompt,
@@ -456,10 +477,7 @@ async def build_runtime(
         engine=engine,
         commands=create_default_command_registry(
             plugin_commands=[
-                command
-                for plugin in plugins
-                if plugin.enabled
-                for command in plugin.commands
+                command for plugin in plugins if plugin.enabled for command in plugin.commands
             ]
         ),
         external_api_client=api_client is not None,
@@ -490,7 +508,10 @@ async def close_runtime(bundle: RuntimeBundle) -> None:
     await stop_docker_sandbox()
     # 关闭会话前提取本地环境规则
     try:
-        from questorharness.capabilities.memory.personalization.session_hook import update_rules_from_session
+        from questorharness.capabilities.memory.personalization.session_hook import (
+            update_rules_from_session,
+        )
+
         update_rules_from_session(bundle.engine.messages)
     except Exception:
         pass  # 个性化处理尽力而为，绝不阻塞会话结束
@@ -533,8 +554,12 @@ def sync_app_state(bundle: RuntimeBundle) -> None:
         fast_mode=settings.fast_mode,
         effort=settings.effort,
         passes=settings.passes,
-        mcp_connected=sum(1 for status in bundle.mcp_manager.list_statuses() if status.state == "connected"),
-        mcp_failed=sum(1 for status in bundle.mcp_manager.list_statuses() if status.state == "failed"),
+        mcp_connected=sum(
+            1 for status in bundle.mcp_manager.list_statuses() if status.state == "connected"
+        ),
+        mcp_failed=sum(
+            1 for status in bundle.mcp_manager.list_statuses() if status.state == "failed"
+        ),
         bridge_sessions=len(get_bridge_manager().list_sessions()),
         output_style=settings.output_style,
         keybindings=load_keybindings(),
@@ -631,8 +656,10 @@ async def handle_line(
         memory_backend=bundle.memory_backend,
         include_project_memory=bundle.include_project_memory,
     )
-    parsed = None if user_message is not None else (
-        bundle.commands.lookup(line) or lookup_skill_slash_command(line, command_context)
+    parsed = (
+        None
+        if user_message is not None
+        else (bundle.commands.lookup(line) or lookup_skill_slash_command(line, command_context))
     )
     if parsed is not None:
         command, args = parsed
@@ -684,7 +711,11 @@ async def handle_line(
                 include_project_memory=bundle.include_project_memory,
             )
             bundle.engine.set_system_prompt(system_prompt)
-            turns = result.continue_turns if result.continue_turns is not None else bundle.engine.max_turns
+            turns = (
+                result.continue_turns
+                if result.continue_turns is not None
+                else bundle.engine.max_turns
+            )
             await _run_engine_turn(
                 bundle,
                 bundle.engine.continue_pending(max_turns=turns),

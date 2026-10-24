@@ -39,8 +39,8 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/serve/transport.py` | 87 |
 | `src/questorharness/bootstrap/hosts/serve/wire.py` | 158 |
 | `src/questorharness/bootstrap/hosts/serve/wire_types.py` | 248 |
-| `src/questorharness/bootstrap/hosts/terminal_client.py` | 263 |
-| `src/questorharness/bootstrap/runtime.py` | 800 |
+| `src/questorharness/bootstrap/hosts/terminal_client.py` | 269 |
+| `src/questorharness/bootstrap/runtime.py` | 831 |
 | `src/questorharness/capabilities/__init__.py` | 7 |
 | `src/questorharness/capabilities/context/__init__.py` | 1 |
 | `src/questorharness/capabilities/context/compact/__init__.py` | 1148 |
@@ -222,8 +222,8 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/plugins/schemas.py` | 26 |
 | `src/questorharness/plugins/source.py` | 55 |
 | `src/questorharness/profiles/__init__.py` | 6 |
-| `src/questorharness/profiles/loader.py` | 127 |
-| `src/questorharness/profiles/model.py` | 23 |
+| `src/questorharness/profiles/loader.py` | 129 |
+| `src/questorharness/profiles/model.py` | 24 |
 | `src/questorharness/providers/__init__.py` | 7 |
 | `src/questorharness/providers/auth/__init__.py` | 30 |
 | `src/questorharness/providers/auth/auth_manager.py` | 484 |

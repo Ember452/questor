@@ -33,8 +33,9 @@ ContextUsageDonut`；业界 Roo Code 的 custom modes 把"模式"定义为 roleD
 ## Decision
 
 1. **形态 = profile bundle（数据）**。`profile.yaml` 含 `name / description / system_prompt /
-   model / provider / skill_dirs / plugin_roots / allowed_tools / ui.capabilities`。形态差异
-   只在数据，不在代码。
+   model / provider / skill_dirs / plugin_roots / allowed_tools / denied_tools /
+   ui.capabilities`。形态差异只在数据，不在代码。**工具面语义**：`allowed_tools` 是"显式放行"
+   （触及需确认的工具），`denied_tools` 是"硬拒"（fail-closed）；两形态可同时使用。
 2. **`/rt/r1/profile` 是契约帧**：返回
    `{id, name, description, ui: {capabilities: {page_id: ready|declared|absent}}}`；
    三态沿用 `STRUCTURE.md` §7 边界 5 的词表，不另造一套。
