@@ -122,6 +122,11 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # records.py + guard.py + extraction.py), and platform is a reviewed implementation
 # facade held by a line cap in FACADE_IMPLEMENTATION_PACKAGES. Only context.compact
 # still carries behavior worth relocating behind an exemption.
+# R3 is 0: the last banned name, ``surfaces/channels/helpers.py``, was retired once its
+# own stated precondition was checked against the code and found already satisfied --
+# exactly one in-repo importer (the Feishu adapter), no patch strings. It became
+# ``filenames.py`` and ``message_chunks.py`` plus the deletion of a zero-caller
+# ``get_data_path`` alias, so the bucket is gone rather than renamed (ledger #127).
 # R7 is 154, the plan's target: one inline note per module that no test file names.
 # This number is only ever paid with mirror tests that go red when the behavior changes.
 # A candidate whose whole surface is Protocol or TypedDict declarations
@@ -130,7 +135,7 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # no decision (plan 01 ledger #120).
 EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 1,
-    "R3": 1,
+    "R3": 0,
     "R4": 1,
     "R5": 1,
     "R7": 154,

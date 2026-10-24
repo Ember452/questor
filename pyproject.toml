@@ -127,6 +127,10 @@ files = [
     "src/questorharness/runtime/swarm/permission_models.py",
     # W8: the gateway redaction layer, cut out of runtime.py with its annotations intact.
     "src/questor/gateway/redaction.py",
+    # W8: the two halves of the retired channels/helpers bucket came out fully annotated,
+    # so they join the strict whitelist instead of enlarging the deferred pool.
+    "src/questorharness/surfaces/channels/filenames.py",
+    "src/questorharness/surfaces/channels/message_chunks.py",
 ]
 plugins = ["pydantic.mypy"]
 

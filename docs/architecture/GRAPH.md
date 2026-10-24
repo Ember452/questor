@@ -55,7 +55,7 @@
 | module | imported by | 类型 |
 | --- | ---: | --- |
 | `questorharness.config.settings` | 41 | 契约/原语/实现 |
-| `questorharness.platform.paths` | 31 | 契约/原语/实现 |
+| `questorharness.platform.paths` | 30 | 契约/原语/实现 |
 | `questorharness.api` | 29 | 契约/原语/实现 |
 | `questorharness.contracts.domain.message` | 28 | 契约/原语/实现 |
 | `questorharness.providers.auth.auth_manager` | 18 | 契约/原语/实现 |
