@@ -1,33 +1,33 @@
-# AGENTS.md — Questor Signpost
+# AGENTS.md — Questor 路标
 
-Route to the right file, then read the doc that owns the decision. Behavioral rules are **not**
-here: §0–§6 of the old file moved verbatim to [docs/CONVENTIONS.md](./docs/CONVENTIONS.md).
-Priority: user instruction → [ARCHITECTURE](./docs/ARCHITECTURE.md) → [docs/adr](./docs/adr)
-→ [docs/architecture](./docs/architecture) → [docs/plan](./docs/plan) → elsewhere. The rulebook's
-own §5.5 still cites the pre-reset doc set (`docs/design/`, `docs/ROADMAP.md`, `docs/pitfalls.md`);
-those files left the repository in W10 — see the pointer at `docs-pre-reset-v1/README.md` and the
-勘误 block at the top of CONVENTIONS.md.
-Never work from memory: these links are the truth, and they move.
+先路由到正确的文件，再读拥有该决策的文档。行为守则**不在**这里：旧文件的 §0–§6
+已原样迁至 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md)。
+优先级：用户指令 → [ARCHITECTURE](./docs/ARCHITECTURE.md) → [docs/adr](./docs/adr)
+→ [docs/architecture](./docs/architecture) → [docs/plan](./docs/plan) → 其他。守则自身的
+§5.5 仍引用重置前的文档集（`docs/design/`、`docs/ROADMAP.md`、`docs/pitfalls.md`）；
+这些文件已在 W10 离开仓库——见 `docs-pre-reset-v1/README.md` 的指引与 CONVENTIONS.md
+顶部的勘误块。
+永远不要凭记忆工作：这些链接才是事实，而且它们会移动。
 
 ## 顶层结构
 
 ```
-src/questorharness   engine: contracts → platform → config → providers / execution →
-                     runtime → engine → capabilities → commands → surfaces → bootstrap,
-                     plus plugins (extension layer) and the appearance leaves
-src/questor          product composition root: gateway, groups, personal memory
-docs/architecture    STRUCTURE (intent) · GRAPH (generated graph) · TREE (generated tree)
-                     · NAMESPACES (registry) · MIGRATION · APPEARANCE
-tests                unit / integration / e2e / ci (guard contracts) / fixtures/baseline
+src/questorharness   引擎：contracts → platform → config → providers / execution →
+                     runtime → engine → capabilities → commands → surfaces → bootstrap，
+                     另有 plugins（扩展层）与五个表现层叶子包
+src/questor          产品组合根：gateway、groups、personal memory
+docs/architecture    STRUCTURE（意图）· GRAPH（生成的关系图）· TREE（生成的目录树）
+                     · NAMESPACES（注册表）· MIGRATION · APPEARANCE
+tests                unit / integration / e2e / ci（守卫契约）/ fixtures/baseline
 ```
 
-Package edges, cycles, most-imported files and over-budget files exist only in
-[GRAPH.md](./docs/architecture/GRAPH.md) and [TREE.md](./docs/architecture/TREE.md). Both are
-generated; drawing them by hand is a red build.
+包级依赖边、环、被 import 最多的文件与超预算清单只存在于
+[GRAPH.md](./docs/architecture/GRAPH.md) 与 [TREE.md](./docs/architecture/TREE.md)。两者
+均为生成物；手画它们就是红构建。
 
 ## 依赖铁律
 
-`.importlinter` owns the rules; CI's `guards` job keeps every contract KEPT:
+`.importlinter` 拥有规则；CI 的 `guards` job 保证每条契约 KEPT：
 
 - `layers`
 - `plugins-stay-an-extension-layer`
@@ -40,9 +40,9 @@ generated; drawing them by hand is a red build.
 - `surfaces-are-thin`
 - `command-families-are-leaf`
 
-Before adding an edge, read GRAPH.md's 冻结的间接入口 section: the five
-`capabilities → execution` edges and the `providers.sandbox` pair are registered
-exceptions, and one more is a failure.
+加新的依赖边之前，先读 GRAPH.md 的「冻结的间接入口」一节：五条
+`capabilities → execution` 边与 `providers.sandbox` 一对是已登记的例外，
+多出一条即失败。
 
 ## 路由表
 

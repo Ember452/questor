@@ -116,7 +116,7 @@
       "value": 1178
     },
     "root_agents": {
-      "bytes": 4660,
+      "bytes": 4658,
       "caliber": "len(read_text('AGENTS.md').splitlines())",
       "gate": true,
       "value": 87
@@ -152,7 +152,7 @@
     }
   },
   "pin": {
-    "commit": "974ef0973d75dc163de1a53132c8979d346e80cc",
-    "date": "2026-10-23"
+    "commit": "579a9dfc54d18250ca76136cdc88fe7dbcb5e1fa",
+    "date": "2026-10-24"
   }
 }
