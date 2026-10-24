@@ -96,6 +96,9 @@ uv.lock.bak
 # ---------------------------------------------------------------------------
 # IDE / editor
 # ---------------------------------------------------------------------------
+# ZCode agent session workspace (visualizations, scratch) — per-machine
+.zcode/
+
 # JetBrains (IntelliJ, PyCharm, ...)
 .idea/
 *.iml
