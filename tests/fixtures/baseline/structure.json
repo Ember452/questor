@@ -19,7 +19,7 @@
     "capabilities_size": {
       "caliber": "git ls-files src | non-__init__ under capabilities/",
       "gate": true,
-      "ratio": 32.8,
+      "ratio": 32.7,
       "subdirs_ge2": 18,
       "tool_files": 44,
       "value": 87
@@ -65,8 +65,8 @@
     "long_files": {
       "caliber": "len(read_text(path).splitlines()) over tracked src/*.py",
       "gate": true,
-      "max": 1190,
-      "max_file": "src/questorharness/bootstrap/cli/main.py",
+      "max": 1171,
+      "max_file": "src/questorharness/capabilities/context/compact/__init__.py",
       "over_limit": 0,
       "value": 4,
       "warning_band": 5
@@ -125,22 +125,22 @@
     "src_files": {
       "caliber": "git ls-files src | *.py",
       "gate": true,
-      "modules": 265,
-      "value": 329
+      "modules": 266,
+      "value": 330
     },
     "test_files": {
       "caliber": "git ls-files tests | *.py",
       "e2e": 11,
       "gate": true,
       "integration": 32,
-      "unit": 117,
-      "value": 165
+      "unit": 118,
+      "value": 166
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
       "gate": true,
-      "percent": 36.6,
-      "value": "97/265"
+      "percent": 36.8,
+      "value": "98/266"
     },
     "tool_radius": {
       "caliber": "shared files a new tool must touch: registration point + consumers with hard-coded names",
@@ -153,7 +153,7 @@
     }
   },
   "pin": {
-    "commit": "becde80dbe7bdacdbe6ea356a6303486f1b18a54",
+    "commit": "bd1f5d96fc9ac1aeb8d032f29690a04642e6b2d3",
     "date": "2026-10-23"
   }
 }

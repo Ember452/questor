@@ -64,7 +64,7 @@ def _schema_argument_preview(tool_schema: dict[str, object]) -> dict[str, object
 
 def _mcp_transport_preview(config: object) -> dict[str, str]:
     if hasattr(config, "type"):
-        transport = str(getattr(config, "type") or "unknown")
+        transport = str(config.type or "unknown")
     elif isinstance(config, dict):
         transport = str(config.get("type") or "unknown")
     else:

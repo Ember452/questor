@@ -69,10 +69,10 @@
 
 ### 文件（>1000 行）
 
-- `src/questorharness/bootstrap/cli/main.py`: 1190 lines
 - `src/questorharness/capabilities/context/compact/__init__.py`: 1171 lines
 - `src/questorharness/runtime/swarm/permission_sync.py`: 1162 lines
 - `src/questor/gateway/runtime.py`: 1089 lines
+- `src/questorharness/bootstrap/cli/main.py`: 1086 lines
 
 ### 目录（>=17 个非 init 源文件）
 

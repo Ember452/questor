@@ -115,6 +115,9 @@ files = [
     "src/questorharness/capabilities/memory/extract/records.py",
     "src/questorharness/capabilities/memory/extract/guard.py",
     "src/questorharness/capabilities/memory/extract/extraction.py",
+    # W8/W10: the terminal-prompt layer split out of the CLI entry point joins the
+    # strict whitelist for the same reason as the other split halves above.
+    "src/questorharness/bootstrap/cli/cli_prompts.py",
 ]
 plugins = ["pydantic.mypy"]
 
