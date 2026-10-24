@@ -487,7 +487,7 @@ def _maybe_update_profile_auth(manager, profile_name: str) -> bool:
 
 def _maybe_update_default_model_for_provider(provider: str) -> None:
     """Keep the active model in-family after switching auth providers."""
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
 
     manager = AuthManager()
     profile_name = {
@@ -550,7 +550,7 @@ def _bind_external_provider(provider: str) -> None:
 def _login_provider(provider: str) -> None:
     """Authenticate or bind the given provider."""
     from questorharness.providers.auth.flows import ApiKeyFlow
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
     from questorharness.providers.auth.storage import store_credential
 
     manager = AuthManager()
@@ -589,7 +589,7 @@ def setup_cmd(
 ) -> None:
     """Unified setup flow: choose workflow, authenticate if needed, then set the model."""
     from questorharness.config.settings import display_model_setting
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
 
     manager = AuthManager()
     statuses = manager.get_profile_statuses()
@@ -673,7 +673,7 @@ def auth_login(
 @auth_app.command("status")
 def auth_status_cmd() -> None:
     """Show authentication source and provider profile status."""
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
 
     manager = AuthManager()
     auth_sources = manager.get_auth_source_statuses()
@@ -704,7 +704,7 @@ def auth_logout(
     provider: Optional[str] = typer.Argument(None, help="Provider to log out (default: active provider)"),
 ) -> None:
     """Clear stored authentication for a provider."""
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
 
     manager = AuthManager()
     if provider is None:
@@ -721,7 +721,7 @@ def auth_switch(
     provider: str = typer.Argument(..., help="Auth source or profile to activate"),
 ) -> None:
     """Switch the auth source for the active profile, or use a profile by name."""
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
 
     manager = AuthManager()
     try:

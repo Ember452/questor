@@ -10,7 +10,7 @@ from questorharness.capabilities.skills.definition import SkillDefinition
 from questorharness.config.settings import Settings
 from questorharness.plugins.models import PluginCommandDefinition
 
-from questorharness.commands.types import CommandContext, CommandResult, SlashCommand
+from questorharness.commands.models import CommandContext, CommandResult, SlashCommand
 
 
 _SECRET_KEY_PARTS = (
@@ -143,5 +143,3 @@ def _make_skill_slash_command(skill_name: str, description: str) -> SlashCommand
             skill_name=skill_name,
         ),
     )
-
-# questor: allow R3 -- until W9 rename wave

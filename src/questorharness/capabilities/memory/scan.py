@@ -14,7 +14,7 @@ from questorharness.capabilities.memory.schema import (
     is_memory_expired,
     split_memory_file,
 )
-from questorharness.capabilities.memory.types import MemoryHeader
+from questorharness.capabilities.memory.header import MemoryHeader
 
 
 def scan_memory_files(

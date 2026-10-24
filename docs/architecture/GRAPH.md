@@ -66,7 +66,7 @@
 | `questorharness.platform.paths` | 31 | 契约/原语/实现 |
 | `questorharness.api` | 28 | 契约/原语/实现 |
 | `questorharness.contracts.domain.message` | 28 | 契约/原语/实现 |
-| `questorharness.providers.auth.manager` | 17 | 禁用名 manager.py |
+| `questorharness.providers.auth.auth_manager` | 17 | 契约/原语/实现 |
 | `questorharness.config` | 15 | 契约/原语/实现 |
 | `questorharness.contracts.domain.events` | 15 | 契约/原语/实现 |
 | `questorharness.contracts.hooks` | 14 | 契约/原语/实现 |

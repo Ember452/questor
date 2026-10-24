@@ -97,7 +97,7 @@ def test_setup_flow_existing_api_key_profile_can_update_secret(tmp_path: Path, m
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
     from questorharness.providers.auth.storage import load_credential
 
     manager = AuthManager()
@@ -193,7 +193,7 @@ def test_provider_edit_can_replace_profile_api_key(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
     from questorharness.providers.auth.storage import load_credential
 
     manager = AuthManager()

@@ -8,4 +8,4 @@
 不变式：查询入口由外部注入（`ChannelBridge(query_runner=...)`）；本层不持有业务状态、不装配运行时而只消费注入的端口。
 禁止：不要把产品策略（群规则、通知）装进 surfaces；不要把进程宿主搬回这里——宿主属于 `bootstrap/hosts/`，因为它必须装配组合根。
 测试：`uv run pytest tests/unit/test_channels -q`
-关键文件：`channels/__init__.py`、`channels/impl/manager.py`、`channels/bus/queue.py`
+关键文件：`channels/__init__.py`、`channels/impl/channel_manager.py`、`channels/bus/queue.py`

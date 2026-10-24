@@ -11,7 +11,7 @@ from questorharness.contracts.mcp import McpResourceInfo, McpStdioServerConfig, 
 from questorharness.plugins.models import LoadedPlugin
 from questorharness.plugins.schemas import PluginManifest
 from questorharness.capabilities.tools import create_default_tool_registry
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 
 
 @dataclass

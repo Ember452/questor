@@ -6,7 +6,7 @@ import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
-from questorharness.runtime.autopilot.types import RepoTaskSource
+from questorharness.runtime.autopilot.models import RepoTaskSource
 
 _SOURCE_BASE_SCORES: dict[RepoTaskSource, int] = {
     "questor_request": 100,
@@ -166,5 +166,4 @@ def _source_ref_number(source_ref: str, prefix: str) -> int | None:
     except ValueError:
         return None
 
-# questor: allow R3 -- until W9 rename wave
 # questor: allow R7 -- until W8 adds the mirror test

@@ -35,7 +35,7 @@
 | image_generation | `src/questorharness/capabilities/tools/media/image_generation_tool.py` | `src/questor/gateway/media.py` / `src/questorharness/bootstrap/runtime.py` |
 | image_to_text | `src/questorharness/capabilities/tools/media/image_to_text_tool.py` | `src/questorharness/config/settings_models.py` / `src/questorharness/engine/vision.py` |
 | list_mcp_resources | `src/questorharness/capabilities/tools/mcp/list_mcp_resources_tool.py` | — |
-| lsp | `src/questorharness/capabilities/tools/fs/lsp_tool.py` | `src/questorharness/capabilities/ports.py` / `src/questorharness/capabilities/tools/base.py` |
+| lsp | `src/questorharness/capabilities/tools/fs/lsp_tool.py` | `src/questorharness/capabilities/ports.py` / `src/questorharness/capabilities/tools/contract.py` |
 | mcp_auth | `src/questorharness/capabilities/tools/mcp/mcp_auth_tool.py` | — |
 | notebook_edit | `src/questorharness/capabilities/tools/fs/notebook_edit_tool.py` | `src/questorharness/runtime/coordinator/agent_definitions.py` |
 | questor_create_feishu_group | `src/questor/gateway/group_tool.py` | `src/questor/gateway/bridge.py` / `src/questor/gateway/runtime.py` |
@@ -67,7 +67,7 @@
 | --- | --- | --- |
 | agents | `src/questorharness/commands/families/agents.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/capabilities/context/prompts/context.py` |
 | autopilot | `src/questorharness/commands/families/agents.py` | `src/questorharness/bootstrap/runtime.py` / `src/questorharness/cli_autopilot.py` |
-| brainstorming | `src/questorharness/commands/helpers.py` | — |
+| brainstorming | `src/questorharness/commands/command_display.py` | — |
 | branch | `src/questorharness/commands/families/project.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/capabilities/context/prompts/environment.py` |
 | bridge | `src/questorharness/commands/families/workspace.py` | `src/questor/gateway/bridge.py` / `src/questor/gateway/gateway_process.py` |
 | clear | `src/questorharness/commands/families/session.py` | `src/questor/gateway/provider_commands.py` / `src/questorharness/capabilities/context/compact/__init__.py` |
@@ -78,53 +78,53 @@
 | continue | `src/questorharness/commands/families/model.py` | `src/questor/cli.py` / `src/questor/gateway/bridge.py` |
 | copy | `src/questorharness/commands/families/workspace.py` | `src/questor/gateway/gateway_process.py` / `src/questor/runtime.py` |
 | cost | `src/questorharness/commands/families/session.py` | `src/questorharness/cli_preview.py` |
-| debug | `src/questorharness/commands/helpers.py` | `src/questorharness/bootstrap/hosts/backend_host.py` / `src/questorharness/capabilities/schedule/cron_scheduler.py` |
-| diagnose | `src/questorharness/commands/helpers.py` | `src/questorharness/capabilities/context/prompts/system_prompt.py` |
+| debug | `src/questorharness/commands/command_display.py` | `src/questorharness/bootstrap/hosts/backend_host.py` / `src/questorharness/capabilities/schedule/cron_scheduler.py` |
+| diagnose | `src/questorharness/commands/command_display.py` | `src/questorharness/capabilities/context/prompts/system_prompt.py` |
 | diff | `src/questorharness/commands/families/project.py` | `src/questorharness/bootstrap/hosts/backend_host.py` / `src/questorharness/capabilities/memory/consolidate/backup.py` |
-| dispatching-parallel-agents | `src/questorharness/commands/helpers.py` | — |
+| dispatching-parallel-agents | `src/questorharness/commands/command_display.py` | — |
 | doctor | `src/questorharness/commands/families/diagnostics.py` | `src/questor/cli.py` / `src/questorharness/cli_preview.py` |
 | dream | `src/questorharness/commands/families/memory.py` | `src/questorharness/capabilities/memory/consolidate/__init__.py` / `src/questorharness/capabilities/memory/consolidate/backup.py` |
 | effort | `src/questorharness/commands/families/model.py` | `src/questorharness/bootstrap/hosts/app.py` / `src/questorharness/bootstrap/hosts/backend_host.py` |
-| executing-plans | `src/questorharness/commands/helpers.py` | — |
+| executing-plans | `src/questorharness/commands/command_display.py` | — |
 | exit | `src/questorharness/commands/families/session.py` | `src/questor/cli.py` / `src/questorharness/bootstrap/hosts/app.py` |
 | export | `src/questorharness/commands/families/workspace.py` | `src/questorharness/capabilities/memory/personalization/extractor.py` / `src/questorharness/cli_autopilot.py` |
 | fast | `src/questorharness/commands/families/model.py` | `src/questor/gateway/runtime.py` / `src/questorharness/bootstrap/hosts/backend_host.py` |
 | feedback | `src/questorharness/commands/families/account.py` | `src/questorharness/capabilities/context/compact/limits.py` / `src/questorharness/capabilities/context/compact/prompts.py` |
 | files | `src/questorharness/commands/families/workspace.py` | `src/questor/gateway/group_tool.py` / `src/questor/memory.py` |
-| finishing-a-development-branch | `src/questorharness/commands/helpers.py` | — |
+| finishing-a-development-branch | `src/questorharness/commands/command_display.py` | — |
 | help | `src/questorharness/commands/families/session.py` | `src/questor/cli.py` / `src/questor/workspace.py` |
 | hooks | `src/questorharness/commands/families/memory.py` | `src/questorharness/bootstrap/runtime.py` / `src/questorharness/capabilities/context/compact/__init__.py` |
 | init | `src/questorharness/commands/families/workspace.py` | `src/questor/cli.py` / `src/questorharness/capabilities/memory/personalization/extractor.py` |
 | issue | `src/questorharness/commands/families/project.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/cli_autopilot.py` |
 | keybindings | `src/questorharness/commands/families/appearance.py` | `src/questorharness/bootstrap/hosts/backend_host.py` / `src/questorharness/bootstrap/hosts/protocol.py` |
-| lark-approval | `src/questorharness/commands/helpers.py` | — |
-| lark-apps | `src/questorharness/commands/helpers.py` | — |
-| lark-attendance | `src/questorharness/commands/helpers.py` | — |
-| lark-base | `src/questorharness/commands/helpers.py` | — |
-| lark-calendar | `src/questorharness/commands/helpers.py` | — |
-| lark-contact | `src/questorharness/commands/helpers.py` | — |
-| lark-doc | `src/questorharness/commands/helpers.py` | — |
-| lark-drive | `src/questorharness/commands/helpers.py` | — |
-| lark-event | `src/questorharness/commands/helpers.py` | — |
-| lark-im | `src/questorharness/commands/helpers.py` | — |
-| lark-mail | `src/questorharness/commands/helpers.py` | — |
-| lark-markdown | `src/questorharness/commands/helpers.py` | — |
-| lark-minutes | `src/questorharness/commands/helpers.py` | — |
-| lark-note | `src/questorharness/commands/helpers.py` | — |
-| lark-okr | `src/questorharness/commands/helpers.py` | — |
-| lark-openapi-explorer | `src/questorharness/commands/helpers.py` | — |
-| lark-shared | `src/questorharness/commands/helpers.py` | — |
-| lark-sheets | `src/questorharness/commands/helpers.py` | — |
-| lark-skill-maker | `src/questorharness/commands/helpers.py` | — |
-| lark-slides | `src/questorharness/commands/helpers.py` | — |
-| lark-task | `src/questorharness/commands/helpers.py` | — |
-| lark-vc | `src/questorharness/commands/helpers.py` | — |
-| lark-vc-agent | `src/questorharness/commands/helpers.py` | — |
-| lark-whiteboard | `src/questorharness/commands/helpers.py` | — |
-| lark-wiki | `src/questorharness/commands/helpers.py` | — |
-| lark-workflow-meeting-summary | `src/questorharness/commands/helpers.py` | — |
-| lark-workflow-standup-report | `src/questorharness/commands/helpers.py` | — |
-| live-panel | `src/questorharness/commands/helpers.py` | — |
+| lark-approval | `src/questorharness/commands/command_display.py` | — |
+| lark-apps | `src/questorharness/commands/command_display.py` | — |
+| lark-attendance | `src/questorharness/commands/command_display.py` | — |
+| lark-base | `src/questorharness/commands/command_display.py` | — |
+| lark-calendar | `src/questorharness/commands/command_display.py` | — |
+| lark-contact | `src/questorharness/commands/command_display.py` | — |
+| lark-doc | `src/questorharness/commands/command_display.py` | — |
+| lark-drive | `src/questorharness/commands/command_display.py` | — |
+| lark-event | `src/questorharness/commands/command_display.py` | — |
+| lark-im | `src/questorharness/commands/command_display.py` | — |
+| lark-mail | `src/questorharness/commands/command_display.py` | — |
+| lark-markdown | `src/questorharness/commands/command_display.py` | — |
+| lark-minutes | `src/questorharness/commands/command_display.py` | — |
+| lark-note | `src/questorharness/commands/command_display.py` | — |
+| lark-okr | `src/questorharness/commands/command_display.py` | — |
+| lark-openapi-explorer | `src/questorharness/commands/command_display.py` | — |
+| lark-shared | `src/questorharness/commands/command_display.py` | — |
+| lark-sheets | `src/questorharness/commands/command_display.py` | — |
+| lark-skill-maker | `src/questorharness/commands/command_display.py` | — |
+| lark-slides | `src/questorharness/commands/command_display.py` | — |
+| lark-task | `src/questorharness/commands/command_display.py` | — |
+| lark-vc | `src/questorharness/commands/command_display.py` | — |
+| lark-vc-agent | `src/questorharness/commands/command_display.py` | — |
+| lark-whiteboard | `src/questorharness/commands/command_display.py` | — |
+| lark-wiki | `src/questorharness/commands/command_display.py` | — |
+| lark-workflow-meeting-summary | `src/questorharness/commands/command_display.py` | — |
+| lark-workflow-standup-report | `src/questorharness/commands/command_display.py` | — |
+| live-panel | `src/questorharness/commands/command_display.py` | — |
 | login | `src/questorharness/commands/families/account.py` | `src/questor/gateway/bridge.py` / `src/questorharness/bootstrap/runtime.py` |
 | logout | `src/questorharness/commands/families/account.py` | `src/questorharness/cli.py` / `src/questorharness/cli_preview.py` |
 | mcp | `src/questorharness/commands/families/plugin_management.py` | `src/questorharness/bootstrap/hosts/protocol.py` / `src/questorharness/bootstrap/runtime.py` |
@@ -140,42 +140,42 @@
 | privacy-settings | `src/questorharness/commands/families/diagnostics.py` | `src/questorharness/cli_preview.py` |
 | provider | `src/questorharness/commands/families/model.py` | `src/questor/cli.py` / `src/questor/gateway/media.py` |
 | rate-limit-options | `src/questorharness/commands/families/diagnostics.py` | `src/questorharness/cli_preview.py` |
-| receiving-code-review | `src/questorharness/commands/helpers.py` | — |
+| receiving-code-review | `src/questorharness/commands/command_display.py` | — |
 | release-notes | `src/questorharness/commands/families/diagnostics.py` | `src/questorharness/cli_preview.py` |
 | reload-plugins | `src/questorharness/commands/families/plugin_management.py` | `src/questorharness/cli_preview.py` |
-| requesting-code-review | `src/questorharness/commands/helpers.py` | — |
+| requesting-code-review | `src/questorharness/commands/command_display.py` | — |
 | resume | `src/questorharness/commands/families/workspace.py` | `src/questor/cli.py` / `src/questorharness/bootstrap/hosts/backend_host.py` |
-| review | `src/questorharness/commands/helpers.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/capabilities/memory/consolidate/prompt.py` |
+| review | `src/questorharness/commands/command_display.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/capabilities/memory/consolidate/prompt.py` |
 | rewind | `src/questorharness/commands/families/workspace.py` | `src/questorharness/cli_preview.py` / `src/questorharness/commands/families/diagnostics.py` |
 | session | `src/questorharness/commands/families/workspace.py` | `src/questor/cli.py` / `src/questor/gateway/bridge.py` |
 | share | `src/questorharness/commands/families/workspace.py` | `src/questorharness/bootstrap/hosts/coordinator_drain.py` / `src/questorharness/capabilities/memory/consolidate/prompt.py` |
 | ship | `src/questorharness/commands/families/agents.py` | `src/questorharness/cli_preview.py` |
-| simplify | `src/questorharness/commands/helpers.py` | — |
-| skill-creator | `src/questorharness/commands/helpers.py` | — |
+| simplify | `src/questorharness/commands/command_display.py` | — |
+| skill-creator | `src/questorharness/commands/command_display.py` | — |
 | skills | `src/questorharness/commands/families/account.py` | `src/questor/workspace.py` / `src/questorharness/capabilities/context/compact/attachments.py` |
 | stats | `src/questorharness/commands/families/session.py` | `src/questorharness/capabilities/tools/fs/file_edit_tool.py` / `src/questorharness/capabilities/tools/fs/file_write_tool.py` |
 | status | `src/questorharness/commands/families/session.py` | `src/questor/cli.py` / `src/questor/gateway/bridge.py` |
 | stop | `src/questorharness/commands/families/model.py` | `src/questor/cli.py` / `src/questor/gateway/bridge.py` |
-| subagent-driven-development | `src/questorharness/commands/helpers.py` | — |
+| subagent-driven-development | `src/questorharness/commands/command_display.py` | — |
 | subagents | `src/questorharness/commands/families/agents.py` | `src/questorharness/capabilities/context/prompts/context.py` / `src/questorharness/capabilities/tools/agent/agent_tool.py` |
 | summary | `src/questorharness/commands/families/session.py` | `src/questor/gateway/media.py` / `src/questor/gateway/runtime.py` |
-| systematic-debugging | `src/questorharness/commands/helpers.py` | — |
+| systematic-debugging | `src/questorharness/commands/command_display.py` | — |
 | tag | `src/questorharness/commands/families/workspace.py` | `src/questorharness/capabilities/context/coordinator.py` / `src/questorharness/capabilities/memory/extract/__init__.py` |
 | tasks | `src/questorharness/commands/families/agents.py` | `src/questorharness/bootstrap/hosts/app.py` / `src/questorharness/bootstrap/hosts/backend_host.py` |
-| test | `src/questorharness/commands/helpers.py` | `src/questor/__main__.py` / `src/questor/gateway/bridge.py` |
-| test-driven-development | `src/questorharness/commands/helpers.py` | — |
+| test | `src/questorharness/commands/command_display.py` | `src/questor/__main__.py` / `src/questor/gateway/bridge.py` |
+| test-driven-development | `src/questorharness/commands/command_display.py` | — |
 | theme | `src/questorharness/commands/families/appearance.py` | `src/questor/runtime.py` / `src/questorharness/bootstrap/hosts/backend_host.py` |
 | turns | `src/questorharness/commands/families/model.py` | `src/questor/cli.py` / `src/questor/gateway/runtime.py` |
 | upgrade | `src/questorharness/commands/families/diagnostics.py` | `src/questorharness/cli_preview.py` |
 | usage | `src/questorharness/commands/families/session.py` | `src/questor/gateway/runtime.py` / `src/questor/session_storage.py` |
-| using-git-worktrees | `src/questorharness/commands/helpers.py` | — |
-| using-superpowers | `src/questorharness/commands/helpers.py` | — |
-| verification-before-completion | `src/questorharness/commands/helpers.py` | — |
+| using-git-worktrees | `src/questorharness/commands/command_display.py` | — |
+| using-superpowers | `src/questorharness/commands/command_display.py` | — |
+| verification-before-completion | `src/questorharness/commands/command_display.py` | — |
 | version | `src/questorharness/commands/families/session.py` | `src/questorharness/capabilities/context/prompts/environment.py` / `src/questorharness/capabilities/memory/personalization/extractor.py` |
 | vim | `src/questorharness/commands/families/appearance.py` | `src/questorharness/bootstrap/hosts/backend_host.py` / `src/questorharness/cli_preview.py` |
 | voice | `src/questorharness/commands/families/appearance.py` | `src/questorharness/bootstrap/hosts/backend_host.py` / `src/questorharness/cli_preview.py` |
-| writing-plans | `src/questorharness/commands/helpers.py` | — |
-| writing-skills | `src/questorharness/commands/helpers.py` | — |
+| writing-plans | `src/questorharness/commands/command_display.py` | — |
+| writing-skills | `src/questorharness/commands/command_display.py` | — |
 
 ## event
 
@@ -241,14 +241,14 @@
 | --- | --- | --- |
 | QUESTORHARNESS_AGENT_TEAMS | `src/questorharness/runtime/swarm/spawn_utils.py` | — |
 | QUESTORHARNESS_ANTHROPIC_API_KEY | `src/questorharness/config/settings_models.py` | `src/questorharness/runtime/swarm/spawn_utils.py` |
-| QUESTORHARNESS_API_FORMAT | `src/questorharness/capabilities/memory/consolidate/service.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
-| QUESTORHARNESS_API_KEY | `src/questorharness/capabilities/memory/consolidate/service.py` | — |
-| QUESTORHARNESS_AUTODREAM_CHILD | `src/questorharness/capabilities/memory/consolidate/service.py` | — |
-| QUESTORHARNESS_AUTODREAM_MEMORY_DIR | `src/questorharness/capabilities/memory/consolidate/service.py` | — |
+| QUESTORHARNESS_API_FORMAT | `src/questorharness/capabilities/memory/consolidate/dream.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
+| QUESTORHARNESS_API_KEY | `src/questorharness/capabilities/memory/consolidate/dream.py` | — |
+| QUESTORHARNESS_AUTODREAM_CHILD | `src/questorharness/capabilities/memory/consolidate/dream.py` | — |
+| QUESTORHARNESS_AUTODREAM_MEMORY_DIR | `src/questorharness/capabilities/memory/consolidate/dream.py` | — |
 | QUESTORHARNESS_AUTO_COMPACT_THRESHOLD_TOKENS | `src/questorharness/config/settings_loader.py` | — |
-| QUESTORHARNESS_BASE_URL | `src/questorharness/capabilities/memory/consolidate/service.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
-| QUESTORHARNESS_CHANNEL_MEDIA_DIR | `src/questor/gateway/gateway_process.py` | `src/questorharness/surfaces/channels/impl/base.py` |
-| QUESTORHARNESS_CONFIG_DIR | `src/questorharness/capabilities/memory/consolidate/service.py` | `src/questorharness/platform/paths.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
+| QUESTORHARNESS_BASE_URL | `src/questorharness/capabilities/memory/consolidate/dream.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
+| QUESTORHARNESS_CHANNEL_MEDIA_DIR | `src/questor/gateway/gateway_process.py` | `src/questorharness/surfaces/channels/impl/base_channel.py` |
+| QUESTORHARNESS_CONFIG_DIR | `src/questorharness/capabilities/memory/consolidate/dream.py` | `src/questorharness/platform/paths.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
 | QUESTORHARNESS_CONTEXT_WINDOW_TOKENS | `src/questorharness/config/settings_loader.py` | — |
 | QUESTORHARNESS_DASHSCOPE_API_KEY | `src/questorharness/config/settings_models.py` | `src/questorharness/runtime/swarm/spawn_utils.py` |
 | QUESTORHARNESS_DATA_DIR | `src/questorharness/platform/paths.py` | `src/questorharness/runtime/swarm/spawn_utils.py` |
@@ -269,13 +269,13 @@
 | QUESTORHARNESS_MAX_TURNS | `src/questorharness/config/settings_loader.py` | — |
 | QUESTORHARNESS_MICROCOMPACT_TOOL_RESULT_CHARS | `src/questorharness/contracts/tool_outputs.py` | — |
 | QUESTORHARNESS_MINIMAX_API_KEY | `src/questorharness/config/settings_models.py` | `src/questorharness/runtime/swarm/spawn_utils.py` |
-| QUESTORHARNESS_MODEL | `src/questorharness/capabilities/memory/consolidate/service.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
+| QUESTORHARNESS_MODEL | `src/questorharness/capabilities/memory/consolidate/dream.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
 | QUESTORHARNESS_MODELSCOPE_API_KEY | `src/questorharness/config/settings_models.py` | `src/questorharness/runtime/swarm/spawn_utils.py` |
 | QUESTORHARNESS_MOONSHOT_API_KEY | `src/questorharness/config/settings_models.py` | `src/questorharness/runtime/swarm/spawn_utils.py` |
 | QUESTORHARNESS_NVIDIA_API_KEY | `src/questorharness/config/settings_models.py` | `src/questorharness/runtime/swarm/spawn_utils.py` |
 | QUESTORHARNESS_OPENAI_API_KEY | `src/questorharness/config/settings_models.py` | `src/questorharness/runtime/swarm/spawn_utils.py` |
-| QUESTORHARNESS_PROFILE | `src/questorharness/capabilities/memory/consolidate/service.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/config/settings_models.py` |
-| QUESTORHARNESS_PROVIDER | `src/questorharness/capabilities/memory/consolidate/service.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
+| QUESTORHARNESS_PROFILE | `src/questorharness/capabilities/memory/consolidate/dream.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/config/settings_models.py` |
+| QUESTORHARNESS_PROVIDER | `src/questorharness/capabilities/memory/consolidate/dream.py` | `src/questorharness/config/settings_loader.py` / `src/questorharness/runtime/swarm/spawn_utils.py` |
 | QUESTORHARNESS_REQUIRE_EMPTY_REASONING_CONTENT | `src/questorharness/providers/llm/openai_client.py` | — |
 | QUESTORHARNESS_SANDBOX_BACKEND | `src/questorharness/config/settings_loader.py` | — |
 | QUESTORHARNESS_SANDBOX_DOCKER_IMAGE | `src/questorharness/config/settings_loader.py` | — |

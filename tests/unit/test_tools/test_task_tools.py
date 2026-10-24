@@ -10,7 +10,7 @@ import pytest
 from questorharness.runtime.coordinator.coordinator_mode import get_team_registry
 from questorharness.runtime.tasks import get_task_manager
 from questorharness.capabilities.tools.agent.agent_tool import AgentTool, AgentToolInput
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.capabilities.tools.task.task_create_tool import TaskCreateTool, TaskCreateToolInput
 from questorharness.capabilities.tools.task.task_output_tool import TaskOutputTool, TaskOutputToolInput
 from questorharness.capabilities.tools.task.task_update_tool import TaskUpdateTool, TaskUpdateToolInput

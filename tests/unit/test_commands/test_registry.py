@@ -685,11 +685,11 @@ async def test_ship_command_queues_and_executes_card(tmp_path: Path, monkeypatch
         return [RepoVerificationStep(command="uv run pytest -q", returncode=0, status="success")]
 
     monkeypatch.setattr(
-        "questorharness.runtime.autopilot.service.RepoAutopilotStore._run_agent_prompt",
+        "questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._run_agent_prompt",
         fake_run_agent_prompt,
     )
     monkeypatch.setattr(
-        "questorharness.runtime.autopilot.service.RepoAutopilotStore._run_verification_steps",
+        "questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._run_verification_steps",
         fake_run_verification_steps,
     )
 

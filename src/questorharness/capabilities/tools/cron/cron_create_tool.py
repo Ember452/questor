@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from questorharness.capabilities.schedule.cron import upsert_cron_job, validate_cron_expression, validate_timezone
-from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class CronCreateToolInput(BaseModel):

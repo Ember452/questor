@@ -10,8 +10,8 @@ Usage::
 
 from questorharness.surfaces.channels.bus.events import InboundMessage, OutboundMessage
 from questorharness.surfaces.channels.bus.queue import MessageBus
-from questorharness.surfaces.channels.impl.base import BaseChannel
-from questorharness.surfaces.channels.impl.manager import ChannelManager
+from questorharness.surfaces.channels.impl.base_channel import BaseChannel
+from questorharness.surfaces.channels.impl.channel_manager import ChannelManager
 
 __all__ = [
     "BaseChannel",

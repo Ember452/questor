@@ -42,7 +42,7 @@ def _config_coerce_value(current: object, raw: str) -> object:
 @config_app.command("show")
 def config_show() -> None:
     """Print the resolved settings JSON."""
-    from questorharness.commands.helpers import _settings_json_for_display
+    from questorharness.commands.command_display import _settings_json_for_display
     from questorharness.config.settings import load_settings
 
     print(_settings_json_for_display(load_settings()), flush=True)

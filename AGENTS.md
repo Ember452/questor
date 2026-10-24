@@ -50,7 +50,7 @@ exceptions, and one more is a failure.
 | 系统提示词与技能清单 | `src/questorharness/capabilities/context/prompts/context.py` |
 | 压缩与微压缩 | `src/questorharness/capabilities/context/compact` |
 | 工具注册表与能力索引 | `src/questorharness/capabilities/tools/registry.py` |
-| 工具能力声明本体 | `src/questorharness/capabilities/tools/base.py` |
+| 工具能力声明本体 | `src/questorharness/capabilities/tools/contract.py` |
 | 权限判定与策略 | `src/questorharness/capabilities/policy` |
 | swarm 权限同步 | `src/questorharness/runtime/swarm/permission_sync.py` |
 | 回合循环 | `src/questorharness/engine/query.py` |

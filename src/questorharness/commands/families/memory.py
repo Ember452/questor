@@ -11,7 +11,7 @@ from questorharness.commands.memory_commands import _handle_memory_agent_command
 from questorharness.config.settings import load_settings
 from questorharness.runtime.tasks import get_task_manager
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,

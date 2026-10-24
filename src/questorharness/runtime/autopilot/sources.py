@@ -7,13 +7,13 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from questorharness.runtime.autopilot.constants import (
+from questorharness.runtime.autopilot.verification_defaults import (
     _source_ref_number,
 )
 from questorharness.runtime.autopilot.text_utils import (
     _safe_text,
 )
-from questorharness.runtime.autopilot.types import (
+from questorharness.runtime.autopilot.models import (
     RepoTaskCard,
 )
 

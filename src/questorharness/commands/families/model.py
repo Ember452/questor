@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, Iterable
 
 from questorharness.capabilities.context.prompts import build_runtime_system_prompt
 from questorharness.config.settings import display_model_setting, load_settings, save_settings
-from questorharness.providers.auth.manager import AuthManager
+from questorharness.providers.auth.auth_manager import AuthManager
 from questorharness.providers.llm.provider import auth_status, detect_provider
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,

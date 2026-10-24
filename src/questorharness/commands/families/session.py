@@ -6,11 +6,11 @@ from questorharness.capabilities.context.compact import build_post_compact_messa
 from questorharness.capabilities.context.prompts import build_runtime_system_prompt
 from questorharness.commands.memory_commands import _memory_backend_for_context
 from questorharness.config.settings import load_settings
-from questorharness.providers.auth.manager import AuthManager
+from questorharness.providers.auth.auth_manager import AuthManager
 from questorharness.runtime.tasks import get_task_manager
 import importlib.metadata
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,

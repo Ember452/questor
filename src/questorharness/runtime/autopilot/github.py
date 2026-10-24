@@ -12,7 +12,7 @@ from questorharness.runtime.autopilot.text_utils import (
     _bilingual_lines,
     _safe_text,
 )
-from questorharness.runtime.autopilot.types import (
+from questorharness.runtime.autopilot.models import (
     RepoTaskCard,
 )
 

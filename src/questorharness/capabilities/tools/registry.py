@@ -23,7 +23,7 @@ from functools import lru_cache
 from types import MappingProxyType
 
 import questorharness.capabilities.tools as _tools_package
-from questorharness.capabilities.tools.base import BaseTool, ToolRegistry
+from questorharness.capabilities.tools.contract import BaseTool, ToolRegistry
 
 # Registration order is the prompt order. Adding a tool means one new module plus
 # one line here; scripts/guards/check_tool_radius.py fails when a discovered tool

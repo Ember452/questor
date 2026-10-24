@@ -16,7 +16,7 @@ from questorharness.runtime.bridge import get_bridge_manager
 from questorharness.runtime.bridge.models import WorkSecret
 from questorharness.runtime.bridge.work_secret import build_sdk_url, decode_work_secret, encode_work_secret
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,

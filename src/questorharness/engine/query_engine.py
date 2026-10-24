@@ -16,9 +16,9 @@ from questorharness.contracts.domain.events import AssistantTurnComplete, Stream
 from questorharness.config.settings import Settings
 from questorharness.runtime.hooks import HookEvent, HookExecutor
 from questorharness.capabilities.policy.checker import PermissionChecker
-from questorharness.capabilities.memory.consolidate.service import schedule_auto_dream
+from questorharness.capabilities.memory.consolidate.dream import schedule_auto_dream
 from questorharness.runtime.services import default_task_runtime
-from questorharness.capabilities.tools.base import ToolRegistry
+from questorharness.capabilities.tools.contract import ToolRegistry
 
 
 class QueryEngine:

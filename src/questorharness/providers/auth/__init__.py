@@ -1,7 +1,7 @@
 """Unified authentication management for QuestorHarness."""
 
 from questorharness.providers.auth.flows import ApiKeyFlow, BrowserFlow, DeviceCodeFlow
-from questorharness.providers.auth.manager import AuthManager
+from questorharness.providers.auth.auth_manager import AuthManager
 from questorharness.providers.auth.storage import (
     clear_provider_credentials,
     decrypt,

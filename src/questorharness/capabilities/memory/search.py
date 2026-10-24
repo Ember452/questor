@@ -8,7 +8,7 @@ from pathlib import Path
 
 from questorharness.capabilities.memory.scan import scan_memory_files
 from questorharness.capabilities.memory.schema import parse_datetime, utc_now
-from questorharness.capabilities.memory.types import MemoryHeader
+from questorharness.capabilities.memory.header import MemoryHeader
 from questorharness.capabilities.memory.usage import get_memory_usage
 
 

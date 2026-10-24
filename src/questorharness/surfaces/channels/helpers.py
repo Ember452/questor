@@ -76,4 +76,4 @@ def safe_filename(value: object, *, max_length: int = 128) -> str:
         return ""
     return name[:max_length]
 
-# questor: allow R3 -- until W9 rename wave
+# questor: allow R3 -- adapters import this path; rename when they stop (ledger #98)

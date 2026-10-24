@@ -7,9 +7,9 @@ from pathlib import Path
 from questorharness.capabilities.memory import get_project_memory_dir
 from questorharness.config.settings import load_settings
 from questorharness.platform.paths import get_config_dir, get_feedback_log_path, get_project_config_dir
-from questorharness.providers.auth.manager import AuthManager
+from questorharness.providers.auth.auth_manager import AuthManager
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,

@@ -7,16 +7,15 @@ from types import MethodType, SimpleNamespace
 
 import pytest
 
-from questorharness.runtime.autopilot import RepoAutopilotStore, RepoVerificationStep
-from questorharness.runtime.autopilot import runner as autopilot_runner
-from questorharness.runtime.autopilot import service as autopilot_service
-from questorharness.runtime.autopilot.constants import _DEFAULT_VERIFICATION_POLICY
 from questorharness.platform.paths import (
     get_project_active_repo_context_path,
     get_project_autopilot_policy_path,
     get_project_release_policy_path,
     get_project_verification_policy_path,
 )
+from questorharness.runtime.autopilot import RepoAutopilotStore, RepoVerificationStep
+from questorharness.runtime.autopilot import runner as autopilot_runner
+from questorharness.runtime.autopilot.verification_defaults import _DEFAULT_VERIFICATION_POLICY
 
 
 def test_autopilot_enqueue_creates_layout_and_context(tmp_path: Path) -> None:
@@ -307,24 +306,24 @@ def test_autopilot_run_card_opens_pr_and_waits_for_ci(tmp_path: Path, monkeypatc
     async def fake_wait_for_pr_ci(self, pr_number: int, policies):
         return "success", "All reported remote checks passed.", {"url": "https://example/pr/17", "labels": [], "isDraft": False}, []
 
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.WorktreeManager.create_worktree", fake_create_worktree)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.WorktreeManager.remove_worktree", fake_remove_worktree)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._is_git_repo", lambda self, cwd: True)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._run_agent_prompt", fake_run_agent_prompt)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._run_verification_steps", fake_run_verification_steps)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._sync_worktree_to_base", lambda self, cwd, *, base_branch, head_branch, reset: None)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._git_commit_all", lambda self, cwd, message: True)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._git_push_branch", lambda self, cwd, branch: None)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.WorktreeManager.create_worktree", fake_create_worktree)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.WorktreeManager.remove_worktree", fake_remove_worktree)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._is_git_repo", lambda self, cwd: True)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._run_agent_prompt", fake_run_agent_prompt)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._run_verification_steps", fake_run_verification_steps)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._sync_worktree_to_base", lambda self, cwd, *, base_branch, head_branch, reset: None)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._git_commit_all", lambda self, cwd, message: True)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._git_push_branch", lambda self, cwd, branch: None)
     monkeypatch.setattr(
-        "questorharness.runtime.autopilot.service.RepoAutopilotStore._upsert_pull_request",
+        "questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._upsert_pull_request",
         lambda self, card, *, head_branch, base_branch, run_report_path, verification_report_path: {
             "number": 17,
             "url": "https://example/pr/17",
         },
     )
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._wait_for_pr_ci", fake_wait_for_pr_ci)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._automerge_eligible", lambda self, pr_snapshot, policies: False)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._comment_on_pr", lambda self, pr_number, comment: None)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._wait_for_pr_ci", fake_wait_for_pr_ci)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._automerge_eligible", lambda self, pr_snapshot, policies: False)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._comment_on_pr", lambda self, pr_number, comment: None)
 
     import asyncio
 
@@ -372,25 +371,25 @@ def test_autopilot_run_card_repairs_after_local_verification_failure(tmp_path: P
 
     merged = {"called": False}
 
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.WorktreeManager.create_worktree", fake_create_worktree)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.WorktreeManager.remove_worktree", fake_remove_worktree)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._is_git_repo", lambda self, cwd: True)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._run_agent_prompt", fake_run_agent_prompt)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._run_verification_steps", fake_run_verification_steps)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._sync_worktree_to_base", lambda self, cwd, *, base_branch, head_branch, reset: None)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._git_commit_all", lambda self, cwd, message: True)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._git_push_branch", lambda self, cwd, branch: None)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.WorktreeManager.create_worktree", fake_create_worktree)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.WorktreeManager.remove_worktree", fake_remove_worktree)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._is_git_repo", lambda self, cwd: True)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._run_agent_prompt", fake_run_agent_prompt)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._run_verification_steps", fake_run_verification_steps)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._sync_worktree_to_base", lambda self, cwd, *, base_branch, head_branch, reset: None)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._git_commit_all", lambda self, cwd, message: True)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._git_push_branch", lambda self, cwd, branch: None)
     monkeypatch.setattr(
-        "questorharness.runtime.autopilot.service.RepoAutopilotStore._upsert_pull_request",
+        "questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._upsert_pull_request",
         lambda self, card, *, head_branch, base_branch, run_report_path, verification_report_path: {
             "number": 23,
             "url": "https://example/pr/23",
         },
     )
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._wait_for_pr_ci", fake_wait_for_pr_ci)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._automerge_eligible", lambda self, pr_snapshot, policies: True)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._merge_pull_request", lambda self, pr_number: merged.__setitem__("called", True))
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._comment_on_pr", lambda self, pr_number, comment: None)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._wait_for_pr_ci", fake_wait_for_pr_ci)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._automerge_eligible", lambda self, pr_snapshot, policies: True)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._merge_pull_request", lambda self, pr_number: merged.__setitem__("called", True))
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._comment_on_pr", lambda self, pr_number, comment: None)
 
     import asyncio
 
@@ -431,28 +430,28 @@ def test_autopilot_run_card_reuses_existing_branch_progress(tmp_path: Path, monk
 
     pushed = {"called": False}
 
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.WorktreeManager.create_worktree", fake_create_worktree)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.WorktreeManager.remove_worktree", fake_remove_worktree)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._is_git_repo", lambda self, cwd: True)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._run_agent_prompt", fake_run_agent_prompt)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._run_verification_steps", fake_run_verification_steps)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._sync_worktree_to_base", lambda self, cwd, *, base_branch, head_branch, reset: None)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._git_commit_all", lambda self, cwd, message: False)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._git_branch_has_progress", lambda self, cwd, *, base_branch: True)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.WorktreeManager.create_worktree", fake_create_worktree)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.WorktreeManager.remove_worktree", fake_remove_worktree)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._is_git_repo", lambda self, cwd: True)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._run_agent_prompt", fake_run_agent_prompt)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._run_verification_steps", fake_run_verification_steps)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._sync_worktree_to_base", lambda self, cwd, *, base_branch, head_branch, reset: None)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._git_commit_all", lambda self, cwd, message: False)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._git_branch_has_progress", lambda self, cwd, *, base_branch: True)
     monkeypatch.setattr(
-        "questorharness.runtime.autopilot.service.RepoAutopilotStore._git_push_branch",
+        "questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._git_push_branch",
         lambda self, cwd, branch: pushed.__setitem__("called", True),
     )
     monkeypatch.setattr(
-        "questorharness.runtime.autopilot.service.RepoAutopilotStore._upsert_pull_request",
+        "questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._upsert_pull_request",
         lambda self, card, *, head_branch, base_branch, run_report_path, verification_report_path: {
             "number": 29,
             "url": "https://example/pr/29",
         },
     )
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._wait_for_pr_ci", fake_wait_for_pr_ci)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._automerge_eligible", lambda self, pr_snapshot, policies: False)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._comment_on_pr", lambda self, pr_number, comment: None)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._wait_for_pr_ci", fake_wait_for_pr_ci)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._automerge_eligible", lambda self, pr_snapshot, policies: False)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._comment_on_pr", lambda self, pr_number, comment: None)
 
     import asyncio
 
@@ -483,10 +482,10 @@ def test_autopilot_existing_pr_card_can_auto_merge(tmp_path: Path, monkeypatch) 
 
     merged = {"called": False}
 
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._wait_for_pr_ci", fake_wait_for_pr_ci)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._automerge_eligible", lambda self, pr_snapshot, policies: True)
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._merge_pull_request", lambda self, pr_number: merged.__setitem__("called", True))
-    monkeypatch.setattr("questorharness.runtime.autopilot.service.RepoAutopilotStore._comment_on_pr", lambda self, pr_number, comment: None)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._wait_for_pr_ci", fake_wait_for_pr_ci)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._automerge_eligible", lambda self, pr_snapshot, policies: True)
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._merge_pull_request", lambda self, pr_number: merged.__setitem__("called", True))
+    monkeypatch.setattr("questorharness.runtime.autopilot.repo_store.RepoAutopilotStore._comment_on_pr", lambda self, pr_number, comment: None)
 
     import asyncio
 

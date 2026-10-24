@@ -10,7 +10,7 @@ from questorharness.engine.query_engine import QueryEngine
 from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, SessionBackend
 
 if TYPE_CHECKING:
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.state import AppStateStore
 
 
@@ -116,5 +116,3 @@ class CommandRegistry:
     def list_commands(self) -> list[SlashCommand]:
         """Return canonical commands in registration order (aliases omitted)."""
         return [self._commands[name] for name in self._canonical_names]
-
-# questor: allow R3 -- until W9 rename wave

@@ -38,7 +38,7 @@ from questorharness.capabilities.memory.team import (
     get_team_memory_dir,
 )
 
-from questorharness.commands.types import CommandContext, CommandResult, MemoryCommandBackend
+from questorharness.commands.models import CommandContext, CommandResult, MemoryCommandBackend
 
 
 def _handle_memory_edit_command(

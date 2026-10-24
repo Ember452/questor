@@ -10,7 +10,7 @@ from typing import Any
 from questorharness.capabilities.memory.paths import get_project_memory_dir
 from questorharness.capabilities.memory.scan import scan_memory_files
 from questorharness.capabilities.memory.schema import format_datetime, parse_datetime, utc_now
-from questorharness.capabilities.memory.types import MemoryHeader
+from questorharness.capabilities.memory.header import MemoryHeader
 from questorharness.platform.locking import exclusive_file_lock
 from questorharness.platform.io import atomic_write_text
 

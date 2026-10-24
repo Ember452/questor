@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from questorharness.capabilities.schedule.cron import load_cron_jobs
 from questorharness.capabilities.schedule.cron_scheduler import is_scheduler_running
-from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class CronListToolInput(BaseModel):

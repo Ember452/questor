@@ -9,7 +9,7 @@ from typing import Any
 
 
 from questorharness.surfaces.channels.bus.queue import MessageBus
-from questorharness.surfaces.channels.impl.base import BaseChannel
+from questorharness.surfaces.channels.impl.base_channel import BaseChannel
 from questorharness.config.schema import Config
 
 logger = logging.getLogger(__name__)
@@ -172,5 +172,3 @@ class ChannelManager:
     def enabled_channels(self) -> list[str]:
         """Get list of enabled channel names."""
         return list(self.channels.keys())
-
-# questor: allow R3 -- until W9 rename wave

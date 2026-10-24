@@ -46,7 +46,7 @@ def make_engine(system_prompt="You are a helpful assistant. Be concise.", cwd=No
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
@@ -189,7 +189,7 @@ async def test_hooks_in_agent_loop():
     from questorharness.contracts.domain.events import AssistantTextDelta, ToolExecutionStarted, ToolExecutionCompleted
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.contracts.hooks import HookEvent
     from questorharness.runtime.hooks.loader import HookRegistry
@@ -339,7 +339,7 @@ Build and deploy the app to production.
 # ====================================================================
 async def test_memory_lifecycle():
     """Test full memory lifecycle: add → list → search → remove."""
-    from questorharness.capabilities.memory.manager import list_memory_files, add_memory_entry, remove_memory_entry
+    from questorharness.capabilities.memory.entry_store import list_memory_files, add_memory_entry, remove_memory_entry
     from questorharness.capabilities.memory.search import find_relevant_memories
     from questorharness.capabilities.memory.scan import scan_memory_files
 
@@ -352,7 +352,7 @@ async def test_memory_lifecycle():
         mp.get_project_memory_dir = lambda cwd: mem_dir
 
         # Also patch entrypoint
-        import questorharness.capabilities.memory.manager as mm
+        import questorharness.capabilities.memory.entry_store as mm
         orig_ep = mm.get_memory_entrypoint
         mm.get_memory_entrypoint = lambda cwd: mem_dir / "MEMORY.md"
 
@@ -662,7 +662,7 @@ async def test_combined_hooks_skills_agent():
     from questorharness.contracts.domain.events import AssistantTextDelta, ToolExecutionStarted
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
@@ -728,7 +728,7 @@ async def test_full_swarm_autoagent():
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool

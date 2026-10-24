@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.capabilities.tools.shell.bash_tool import BashTool, BashToolInput
 import questorharness.capabilities.tools.shell.bash_tool as bash_tool_module
 

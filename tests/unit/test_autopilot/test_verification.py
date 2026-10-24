@@ -9,11 +9,11 @@ from typing import Any
 import pytest
 
 from questorharness.runtime.autopilot import verification as verification_module
-from questorharness.runtime.autopilot.constants import (
+from questorharness.runtime.autopilot.verification_defaults import (
     _DEFAULT_VERIFICATION_POLICY,
     _parse_verification_entry,
 )
-from questorharness.runtime.autopilot.service import RepoAutopilotStore
+from questorharness.runtime.autopilot.repo_store import RepoAutopilotStore
 
 
 def test_plain_string_is_parsed_to_argv_without_shell() -> None:

@@ -481,5 +481,4 @@ class AuthManager:
             except Exception as exc:
                 log.warning("Could not clear api_key from settings: %s", exc)
 
-# questor: allow R3 -- until W9 rename wave
 # questor: allow R8 -- refactor the offenders in W8

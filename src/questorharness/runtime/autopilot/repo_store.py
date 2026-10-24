@@ -22,7 +22,7 @@ from questorharness.runtime.autopilot.text_utils import (
     _safe_text,
     _shorten,
 )
-from questorharness.runtime.autopilot.types import (
+from questorharness.runtime.autopilot.models import (
     RepoRunResult,
     RepoTaskCard,
 )
@@ -701,6 +701,5 @@ class RepoAutopilotStore(StorageMixin, SourcesMixin, GitOperationsMixin, GitHubO
             pr_url=pr_url,
         )
 
-# questor: allow R3 -- until W9 rename wave
 # questor: allow R7 -- until W8 adds the mirror test
 # questor: allow R8 -- refactor the offenders in W8

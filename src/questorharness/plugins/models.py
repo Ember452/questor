@@ -12,7 +12,7 @@ from questorharness.plugins.schemas import PluginManifest
 from questorharness.capabilities.skills.definition import SkillDefinition
 
 if TYPE_CHECKING:
-    from questorharness.capabilities.tools.base import BaseTool
+    from questorharness.capabilities.tools.contract import BaseTool
 
 
 @dataclass(frozen=True)

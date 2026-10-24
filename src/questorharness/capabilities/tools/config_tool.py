@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from questorharness.config.settings import load_settings, save_settings
-from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class ConfigToolInput(BaseModel):

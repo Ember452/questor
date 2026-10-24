@@ -12,8 +12,8 @@ from typing import Any
 
 from questorharness.surfaces.channels.bus.events import OutboundMessage
 from questorharness.surfaces.channels.bus.queue import MessageBus
-from questorharness.surfaces.channels.impl.base import BaseChannel
-from questorharness.surfaces.channels.impl.base import resolve_channel_media_dir
+from questorharness.surfaces.channels.impl.base_channel import BaseChannel
+from questorharness.surfaces.channels.impl.base_channel import resolve_channel_media_dir
 from questorharness.config.schema import FeishuConfig
 from questorharness.surfaces.channels.helpers import safe_filename
 

@@ -124,7 +124,7 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # still carries behavior worth relocating behind an exemption.
 EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 4,
-    "R3": 13,
+    "R3": 1,
     "R4": 1,
     "R5": 1,
     "R7": 170,

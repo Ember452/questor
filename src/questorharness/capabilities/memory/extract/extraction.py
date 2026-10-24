@@ -17,7 +17,7 @@ from questorharness.capabilities.memory.extract.records import (
     ExtractionResult,
     parse_extraction_records,
 )
-from questorharness.capabilities.memory.manager import add_memory_entry
+from questorharness.capabilities.memory.entry_store import add_memory_entry
 from questorharness.capabilities.memory.paths import get_project_memory_dir
 from questorharness.capabilities.memory.relevance import build_memory_manifest
 from questorharness.capabilities.memory.scan import scan_memory_files

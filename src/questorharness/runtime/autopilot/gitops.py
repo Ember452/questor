@@ -11,7 +11,7 @@ from typing import Any
 from questorharness.runtime.autopilot.text_utils import (
     _safe_text,
 )
-from questorharness.runtime.autopilot.types import (
+from questorharness.runtime.autopilot.models import (
     RepoTaskCard,
 )
 

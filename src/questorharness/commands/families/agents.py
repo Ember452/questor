@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from questorharness.runtime.autopilot import RepoAutopilotStore
 from questorharness.runtime.tasks import get_task_manager
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,

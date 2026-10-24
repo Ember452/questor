@@ -6,7 +6,7 @@ import sys
 
 import typer
 
-from questorharness.providers.auth.manager import AuthManager
+from questorharness.providers.auth.auth_manager import AuthManager
 from questorharness.providers.auth.profile_naming import default_credential_slot_for_profile
 
 provider_app = typer.Typer(name="provider", help="Manage provider profiles")
@@ -29,7 +29,7 @@ def provider_use(
     name: str = typer.Argument(..., help="Provider profile name"),
 ) -> None:
     """Activate a provider profile."""
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
 
     manager = AuthManager()
     try:
@@ -57,7 +57,7 @@ def provider_add(
 ) -> None:
     """Create a provider profile."""
     from questorharness.config.settings import ProviderProfile
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
 
     manager = AuthManager()
     manager.upsert_profile(
@@ -100,7 +100,7 @@ def provider_edit(
     auto_compact_threshold_tokens: int | None = typer.Option(None, "--auto-compact-threshold-tokens", help="Optional explicit auto-compact threshold override"),
 ) -> None:
     """Edit a provider profile."""
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
 
     manager = AuthManager()
     try:
@@ -135,7 +135,7 @@ def provider_remove(
     name: str = typer.Argument(..., help="Provider profile name"),
 ) -> None:
     """Remove a provider profile."""
-    from questorharness.providers.auth.manager import AuthManager
+    from questorharness.providers.auth.auth_manager import AuthManager
 
     manager = AuthManager()
     try:

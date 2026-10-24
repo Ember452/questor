@@ -175,11 +175,11 @@ forbidden_modules =
 allow_indirect_imports = True
 
 [importlinter:contract:command-families-are-leaf]
-name = Command families and helpers do not import the registry
+name = Command families and the display helpers do not import the registry
 type = forbidden
 source_modules =
     questorharness.commands.families
-    questorharness.commands.helpers
+    questorharness.commands.command_display
     questorharness.commands.memory_commands
 forbidden_modules =
     questorharness.commands.registry

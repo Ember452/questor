@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 from questorharness.capabilities.policy.checker import PermissionChecker
-from questorharness.capabilities.tools.base import ToolRegistry
+from questorharness.capabilities.tools.contract import ToolRegistry
 from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.runtime.hooks import HookExecutor
 

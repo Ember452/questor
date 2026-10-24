@@ -89,5 +89,3 @@ class RepoRunResult(BaseModel):
     worktree_path: str = ""
     pr_number: int | None = None
     pr_url: str = ""
-
-# questor: allow R3 -- until W9 rename wave

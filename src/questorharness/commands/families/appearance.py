@@ -6,7 +6,7 @@ from questorharness.config.settings import load_settings, save_settings
 from questorharness.output_styles import load_output_styles
 from questorharness.providers.llm.provider import detect_provider
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,

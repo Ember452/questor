@@ -37,7 +37,7 @@ from questorharness.capabilities.memory.schema import (
     utc_now,
 )
 from questorharness.capabilities.schedule.cron_scheduler import register_notification_handler
-from questorharness.capabilities.tools.base import (
+from questorharness.capabilities.tools.contract import (
     BaseTool,
     ToolCapabilities,
     ToolExecutionContext,
@@ -74,12 +74,12 @@ from questorharness.platform.session_storage import (
     persistable_tool_metadata,
     sanitize_snapshot_payload,
 )
-from questorharness.providers.auth.manager import AuthManager
+from questorharness.providers.auth.auth_manager import AuthManager
 from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.runtime.session.backend import SessionBackend
 from questorharness.surfaces.channels.bus.events import InboundMessage, OutboundMessage
 from questorharness.surfaces.channels.bus.queue import MessageBus
-from questorharness.surfaces.channels.impl.manager import ChannelManager
+from questorharness.surfaces.channels.impl.channel_manager import ChannelManager
 
 __all__ = [
     "SCHEMA_VERSION",

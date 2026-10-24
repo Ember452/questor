@@ -14,7 +14,7 @@
     "banned_name_files": {
       "caliber": "basename in ADR-0003 section 3 banned list",
       "gate": true,
-      "value": 13
+      "value": 1
     },
     "capabilities_size": {
       "caliber": "git ls-files src | non-__init__ under capabilities/",
@@ -55,7 +55,7 @@
       "gate": false,
       "value": {
         "R2": 4,
-        "R3": 13,
+        "R3": 1,
         "R4": 1,
         "R5": 1,
         "R7": 170,
@@ -133,8 +133,8 @@
       "e2e": 11,
       "gate": true,
       "integration": 32,
-      "unit": 111,
-      "value": 159
+      "unit": 117,
+      "value": 165
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
@@ -153,7 +153,7 @@
     }
   },
   "pin": {
-    "commit": "b00f1f56c733f6e953cbe6531e6939109d6a9b04",
+    "commit": "2c2a60703d1f5a9314d8b2d5af62f29b468cab46",
     "date": "2026-10-23"
   }
 }

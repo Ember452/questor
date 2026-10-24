@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from questorharness.capabilities.tools.agent.team_create_tool import TeamCreateTool, TeamCreateToolInput
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool, FileReadToolInput
 from questorharness.capabilities.tools.media.image_to_text_tool import (
     ImageToTextTool,

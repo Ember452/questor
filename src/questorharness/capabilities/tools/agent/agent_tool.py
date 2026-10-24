@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from questorharness.contracts.hooks import HookEvent
 from questorharness.contracts.task import TaskRecord
-from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 logger = logging.getLogger(__name__)
 

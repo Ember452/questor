@@ -1,7 +1,7 @@
 """Memory exports."""
 
 from questorharness.capabilities.memory.memdir import load_memory_prompt
-from questorharness.capabilities.memory.manager import add_memory_entry, list_memory_files, remove_memory_entry
+from questorharness.capabilities.memory.entry_store import add_memory_entry, list_memory_files, remove_memory_entry
 from questorharness.capabilities.memory.migrate import migrate_memory
 from questorharness.capabilities.memory.paths import get_memory_entrypoint, get_project_memory_dir
 from questorharness.capabilities.memory.scan import scan_memory_files

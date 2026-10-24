@@ -12,7 +12,7 @@ import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 from questorharness.capabilities.ports import LlmToolRuntime
 
 log = logging.getLogger(__name__)

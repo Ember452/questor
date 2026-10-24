@@ -351,6 +351,5 @@ def schedule_auto_dream(**kwargs: object) -> None:
         return
     loop.create_task(execute_auto_dream(**kwargs))  # type: ignore[arg-type]
 
-# questor: allow R3 -- until W9 rename wave
 # questor: allow R7 -- until W8 adds the mirror test
 # questor: allow R8 -- refactor the offenders in W8
