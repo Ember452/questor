@@ -122,17 +122,19 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # records.py + guard.py + extraction.py), and platform is a reviewed implementation
 # facade held by a line cap in FACADE_IMPLEMENTATION_PACKAGES. Only context.compact
 # still carries behavior worth relocating behind an exemption.
-# R7 is 159, one inline note per module that no test file names. This one is paid
+# R7 is 155, one inline note per module that no test file names. This one is paid
 # only with mirror tests that go red when the behavior changes: a candidate whose
 # whole surface is Protocol or TypedDict declarations (capabilities/schedule ports)
 # is deliberately left exempted, because a test there can only assert that an
-# interface exists and would pin no decision while lowering the number.
+# interface exists and would pin no decision while lowering the number. The spec
+# target is <=154; the remaining gap is one module that no eligible target covers, and
+# it is reported rather than filled with a stub (plan 01 ledger #120).
 EXEMPTION_BUDGET: dict[str, int] = {
     "R2": 1,
     "R3": 1,
     "R4": 1,
     "R5": 1,
-    "R7": 159,
+    "R7": 155,
     "R8": 31,
 }
 

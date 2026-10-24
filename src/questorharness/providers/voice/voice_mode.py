@@ -41,5 +41,3 @@ def inspect_voice_capabilities(provider: ProviderInfo) -> VoiceDiagnostics:
         reason="voice shell is available",
         recorder=recorder,
     )
-
-# questor: allow R7 -- until W8 adds the mirror test

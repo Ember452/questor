@@ -13,7 +13,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/__init__.py` | 7 |
 | `src/questorharness/bootstrap/cli/__init__.py` | 7 |
 | `src/questorharness/bootstrap/cli/auth_commands.py` | 273 |
-| `src/questorharness/bootstrap/cli/autopilot_commands.py` | 243 |
+| `src/questorharness/bootstrap/cli/autopilot_commands.py` | 241 |
 | `src/questorharness/bootstrap/cli/cli_prompts.py` | 139 |
 | `src/questorharness/bootstrap/cli/config_commands.py` | 74 |
 | `src/questorharness/bootstrap/cli/cron_commands.py` | 133 |
@@ -142,7 +142,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/commands/__init__.py` | 21 |
 | `src/questorharness/commands/command_display.py` | 145 |
 | `src/questorharness/commands/families/__init__.py` | 3 |
-| `src/questorharness/commands/families/account.py` | 194 |
+| `src/questorharness/commands/families/account.py` | 192 |
 | `src/questorharness/commands/families/agents.py` | 437 |
 | `src/questorharness/commands/families/appearance.py` | 213 |
 | `src/questorharness/commands/families/diagnostics.py` | 122 |
@@ -245,7 +245,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/providers/voice/__init__.py` | 7 |
 | `src/questorharness/providers/voice/keyterms.py` | 12 |
 | `src/questorharness/providers/voice/stream_stt.py` | 10 |
-| `src/questorharness/providers/voice/voice_mode.py` | 45 |
+| `src/questorharness/providers/voice/voice_mode.py` | 43 |
 | `src/questorharness/runtime/__init__.py` | 7 |
 | `src/questorharness/runtime/autopilot/__init__.py` | 23 |
 | `src/questorharness/runtime/autopilot/dashboard.py` | 165 |
@@ -333,7 +333,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questor/gateway/group_tool.py` | 161 |
 | `src/questor/gateway/media.py` | 187 |
 | `src/questor/gateway/models.py` | 34 |
-| `src/questor/gateway/notify.py` | 106 |
+| `src/questor/gateway/notify.py` | 104 |
 | `src/questor/gateway/provider_commands.py` | 140 |
 | `src/questor/gateway/redaction.py` | 343 |
 | `src/questor/gateway/router.py` | 33 |

@@ -239,5 +239,3 @@ def autopilot_export_dashboard_cmd(
 
     path = RepoAutopilotStore(cwd).export_dashboard(output)
     print(f"Exported autopilot dashboard: {path}")
-
-# questor: allow R7 -- until W8 adds the mirror test
