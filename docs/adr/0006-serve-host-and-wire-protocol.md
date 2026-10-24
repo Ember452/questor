@@ -32,6 +32,10 @@ Electron（`apps/desktop`）与浏览器（`apps/web`）。现状却是每个客
    分类——进度类可丢、事实类不可丢（`broadcaster.go:39-43`）+ `/events/mux`
    复用单连接（`hub_mux.go:267-269`）。命令上行 = POST + **refusal code**
    （客户端按码分支，不解析自由文本错误）。
+
+   > **帧集口径（2026-10-24）**：36 是参照仓的帧数，**不是本仓目标**。本仓契约以
+   > **protocol/app-wire.schema.json** 的实际帧集为准（阶段 1 为 13 帧，全部有引擎来源），
+   > 新增帧只加不改。
 3. **对齐声明（不是新的一致性决定）**。传输层 `seq` 是传输的，不是会话事实
    流的；SSE 重放是**有界尾巴**，不是事件溯源；durable spine 仍未立项
    （STRUCTURE §11）。交付语义 = **at-least-once + seq 去重幂等**——恰是

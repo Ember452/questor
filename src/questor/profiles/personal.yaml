@@ -1,0 +1,17 @@
+# 个人形态：人设 / 记忆 / 日程 / 渠道 / 会话。
+# 首批五个 page id 只登记命名与能力位（declared = 已声明、未就绪，入口不出现）。
+name: personal
+description: 个人形态：人设、记忆、日程、渠道会话与对话。
+is_default: false
+model: null
+provider: null
+skill_dirs: []
+plugin_roots: []
+allowed_tools: []
+ui:
+  capabilities:
+    chat: declared
+    persona: declared
+    memory: declared
+    schedule: declared
+    channels: declared

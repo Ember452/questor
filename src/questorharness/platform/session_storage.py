@@ -18,6 +18,9 @@ from questorharness.contracts.domain.message import (
 )
 from questorharness.platform.io import atomic_write_text
 
+# 快照格式版本：缺字段的旧文件按 v1 读（load 忽略未知/缺失键），新写入必带。
+SNAPSHOT_SCHEMA_VERSION = 1
+
 
 _PERSISTED_TOOL_METADATA_KEYS = (
     "permission_mode",
@@ -87,6 +90,7 @@ def save_session_snapshot(
             break
 
     payload = {
+        "schema_version": SNAPSHOT_SCHEMA_VERSION,
         "session_id": sid,
         "cwd": str(Path(cwd).resolve()),
         "model": model,

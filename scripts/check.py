@@ -71,6 +71,13 @@ STEPS: tuple[Step, ...] = (
     Step("mypy-scope", (PYTHON, "scripts/guards/check_mypy_scope.py", "--fail-on-empty")),
     Step("prompt-surface", (PYTHON, "scripts/ci/prompt_surface.py", "--check")),
     Step("import-contracts", ("uv", "run", "lint-imports")),
+    # serve 契约三守卫：codegen 漂移 / kind 覆盖 / 持久化版本（各自带自证用例）。
+    Step("wire-codegen", (PYTHON, "-m", "pytest", "tests/ci/test_wire_codegen.py", "-q")),
+    Step("kind-coverage", (PYTHON, "-m", "pytest", "tests/ci/test_kind_coverage.py", "-q")),
+    Step(
+        "persistence-version",
+        (PYTHON, "-m", "pytest", "tests/ci/test_persistence_version.py", "-q"),
+    ),
     Step(
         "baseline-check",
         # 不传 --fast:pytest 收集计数与 node-id 集是这份基线存在的意义,
