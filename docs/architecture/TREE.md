@@ -17,7 +17,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/cli/cli_prompts.py` | 139 |
 | `src/questorharness/bootstrap/cli/config_commands.py` | 74 |
 | `src/questorharness/bootstrap/cli/cron_commands.py` | 133 |
-| `src/questorharness/bootstrap/cli/main.py` | 467 |
+| `src/questorharness/bootstrap/cli/main.py` | 474 |
 | `src/questorharness/bootstrap/cli/mcp_commands.py` | 68 |
 | `src/questorharness/bootstrap/cli/plugin_commands.py` | 52 |
 | `src/questorharness/bootstrap/cli/preview.py` | 747 |

@@ -248,6 +248,12 @@ def main(
         help="Run the loopback studio host (handshake line on stdout)",
         hidden=True,
     ),
+    serve_no_auth: bool = typer.Option(
+        False,
+        "--serve-no-auth",
+        help="DEV ONLY: skip the launch credential checks on the loopback host",
+        hidden=True,
+    ),
     task_worker: bool = typer.Option(
         False,
         "--task-worker",
@@ -444,6 +450,7 @@ def main(
                 api_format=api_format,
                 permission_mode=permission_mode,
                 effort=effort,
+                allow_no_auth=serve_no_auth,
             )
         )
         return
