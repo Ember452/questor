@@ -40,8 +40,14 @@ Electron（`apps/desktop`）与浏览器（`apps/web`）。现状却是每个客
    "this file is the contract, not a convenience shape"（Reasonix
    `port/wire.ts` 原则），并配 `frontend_contract_test` 同款守卫进
    `tests/ci`——镜像与引擎侧定义漂移即红。
+
+   > **更新（2026-10-24，由 ADR-0007 §4 取代本节实现）**：意图不变，**实现方式作废**。
+   > 手写镜像 + 正则守卫已证为弱守卫（Reasonix 的 `frontend_contract_test` 实测为单向、
+   > 文件缺失即 `Skipf`、靠 `compared >= 10` 兜底）。现行实现为**单 schema + 双侧
+   > codegen**：**protocol/app-wire.schema.json** 为唯一真源，TS 与 Python 两侧生成、
+   > 两侧 `--check` 进 `scripts/check.py`。
 5. **实现口径**。Python / aiohttp 表达；`contracts/domain/events.py` 的
-   StreamEvent（8 种）到 wire 帧的映射由本仓自定；**aiohttp 是本 ADR 唯一
+   StreamEvent（7 种，2026-10-24 实测勘误：原误记 8 种）到 wire 帧的映射由本仓自定；**aiohttp 是本 ADR 唯一
    新增依赖**，进入依赖树须过 layout/structure 基线。
 6. **设计法典随契约走**。`TOKENS.md` / `LAYOUT.md` / `tokens.css`（Reasonix
    `styles/` 先例，329 / 1591 / 279 行实物）移植进仓作为设计真源；关键交互
