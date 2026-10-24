@@ -10,7 +10,6 @@ from questorharness.providers.llm.provider import is_model_multimodal
 from questorharness.config.settings import VisionModelConfig
 from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.capabilities.tools.media.image_to_text_tool import ImageToTextTool, ImageToTextToolInput
-from questorharness.providers.llm.tool_runtime import ProviderLlmToolRuntime
 
 
 # ---------------------------------------------------------------------------
@@ -169,10 +168,17 @@ async def test_execute_no_vision_config(tmp_path: Path) -> None:
     assert "vision model is not configured" in result.output
 
 
-@pytest.mark.integration
+class _FailingLlmRuntime:
+    """LLM runtime whose describe_image always raises, so the error path needs no network."""
+
+    async def describe_image(self, **kwargs: object) -> str:
+        del kwargs
+        raise RuntimeError("simulated vision provider outage")
+
+
 @pytest.mark.asyncio
 async def test_execute_with_image_path(tmp_path: Path) -> None:
-    """Tool reads a real image file and attempts to describe it."""
+    """Tool reads a real image file and wraps a failing model call as an error."""
     # Create a minimal valid PNG file
     png_path = tmp_path / "test_image.png"
     # Minimal valid PNG (1x1 pixel, white)
@@ -199,15 +205,16 @@ async def test_execute_with_image_path(tmp_path: Path) -> None:
                 "base_url": "",
             }
         },
-        llm=ProviderLlmToolRuntime(),
+        llm=_FailingLlmRuntime(),
     )
     result = await tool.execute(
         ImageToTextToolInput(image_path=str(png_path)),
         context,
     )
-    # Should fail at API call (not at file reading), since the API key is fake
+    # 失败必须发生在模型调用（而非文件读取），且底层异常被原样包装进 vision model error。
     assert result.is_error
     assert "vision model error" in result.output
+    assert "simulated vision provider outage" in result.output
 
 
 @pytest.mark.asyncio

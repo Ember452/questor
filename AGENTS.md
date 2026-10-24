@@ -69,6 +69,7 @@ tests                unit / integration / e2e / ci（守卫契约）/ fixtures/b
 | 产品网关与群策略 | `src/questor/gateway/runtime.py` |
 | 名字是否重名 | `docs/architecture/NAMESPACES.md` |
 | 门禁都跑什么 | `scripts/check.py` |
+| 测试基建扩容触发器与「暂不引入」清单 | `docs/operations/ci.md` |
 
 ## 新功能落位
 
