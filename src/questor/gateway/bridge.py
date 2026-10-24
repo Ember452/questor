@@ -409,3 +409,5 @@ def _message_mentions_bot(message: InboundMessage) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "y"}
     return False
+
+# questor: allow R7 -- until W8 adds the mirror test

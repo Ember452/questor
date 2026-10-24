@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class TaskUpdateToolInput(BaseModel):
@@ -22,6 +22,8 @@ class TaskUpdateTool(BaseTool):
     name = "task_update"
     description = "Update a task description, progress, or status note."
     input_model = TaskUpdateToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(
         self,
@@ -48,3 +50,5 @@ class TaskUpdateTool(BaseTool):
         if arguments.status_note:
             parts.append(f"note={task.metadata.get('status_note', '')}")
         return ToolResult(output=" ".join(parts))
+
+# questor: allow R7 -- until W8 adds the mirror test

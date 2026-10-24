@@ -1,8 +1,8 @@
 """Bridge exports."""
 
-from questorharness.runtime.bridge.manager import BridgeSessionManager, BridgeSessionRecord, get_bridge_manager
+from questorharness.runtime.bridge.session_manager import BridgeSessionManager, BridgeSessionRecord, get_bridge_manager
 from questorharness.runtime.bridge.session_runner import SessionHandle, spawn_session
-from questorharness.runtime.bridge.types import BridgeConfig, WorkData, WorkSecret
+from questorharness.runtime.bridge.models import BridgeConfig, WorkData, WorkSecret
 from questorharness.runtime.bridge.work_secret import build_sdk_url, decode_work_secret, encode_work_secret
 
 __all__ = [
@@ -18,3 +18,4 @@ __all__ = [
     "get_bridge_manager",
     "spawn_session",
 ]
+

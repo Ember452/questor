@@ -88,7 +88,7 @@ def _write_tool_plugin(root: Path, *, enabled_by_default: bool = True) -> Path:
     )
     (tools_dir / "echo_tool.py").write_text(
         "from pydantic import BaseModel\n"
-        "from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult\n\n"
+        "from questorharness.capabilities.tools.contract import BaseTool, ToolExecutionContext, ToolResult\n\n"
         "class EchoArgs(BaseModel):\n"
         "    text: str = 'hello'\n\n"
         "class EchoTool(BaseTool):\n"

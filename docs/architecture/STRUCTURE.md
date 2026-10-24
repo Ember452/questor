@@ -17,17 +17,9 @@
 
 ## 0. 一页结论
 
-```text
-                 ┌── profiles（纯数据，只依赖 contracts）
-                 │
-contracts ──┬── kernel ── runtime ── capabilities ── surfaces ── bootstrap
-            │
-            └── providers（适配器，只依赖 contracts）
-
-箭头方向：右边依赖左边；bootstrap 是唯一装配点。
-apps/desktop + apps/web + apps/terminal  ← 宿主，只装配，不含领域逻辑
-src/questor                                ← 产品组合根 + 产品策略
-```
+依赖与目录的**事实**不在本文：包级边、环、被 import Top10 与超阈值清单由
+`scripts/guards/gen_graph.py` 生成到 [GRAPH.md](GRAPH.md)，目录与行数由 `scripts/guards/gen_tree.py`
+生成到 [TREE.md](TREE.md)。本文只写意图与理由；手画依赖边会被 `check_agents_docs.py` 的 C6 判红。
 
 七条结构约束：
 
@@ -162,18 +154,9 @@ questor/
 
 实际生效的层序（`.importlinter` 的 `layers` 契约，自上而下，上层可依赖下层）：
 
-```
-bootstrap
-  surfaces
-    commands
-      engine
-        runtime
-          execution
-            providers
-              config
-                platform
-                  contracts
-```
+层序自上而下：`bootstrap > surfaces > commands > engine > runtime > execution > providers >
+config > platform > contracts`（`.importlinter` 的 `layers` 契约）。逐包的实际边请看
+[GRAPH.md](GRAPH.md) 的包级邻接表，本文不再重画。
 
 不在层序内、由单独契约管的包：
 
@@ -518,19 +501,22 @@ apps/web/
 
 详细移动表、阶段边界、回滚策略见 [MIGRATION](MIGRATION.md)。Phase 1 每包一个 PR；Phase 2 每个 god file 一个 PR；Phase 3 每个能力一个开关。
 
-当前进度（2026-10-23）：Phase 1 完成；Phase 2 的 W0–W7 完成——contracts 收下跨层词表（task / subagent / hooks / agent）、capabilities 改为端口注入（sandbox / llm / lsp / task / subagent / hook）、`coordinator` / `swarm` / `tasks` / `hooks` / `autopilot` / `bridge` 收拢进 `runtime/`。剩余：W8 配置与插件、W9 UI 解耦、W10 分层守卫与文档终验。
+当前进度（2026-10-24）：Phase 1 完成；Phase 2 全部完成——contracts 收下跨层词表（task / subagent / hooks / agent），capabilities 改为端口注入（sandbox / llm / lsp / task / subagent / hook），`coordinator` / `swarm` / `tasks` / `hooks` / `autopilot` / `bridge` 收拢进 `runtime/`，单 UI 宿主落地（ADR-0005，textual/prompt-toolkit 删除），门面/尺寸/命名治理与 AGENTS 三层地图由计划 01 的 W0–W10 执行完毕（见 `docs/plan/01-structure-hardening.md` 的台账）。
 
 ---
 
 ## 10. 守卫与地图
 
-### 10.1 现在就上的守卫（3 个）
+### 10.1 现在就上的守卫（已建成，全部 blocking）
+
+下表为历史规划口径；实际状态以 `scripts/check.py --list` 为准（单一入口，
+CI 与 pre-commit 同一清单）。
 
 | 守卫 | 作用 | 级别 |
 |---|---|---|
-| `.importlinter`（已有 1 条；Phase 0 先加 4 条 `forbidden`，`layers` 随层包增量） | 引擎⊥产品；层级；禁止新代码依赖 `questorharness.ui`/`utils`/`services` | blocking |
-| check_layout.py（待建） | 目录扇出、文件行数、禁用名（带 baseline）、`__init__` 门面、AGENTS 地图 | blocking |
-| gen_tree.py（待建） | 生成目录树文档，--check 防漂移 | blocking |
+| `.importlinter`（已建 10 条契约） | 引擎⊥产品；层级；插件扩展层；产品只走公共门面 | blocking |
+| check_layout.py（已建） | 目录扇出、文件行数、禁用名（带 baseline）、`__init__` 门面、AGENTS 地图 | blocking |
+| gen_tree.py（已建） | 生成目录树文档，--check 防漂移 | blocking |
 
 已有的三个继续保留：`check_doc_cross_refs.py`、`check_secret_projection.py`、`check_thread_leak.py`。
 

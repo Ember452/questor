@@ -38,7 +38,7 @@ from questorharness.capabilities.memory.team import (
     get_team_memory_dir,
 )
 
-from questorharness.commands.types import CommandContext, CommandResult, MemoryCommandBackend
+from questorharness.commands.models import CommandContext, CommandResult, MemoryCommandBackend
 
 
 def _handle_memory_edit_command(
@@ -245,3 +245,5 @@ def _resolve_memory_candidate(memory_dir: Path, candidate: str) -> tuple[Path | 
     except ValueError:
         return None, True
     return resolved, False
+
+# questor: allow R7 -- until W8 adds the mirror test

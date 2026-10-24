@@ -14,7 +14,7 @@ from questorharness.api import load_settings
 
 from questor.gateway.config import load_gateway_config, save_gateway_config
 from questor.gateway.models import GatewayConfig
-from questor.gateway.service import (
+from questor.gateway.gateway_process import (
     QuestorGatewayService,
     gateway_status,
     start_gateway_process,
@@ -467,6 +467,17 @@ def main(
                 )
             )
         )
+
+    # Node Ink 终端需要 raw-mode TTY;无 TTY 时它会以内部堆栈崩溃且退出码
+    # 还是 0(2026-10-24 巡检实测)。在拉起前换成一句干净报错。
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        print(
+            "questor: the interactive terminal needs a TTY on stdin and stdout.\n"
+            'Headless? Use --print "<prompt>" for a single run, or a subcommand '
+            "(doctor / memory / soul / user / config / gateway).",
+            file=sys.stderr,
+        )
+        raise typer.Exit(2)
 
     raise SystemExit(
         asyncio.run(

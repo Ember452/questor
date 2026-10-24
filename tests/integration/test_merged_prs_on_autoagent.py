@@ -34,7 +34,7 @@ RESULTS: dict[str, tuple[bool, float]] = {}
 # ==================================================================
 
 def _make_registry(extra_tools=None):
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
@@ -158,7 +158,7 @@ async def task_memory_research_autoagent():
     from questorharness.capabilities.memory.search import find_relevant_memories
     from questorharness.capabilities.memory.scan import scan_memory_files
     import questorharness.capabilities.memory.paths as mp
-    import questorharness.capabilities.memory.manager as mm
+    import questorharness.capabilities.memory.entry_store as mm
     import questorharness.capabilities.memory.scan as ms
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -509,7 +509,7 @@ async def task_full_dev_workflow():
     from questorharness.capabilities.schedule.cron import upsert_cron_job, load_cron_jobs, validate_cron_expression
     from questorharness.contracts.domain.message import ConversationMessage
     import questorharness.capabilities.memory.paths as mp
-    import questorharness.capabilities.memory.manager as mm
+    import questorharness.capabilities.memory.entry_store as mm
     import questorharness.capabilities.memory.scan as ms
     import questorharness.capabilities.schedule.cron as cron_mod
 

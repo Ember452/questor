@@ -40,8 +40,8 @@ from questorharness.capabilities.context.compact.collapse import (  # noqa: F401
     truncate_head_for_ptl_retry,
     try_context_collapse,
 )
-from questorharness.capabilities.context.compact.constants import *  # noqa: F403
-from questorharness.capabilities.context.compact.constants import (  # noqa: F401
+from questorharness.capabilities.context.compact.limits import *  # noqa: F403
+from questorharness.capabilities.context.compact.limits import (  # noqa: F401
     _DEFAULT_CONTEXT_WINDOW,
     _DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE,
 )
@@ -59,6 +59,7 @@ from questorharness.capabilities.context.compact.tokens import (  # noqa: F401
 )
 from questorharness.capabilities.ports import HookRuntime
 from questorharness.contracts.domain.events import CompactProgressEvent
+from questorharness.contracts.errors import is_prompt_too_long_error as _is_prompt_too_long_error
 from questorharness.contracts.domain.message import (
     ContentBlock,
     ConversationMessage,
@@ -169,30 +170,6 @@ async def _emit_progress(
             attempt=attempt,
             checkpoint=checkpoint,
             metadata=_sanitize_metadata(metadata) if metadata else None,
-        )
-    )
-
-
-def _is_prompt_too_long_error(exc: Exception) -> bool:
-    text = str(exc).lower()
-    return any(
-        needle in text
-        for needle in (
-            "prompt too long",
-            "context_length_exceeded",
-            "context length",
-            "maximum context",
-            "context window",
-            "input tokens exceed",
-            "messages resulted in",
-            "reduce the length of the messages",
-            "configured limit",
-            "too many tokens",
-            "too large for the model",
-            "maximum context length",
-            "exceed_context",
-            "exceeds the available context size",
-            "available context size",
         )
     )
 
@@ -320,7 +297,7 @@ def _collect_compactable_tool_ids(messages: list[ConversationMessage]) -> list[s
     return [
         tool_id
         for tool_id in ordered_ids
-        if tool_names.get(tool_id, "") in COMPACTABLE_TOOLS
+        if tool_names.get(tool_id, "") in compactable_tool_names()
         or is_microcompactable_tool_result(
             tool_names.get(tool_id, ""),
             result_content.get(tool_id, ""),
@@ -1147,7 +1124,7 @@ __all__ = [
     "AutoCompactState",
     "CompactAttachment",
     "CompactionResult",
-    "COMPACTABLE_TOOLS",
+    "compactable_tool_names",
     "TIME_BASED_MC_CLEARED_MESSAGE",
     "auto_compact_if_needed",
     "build_post_compact_messages",
@@ -1164,3 +1141,8 @@ __all__ = [
     "should_autocompact",
     "summarize_messages",
 ]
+
+# questor: allow R2 -- 1171 lines until W8 splits this file (ledger row 86)
+# questor: allow R4 -- split when a test proves patching should_autocompact still bites
+# questor: allow R5 -- 20 exports until the R4 split above lands
+# questor: allow R8 -- refactor compact_conversation (CC 42) in W8, after the split

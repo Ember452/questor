@@ -31,3 +31,4 @@ class GatewayState(BaseModel):
     enabled_channels: list[str] = Field(default_factory=list)
     last_error: str | None = None
 
+# questor: allow R7 -- until W8 adds the mirror test

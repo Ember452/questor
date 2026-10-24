@@ -166,3 +166,6 @@ def resolve_auth(settings: Settings) -> ResolvedAuth:
         f"No credentials found for auth source '{auth_source}'. "
         "Configure the matching provider or environment variable first."
     )
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

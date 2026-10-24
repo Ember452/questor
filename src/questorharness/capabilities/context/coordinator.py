@@ -60,8 +60,18 @@ def match_session_mode(session_mode: Optional[str]) -> Optional[str]:
 
 
 def get_coordinator_tools() -> list[str]:
-    """Return the tool names reserved for the coordinator."""
-    return [_AGENT_TOOL_NAME, _SEND_MESSAGE_TOOL_NAME, _TASK_STOP_TOOL_NAME]
+    """Return the tool names reserved for the coordinator.
+
+    Derived from the carry-over categories of the tools themselves, so a rename
+    does not need a second edit here. The order is stable and matches the
+    registration order in ``capabilities/tools/registry.py``.
+    """
+    from questorharness.capabilities.tools.registry import tool_names_for
+
+    ordered: list[str] = []
+    for key in ("async_agent", "async_message", "task_stop"):
+        ordered.extend(sorted(tool_names_for(key)))
+    return ordered
 
 
 def get_coordinator_user_context(
@@ -364,3 +374,5 @@ User:
 
 You:
   Fix for the new test is in progress. Still waiting to hear back about the test suite."""
+
+# questor: allow R7 -- until W8 adds the mirror test

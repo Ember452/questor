@@ -12,21 +12,35 @@
 | --- | --- |
 | `src/questorharness/` | Engine: agent loop, providers, tools, permissions, memory, channels, cron, sandbox |
 | `src/questor/` | Product app: gateway, onboarding, workspace, Feishu group policy |
-| `frontend/terminal/` | Terminal UI (frozen; removed in Phase 2 per ADR-0005) |
+| `frontend/terminal/` | Terminal UI (deprecated, ADR-0005 Updated 2026-10-24; removed in the same change that lands the REPL thin client — see plan 02) |
 | `tests/unit/` | Fast, isolated tests |
 | `tests/integration/` | Tests crossing process, filesystem, transport, or service boundaries |
 | `tests/e2e/` | Real end-to-end suites and their pytest gate |
 | `scripts/` | Operational scripts only |
 | `docs/` | Current documentation |
-| `docs-pre-reset-v1/` | Archived v1 documentation, read-only |
+| `docs-pre-reset-v1/` | One-line pointer; the v1 archive itself lives outside the repository |
 
 Both Python packages use the `src` layout. Do not add importable packages at the
 repository root.
 
 UI host: **Electron + React is the only long-term UI** (`apps/web` renderer,
-`apps/desktop` host). The Python `textual` UI and the Node Ink terminal are
-frozen and will be removed; do not add features to either. See
-[ADR-0005](adr/0005-single-ui-host.md).
+`apps/desktop` host). The Python `textual` UI is gone; the Node Ink terminal and
+the OHJSON backend host are **deprecated** (ADR-0005 Updated 2026-10-24) and go
+away when the REPL thin client passes acceptance; do not add features to either.
+See [ADR-0005](adr/0005-single-ui-host.md) and [ADR-0006](adr/0006-serve-host-and-wire-protocol.md).
+
+## Client topology (target, ADR-0006)
+
+One contract, two transports. The same serve routes back the terminal REPL
+through an **in-process transport** (no port, no credentials) and back
+Studio/Web over **loopback TCP with the credential handshake** (random
+127.0.0.1 port, one-shot launch credential, HttpOnly cookie, Host/Origin
+check, parent lease). `apps/web` must also run standalone in a browser
+(STRUCTURE §8); Electron is just one of its hosts.
+
+`apps/web` talks to the engine over HTTP — that is a **network relationship,
+not an import edge**; the import ladder and `.importlinter` are unchanged by
+host growth.
 
 Configuration types belong in `contracts/settings.py` (future), not in
 `bootstrap/`: `bootstrap` is the assembly layer and must not be imported by
@@ -35,7 +49,7 @@ lower layers. See ADR-0002 item 18.
 ## Dependency direction
 
 ```text
-frontend/terminal
+frontend/terminal  (deprecated, ADR-0005 Updated)
         |
         v
 src/questor  (product app)

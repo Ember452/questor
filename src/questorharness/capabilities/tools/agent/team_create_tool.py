@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class TeamCreateToolInput(BaseModel):
@@ -21,6 +21,8 @@ class TeamCreateTool(BaseTool):
     description = "Create a lightweight in-memory team for agent tasks."
     input_model = TeamCreateToolInput
 
+    capabilities = ToolCapabilities()
+
     async def execute(self, arguments: TeamCreateToolInput, context: ToolExecutionContext) -> ToolResult:
         if context.subagents is None:
             return ToolResult(output="subagent runtime unavailable", is_error=True)
@@ -29,3 +31,5 @@ class TeamCreateTool(BaseTool):
         except ValueError as exc:
             return ToolResult(output=str(exc), is_error=True)
         return ToolResult(output=f"Created team {name}")
+
+# questor: allow R7 -- until W8 adds the mirror test

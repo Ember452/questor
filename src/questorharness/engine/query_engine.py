@@ -9,16 +9,21 @@ from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.engine.cost_tracker import CostTracker
 from questorharness.runtime.coordinator.coordinator_mode import get_coordinator_user_context
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock, ToolResultBlock, sanitize_conversation_messages
-from questorharness.engine.context import AskUserPrompt, PermissionPrompt, QueryContext
+from questorharness.engine.context import (
+    AskUserPrompt,
+    COORDINATOR_CONTEXT_MARKER,
+    PermissionPrompt,
+    QueryContext,
+)
 from questorharness.engine.query import run_query
 from questorharness.engine.tool_metadata import remember_user_goal
 from questorharness.contracts.domain.events import AssistantTurnComplete, StreamEvent
 from questorharness.config.settings import Settings
 from questorharness.runtime.hooks import HookEvent, HookExecutor
 from questorharness.capabilities.policy.checker import PermissionChecker
-from questorharness.capabilities.memory.consolidate.service import schedule_auto_dream
+from questorharness.capabilities.memory.consolidate.dream import schedule_auto_dream
 from questorharness.runtime.services import default_task_runtime
-from questorharness.capabilities.tools.base import ToolRegistry
+from questorharness.capabilities.tools.contract import ToolRegistry
 
 
 class QueryEngine:
@@ -248,6 +253,7 @@ class QueryEngine:
                     "prompt": user_message.text,
                 },
             )
+        coordinator_context = self._build_coordinator_context_message()
         context = QueryContext(
             api_client=self._api_client,
             tool_registry=self._tool_registry,
@@ -264,9 +270,9 @@ class QueryEngine:
             ask_user_prompt=self._ask_user_prompt,
             hook_executor=self._hook_executor,
             tool_metadata=self._tool_metadata,
+            coordinator_mode=coordinator_context is not None,
         )
         query_messages = list(self._messages)
-        coordinator_context = self._build_coordinator_context_message()
         if coordinator_context is not None:
             query_messages.append(coordinator_context)
         try:

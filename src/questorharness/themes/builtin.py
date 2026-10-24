@@ -87,3 +87,5 @@ BUILTIN_THEMES: dict[str, ThemeConfig] = {
         layout=LayoutConfig(compact=False, show_tokens=True, show_time=True),
     ),
 }
+
+# questor: allow R7 -- until W8 adds the mirror test

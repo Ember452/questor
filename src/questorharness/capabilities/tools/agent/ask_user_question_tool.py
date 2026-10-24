@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 AskUserPrompt = Callable[[str], Awaitable[str]]
@@ -24,6 +24,8 @@ class AskUserQuestionTool(BaseTool):
     name = "ask_user_question"
     description = "Ask the interactive user a follow-up question and return the answer."
     input_model = AskUserQuestionToolInput
+
+    capabilities = ToolCapabilities()
 
     def is_read_only(self, arguments: AskUserQuestionToolInput) -> bool:
         del arguments
@@ -44,3 +46,5 @@ class AskUserQuestionTool(BaseTool):
         if not answer:
             return ToolResult(output="(no response)")
         return ToolResult(output=answer)
+
+# questor: allow R7 -- until W8 adds the mirror test

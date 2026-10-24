@@ -95,14 +95,64 @@ def _check_code_paths(doc: Path, text: str, *, root: Path) -> list[Violation]:
     return violations
 
 
+STALE_REFS_RE = re.compile(r"<!--\s*known-stale-refs:\s*([^>]+?)\s*-->")
+HEADER_LINES = 30
+
+
+def _normalize_ref(token: str) -> str:
+    return token.strip().lstrip("./")
+
+
+def _stale_allowance(text: str) -> set[str]:
+    """Read a declared stale-reference list, but only from the file header.
+
+    A document may describe this mechanism anywhere in its body; quoting the
+    literal marker there must not turn the description into an opt-in.
+    """
+
+    header = "\n".join(text.splitlines()[:HEADER_LINES])
+    match = STALE_REFS_RE.search(header)
+    if not match:
+        return set()
+    return {_normalize_ref(item) for item in match.group(1).split(",") if item.strip()}
+
+
 def check_doc(doc: Path, *, root: Path) -> list[Violation]:
+    """Report dead references, minus the ones this document declared stale.
+
+    The allowance is a ratchet, not a blanket skip: an entry that no longer
+    matches any failing reference is itself reported, so fixing a link must
+    shrink the list in the same change.
+    """
+
     text = read_text(doc)
+    allowance = _stale_allowance(text)
+    used: set[str] = set()
     violations: list[Violation] = []
     for match in LINK_RE.finditer(text):
         problem = _check_target(doc, match.group(1), root=root)
         if problem:
-            violations.append(Violation(doc, _line_of(text, match.start()), problem))
-    violations.extend(_check_code_paths(doc, text, root=root))
+            violation = Violation(doc, _line_of(text, match.start()), problem)
+            token = _normalize_ref(problem.rsplit(": ", 1)[-1])
+            if token in allowance:
+                used.add(token)
+            else:
+                violations.append(violation)
+    for violation in _check_code_paths(doc, text, root=root):
+        token = _normalize_ref(violation.message.rsplit(": ", 1)[-1])
+        if token in allowance:
+            used.add(token)
+        else:
+            violations.append(violation)
+    unused = sorted(allowance - used)
+    for token in unused:
+        violations.append(
+            Violation(
+                doc,
+                1,
+                f"known-stale-refs entry '{token}' no longer matches a dead reference; delete it",
+            )
+        )
     return violations
 
 
@@ -127,9 +177,42 @@ def _self_test() -> int:
             "[target](missing.md)\n\n`src/pkg/missing.py`\n",
             encoding="utf-8",
         )
+        declared = docs / "declared.md"
+        declared.write_text(
+            "<!-- known-stale-refs: missing.md, src/pkg/missing.py -->\n\n"
+            "[target](missing.md)\n\n`src/pkg/missing.py`\n",
+            encoding="utf-8",
+        )
+        stale = docs / "stale-allowance.md"
+        stale.write_text(
+            "<!-- known-stale-refs: src/pkg/fixed.py -->\n\n`src/pkg/module.py`\n",
+            encoding="utf-8",
+        )
+        described = docs / "described.md"
+        described.write_text(
+            "# prose\n\n"
+            + "\n".join(f"padding line {index}" for index in range(HEADER_LINES))
+            + "\n\na document may quote `<!-- known-stale-refs: dead.md -->` as text\n\n"
+            "[dead](missing2.md)\n",
+            encoding="utf-8",
+        )
         valid_hits = check_doc(valid, root=root)
         broken_hits = check_doc(broken, root=root)
+        declared_hits = check_doc(declared, root=root)
+        stale_hits = check_doc(stale, root=root)
+        described_hits = check_doc(described, root=root)
         cases = [
+            (
+                "marker-in-body-is-not-an-opt-in",
+                any("missing2.md" in item.message for item in described_hits),
+                f"{[item.message for item in described_hits]}",
+            ),
+            ("declared-stale-allowed", declared_hits == [], f"{[item.message for item in declared_hits]}"),
+            (
+                "allowance-shrinks-when-fixed",
+                any("no longer matches" in item.message for item in stale_hits),
+                f"{[item.message for item in stale_hits]}",
+            ),
             ("valid-doc", not valid_hits, f"{len(valid_hits)} violations"),
             (
                 "missing-link",

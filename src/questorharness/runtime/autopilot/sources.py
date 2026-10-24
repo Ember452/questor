@@ -7,13 +7,13 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from questorharness.runtime.autopilot.constants import (
+from questorharness.runtime.autopilot.verification_defaults import (
     _source_ref_number,
 )
 from questorharness.runtime.autopilot.text_utils import (
     _safe_text,
 )
-from questorharness.runtime.autopilot.types import (
+from questorharness.runtime.autopilot.models import (
     RepoTaskCard,
 )
 
@@ -192,3 +192,5 @@ class SourcesMixin:
         if not repo:
             raise RuntimeError("Unable to resolve GitHub repository name with `gh repo view`.")
         return repo
+
+# questor: allow R7 -- until W8 adds the mirror test

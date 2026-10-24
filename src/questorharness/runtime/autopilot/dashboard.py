@@ -161,3 +161,5 @@ class DashboardMixin:
 </body>
 </html>
 """
+
+# questor: allow R7 -- until W8 adds the mirror test

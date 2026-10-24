@@ -6,7 +6,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from questorharness.cli import app
+from questorharness.bootstrap.cli.main import app
 from questorharness.config.settings import load_settings
 
 

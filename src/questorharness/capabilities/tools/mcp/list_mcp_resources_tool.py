@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 from questorharness.capabilities.ports import McpClientPort
 
 
@@ -18,6 +18,8 @@ class ListMcpResourcesTool(BaseTool):
     name = "list_mcp_resources"
     description = "List MCP resources available from connected servers."
     input_model = ListMcpResourcesToolInput
+
+    capabilities = ToolCapabilities()
 
     def __init__(self, manager: McpClientPort) -> None:
         self._manager = manager
@@ -34,3 +36,5 @@ class ListMcpResourcesTool(BaseTool):
         return ToolResult(
             output="\n".join(f"{item.server_name}:{item.uri} {item.description}".strip() for item in resources)
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

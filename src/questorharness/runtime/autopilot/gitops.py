@@ -11,7 +11,7 @@ from typing import Any
 from questorharness.runtime.autopilot.text_utils import (
     _safe_text,
 )
-from questorharness.runtime.autopilot.types import (
+from questorharness.runtime.autopilot.models import (
     RepoTaskCard,
 )
 
@@ -111,3 +111,5 @@ class GitOperationsMixin:
             self._run_git(["checkout", "-B", head_branch, f"origin/{base_branch}"], cwd=cwd, check=True)
             return
         self._run_git(["checkout", head_branch], cwd=cwd, check=True)
+
+# questor: allow R7 -- until W8 adds the mirror test

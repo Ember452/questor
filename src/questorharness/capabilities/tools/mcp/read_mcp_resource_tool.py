@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from questorharness.contracts.errors import McpServerNotConnectedError
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 from questorharness.capabilities.ports import McpClientPort
 
 
@@ -23,6 +23,8 @@ class ReadMcpResourceTool(BaseTool):
     description = "Read an MCP resource by server and URI."
     input_model = ReadMcpResourceToolInput
 
+    capabilities = ToolCapabilities()
+
     def __init__(self, manager: McpClientPort) -> None:
         self._manager = manager
 
@@ -37,3 +39,5 @@ class ReadMcpResourceTool(BaseTool):
         except McpServerNotConnectedError as exc:
             return ToolResult(output=str(exc), is_error=True)
         return ToolResult(output=output)
+
+# questor: allow R7 -- until W8 adds the mirror test

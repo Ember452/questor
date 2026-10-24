@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from questorharness.runtime.autopilot.constants import (
+from questorharness.runtime.autopilot.verification_defaults import (
     _looks_available,
     _parse_verification_entry,
     _VerificationCommand,
@@ -18,7 +18,7 @@ from questorharness.runtime.autopilot.text_utils import (
     _safe_text,
     _shorten,
 )
-from questorharness.runtime.autopilot.types import (
+from questorharness.runtime.autopilot.models import (
     RepoTaskCard,
     RepoVerificationStep,
 )

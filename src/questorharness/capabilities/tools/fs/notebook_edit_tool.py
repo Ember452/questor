@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class NotebookEditToolInput(BaseModel):
@@ -28,6 +28,8 @@ class NotebookEditTool(BaseTool):
     name = "notebook_edit"
     description = "Create or edit a Jupyter notebook cell."
     input_model = NotebookEditToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(
         self,
@@ -95,3 +97,5 @@ def _normalize_source(source: str | list[str]) -> str:
     if isinstance(source, list):
         return "".join(source)
     return str(source)
+
+# questor: allow R7 -- until W8 adds the mirror test

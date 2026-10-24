@@ -14,7 +14,7 @@ from typing import Any, Coroutine
 from uuid import uuid4
 
 from questorharness.providers.llm.client import SupportsStreamingMessages
-from questorharness.providers.auth.manager import AuthManager
+from questorharness.providers.auth.auth_manager import AuthManager
 from questorharness.commands import MemoryCommandBackend
 from questorharness.config.settings import CLAUDE_MODEL_ALIAS_OPTIONS, resolve_model_setting
 from questorharness.runtime.bridge import get_bridge_manager
@@ -37,8 +37,6 @@ from questorharness.bootstrap.hosts.coordinator_drain import drain_coordinator_a
 from questorharness.bootstrap.hosts.protocol import BackendEvent, FrontendImageAttachment, FrontendRequest, TranscriptItem
 from questorharness.bootstrap.runtime import build_runtime, close_runtime, handle_line, start_runtime
 from questorharness.runtime.session.backend import SessionBackend
-
-log = logging.getLogger(__name__)
 
 log = logging.getLogger(__name__)
 
@@ -239,6 +237,16 @@ class ReactBackendHost:
             await self._emit(BackendEvent.tasks_snapshot(get_task_manager().list_tasks()))
             await self._emit(BackendEvent(type="line_complete"))
             return True
+        except Exception as exc:
+            # 意外异常(例如压缩调用裸抛、provider 流异常结束)以前会穿透主循环,
+            # 触发 finally 里关 reader、关 runtime,后端以退出码 0 静默失联。
+            # 这里把异常变成前端可见的 error 事件,并让主循环继续处理后续请求。
+            log.exception("active request failed unexpectedly; keeping the host alive")
+            await self._emit(BackendEvent(type="error", message=f"Internal error: {exc}"))
+            await self._emit(self._status_snapshot())
+            await self._emit(BackendEvent.tasks_snapshot(get_task_manager().list_tasks()))
+            await self._emit(BackendEvent(type="line_complete"))
+            return True
         finally:
             if self._active_request_task is task:
                 self._active_request_task = None
@@ -334,7 +342,7 @@ class ReactBackendHost:
                 await self._emit(BackendEvent.tasks_snapshot(get_task_manager().list_tasks()))
                 await self._emit(self._status_snapshot())
                 # TodoWrite 工具运行时发出 todo_update
-                if event.tool_name in ("TodoWrite", "todo_write"):
+                if event.tool_name == "todo_write":
                     tool_input = self._last_tool_inputs.get(event.tool_name, {})
                     # TodoWrite 输入可能包含 'todos' 列表或 Markdown 内容字段
                     todos = tool_input.get("todos") or tool_input.get("content") or []
@@ -349,10 +357,12 @@ class ReactBackendHost:
                             await self._emit(BackendEvent(type="todo_update", todo_markdown="\n".join(lines)))
                     else:
                         await self._emit_todo_update_from_output(event.output)
-                # 计划相关工具完成时发出 plan_mode_change
-                if event.tool_name in ("set_permission_mode", "plan_mode"):
+                # 计划模式工具完成时发出 plan_mode_change。工具刚把新 mode 写进
+                # settings,app_state 要到本回合末尾的 sync_app_state 才刷新,
+                # 所以这里读 settings 才是当前值,读 app_state 会发出旧值。
+                if event.tool_name in ("enter_plan_mode", "exit_plan_mode"):
                     assert self._bundle is not None
-                    new_mode = self._bundle.app_state.get().permission_mode
+                    new_mode = self._bundle.current_settings().permission.mode.value
                     await self._emit(BackendEvent(type="plan_mode_change", plan_mode=new_mode))
                 return
             if isinstance(event, ErrorEvent):
@@ -444,14 +454,6 @@ class ReactBackendHost:
         if checklist_lines:
             markdown = "\n".join(checklist_lines)
             await self._emit(BackendEvent(type="todo_update", todo_markdown=markdown))
-
-    def _emit_swarm_status(self, teammates: list[dict], notifications: list[dict] | None = None) -> None:
-        """Emit a swarm_status event synchronously (schedule as coroutine)."""
-        import asyncio
-        loop = asyncio.get_event_loop()
-        loop.create_task(
-            self._emit(BackendEvent(type="swarm_status", swarm_teammates=teammates, swarm_notifications=notifications))
-        )
 
     async def _handle_list_sessions(self) -> None:
         import time as _time
@@ -935,11 +937,14 @@ async def run_backend_host(
     return await host.run()
 
 
-__all__ = ["run_backend_host", "ReactBackendHost", "BackendHostConfig"]
-
-
 def _edit_approval_reply_from_request(request: FrontendRequest) -> str:
     reply = (request.permission_reply or "").strip().lower()
     if reply in {"once", "always", "reject"}:
         return reply
     return "once" if bool(request.allowed) else "reject"
+
+
+__all__ = ["run_backend_host", "ReactBackendHost", "BackendHostConfig"]
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

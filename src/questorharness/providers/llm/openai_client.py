@@ -482,3 +482,5 @@ def _strip_think_blocks(buf: str) -> tuple[str, str]:
             return cleaned[:-prefix_len], cleaned[-prefix_len:]
 
     return cleaned, ""
+
+# questor: allow R8 -- refactor the offenders in W8

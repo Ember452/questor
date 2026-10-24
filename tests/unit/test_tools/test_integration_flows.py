@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.runtime.tasks.manager import get_task_manager
+from questorharness.runtime.tasks.task_manager import get_task_manager
 from questorharness.capabilities.tools import create_default_tool_registry
 from questorharness.runtime.services import default_subagent_runtime, default_task_runtime
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.providers.lsp.runtime import ProviderLspRuntime
 
 _TOOL_PORTS = {"tasks": default_task_runtime, "subagents": default_subagent_runtime}

@@ -16,7 +16,7 @@ Architecture summary
 * :func:`start_in_process_teammate` – the actual coroutine that sets up
   context, drives the query engine, and cleans up on exit.
 * :class:`InProcessBackend` – implements
-  :class:`~questorharness.runtime.swarm.types.TeammateExecutor` and manages the dict of
+  :class:`~questorharness.runtime.swarm.models.TeammateExecutor` and manages the dict of
   live asyncio Tasks.
 """
 
@@ -35,7 +35,7 @@ from questorharness.runtime.swarm.mailbox import (
     TeammateMailbox,
     create_idle_notification,
 )
-from questorharness.runtime.swarm.types import (
+from questorharness.runtime.swarm.models import (
     BackendType,
     SpawnResult,
     TeammateMessage,

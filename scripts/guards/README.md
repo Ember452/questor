@@ -2,26 +2,55 @@
 
 Small, dependency-free checks used by local development and CI.
 
-Run every guard's self-test:
+## Single entry point
+
+CI and pre-commit both run **scripts/check.py**; never wire an individual guard
+into a pipeline again. The list lives in one place, so the two cannot fork.
 
 ```bash
-uv run python scripts/guards/_guard_kit.py --self-test
-uv run python scripts/guards/check_thread_leak.py --self-test
-uv run python scripts/guards/check_secret_projection.py --self-test
-uv run python scripts/guards/check_doc_cross_refs.py --self-test
-uv run python scripts/guards/check_layout.py --self-test
+uv run python scripts/check.py --list     # which commands run, in order
+uv run python scripts/check.py            # everything (CI guards job)
+uv run python scripts/check.py --fast     # skip the slow snapshot checks (pre-commit)
 ```
 
-Run the real checks:
+Every step prints its name before it runs and the run ends with a
+`step / result / seconds` table, so a red build names the guard that failed.
+
+Run every guard's self-test by hand — that is exactly what `--fast` already
+does for you, via the ten `*-self-test` steps:
+
+```bash
+uv run python scripts/check.py --fast
+```
+
+Run a single guard by hand while debugging:
 
 ```bash
 uv run python scripts/guards/check_thread_leak.py --fail-on-empty
 uv run python scripts/guards/check_secret_projection.py --fail-on-empty
 uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
 uv run python scripts/guards/check_layout.py --fail-on-empty
+uv run python scripts/guards/check_tool_radius.py --fail-on-empty
+uv run python scripts/guards/check_name_registries.py --fail-on-empty
+uv run python scripts/guards/check_mypy_scope.py --fail-on-empty
 uv run python scripts/guards/gen_tree.py --check
+uv run python scripts/guards/gen_structure_baseline.py --check
+uv run python scripts/guards/gen_namespaces.py --check
+uv run python scripts/guards/gen_graph.py --check
 uv run lint-imports
+uv run mypy
 ```
+
+## Generated documents
+
+Three documents are generated and must never be edited by hand; each `--check`
+fails on any difference, which is also how the frozen values work:
+
+| document | generator | what the check really proves |
+| --- | --- | --- |
+| `docs/architecture/TREE.md` | `gen_tree.py` | the tree map still matches the source |
+| `docs/architecture/NAMESPACES.md` | `gen_namespaces.py` | no name exists in code without a row |
+| `docs/architecture/GRAPH.md` | `gen_graph.py` | cycles, vacuous contracts and the frozen indirect edges did not grow |
 
 ## `_guard_kit.py`
 
@@ -62,7 +91,8 @@ Checks:
 - repository paths written in backticks, such as `src/...` and `tests/...`
 - empty documentation sets or reference sets when `--fail-on-empty` is used
 
-The v1 archive in `docs-pre-reset-v1/` is excluded.
+The v1 archive is out of scope: it left the repository in W10, and the only tracked file
+under `docs-pre-reset-v1/` is the pointer README.
 
 ## `check_layout.py`
 

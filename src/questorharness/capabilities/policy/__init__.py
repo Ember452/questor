@@ -24,3 +24,4 @@ def __getattr__(name: str):
 
         return PermissionMode
     raise AttributeError(name)
+

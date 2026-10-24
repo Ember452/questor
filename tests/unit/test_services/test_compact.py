@@ -285,6 +285,15 @@ def test_compact_prompt_too_long_detection_handles_llama_cpp_errors():
     )
 
 
+def test_the_prompt_too_long_predicate_has_one_definition():
+    """跨层契约:引擎与压缩必须用同一个判定,而不是两份会各自漂移的针表。"""
+    from questorharness.contracts.errors import is_prompt_too_long_error
+    from questorharness.engine.model_errors import _is_prompt_too_long_error as engine_predicate
+
+    assert _is_prompt_too_long_error is is_prompt_too_long_error
+    assert engine_predicate is is_prompt_too_long_error
+
+
 def test_compact_token_estimate_counts_images(monkeypatch):
     monkeypatch.setenv("QUESTORHARNESS_IMAGE_TOKEN_ESTIMATE", "6000")
     messages = [

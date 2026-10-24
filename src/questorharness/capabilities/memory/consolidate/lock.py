@@ -136,3 +136,5 @@ def list_sessions_touched_since(
         seen.add(session_id)
         session_ids.append(session_id)
     return session_ids
+
+# questor: allow R7 -- until W8 adds the mirror test

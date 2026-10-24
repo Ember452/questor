@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from questorharness.capabilities.skills.registry import SkillRegistry
-    from questorharness.capabilities.skills.types import SkillDefinition
+    from questorharness.capabilities.skills.definition import SkillDefinition
 
 __all__ = [
     "SkillDefinition",
@@ -38,7 +38,8 @@ def __getattr__(name: str):
 
         return SkillRegistry
     if name == "SkillDefinition":
-        from questorharness.capabilities.skills.types import SkillDefinition
+        from questorharness.capabilities.skills.definition import SkillDefinition
 
         return SkillDefinition
     raise AttributeError(name)
+

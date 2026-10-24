@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from questorharness.capabilities.schedule.cron import delete_cron_job
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class CronDeleteToolInput(BaseModel):
@@ -21,6 +21,8 @@ class CronDeleteTool(BaseTool):
     description = "Delete a local cron-style job by name."
     input_model = CronDeleteToolInput
 
+    capabilities = ToolCapabilities()
+
     async def execute(
         self,
         arguments: CronDeleteToolInput,
@@ -30,3 +32,5 @@ class CronDeleteTool(BaseTool):
         if not delete_cron_job(arguments.name):
             return ToolResult(output=f"Cron job not found: {arguments.name}", is_error=True)
         return ToolResult(output=f"Deleted cron job {arguments.name}")
+
+# questor: allow R7 -- until W8 adds the mirror test

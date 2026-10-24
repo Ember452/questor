@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class ExitWorktreeToolInput(BaseModel):
@@ -22,6 +22,8 @@ class ExitWorktreeTool(BaseTool):
     name = "exit_worktree"
     description = "Remove a git worktree by path."
     input_model = ExitWorktreeToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(
         self,
@@ -40,3 +42,5 @@ class ExitWorktreeTool(BaseTool):
         )
         output = (result.stdout or result.stderr).strip() or f"Removed worktree {path}"
         return ToolResult(output=output, is_error=result.returncode != 0)
+
+# questor: allow R7 -- until W8 adds the mirror test

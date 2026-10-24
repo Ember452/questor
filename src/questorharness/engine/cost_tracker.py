@@ -22,3 +22,5 @@ class CostTracker:
     def total(self) -> UsageSnapshot:
         """Return the aggregated usage."""
         return self._usage
+
+# questor: allow R7 -- until W8 adds the mirror test

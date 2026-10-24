@@ -6,7 +6,7 @@ from importlib import import_module
 
 from questorharness.runtime.swarm.registry import BackendRegistry, get_backend_registry
 from questorharness.runtime.swarm.subprocess_backend import SubprocessBackend
-from questorharness.runtime.swarm.types import (
+from questorharness.runtime.swarm.models import (
     BackendType,
     SpawnResult,
     TeammateExecutor,
@@ -23,13 +23,6 @@ _LAZY_EXPORTS = {
     "create_user_message": ("questorharness.runtime.swarm.mailbox", "create_user_message"),
     "get_agent_mailbox_dir": ("questorharness.runtime.swarm.mailbox", "get_agent_mailbox_dir"),
     "get_team_dir": ("questorharness.runtime.swarm.mailbox", "get_team_dir"),
-    "SwarmPermissionRequest": ("questorharness.runtime.swarm.permission_sync", "SwarmPermissionRequest"),
-    "SwarmPermissionResponse": ("questorharness.runtime.swarm.permission_sync", "SwarmPermissionResponse"),
-    "create_permission_request": ("questorharness.runtime.swarm.permission_sync", "create_permission_request"),
-    "handle_permission_request": ("questorharness.runtime.swarm.permission_sync", "handle_permission_request"),
-    "poll_permission_response": ("questorharness.runtime.swarm.permission_sync", "poll_permission_response"),
-    "send_permission_request": ("questorharness.runtime.swarm.permission_sync", "send_permission_request"),
-    "send_permission_response": ("questorharness.runtime.swarm.permission_sync", "send_permission_response"),
 }
 
 __all__ = [
@@ -38,24 +31,17 @@ __all__ = [
     "MailboxMessage",
     "SpawnResult",
     "SubprocessBackend",
-    "SwarmPermissionRequest",
-    "SwarmPermissionResponse",
     "TeammateExecutor",
     "TeammateIdentity",
     "TeammateMailbox",
     "TeammateMessage",
     "TeammateSpawnConfig",
     "create_idle_notification",
-    "create_permission_request",
     "create_shutdown_request",
     "create_user_message",
     "get_agent_mailbox_dir",
     "get_backend_registry",
     "get_team_dir",
-    "handle_permission_request",
-    "poll_permission_response",
-    "send_permission_request",
-    "send_permission_response",
 ]
 
 
@@ -68,3 +54,4 @@ def __getattr__(name: str):
     value = getattr(import_module(module_name), attr_name)
     globals()[name] = value
     return value
+

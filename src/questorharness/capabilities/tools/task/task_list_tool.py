@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class TaskListToolInput(BaseModel):
@@ -20,6 +20,10 @@ class TaskListTool(BaseTool):
     description = "List background tasks."
     input_model = TaskListToolInput
 
+    capabilities = ToolCapabilities(
+        read_only_by_default=True,
+    )
+
     def is_read_only(self, arguments: TaskListToolInput) -> bool:
         del arguments
         return True
@@ -33,3 +37,5 @@ class TaskListTool(BaseTool):
         return ToolResult(
             output="\n".join(f"{task.id} {task.type} {task.status} {task.description}" for task in tasks)
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

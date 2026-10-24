@@ -1,7 +1,7 @@
 """Repo autopilot exports."""
 
-from questorharness.runtime.autopilot.service import RepoAutopilotStore
-from questorharness.runtime.autopilot.types import (
+from questorharness.runtime.autopilot.repo_store import RepoAutopilotStore
+from questorharness.runtime.autopilot.models import (
     RepoAutopilotRegistry,
     RepoJournalEntry,
     RepoRunResult,

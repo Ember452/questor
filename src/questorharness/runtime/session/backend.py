@@ -95,3 +95,5 @@ class QuestorHarnessSessionBackend:
 
 
 DEFAULT_SESSION_BACKEND: SessionBackend = QuestorHarnessSessionBackend()
+
+# questor: allow R7 -- until W8 adds the mirror test

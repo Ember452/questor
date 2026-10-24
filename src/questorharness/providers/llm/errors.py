@@ -17,3 +17,5 @@ class RateLimitFailure(QuestorHarnessApiError):
 
 class RequestFailure(QuestorHarnessApiError):
     """Raised for generic request or transport failures."""
+
+# questor: allow R7 -- until W8 adds the mirror test

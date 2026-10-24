@@ -1,0 +1,394 @@
+{
+  "caliber": "tool carry-over metadata, timestamps normalised to 0.0",
+  "cases": [
+    {
+      "case": 0,
+      "error": false,
+      "expected": {
+        "read_file_state": [
+          {
+            "path": "a.py",
+            "preview": "x | y",
+            "span": "lines 1-50",
+            "timestamp": 0.0
+          }
+        ],
+        "recent_verified_work": [
+          "Inspected file a.py (lines 1-50)"
+        ],
+        "recent_work_log": [
+          "Read file a.py"
+        ],
+        "task_focus_state": {
+          "active_artifacts": [
+            "a.py"
+          ],
+          "goal": "",
+          "next_step": "",
+          "recent_goals": [],
+          "verified_state": [
+            "Inspected file a.py (lines 1-50)"
+          ]
+        }
+      },
+      "input": {
+        "file_path": "a.py",
+        "limit": 50,
+        "offset": 0
+      },
+      "meta": null,
+      "output": "x\ny",
+      "path": "a.py",
+      "tool": "read_file"
+    },
+    {
+      "case": 1,
+      "error": false,
+      "expected": {
+        "read_file_state": [
+          {
+            "path": "b.py",
+            "preview": "z",
+            "span": "lines 11-30",
+            "timestamp": 0.0
+          }
+        ],
+        "recent_verified_work": [
+          "Inspected file b.py (lines 11-30)"
+        ],
+        "recent_work_log": [
+          "Read file b.py"
+        ],
+        "task_focus_state": {
+          "active_artifacts": [
+            "b.py"
+          ],
+          "goal": "",
+          "next_step": "",
+          "recent_goals": [],
+          "verified_state": [
+            "Inspected file b.py (lines 11-30)"
+          ]
+        }
+      },
+      "input": {
+        "file_path": "b.py",
+        "limit": 20,
+        "offset": 10
+      },
+      "meta": null,
+      "output": "z",
+      "path": "b.py",
+      "tool": "read_file"
+    },
+    {
+      "case": 2,
+      "error": false,
+      "expected": {
+        "recent_verified_work": [
+          "Ran bash command ls -la [total 0]"
+        ],
+        "recent_work_log": [
+          "Ran bash: ls -la [total 0]"
+        ],
+        "task_focus_state": {
+          "active_artifacts": [],
+          "goal": "",
+          "next_step": "",
+          "recent_goals": [],
+          "verified_state": [
+            "Ran bash command ls -la [total 0]"
+          ]
+        }
+      },
+      "input": {
+        "command": "ls -la"
+      },
+      "meta": null,
+      "output": "total 0",
+      "path": null,
+      "tool": "bash"
+    },
+    {
+      "case": 3,
+      "error": false,
+      "expected": {
+        "recent_verified_work": [
+          "Checked repository matches for grep pattern needle"
+        ],
+        "recent_work_log": [
+          "Searched with grep pattern=needle"
+        ],
+        "task_focus_state": {
+          "active_artifacts": [],
+          "goal": "",
+          "next_step": "",
+          "recent_goals": [],
+          "verified_state": [
+            "Checked repository matches for grep pattern needle"
+          ]
+        }
+      },
+      "input": {
+        "pattern": "needle"
+      },
+      "meta": null,
+      "output": "a.py:1:needle",
+      "path": null,
+      "tool": "grep"
+    },
+    {
+      "case": 4,
+      "error": false,
+      "expected": {
+        "recent_verified_work": [
+          "Expanded glob pattern **/*.py"
+        ],
+        "task_focus_state": {
+          "active_artifacts": [],
+          "goal": "",
+          "next_step": "",
+          "recent_goals": [],
+          "verified_state": [
+            "Expanded glob pattern **/*.py"
+          ]
+        }
+      },
+      "input": {
+        "pattern": "**/*.py"
+      },
+      "meta": null,
+      "output": "a.py\nb.py",
+      "path": null,
+      "tool": "glob"
+    },
+    {
+      "case": 5,
+      "error": false,
+      "expected": {
+        "recent_verified_work": [
+          "Fetched remote content from https://example.com"
+        ],
+        "task_focus_state": {
+          "active_artifacts": [
+            "https://example.com"
+          ],
+          "goal": "",
+          "next_step": "",
+          "recent_goals": [],
+          "verified_state": [
+            "Fetched remote content from https://example.com"
+          ]
+        }
+      },
+      "input": {
+        "url": "https://example.com"
+      },
+      "meta": null,
+      "output": "<html>",
+      "path": null,
+      "tool": "web_fetch"
+    },
+    {
+      "case": 6,
+      "error": false,
+      "expected": {
+        "recent_verified_work": [
+          "Ran web search for python typing"
+        ],
+        "task_focus_state": {
+          "active_artifacts": [],
+          "goal": "",
+          "next_step": "",
+          "recent_goals": [],
+          "verified_state": [
+            "Ran web search for python typing"
+          ]
+        }
+      },
+      "input": {
+        "query": "python typing"
+      },
+      "meta": null,
+      "output": "1. docs",
+      "path": null,
+      "tool": "web_search"
+    },
+    {
+      "case": 7,
+      "error": false,
+      "expected": {
+        "invoked_skills": [
+          "pdf"
+        ],
+        "recent_verified_work": [
+          "Loaded skill pdf"
+        ],
+        "recent_work_log": [
+          "Loaded skill pdf"
+        ],
+        "task_focus_state": {
+          "active_artifacts": [
+            "skill:pdf"
+          ],
+          "goal": "",
+          "next_step": "",
+          "recent_goals": [],
+          "verified_state": [
+            "Loaded skill pdf"
+          ]
+        }
+      },
+      "input": {
+        "name": "pdf"
+      },
+      "meta": null,
+      "output": "loaded",
+      "path": null,
+      "tool": "skill"
+    },
+    {
+      "case": 8,
+      "error": false,
+      "expected": {
+        "async_agent_state": [
+          "Spawned async agent. investigate [Spawned agent worker (task_id=t-1,)]"
+        ],
+        "async_agent_tasks": [
+          {
+            "agent_id": "agent-1",
+            "description": "investigate",
+            "notification_sent": false,
+            "spawned_at": 0.0,
+            "status": "spawned",
+            "task_id": "t-1"
+          }
+        ],
+        "recent_verified_work": [
+          "Confirmed async-agent activity via agent: investigate"
+        ],
+        "recent_work_log": [
+          "Async agent action via agent"
+        ],
+        "task_focus_state": {
+          "active_artifacts": [],
+          "goal": "",
+          "next_step": "",
+          "recent_goals": [],
+          "verified_state": [
+            "Confirmed async-agent activity via agent: investigate"
+          ]
+        }
+      },
+      "input": {
+        "description": "investigate",
+        "prompt": "look"
+      },
+      "meta": {
+        "agent_id": "agent-1",
+        "task_id": "t-1"
+      },
+      "output": "Spawned agent worker (task_id=t-1,)",
+      "path": null,
+      "tool": "agent"
+    },
+    {
+      "case": 9,
+      "error": false,
+      "expected": {
+        "async_agent_state": [
+          "Sent follow-up message to async agent t-1"
+        ],
+        "recent_verified_work": [
+          "Confirmed async-agent activity via send_message: send_message"
+        ],
+        "recent_work_log": [
+          "Async agent action via send_message"
+        ],
+        "task_focus_state": {
+          "active_artifacts": [],
+          "goal": "",
+          "next_step": "",
+          "recent_goals": [],
+          "verified_state": [
+            "Confirmed async-agent activity via send_message: send_message"
+          ]
+        }
+      },
+      "input": {
+        "message": "hi",
+        "task_id": "t-1"
+      },
+      "meta": null,
+      "output": "sent",
+      "path": null,
+      "tool": "send_message"
+    },
+    {
+      "case": 10,
+      "error": false,
+      "expected": {
+        "permission_mode": "plan",
+        "recent_work_log": [
+          "Entered plan mode"
+        ]
+      },
+      "input": {},
+      "meta": null,
+      "output": "ok",
+      "path": null,
+      "tool": "enter_plan_mode"
+    },
+    {
+      "case": 11,
+      "error": false,
+      "expected": {
+        "permission_mode": "default",
+        "recent_work_log": [
+          "Exited plan mode"
+        ]
+      },
+      "input": {},
+      "meta": null,
+      "output": "ok",
+      "path": null,
+      "tool": "exit_plan_mode"
+    },
+    {
+      "case": 12,
+      "error": false,
+      "expected": {},
+      "input": {
+        "todos": []
+      },
+      "meta": null,
+      "output": "ok",
+      "path": null,
+      "tool": "todo_write"
+    },
+    {
+      "case": 13,
+      "error": true,
+      "expected": {},
+      "input": {
+        "command": "exit 1"
+      },
+      "meta": null,
+      "output": "boom",
+      "path": null,
+      "tool": "bash"
+    },
+    {
+      "case": 14,
+      "error": false,
+      "expected": {},
+      "input": {
+        "x": 1
+      },
+      "meta": null,
+      "output": "ok",
+      "path": null,
+      "tool": "totally_unknown_tool"
+    }
+  ]
+}

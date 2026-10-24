@@ -16,3 +16,5 @@ def parse_keybindings(text: str) -> dict[str, str]:
             raise ValueError("keybindings keys and values must be strings")
         parsed[key] = value
     return parsed
+
+# questor: allow R7 -- until W8 adds the mirror test

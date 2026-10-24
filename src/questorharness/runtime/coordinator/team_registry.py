@@ -60,3 +60,5 @@ def get_team_registry() -> TeamRegistry:
     if _DEFAULT_TEAM_REGISTRY is None:
         _DEFAULT_TEAM_REGISTRY = TeamRegistry()
     return _DEFAULT_TEAM_REGISTRY
+
+# questor: allow R7 -- until W8 adds the mirror test

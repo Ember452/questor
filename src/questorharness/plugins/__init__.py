@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from questorharness.plugins.schemas import PluginManifest
-    from questorharness.plugins.types import LoadedPlugin
+    from questorharness.plugins.models import LoadedPlugin
 
 __all__ = [
     "LoadedPlugin",
@@ -47,7 +47,8 @@ def __getattr__(name: str):
 
         return PluginManifest
     if name == "LoadedPlugin":
-        from questorharness.plugins.types import LoadedPlugin
+        from questorharness.plugins.models import LoadedPlugin
 
         return LoadedPlugin
     raise AttributeError(name)
+

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +67,8 @@ class ImageToTextTool(BaseTool):
         "model does not support image input."
     )
     input_model = ImageToTextToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(
         self, arguments: ImageToTextToolInput, context: ToolExecutionContext

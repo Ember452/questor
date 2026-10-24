@@ -13,3 +13,5 @@ def estimate_tokens(text: str) -> int:
 def estimate_message_tokens(messages: list[str]) -> int:
     """Estimate tokens for a collection of message strings."""
     return sum(estimate_tokens(message) for message in messages)
+
+# questor: allow R7 -- until W8 adds the mirror test

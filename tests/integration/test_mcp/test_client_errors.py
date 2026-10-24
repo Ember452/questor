@@ -16,7 +16,7 @@ except NameError:  # pragma: no cover - Python < 3.11 compatibility
 
 from questorharness.providers.mcp.client import McpClientManager, McpServerNotConnectedError
 from questorharness.contracts.mcp import McpConnectionStatus, McpStdioServerConfig, McpToolInfo
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.capabilities.tools.mcp.mcp_tool import McpToolAdapter
 from questorharness.capabilities.tools.mcp.read_mcp_resource_tool import ReadMcpResourceTool
 

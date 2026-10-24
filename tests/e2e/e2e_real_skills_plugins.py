@@ -111,7 +111,7 @@ async def test_real_skill_content_quality() -> tuple[bool, str]:
 async def test_skill_tool_with_real_skill() -> tuple[bool, str]:
     """Test SkillTool with a real anthropic skill (pdf)."""
     from questorharness.capabilities.tools.skill_tool import SkillTool, SkillToolInput
-    from questorharness.capabilities.tools.base import ToolExecutionContext
+    from questorharness.capabilities.tools.contract import ToolExecutionContext
 
     tool = SkillTool()
     result = await tool.execute(

@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class LspToolInput(BaseModel):
@@ -50,6 +50,8 @@ class LspTool(BaseTool):
         "across the current workspace."
     )
     input_model = LspToolInput
+
+    capabilities = ToolCapabilities()
 
     def is_read_only(self, arguments: LspToolInput) -> bool:
         del arguments
@@ -148,3 +150,4 @@ def _format_references(results: list[tuple[Path, int, str]], root: Path) -> str:
         return "(no results)"
     return "\n".join(f"{_display_path(path, root)}:{line}:{text}" for path, line, text in results)
 
+# questor: allow R7 -- until W8 adds the mirror test

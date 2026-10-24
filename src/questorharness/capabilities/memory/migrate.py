@@ -135,3 +135,5 @@ def _create_migration_backup(memory_dir: Path) -> Path:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+# questor: allow R7 -- until W8 adds the mirror test

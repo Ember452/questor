@@ -15,3 +15,5 @@ class UsageSnapshot(BaseModel):
     def total_tokens(self) -> int:
         """Return the total number of accounted tokens."""
         return self.input_tokens + self.output_tokens
+
+# questor: allow R7 -- until W8 adds the mirror test

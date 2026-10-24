@@ -1,6 +1,6 @@
 """Slash command registry and the ordered list of built-in command families.
 
-The registry type lives in :mod:`questorharness.commands.types`; each command
+The registry type lives in :mod:`questorharness.commands.models`; each command
 family lives in :mod:`questorharness.commands.families`.  This module owns the
 one thing that must stay global: the order in which families are registered,
 because ``/help`` and remote listings preserve registration order.
@@ -33,19 +33,19 @@ from questorharness.commands.families.project import (
 )
 from questorharness.commands.families.session import register_session_commands
 from questorharness.commands.families.workspace import register_workspace_commands
-from questorharness.commands.helpers import (
+from questorharness.commands.command_display import (
     _is_valid_skill_command_name,
     _make_skill_slash_command,
     _skill_command_name,
 )
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,
     MemoryCommandBackend,
     SlashCommand,
 )
-from questorharness.plugins.types import PluginCommandDefinition
+from questorharness.plugins.models import PluginCommandDefinition
 
 __all__ = [
     "CommandContext",

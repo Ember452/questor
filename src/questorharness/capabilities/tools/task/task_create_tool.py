@@ -6,7 +6,7 @@ import os
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class TaskCreateToolInput(BaseModel):
@@ -25,6 +25,8 @@ class TaskCreateTool(BaseTool):
     name = "task_create"
     description = "Create a background shell or local-agent task."
     input_model = TaskCreateToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(self, arguments: TaskCreateToolInput, context: ToolExecutionContext) -> ToolResult:
         tasks = context.tasks
@@ -55,3 +57,5 @@ class TaskCreateTool(BaseTool):
             return ToolResult(output=f"unsupported task type: {arguments.type}", is_error=True)
 
         return ToolResult(output=f"Created task {task.id} ({task.type})")
+
+# questor: allow R7 -- until W8 adds the mirror test

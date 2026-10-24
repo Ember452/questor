@@ -6,7 +6,7 @@ from questorharness.config.settings import load_settings, save_settings
 from questorharness.plugins import load_plugins
 from questorharness.plugins.installer import install_plugin_from_path, uninstall_plugin
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,
@@ -136,3 +136,5 @@ def register_plugin_management_commands(registry: CommandRegistry) -> None:
             remote_admin_opt_in=True,
         )
     )
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from questorharness.capabilities.skills import load_skill_registry
-from questorharness.commands.helpers import _coerce_setting_value, _is_valid_skill_command_name, _make_skill_slash_command, _settings_json_for_display, _skill_command_name
+from questorharness.commands.command_display import _coerce_setting_value, _is_valid_skill_command_name, _make_skill_slash_command, _settings_json_for_display, _skill_command_name
 from questorharness.config.settings import Settings, load_settings, save_settings
 from questorharness.platform.paths import get_feedback_log_path
-from questorharness.providers.auth.manager import AuthManager
+from questorharness.providers.auth.auth_manager import AuthManager
 from questorharness.providers.llm.provider import auth_status, detect_provider
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,

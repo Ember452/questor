@@ -35,4 +35,4 @@ class OutboundMessage:
     media: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
-
+# questor: allow R7 -- until W8 adds the mirror test

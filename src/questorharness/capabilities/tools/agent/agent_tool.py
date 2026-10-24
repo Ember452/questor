@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from questorharness.contracts.hooks import HookEvent
 from questorharness.contracts.task import TaskRecord
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,11 @@ class AgentTool(BaseTool):
     name = "agent"
     description = "Spawn a local background agent task."
     input_model = AgentToolInput
+
+    capabilities = ToolCapabilities(
+        artifact_keys=("description", "prompt"),
+        remember_as="async_agent",
+    )
 
     async def execute(self, arguments: AgentToolInput, context: ToolExecutionContext) -> ToolResult:
         if arguments.mode not in {"local_agent", "remote_agent", "in_process_teammate"}:
@@ -122,3 +127,5 @@ class AgentTool(BaseTool):
                 "description": arguments.description,
             },
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

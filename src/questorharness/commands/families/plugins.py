@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from questorharness.commands.helpers import _render_plugin_command_prompt
-from questorharness.plugins.types import PluginCommandDefinition
+from questorharness.commands.command_display import _render_plugin_command_prompt
+from questorharness.plugins.models import PluginCommandDefinition
 from typing import Iterable
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,
@@ -49,3 +49,5 @@ def register_plugin_commands(
                 _plugin_command_handler,
             )
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

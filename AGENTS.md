@@ -1,119 +1,111 @@
-# AGENTS.md — Questor Operating Rules
+# AGENTS.md — Questor 路标
 
-Behavioral and operating rules for anyone (human or AI) working in this repo. These bias toward
-**caution over speed** — for trivial tasks, use judgment.
+先路由到正确的文件，再读拥有该决策的文档。行为守则**不在**这里：旧文件的 §0–§6
+已原样迁至 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md)。
+优先级：用户指令 → [ARCHITECTURE](./docs/ARCHITECTURE.md) → [docs/adr](./docs/adr)
+→ [docs/architecture](./docs/architecture) → [docs/plan](./docs/plan) → 其他。守则自身的
+§5.5 仍引用重置前的文档集（`docs/design/`、`docs/ROADMAP.md`、`docs/pitfalls.md`）；
+这些文件已在 W10 离开仓库——见 `docs-pre-reset-v1/README.md` 的指引与 CONVENTIONS.md
+顶部的勘误块。
+永远不要凭记忆工作：这些链接才是事实，而且它们会移动。
 
-Authoritative project content lives in `docs/` — this file is the always-on rulebook, not a copy of
-the design. **Read the linked docs for the current truth; never work from memory or from this file
-alone** (they evolve). Priority: user instruction → §0 + [HARD-CONSTRAINTS](./docs/design/HARD-CONSTRAINTS.md)
-→ [VISION](./docs/VISION.md)/[ROADMAP](./docs/ROADMAP.md)/[design](./docs/design)/[adr](./docs/adr) → elsewhere.
-<!-- 本文件在仓库根，文档真源在 docs/：链接必须带 ./docs/，否则点开不到。 -->
+## 顶层结构
 
----
+```
+src/questorharness   引擎：contracts → platform → config → providers / execution →
+                     runtime → engine → capabilities → commands → surfaces → bootstrap，
+                     另有 plugins（扩展层）与五个表现层叶子包
+src/questor          产品组合根：gateway、groups、personal memory
+apps/                规划中的非 Python 宿主：web（唯一 renderer）+ desktop（Electron 壳），见 ADR-0006
+docs/architecture    STRUCTURE（意图）· GRAPH（生成的关系图）· TREE（生成的目录树）
+                     · NAMESPACES（注册表）· MIGRATION · APPEARANCE
+tests                unit / integration / e2e / ci（守卫契约）/ fixtures/baseline
+```
 
-## 0. Completeness — no shortcuts when reading or writing
+包级依赖边、环、被 import 最多的文件与超预算清单只存在于
+[GRAPH.md](./docs/architecture/GRAPH.md) 与 [TREE.md](./docs/architecture/TREE.md)。两者
+均为生成物；手画它们就是红构建。
 
-> The most expensive failures here come from *doing less than the task requires to look like progress*.
+## 依赖铁律
 
-- **Read fully, don't skim.** When analyzing any project/file/spec, cover the **complete relevant
-  scope** — never just "part of the core" and assume the rest. Partial reads hide the coupling,
-  edge cases, and call sites that cause subtle bugs. If something is out of scope, say so explicitly;
-  don't silently sample.
-- **Write fully, don't under-build to save effort.** Do not omit required logic, edge cases,
-  error handling, validation, or tests just to write fewer lines. "Concise" means *no throwaway
-  complexity* (§2), **not** missing necessary work.
-- **Verify, don't assume.** Ground claims in evidence (`file:line`, a run, a test). If you'd have to
-  guess, go read/run it instead.
-- **§0 vs §2:** §2 = don't add speculative extras; §0 = don't skip what's needed. Both hold —
-  the line is *necessary vs gratuitous*, not *more vs less*.
+`.importlinter` 拥有规则；CI 的 `guards` job 保证每条契约 KEPT：
 
-## 1. Think Before Coding
-- State assumptions explicitly; if uncertain, ask.
-- If multiple interpretations exist, present them — don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name it. Ask.
+- `layers`
+- `plugins-stay-an-extension-layer`
+- `engine-app-boundary`
+- `capabilities-are-leaf`
+- `lower-layers-do-not-import-capabilities`
+- `product-uses-public-face`
+- `config-is-leaf`
+- `providers-are-adapters`
+- `surfaces-are-thin`
+- `command-families-are-leaf`
 
-## 2. Simplicity First — minimum code that solves the problem
-- No features beyond what was asked; no abstractions for single-use code.
-- No unrequested "flexibility/configurability"; no error handling for impossible scenarios.
-- 200 lines that could be 50 → rewrite. Ask: would a senior engineer call this overcomplicated?
+加新的依赖边之前，先读 GRAPH.md 的「冻结的间接入口」一节：五条
+`capabilities → execution` 边与 `providers.sandbox` 一对是已登记的例外，
+多出一条即失败。
 
-## 3. Surgical Changes — touch only what you must
-- Don't "improve" adjacent code/comments/formatting; don't refactor what isn't broken; match existing style.
-- Unrelated dead code → mention, don't delete. Remove only orphans *your* change created.
-- Every changed line traces to the request.
+## 路由表
 
-## 4. Goal-Driven Execution — loop until verified
-- "Add validation" → tests for invalid inputs, then pass. "Fix bug" → a failing repro, then pass.
-  "Refactor X" → tests pass before and after.
-- Multi-step: state `step → verify: check`. Strong DoDs let you loop independently.
+| 想改什么 | 去哪里 |
+| --- | --- |
+| 系统提示词与技能清单 | `src/questorharness/capabilities/context/prompts/context.py` |
+| 压缩与微压缩 | `src/questorharness/capabilities/context/compact` |
+| 工具注册表与能力索引 | `src/questorharness/capabilities/tools/registry.py` |
+| 工具能力声明本体 | `src/questorharness/capabilities/tools/contract.py` |
+| 权限判定与策略 | `src/questorharness/capabilities/policy` |
+| 回合循环 | `src/questorharness/engine/query.py` |
+| 工具执行与结果处理 | `src/questorharness/engine/tool_execution.py` |
+| 工具携带式元数据 | `src/questorharness/engine/tool_metadata.py` |
+| 斜杠命令注册 | `src/questorharness/commands/registry.py` |
+| 事件与消息协议 | `src/questorharness/contracts/domain/events.py` |
+| 配置模型与环境变量 | `src/questorharness/config/settings_models.py` |
+| 会话存储与快照 | `src/questorharness/platform/session_storage.py` |
+| 命令行入口 | `src/questorharness/bootstrap/cli/main.py` |
+| 运行时装配根 | `src/questorharness/bootstrap/runtime.py` |
+| serve 宿主与线协议（规划中） | `docs/adr/0006-serve-host-and-wire-protocol.md` |
+| 桌面 / 后端宿主（已弃用，判死清单见 ADR-0005） | `src/questorharness/bootstrap/hosts/backend_host.py` |
+| 渠道适配（飞书 / QQ） | `src/questorharness/surfaces/channels` |
+| 产品网关与群策略 | `src/questor/gateway/runtime.py` |
+| 名字是否重名 | `docs/architecture/NAMESPACES.md` |
+| 门禁都跑什么 | `scripts/check.py` |
 
-## 4.5 Self-reliance — build on our own contracts
-Questor is built from scratch on its own layered contracts. Implement a capability by designing it
-against **our** `contracts/` Ports and layer boundaries (HARD-CONSTRAINTS C1/C14) — do not gate or
-steer implementation on external/reference projects. If you consult an outside implementation for
-inspiration, it stays inspiration: the merged code carries no external source/license/attribution
-marker, and the plan records only *our* design decision and where it lives.
+## 新功能落位
 
-## 5. Quality Bar (Definition of Done) — never "looks done", only "verifiably works"
-A change is done only when, as applicable: it **compiles + passes tests + lints clean + cold-imports
-(`uv run python -c "import <mod>")` + violates no HARD-CONSTRAINT boundary**, and the relevant
-**DoD in [ROADMAP](./docs/ROADMAP.md) or the active plan** is met (a manually reproducible behavior, not a vague claim).
-- Follow the design contracts in `docs/design/`; any deviation → update the doc + (order/scope changes)
-  file an ADR (ROADMAP §5). New fields/params: additive only (HARD-CONSTRAINTS C6/C11).
-- Enforce the red lines with *mechanism*, not discipline: single-writer, read-only state view (COW),
-  only `Command` mutates, events append-only & internal-not-stored-as-external, permission/sandbox
-  live in the Harness (C1–C20).
-- **A change is not done until its implied doc updates are made** (see §5.5).
+新增任何功能，先读目标包 AGENTS.md 的「职责 / 不负责」两行再动手：
 
-## 5.5 Living Docs — maintain `docs/` as you code, don't defer
-Docs are the source of truth the *next* session reads; stale docs cause wrong work. Update or add
-**the moment reality changes**, not "later", and ship the doc edit in the same change:
-- **Hard-to-reverse decision taken** → add/update an **ADR** (`docs/adr/`) with rationale + rejected options.
-- **A contract changes** (layering / state / event / tool / loop) → update `docs/design/*` (keep the
-  locked-vs-draft markers honest).
-- **New engineering red-line discovered** → add a `C…` entry to `HARD-CONSTRAINTS.md`.
-- **Architectural trap that will bite again** (cross-subsystem + high comprehension cost + recurring
-  trigger) → add it to the right section of [`docs/pitfalls.md`](./docs/pitfalls.md): 现象 / 触发条件 /
-  为什么容易复发 / 纪律 / 关联. **Ordinary bugs do NOT go here** — they go to a GitHub Issue labelled
-  `bug`, fixed by a commit whose body says `Fixes #N` (auto-closed on merge to `main`). If a pitfall has
-  a one-line enforceable rule, that rule belongs in `HARD-CONSTRAINTS.md` (a `C…` entry), not in pitfalls.
-- **Reality diverges from plan** → follow the reality-wins principle and **write the deviation back**;
-  update the active `docs/plan/NN-*.md` (archived phase plans in `docs/plan-archive/` are history — don't edit them back).
-- **Structural/irreversible change** (contract, layering, phase order) → record an **ADR first**, then edit
-  `ROADMAP.md` (ROADMAP §5); implementation-detail-only changes go to the active plan, not ROADMAP.
-- `CLAUDE.md` stays a thin pointer — only touch it when the doc *map* changes.
-> "Code merged, docs stale" = not done.
+- 归属明确 → 进该包，遵守其「允许依赖」与叶子语法（ADR-0003）。
+- 两个包都像、或都不像 → 先查 [NAMESPACES.md](./docs/architecture/NAMESPACES.md) 里最近的注册名与上面的路由表再裁决；裁决不出来按下一条处理。
+- 找不到位置、或职责与现有包都不重合 → **新开包**：目录 + 带 `__all__` 的 `__init__.py` + 包 AGENTS.md + CODEOWNERS 规则 + 路由表加行 + 结构基线 `--refresh-baseline --reason`；进分层阶梯的包还要在 `.importlinter` 一并声明（ADR-0002 修订版：不设数量封顶，无内容的目录才是违规）。
 
-## 5.6 Code Comments — standardized, **in Chinese**
-Identifiers, log messages and API names stay English, but **all code comments and docstrings are written in
-Chinese**. Detailed conventions live in [`CONTRIBUTING.md`](./CONTRIBUTING.md)（注释规范）; minimum bar:
-- **File/module header**: one-line responsibility + which layer (L0–L7) it belongs to + what it may import.
-- **Docstring (Chinese) on every public class / Port / function**: what it does, how to use it, dependencies,
-  invariants / pre-post conditions, and **failure semantics**.
-- **Explain *why*, not *what*** at non-obvious decisions. Cite **our own** artifacts inline: `ADR-0005`,
-  `HARD C2`, `docs/design/02-event-protocol.md §10`.
-- **Mandatory comments** at: permission checks, fail-closed branches, cancel/rollback paths, event-persistence
-  boundaries, and concurrency/gate/lease code.
-- **No bare `TODO`**: every TODO/FIXME carries context + owning plan/ADR/Issue; `NotImplementedError` states what
-  implements it (plan/ADR/issue).
-- Don't comment self-evident lines (§2); **when behavior changes, update its comment** — a stale comment is a
-  doc defect (§5.5).
-Non-compliant comments = the change is **not done** (§5).
+## 全局禁令与命令
 
-## 6. Git — English, and NEVER without permission
-- **Commit / push messages in English**, Conventional Commits (`feat/fix/refactor/chore/docs/test/spike:`);
-  describe the real engineering action; **do not fabricate timestamps or authorship**.
-- **Never run `git commit` or `git push` without the user's explicit, in-turn permission.** Staging and
-  preparing are fine; committing/pushing require an ask-and-yes every time (§3.2 of the repo rules).
-- Never `--no-verify`; never force-push to a shared branch unless explicitly requested.
-- **Branch policy** (ADR-0012, switched to plan **B** on 2026-10-16): everything goes through branch + PR — the
-  maintainer no longer pushes `main` directly either. The gate is CI's independent blocking `boundaries` job
-  (layering guards / cold import / protocol drift / guard self-tests), not human review. Until `boundaries` is
-  marked *required* in GitHub settings and admin bypass is disallowed, "no direct pushes to main" is a
-  convention rather than an enforced block — see the ADR's switch record.
+- 行为守则、注释规范、Git 纪律、完成定义：只在 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md) 维护。
+- 结构红线（1500 行、30 文件扇出、禁用名、门面零逻辑、命名空间唯一、文档不撒谎）由
+  `scripts/guards` 机械执行，不靠自觉；每条都能构造违规判红。
+- 本地一条命令跑完全部阻断门禁：`uv run python scripts/check.py`（pre-commit 走 `--fast`，CI 走全量）。
+
+## 行为守则速览
+
+正文只在 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md)（§0–§6）；最常被违反的几条先钉在这里：
+
+- **不偷工减料**：读全、做全，不为了显得有进度而少做（§0）。
+- **先算长远收益**：动手前判断这件事长期是否有价值、收益是否配得上改动面；配不上的不做，不盲目动手（§1）。
+- **想清楚再写**：假设摆明，多种解读呈现出来，不许默默选一种（§1）。
+- **最简实现**：只写被要求的功能；单次使用的代码不做抽象（§2）。
+- **外科手术式修改**：只动必须动的，不顺手"改进"无关代码；每一行改动都能追溯到请求（§3）。
+- **目标驱动**：任务先转成可验证目标（红用例 → 变绿）再动手（§4）。
+- **代码注释用中文**（§5.6）。
+- **文档实时维护**：行为变更与文档更新同一刀；失活的文档比没有更糟（§5.5）。
+- **commit 与 push 都需要用户当轮明确授权**；提交信息用英文 Conventional Commits（§6）。
+
+## 第一个 PR
+
+1. 用上面的路由表定位文件，改前先 `uv run python scripts/check.py --fast` 看清基线。
+2. 只改请求触及的东西；行为变更必须先有一个红用例，模型可见面变更看
+   `scripts/ci/prompt_surface.py --check` 与 `tests/fixtures/baseline/tool_metadata_golden.json`。
+3. 提交前跑 `uv run python scripts/check.py` 与 `uv run pytest -q`；commit 与 push 都需要
+   用户当轮明确授权，提交信息用英文 Conventional Commits，subject 小写开头。
 
 ---
-**These rules are working when:** every diff traces to the request, few rewrites happen from
-overcomplication or from under-building, clarifying questions come *before* implementation, nothing
-is committed without a yes, and no bug ever traces back to a skimmed read or a skipped check.
+**完整行为守则（§0–§6 原文）在 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md)。**

@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from questorharness.platform.paths import get_project_issue_file, get_project_pr_comments_file
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,

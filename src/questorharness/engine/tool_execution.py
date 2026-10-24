@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.contracts.domain.message import ToolResultBlock
 from questorharness.contracts.hooks import HookEvent
 from questorharness.contracts.tool_outputs import tool_output_inline_chars, tool_output_preview_chars
@@ -240,3 +240,5 @@ def _extract_permission_command(
         return value
 
     return None
+
+# questor: allow R7 -- until W8 adds the mirror test

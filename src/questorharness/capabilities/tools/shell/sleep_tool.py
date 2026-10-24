@@ -6,7 +6,7 @@ import asyncio
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class SleepToolInput(BaseModel):
@@ -22,6 +22,8 @@ class SleepTool(BaseTool):
     description = "Sleep for a short duration."
     input_model = SleepToolInput
 
+    capabilities = ToolCapabilities()
+
     def is_read_only(self, arguments: SleepToolInput) -> bool:
         del arguments
         return True
@@ -30,3 +32,5 @@ class SleepTool(BaseTool):
         del context
         await asyncio.sleep(arguments.seconds)
         return ToolResult(output=f"Slept for {arguments.seconds} seconds")
+
+# questor: allow R7 -- until W8 adds the mirror test

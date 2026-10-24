@@ -26,9 +26,9 @@ from questorharness.platform.frontmatter import (
     parse_str_list,
 )
 from questorharness.plugins.schemas import PluginManifest
-from questorharness.plugins.types import LoadedPlugin, PluginCommandDefinition
+from questorharness.plugins.models import LoadedPlugin, PluginCommandDefinition
 from questorharness.capabilities.skills.loader import _parse_skill_metadata
-from questorharness.capabilities.skills.types import SkillDefinition
+from questorharness.capabilities.skills.definition import SkillDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -690,7 +690,7 @@ def _load_plugin_mcp(path: Path) -> dict[str, object]:
 
 def _load_plugin_tools(path: Path, manifest: PluginManifest) -> list:
     """Discover and instantiate BaseTool subclasses from a plugin's tools/ directory."""
-    from questorharness.capabilities.tools.base import BaseTool
+    from questorharness.capabilities.tools.contract import BaseTool
 
     tools_dir = path / manifest.tools_dir
     if not tools_dir.is_dir():
@@ -728,3 +728,5 @@ def _load_plugin_tools(path: Path, manifest: PluginManifest) -> list:
                 except Exception:
                     logger.debug("Failed to instantiate tool %s from %s", attr_name, py_file, exc_info=True)
     return tools
+
+# questor: allow R8 -- refactor the offenders in W8

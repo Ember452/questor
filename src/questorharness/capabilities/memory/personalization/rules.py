@@ -47,18 +47,36 @@ def save_facts(facts: dict) -> None:
 
 
 def merge_facts(existing: dict, new_facts: list[dict]) -> dict:
-    """Merge new facts into existing, deduplicating by key."""
-    by_key = {}
-    for f in existing.get("facts", []):
-        by_key[f["key"]] = f
-    for f in new_facts:
-        key = f.get("key", "")
-        if key:
-            if key in by_key:
-                # 用较新的值更新，保留较高置信度
-                old = by_key[key]
-                if f.get("confidence", 0) >= old.get("confidence", 0):
-                    by_key[key] = f
-            else:
-                by_key[key] = f
-    return {"facts": list(by_key.values())}
+    """Merge new facts into existing, deduplicating by key.
+
+    Stored entries are read from a file that a person or an older writer may have
+    touched, so an entry whose key is missing or empty is kept verbatim instead of
+    raising: one bad line must not break every later merge, and dropping the entry
+    would trade a loud failure for silent memory loss. Keyed entries still collapse
+    onto one slot, in the position the key was first seen (ledger #113).
+    """
+    merged: list[dict] = []
+    positions: dict[str, int] = {}
+    for fact in existing.get("facts", []):
+        key = fact.get("key")
+        if not key:
+            merged.append(fact)
+            continue
+        if key in positions:
+            merged[positions[key]] = fact
+            continue
+        positions[key] = len(merged)
+        merged.append(fact)
+    for fact in new_facts:
+        key = fact.get("key", "")
+        if not key:
+            continue
+        if key in positions:
+            # 用较新的值更新，保留较高置信度
+            old = merged[positions[key]]
+            if fact.get("confidence", 0) >= old.get("confidence", 0):
+                merged[positions[key]] = fact
+        else:
+            positions[key] = len(merged)
+            merged.append(fact)
+    return {"facts": merged}

@@ -8,10 +8,10 @@ from pathlib import Path
 from questorharness.config.settings import Settings
 from questorharness.providers.mcp.config import load_mcp_server_configs
 from questorharness.contracts.mcp import McpResourceInfo, McpStdioServerConfig, McpToolInfo
-from questorharness.plugins.types import LoadedPlugin
+from questorharness.plugins.models import LoadedPlugin
 from questorharness.plugins.schemas import PluginManifest
 from questorharness.capabilities.tools import create_default_tool_registry
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 
 
 @dataclass

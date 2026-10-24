@@ -15,7 +15,7 @@ from questorharness.capabilities.memory.consolidate.lock import (
     try_acquire_consolidation_lock,
 )
 from questorharness.capabilities.memory.consolidate.prompt import build_consolidation_prompt
-from questorharness.capabilities.memory.consolidate.service import execute_auto_dream, start_dream_now
+from questorharness.capabilities.memory.consolidate.dream import execute_auto_dream, start_dream_now
 
 __all__ = [
     "build_consolidation_prompt",
@@ -32,3 +32,4 @@ __all__ = [
     "start_dream_now",
     "try_acquire_consolidation_lock",
 ]
+

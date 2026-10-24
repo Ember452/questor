@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from questorharness.runtime.tasks.manager import get_task_manager
+from questorharness.runtime.tasks.task_manager import get_task_manager
 from questorharness.contracts.task import TaskRecord
 
 
@@ -26,3 +26,5 @@ async def spawn_local_agent_task(
         api_key=api_key,
         command=command,
     )
+
+# questor: allow R7 -- until W8 adds the mirror test

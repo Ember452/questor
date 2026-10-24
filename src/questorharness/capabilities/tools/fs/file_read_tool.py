@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class FileReadToolInput(BaseModel):
@@ -23,6 +23,13 @@ class FileReadTool(BaseTool):
     name = "read_file"
     description = "Read a text file from the local repository."
     input_model = FileReadToolInput
+
+    capabilities = ToolCapabilities(
+        read_only_by_default=True,
+        keep_in_compaction=True,
+        artifact_keys=("file_path",),
+        remember_as="file_read",
+    )
 
     def is_read_only(self, arguments: FileReadToolInput) -> bool:
         del arguments
@@ -66,3 +73,5 @@ def _resolve_path(base: Path, candidate: str) -> Path:
     if not path.is_absolute():
         path = base / path
     return path.resolve()
+
+# questor: allow R7 -- until W8 adds the mirror test

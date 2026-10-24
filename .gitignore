@@ -96,6 +96,9 @@ uv.lock.bak
 # ---------------------------------------------------------------------------
 # IDE / editor
 # ---------------------------------------------------------------------------
+# ZCode agent session workspace (visualizations, scratch) — per-machine
+.zcode/
+
 # JetBrains (IntelliJ, PyCharm, ...)
 .idea/
 *.iml
@@ -147,6 +150,7 @@ temp/
 pytest_live.txt
 pytest_live*.txt
 scratch/
+.tmp-baseline/
 *.out
 *.pid
 # 本地一次性/临时脚本（下划线前缀 = scratch，不入库）

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from questorharness.contracts.task import TaskRecord
-from questorharness.runtime.tasks.manager import BackgroundTaskManager, _encode_task_worker_payload
+from questorharness.runtime.tasks.task_manager import BackgroundTaskManager, _encode_task_worker_payload
 
 
 @pytest.mark.asyncio
@@ -51,6 +51,127 @@ async def test_completed_task_restarts_even_when_stale_process_is_still_mapped(t
     await manager._ensure_writable_process(task)
 
     assert restarted == [task.id]
+
+
+class _FakeStdout:
+    """Yields one chunk then EOF, like a single-shot agent's stdout pipe."""
+
+    def __init__(self, *chunks: bytes) -> None:
+        self._chunks = list(chunks)
+
+    async def read(self, _size: int = -1) -> bytes:
+        if self._chunks:
+            return self._chunks.pop(0)
+        return b""
+
+
+class _FakeStdin:
+    def __init__(self, *, closing: bool = False) -> None:
+        self.closing = closing
+        self.written: list[bytes] = []
+
+    def write(self, payload: bytes) -> None:
+        self.written.append(payload)
+
+    async def drain(self) -> None:
+        return None
+
+    def is_closing(self) -> bool:
+        return self.closing
+
+
+class _FakeLiveProcess:
+    """Looks fully alive: mapped, stdin present, not reaped, status running."""
+
+    def __init__(self, stdout=None, stdin=None) -> None:
+        self.stdout = stdout
+        self.stdin = stdin
+        self.returncode = None
+
+
+@pytest.mark.asyncio
+async def test_stdout_eof_makes_a_running_task_unwritable_even_before_the_waiter_records_it(tmp_path: Path) -> None:
+    """stdout EOF ⇒ 该任务永远不会再产出 ⇒ 必须重启,不再等 waiter 记账。
+
+    回归自 CI-only flake(2026-10-24 第二次):单发代理打印后退出,输出文件
+    由 ``_copy_output`` 并发落盘,**先于** waiter 把 status/returncode 记成
+    终态。决策方三项检查全"活着"就复用了垂死进程,消息写进管道静默丢失。
+    终态记账在负载下可以滞后任意久,所以"输出通道已关"必须自成判据。
+    """
+    manager = BackgroundTaskManager()
+    task = TaskRecord(
+        id="agent-eof",
+        type="local_agent",
+        status="running",
+        description="echo agent",
+        cwd=str(tmp_path),
+        output_file=tmp_path / "agent-eof.log",
+        command="python -c pass",
+    )
+    manager._tasks[task.id] = task
+    manager._output_locks[task.id] = asyncio.Lock()
+    manager._input_locks[task.id] = asyncio.Lock()
+    process = _FakeLiveProcess(stdout=_FakeStdout(b"AGENT_ECHO:ready\n"))
+    manager._processes[task.id] = process  # type: ignore[assignment]
+
+    await manager._copy_output(task.id, process)  # type: ignore[arg-type]
+
+    assert task.output_file.read_text(encoding="utf-8") == "AGENT_ECHO:ready\n"
+    assert manager._stdout_eof == {task.id}, "EOF must be recorded by the copy task itself"
+
+    restarted: list[str] = []
+
+    async def _fake_restart(record: TaskRecord):
+        restarted.append(record.id)
+        return _FakeLiveProcess(stdin=_FakeStdin())
+
+    manager._restart_agent_task = _fake_restart  # type: ignore[method-assign]
+
+    await manager._ensure_writable_process(task)
+
+    assert restarted == [task.id], "a task whose stdout closed must restart, not reuse"
+
+
+@pytest.mark.asyncio
+async def test_write_treats_a_transport_that_closes_mid_write_as_undelivered(tmp_path: Path) -> None:
+    """drain 成功 ≠ 投递成功:传输层在写中途关闭时数据被静默丢弃。
+
+    Windows proactor 上,写缓冲尚未刷出、waiter 的收尾关闭了 stdin,这一刀
+    既不抛管道异常也不报错——payload 就此消失。写完必须复核传输层状态,
+    未证实投递就重启重写一次。
+    """
+    manager = BackgroundTaskManager()
+    task = TaskRecord(
+        id="agent-mid",
+        type="local_agent",
+        status="running",
+        description="echo agent",
+        cwd=str(tmp_path),
+        output_file=tmp_path / "agent-mid.log",
+        command="python -c pass",
+    )
+    manager._tasks[task.id] = task
+    manager._output_locks[task.id] = asyncio.Lock()
+    manager._input_locks[task.id] = asyncio.Lock()
+    dying_stdin = _FakeStdin(closing=True)
+    dying = _FakeLiveProcess(stdin=dying_stdin)
+    fresh_stdin = _FakeStdin()
+    manager._processes[task.id] = dying  # type: ignore[assignment]
+
+    async def _fake_ensure(record: TaskRecord):
+        return manager._processes[record.id]  # type: ignore[return-value]
+
+    async def _fake_restart(record: TaskRecord):
+        replacement = _FakeLiveProcess(stdin=fresh_stdin)
+        manager._processes[record.id] = replacement  # type: ignore[assignment]
+        return replacement
+
+    manager._ensure_writable_process = _fake_ensure  # type: ignore[method-assign]
+    manager._restart_agent_task = _fake_restart  # type: ignore[method-assign]
+
+    await manager.write_to_task(task.id, "agent ping")
+
+    assert fresh_stdin.written, "mid-write close must fall through to a restart and rewrite"
 
 
 @pytest.mark.asyncio

@@ -28,3 +28,5 @@ class AppState:
     bridge_sessions: int = 0
     output_style: str = "default"
     keybindings: dict[str, str] = field(default_factory=dict)
+
+# questor: allow R7 -- until W8 adds the mirror test

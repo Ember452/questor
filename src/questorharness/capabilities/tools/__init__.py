@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from questorharness.capabilities.tools.base import (
+    from questorharness.capabilities.tools.contract import (
         BaseTool,
         ToolExecutionContext,
         ToolRegistry,
@@ -27,11 +27,12 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     if name in {"BaseTool", "ToolExecutionContext", "ToolRegistry", "ToolResult"}:
-        from questorharness.capabilities.tools import base
+        from questorharness.capabilities.tools import contract
 
-        return getattr(base, name)
+        return getattr(contract, name)
     if name == "create_default_tool_registry":
         from questorharness.capabilities.tools.registry import create_default_tool_registry
 
         return create_default_tool_registry
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+

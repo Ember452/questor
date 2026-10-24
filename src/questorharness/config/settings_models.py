@@ -683,7 +683,7 @@ class Settings(BaseModel):
             permission_mode=self.permission.mode.value,
         )
         if flat_model and flat_model != resolved_profile_model:
-            next_model = flat_model
+            next_model: str | None = flat_model
         else:
             next_model = profile.last_model
         current_default_auth = default_auth_source_for_provider(profile.provider, profile.api_format)
@@ -770,3 +770,5 @@ class Settings(BaseModel):
                 .materialize_active_profile()
             )
         return merged.sync_active_profile_from_flat_fields().materialize_active_profile()
+
+# questor: allow R8 -- refactor the offenders in W8

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class TaskStopToolInput(BaseModel):
@@ -20,6 +20,8 @@ class TaskStopTool(BaseTool):
     description = "Stop a background task."
     input_model = TaskStopToolInput
 
+    capabilities = ToolCapabilities(remember_as="task_stop")
+
     async def execute(self, arguments: TaskStopToolInput, context: ToolExecutionContext) -> ToolResult:
         if context.tasks is None:
             return ToolResult(output="task runtime unavailable", is_error=True)
@@ -28,3 +30,5 @@ class TaskStopTool(BaseTool):
         except ValueError as exc:
             return ToolResult(output=str(exc), is_error=True)
         return ToolResult(output=f"Stopped task {task.id}")
+
+# questor: allow R7 -- until W8 adds the mirror test

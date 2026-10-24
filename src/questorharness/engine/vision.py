@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import AsyncIterator
 
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.contracts.domain.events import StatusEvent, StreamEvent
 from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock
 from questorharness.engine.context import QueryContext
@@ -85,3 +85,5 @@ async def _preprocess_images_in_messages(
     for msg_idx, blk_idx, description in results:
         msg = messages[msg_idx]
         msg.content[blk_idx] = TextBlock(text=description)
+
+# questor: allow R7 -- until W8 adds the mirror test

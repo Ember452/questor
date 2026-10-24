@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from questorharness.config.settings import load_settings, save_settings
 from questorharness.contracts.mcp import McpHttpServerConfig, McpStdioServerConfig, McpWebSocketServerConfig
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class McpAuthToolInput(BaseModel):
@@ -24,6 +24,8 @@ class McpAuthTool(BaseTool):
     name = "mcp_auth"
     description = "Configure auth for an MCP server and reconnect active sessions when possible."
     input_model = McpAuthToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(self, arguments: McpAuthToolInput, context: ToolExecutionContext) -> ToolResult:
         settings = load_settings()

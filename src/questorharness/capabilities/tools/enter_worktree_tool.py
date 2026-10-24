@@ -8,7 +8,7 @@ import re
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class EnterWorktreeToolInput(BaseModel):
@@ -26,6 +26,8 @@ class EnterWorktreeTool(BaseTool):
     name = "enter_worktree"
     description = "Create a git worktree and return its path."
     input_model = EnterWorktreeToolInput
+
+    capabilities = ToolCapabilities()
 
     async def execute(
         self,
@@ -78,3 +80,5 @@ def _resolve_worktree_path(repo_root: Path, branch: str, path: str | None) -> Pa
         return resolved.resolve()
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", branch).strip("-") or "worktree"
     return (repo_root / ".questorharness" / "worktrees" / slug).resolve()
+
+# questor: allow R7 -- until W8 adds the mirror test

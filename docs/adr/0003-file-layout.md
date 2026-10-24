@@ -67,6 +67,8 @@
 
 阈值不是审美：16 是“人还能一眼扫完”的上限；30 是硬上限；40 是 G8 给机器看的，不是给人看的。catalog 目录（migrations / schemas / vendors）必须显式列在豁免清单（tests/layout_exemptions.txt）里，不能默默超限。
 
+> **2026-10-23 修订**：文件行数阈值已由计划 01（结构加固 W2 R2）放宽为 **801–1000 健康 / 1001–1500 警戒 / >1500 失败**，`__init__.py` 之外的存量以行内 `# questor: allow R2 -- <N> lines until W8` 作只减不增的棘轮；行数口径固定为 `len(text.splitlines())`。本节表格不再作为行数阈值的真源，规则实现见 `scripts/guards/_layout_rules.py`。
+
 2 个源文件的目录在“model + store/sql 对”或公共边界时视为健康；只有 1 个源文件且不是公共边界时才塌回文件。
 
 ### 3. 禁用文件名

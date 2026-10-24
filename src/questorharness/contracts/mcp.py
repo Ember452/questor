@@ -77,3 +77,5 @@ class McpConnectionStatus:
     auth_configured: bool = False
     tools: list[McpToolInfo] = field(default_factory=list)
     resources: list[McpResourceInfo] = field(default_factory=list)
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
 from questorharness.platform.paths import get_config_dir
 from questorharness.config.settings import load_settings
-from questorharness.capabilities.skills._frontmatter import (
+from questorharness.capabilities.skills.frontmatter import (
     optional_frontmatter_str,
     parse_bool_frontmatter,
     parse_skill_frontmatter,
@@ -16,9 +16,40 @@ from questorharness.capabilities.skills._frontmatter import (
 )
 from questorharness.capabilities.skills.bundled import get_bundled_skills
 from questorharness.capabilities.skills.registry import SkillRegistry
-from questorharness.capabilities.skills.types import SkillDefinition
+from questorharness.capabilities.skills.definition import SkillDefinition
+
+if TYPE_CHECKING:
+    from questorharness.capabilities.ports import PluginSource
 
 logger = logging.getLogger(__name__)
+
+# Plugin discovery is injected by the assembly layer (``bootstrap``) through this
+# port. ``capabilities`` must not import ``plugins``; before the port existed the
+# loader did a function-level import, which is what made capabilities <-> plugins
+# a package cycle (plan 01, W6).
+_plugin_source: "PluginSource | None" = None
+
+
+class PluginSourceNotConfigured(RuntimeError):
+    """Raised when a project-level skill load runs before the port is wired."""
+
+
+def configure_plugin_source(source: "PluginSource") -> None:
+    """Install the plugin discovery port. Called once by ``bootstrap``."""
+    global _plugin_source
+    _plugin_source = source
+
+
+def reset_plugin_source() -> None:
+    """Remove the port (tests and a fresh assembly)."""
+    global _plugin_source
+    _plugin_source = None
+
+
+def plugin_source_configured() -> bool:
+    """Return whether the port has been wired."""
+    return _plugin_source is not None
+
 
 _USER_COMPAT_SKILL_DIRS = (
     (".claude", "skills"),
@@ -65,9 +96,12 @@ def load_skill_registry(
             registry.register(skill)
 
     if cwd is not None:
-        from questorharness.plugins.loader import load_plugins
-
-        for plugin in load_plugins(resolved_settings, cwd, extra_roots=extra_plugin_roots):
+        if _plugin_source is None:
+            raise PluginSourceNotConfigured(
+                "plugin discovery is not configured; bootstrap must call "
+                "configure_plugin_source() before loading project skills"
+            )
+        for plugin in _plugin_source.load(resolved_settings, cwd, extra_roots=extra_plugin_roots):
             if not plugin.enabled:
                 continue
             for skill in plugin.skills:

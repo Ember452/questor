@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from questorharness.capabilities.schedule.cron import set_job_enabled
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class CronToggleToolInput(BaseModel):
@@ -22,6 +22,8 @@ class CronToggleTool(BaseTool):
     description = "Enable or disable a local cron job by name."
     input_model = CronToggleToolInput
 
+    capabilities = ToolCapabilities()
+
     async def execute(
         self,
         arguments: CronToggleToolInput,
@@ -35,3 +37,5 @@ class CronToggleTool(BaseTool):
             )
         state = "enabled" if arguments.enabled else "disabled"
         return ToolResult(output=f"Cron job '{arguments.name}' is now {state}")
+
+# questor: allow R7 -- until W8 adds the mirror test

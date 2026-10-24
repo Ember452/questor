@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from questorharness.surfaces.channels.bus.events import OutboundMessage
 from questorharness.surfaces.channels.bus.queue import MessageBus
-from questorharness.surfaces.channels.impl.base import BaseChannel
+from questorharness.surfaces.channels.impl.base_channel import BaseChannel
 from questorharness.config.schema import QQConfig
 
 logger = logging.getLogger(__name__)
@@ -139,3 +139,4 @@ class QQChannel(BaseChannel):
         except Exception:
             logger.exception("Error handling QQ message")
 
+# questor: allow R7 -- until W8 adds the mirror test

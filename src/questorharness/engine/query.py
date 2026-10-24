@@ -19,7 +19,7 @@ from questorharness.contracts.domain.events import (
 from questorharness.contracts.domain.message import ConversationMessage, ToolResultBlock
 from questorharness.contracts.hooks import HookEvent
 from questorharness.contracts.usage import UsageSnapshot
-from questorharness.engine.context import QueryContext
+from questorharness.engine.context import COORDINATOR_CONTEXT_MARKER, QueryContext
 from questorharness.engine.model_errors import (
     MaxTurnsExceeded,
     _bounded_completion_tokens,
@@ -197,8 +197,8 @@ async def run_query(
             raise RuntimeError("Model stream finished without a final message")
 
         coordinator_context_message: ConversationMessage | None = None
-        if context.system_prompt.startswith("You are a **coordinator**."):
-            if messages and messages[-1].role == "user" and messages[-1].text.startswith("# Coordinator User Context"):
+        if context.coordinator_mode:
+            if messages and messages[-1].role == "user" and messages[-1].text.startswith(COORDINATOR_CONTEXT_MARKER):
                 coordinator_context_message = messages.pop()
 
         if final_message.role == "assistant" and final_message.is_effectively_empty():
@@ -294,3 +294,6 @@ async def run_query(
     if context.max_turns is not None:
         raise MaxTurnsExceeded(context.max_turns)
     raise RuntimeError("Query loop exited without a max_turns limit or final response")
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

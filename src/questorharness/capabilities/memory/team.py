@@ -48,6 +48,21 @@ def ensure_team_memory_vault(cwd: str | Path) -> Path:
     return team_dir
 
 
+def _escapes_through_symlink(path: Path) -> bool:
+    """Return True when any component of *path* is itself a symlink.
+
+    ``Path.resolve()`` 是否跟随目录符号链接因平台与文件系统而异,所以两条
+    逃逸分支都可能先触发;消息里是否带 ``via symlink`` 由本函数统一判定,
+    不再依赖 resolve 的实现细节。
+    """
+    current = path
+    while current != current.parent:
+        if current.is_symlink():
+            return True
+        current = current.parent
+    return False
+
+
 def validate_team_memory_write_path(cwd: str | Path, candidate: str | Path) -> tuple[Path | None, str | None]:
     """Validate a write target against traversal and symlink escape."""
 
@@ -57,6 +72,8 @@ def validate_team_memory_write_path(cwd: str | Path, candidate: str | Path) -> t
         path = team_dir / path
     resolved = path.resolve()
     if not path_is_relative_to(resolved, team_dir):
+        if _escapes_through_symlink(path):
+            return None, f"Path escapes team memory directory via symlink: {candidate}"
         return None, f"Path escapes team memory directory: {candidate}"
     parent = resolved.parent
     deepest = parent

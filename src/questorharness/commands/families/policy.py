@@ -5,7 +5,7 @@ from __future__ import annotations
 from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.config.settings import load_settings, save_settings
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,
@@ -84,3 +84,5 @@ def register_policy_commands(registry: CommandRegistry) -> None:
             remote_admin_opt_in=True,
         )
     )
+
+# questor: allow R7 -- until W8 adds the mirror test

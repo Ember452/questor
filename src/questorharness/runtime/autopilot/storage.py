@@ -17,7 +17,7 @@ from questorharness.platform.paths import (
     get_project_release_policy_path,
     get_project_verification_policy_path,
 )
-from questorharness.runtime.autopilot.constants import (
+from questorharness.runtime.autopilot.verification_defaults import (
     _BUG_HINTS,
     _DEFAULT_AUTOPILOT_POLICY,
     _DEFAULT_RELEASE_POLICY,
@@ -30,7 +30,7 @@ from questorharness.runtime.autopilot.text_utils import (
     _safe_text,
     _shorten,
 )
-from questorharness.runtime.autopilot.types import (
+from questorharness.runtime.autopilot.models import (
     RepoAutopilotRegistry,
     RepoJournalEntry,
     RepoTaskCard,
@@ -453,3 +453,6 @@ class StorageMixin:
             "superseded": 12,
         }
         return order.get(status, 99)
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

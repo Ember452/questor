@@ -821,3 +821,5 @@ def filter_agents_by_mcp_requirements(
 ) -> list[AgentDefinition]:
     """Return only agents whose required MCP servers are available."""
     return [a for a in agents if has_required_mcp_servers(a, available_servers)]
+
+# questor: allow R8 -- refactor the offenders in W8

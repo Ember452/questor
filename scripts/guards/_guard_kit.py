@@ -4,13 +4,40 @@
 from __future__ import annotations
 
 import argparse
+import re
+import subprocess
+import sys
 import tempfile
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 EXIT_OK = 0
 EXIT_RED = 1
 EXIT_CONFIG = 2
+
+
+def _force_utf8_streams() -> None:
+    """Print diffs on Windows consoles without dying on a non-GBK character.
+
+    Guards report Chinese evidence and box-drawing symbols; a cp936 console made
+    ``print`` raise UnicodeEncodeError and hide the very diff the developer needs
+    (seen live in prompt_surface --check). Output is still bytes on the wire, so
+    the parent runner keeps decoding UTF-8 regardless.
+    """
+
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):  # already replaced or not a terminal stream
+                pass
+
+
+_force_utf8_streams()
+
+EXEMPTION_RE = re.compile(r"#\s*questor:\s*allow\s+(R\d+)\s*--\s*(.+?)\s*$")
+EXEMPTION_REASON_RE = re.compile(r"(until|when|W\d+)", re.IGNORECASE)
 
 SKIP_DIRS: frozenset[str] = frozenset(
     {
@@ -30,6 +57,115 @@ SKIP_DIRS: frozenset[str] = frozenset(
 
 class GuardConfigError(RuntimeError):
     """Raised when a guard is pointed at an empty or invalid target."""
+
+
+@dataclass(frozen=True)
+class Exemption:
+    """One ``# questor: allow <RULE> -- <reason>`` comment."""
+
+    rule: str
+    reason: str
+    line: int
+
+
+def tracked_files(
+    root: str | Path,
+    pathspecs: Sequence[str] = ("src",),
+    suffixes: Sequence[str] = (".py",),
+) -> list[Path]:
+    """Return tracked files matching ``pathspecs``, resolved against ``root``.
+
+    ``git ls-files`` is the single scanning caliber: untracked scratch output
+    (``__pycache__``, ``.tmp-baseline``) can never make a guard report on files
+    that are not part of the repository.
+
+    Results are cached per process, keyed by the git index's mtime and size:
+    any ``git add``/``git rm`` rewrites ``.git/index`` and invalidates the
+    entry, so mutate-then-rescan flows (the layout self-test, the guard
+    contract tests) keep seeing fresh listings without paying a subprocess
+    per rule. A root without a readable ``.git/index`` is simply not cached.
+    """
+    base = Path(root)
+    cache_key = (base, tuple(pathspecs), tuple(suffixes))
+    validity = _index_fingerprint(base)
+    if validity is not None:
+        cached = _TRACKED_CACHE.get(cache_key)
+        if cached is not None and cached[0] == validity:
+            return list(cached[1])
+    result = subprocess.run(
+        ["git", "ls-files", "--", *pathspecs],
+        cwd=base,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if result.returncode != 0:
+        raise GuardConfigError(f"git ls-files failed under {base}: {result.stderr.strip()[:200]}")
+    names = [
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip() and line.strip().endswith(tuple(suffixes))
+    ]
+    listing = sorted(base / name for name in names)
+    if validity is not None:
+        _TRACKED_CACHE[cache_key] = (validity, listing)
+    return list(listing)
+
+
+_TRACKED_CACHE: dict[tuple[Path, tuple[str, ...], tuple[str, ...]], tuple[tuple[int, int], list[Path]]] = {}
+
+
+def _index_fingerprint(base: Path) -> tuple[int, int] | None:
+    index = base / ".git" / "index"
+    try:
+        stat = index.stat()
+    except OSError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size)
+
+
+def parse_exemptions(path: str | Path, *, rule: str | None = None) -> dict[str, Exemption]:
+    """Parse questor exemptions from one file.
+
+    A comment without ``--`` or with an empty reason is not an exemption; the
+    reason must name a wave (``until W8``) so every exemption has a deletion
+    condition. Malformed lines are reported by ``exemption_errors`` instead of
+    silently passing.
+    """
+    found: dict[str, Exemption] = {}
+    for number, line in enumerate(read_text(path).splitlines(), start=1):
+        if "questor:" not in line or "allow" not in line:
+            continue
+        match = EXEMPTION_RE.search(line)
+        if match is None:
+            continue
+        name, reason = match.group(1), match.group(2).strip()
+        if rule is not None and name != rule:
+            continue
+        if name in found:
+            continue
+        found[name] = Exemption(rule=name, reason=reason, line=number)
+    return found
+
+
+def exemption_errors(path: str | Path, text: str | None = None) -> list[str]:
+    """Return problems with the exemption comments in one file."""
+    body = read_text(path) if text is None else text
+    problems: list[str] = []
+    for number, line in enumerate(body.splitlines(), start=1):
+        if "questor:" not in line or "allow" not in line:
+            continue
+        match = EXEMPTION_RE.search(line)
+        if match is None:
+            problems.append(f"line {number}: malformed exemption (need '# questor: allow <RULE> -- <reason>')")
+            continue
+        if not EXEMPTION_REASON_RE.search(match.group(2)):
+            problems.append(
+                f"line {number}: exemption reason must name a wave (until W8 / when ... / W9)"
+            )
+    return problems
 
 
 def walk_py(root: str | Path) -> Iterable[Path]:

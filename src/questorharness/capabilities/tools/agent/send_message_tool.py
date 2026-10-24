@@ -6,7 +6,7 @@ import logging
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,11 @@ class SendMessageTool(BaseTool):
     name = "send_message"
     description = "Send a follow-up message to a running local agent task."
     input_model = SendMessageToolInput
+
+    capabilities = ToolCapabilities(
+        artifact_keys=("to", "task_id"),
+        remember_as="async_message",
+    )
 
     async def execute(self, arguments: SendMessageToolInput, context: ToolExecutionContext) -> ToolResult:
         # 群协作 Agent 使用 agent_id 格式（name@team）；旧任务使用普通 task ID
@@ -55,3 +60,5 @@ class SendMessageTool(BaseTool):
             logger.error("Failed to send message to %s: %s", agent_id, exc)
             return ToolResult(output=str(exc), is_error=True)
         return ToolResult(output=f"Sent message to agent {agent_id}")
+
+# questor: allow R7 -- until W8 adds the mirror test

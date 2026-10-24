@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from questorharness.config.settings import ImageGenerationConfig
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.capabilities.tools.media.image_generation_tool import ImageGenerationTool, ImageGenerationToolInput
 from questorharness.providers.llm.tool_runtime import ProviderLlmToolRuntime
 

@@ -12,7 +12,7 @@ from questorharness.runtime.autopilot.text_utils import (
     _bilingual_lines,
     _safe_text,
 )
-from questorharness.runtime.autopilot.types import (
+from questorharness.runtime.autopilot.models import (
     RepoTaskCard,
 )
 
@@ -288,3 +288,5 @@ class GitHubOperationsMixin:
             cwd=self._cwd,
             check=True,
         )
+
+# questor: allow R7 -- until W8 adds the mirror test

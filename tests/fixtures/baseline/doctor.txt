@@ -11,11 +11,11 @@ questor doctor:
 - sessions_dir: ok
 - gateway_config: ok
 - project_cwd: <REPO>
-- workspace_root: <HOME>\.questor\agent
-- workspace_state: <HOME>\.questor\agent\state.json
-- gateway_config: <HOME>\.questor\agent\gateway.json
+- workspace_root: <REPO>/.tmp-baseline/doctor-env/home/.questor/agent
+- workspace_state: <REPO>/.tmp-baseline/doctor-env/home/.questor/agent/state.json
+- gateway_config: <REPO>/.tmp-baseline/doctor-env/home/.questor/agent/gateway.json
 - available_profiles:
-  - claude-api: Anthropic-Compatible API (configured)
+  - claude-api: Anthropic-Compatible API (missing auth)
   - claude-subscription: Claude Subscription (missing auth)
   - openai-compatible: OpenAI-Compatible API (missing auth)
   - codex: Codex Subscription (missing auth)

@@ -68,7 +68,7 @@ async def task_hook_blocks_model_adapts():
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
@@ -151,7 +151,7 @@ async def task_model_invokes_skill_tool():
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
@@ -244,7 +244,7 @@ async def task_plugin_skill_in_agent_loop():
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
@@ -348,7 +348,7 @@ async def task_hook_gates_writes_skill_guides():
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
@@ -496,13 +496,13 @@ async def task_swarm_teammates_use_skills():
     print("=" * 70)
 
     from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.runtime.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.models import TeammateSpawnConfig
     from questorharness.engine.query import QueryContext
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool

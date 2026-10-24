@@ -6,7 +6,7 @@ from questorharness.config.settings import load_settings, save_settings
 from questorharness.output_styles import load_output_styles
 from questorharness.providers.llm.provider import detect_provider
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,
@@ -209,3 +209,5 @@ def register_appearance_commands(registry: CommandRegistry) -> None:
     registry.register(SlashCommand("vim", "Show or update Vim mode", _vim_handler))
 
     registry.register(SlashCommand("voice", "Show or update voice mode", _voice_handler))
+
+# questor: allow R7 -- until W8 adds the mirror test

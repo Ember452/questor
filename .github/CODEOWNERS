@@ -1,2 +1,56 @@
-# 单人项目：所有改动默认由维护者负责。
+# CODEOWNERS — ownership by first-level domain (plan 01, W10).
+#
+# Every entry is @Ember452: this is a single-owner repository today. The file
+# exists so domain ownership is explicit and review gets requested automatically,
+# NOT as an access gate.
+#
+# Do not enable "Require review from code owners" in branch protection: with one
+# maintainer a PR can never collect an approving review from an owner who is the
+# author, so the setting would lock the repository. Ownership here is advisory.
+#
+# Adding a second owner (e.g. a peppa-web handle) requires confirming the handle
+# and the domains first; never guess someone's GitHub handle here.
+
+# Fallback: everything not claimed below.
 * @Ember452
+
+# Engine domains (src/questorharness)
+/src/questorharness/bootstrap/ @Ember452
+/src/questorharness/capabilities/ @Ember452
+/src/questorharness/commands/ @Ember452
+/src/questorharness/config/ @Ember452
+/src/questorharness/contracts/ @Ember452
+/src/questorharness/engine/ @Ember452
+/src/questorharness/execution/ @Ember452
+/src/questorharness/keybindings/ @Ember452
+/src/questorharness/output_styles/ @Ember452
+/src/questorharness/platform/ @Ember452
+/src/questorharness/plugins/ @Ember452
+/src/questorharness/providers/ @Ember452
+/src/questorharness/runtime/ @Ember452
+/src/questorharness/state/ @Ember452
+/src/questorharness/surfaces/ @Ember452
+/src/questorharness/themes/ @Ember452
+/src/questorharness/vim/ @Ember452
+
+# Engine root files (api facade, CLI entry points, package markers)
+/src/questorharness/*.py @Ember452
+/src/questorharness/py.typed @Ember452
+
+# Product composition root: gateway, groups, personal memory app
+/src/questor/ @Ember452
+
+# Structure gates and generated documents (plan 01 owns these)
+/scripts/guards/ @Ember452
+/scripts/check.py @Ember452
+/tests/ci/ @Ember452
+/tests/fixtures/baseline/ @Ember452
+/docs/architecture/ @Ember452
+/docs/plan/ @Ember452
+/docs/adr/ @Ember452
+/AGENTS.md @Ember452
+/CLAUDE.md @Ember452
+/docs/CONVENTIONS.md @Ember452
+/.importlinter @Ember452
+/.pre-commit-config.yaml @Ember452
+/.github/workflows/ @Ember452

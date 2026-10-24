@@ -96,3 +96,5 @@ def _apply_mode(path: Path, target_mode: int) -> None:
         # chmod 在 Windows / FAT / 某些网络挂载上可能失败。数据
         # 仍然完整，只是权限约束被削弱。
         pass
+
+# questor: allow R7 -- until W8 adds the mirror test

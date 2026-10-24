@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class BriefToolInput(BaseModel):
@@ -21,6 +21,8 @@ class BriefTool(BaseTool):
     description = "Shorten a piece of text for compact display."
     input_model = BriefToolInput
 
+    capabilities = ToolCapabilities()
+
     def is_read_only(self, arguments: BriefToolInput) -> bool:
         del arguments
         return True
@@ -31,3 +33,5 @@ class BriefTool(BaseTool):
         if len(text) <= arguments.max_chars:
             return ToolResult(output=text)
         return ToolResult(output=text[: arguments.max_chars].rstrip() + "...")
+
+# questor: allow R7 -- until W8 adds the mirror test

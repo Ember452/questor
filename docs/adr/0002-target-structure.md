@@ -36,6 +36,7 @@
 
 1. **保留两个分发**：`questorharness`（引擎）与 `questor`（产品），沿用 ADR-0001。不为了名字好看做全仓改名；重组发生在包内部。
 2. **引擎固定 8 个域**：`contracts`、`kernel`、`runtime`、`capabilities`、`providers`、`surfaces`、`profiles`、`bootstrap`。一级目录封顶 10 个。
+   > **2026-10-24 修订**：上面这份 8 域清单与「封顶 10」是立项时的目标态，与现实已偏离——`kernel`/`profiles` 未建（见第 3、8 条），实际长出的是 12 个核心域（`bootstrap`/`capabilities`/`commands`/`config`/`contracts`/`engine`/`execution`/`platform`/`plugins`/`providers`/`runtime`/`surfaces`）加 5 个表现层叶子（`state`/`keybindings`/`themes`/`vim`/`output_styles`）。**修订决定：不设一级目录数量封顶**——数量不是风险，无内容的目录才是；起约束作用的是 STRUCTURE.md §0 第 7 条（目录从内容长出来、没有内容不建目录）、禁用名与空目录规则、以及分层契约对新包依赖边的判定。一级目录的**现状真源**是 [TREE.md](../architecture/TREE.md)，不由本文维护。
 3. **`kernel` 这个名字为 durable 保留，但现在不建**：当前持久化是会话快照（`services/session_backend.py` + 产品包内的 session_storage），**没有事件流、没有 `reduce()` 咽喉、没有 upcast**。durable spine 属于**未立项**事项：要引入必须先单独 ADR + 预算 + 排期，不混在结构迁移里；在那之前 `kernel/` 目录不创建。
 4. **`runtime` 是循环与控制**：run/turn、tool cycle、session ops、budget、extension points、tasks、delegation、autopilot。它只认 `contracts/ports` 与 `kernel` 的公开入口，不 import 能力实现。
 5. **`capabilities` 是能力域**：context、memory、tools、policy、delivery、schedule、evolution。每个子域是一个叶子，拥有自己的 `model/ports/policy/store/README`。

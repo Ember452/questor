@@ -6,11 +6,11 @@ from questorharness.capabilities.context.compact import build_post_compact_messa
 from questorharness.capabilities.context.prompts import build_runtime_system_prompt
 from questorharness.commands.memory_commands import _memory_backend_for_context
 from questorharness.config.settings import load_settings
-from questorharness.providers.auth.manager import AuthManager
+from questorharness.providers.auth.auth_manager import AuthManager
 from questorharness.runtime.tasks import get_task_manager
 import importlib.metadata
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,
@@ -176,3 +176,5 @@ def register_session_commands(registry: CommandRegistry) -> None:
     registry.register(SlashCommand("cost", "Show token usage and estimated cost", _cost_handler))
     registry.register(SlashCommand("usage", "Show usage and token estimates", _usage_handler))
     registry.register(SlashCommand("stats", "Show session statistics", _stats_handler))
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -57,3 +57,36 @@
   - `uv run questorharness --help` 与 `uv run python -m questor --help` 输出逐字不变；
   - wheel 内不再有 `questorharness/_frontend`；
   - 基线五项（MIGRATION §3.1）逐项不变。
+
+## Updated（2026-10-24）：交互式 CLI 定为瘦客户端，旧宿主判死
+
+经对照参照仓库 Reasonix 逐条核验（维护者本轮亲验，行号在手），本 ADR 的
+终端走向从"若保留则瘦客户端"升级为**确定保留且就是瘦客户端**，协议与宿主
+形态由 [ADR-0006](0006-serve-host-and-wire-protocol.md) 决定：
+
+1. **客户端拓扑 = 三张嘴、一份契约**：终端 REPL、Electron（`apps/desktop`）、
+   浏览器（`apps/web`）消费同一组 serve 路由与线协议；REPL 走进程内
+   transport（不开端口、无凭据），Studio/Web 走回环 TCP + 凭据五件套。
+2. **判死清单**（删除时点 = REPL 瘦客户端验收通过的**同一次变更**，见
+   `docs/plan/02-studio-serve-host.md` 阶段 2）：
+   - `frontend/terminal/`（Node Ink）；
+   - `src/questorharness/bootstrap/hosts/backend_host.py` 及其 OHJSON stdio 协议
+     （`protocol.py` 的 `OHJSON:` 前缀）；
+   - `src/questorharness/bootstrap/hosts/react_launcher.py` 与 `hosts/app.py`
+     的 React TUI 启动路径；
+   - `--backend-only` CLI 开关（`bootstrap/cli/main.py`）。
+   在判死前**不加任何新能力**；缺陷照修（2026-10-24 的宿主兜底与
+   `plan_mode_change` 修复属于维持期债务偿还，不是续命）。
+3. **Electron 而非 Tauri**：与 DeepCode 的 Tauri 宿主对勘后仍取 Electron——
+   Node 侧生态（DevTools、崩溃采集、自动更新链）与本仓 React renderer 的
+   现状更契合；Tauri 的 Rust 壳对当前团队是纯增量学习成本，收益（二进制
+   体积）不落在关键路径上。
+4. **appearance 叶子包去留挂起**：`state` / `keybindings` / `themes` /
+   `vim` / `output_styles` 五包的存废跟随 REPL 瘦客户端落地后的实际键盘/
+   主题需求再裁，不在删除刀内。
+5. **删除刀红线**（进 Verification）：
+   - `rg "OHJSON|backend_host" src` = 0；
+   - `rg "react_launcher|--backend-only" src pyproject.toml` = 0；
+   - `frontend/terminal` 目录消失，打包不再 force-include 任何前端产物；
+   - 删除同一刀内完成 `prompt_surface/desktop.txt`、`doctor.txt`、help 基线
+     与 TREE/GRAPH/structure 基线重录（`--refresh-baseline --reason`）。

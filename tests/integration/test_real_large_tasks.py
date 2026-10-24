@@ -40,7 +40,7 @@ def make_engine(system_prompt, cwd=None, hook_executor=None, max_tokens=4096, ma
     from questorharness.engine.query_engine import QueryEngine
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.file_write_tool import FileWriteTool
@@ -174,14 +174,14 @@ async def task_coordinator_code_review():
     )
     from questorharness.runtime.coordinator.agent_definitions import get_agent_definition
     from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.runtime.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.models import TeammateSpawnConfig
     from questorharness.runtime.swarm.team_lifecycle import TeamLifecycleManager, TeamMember
     from questorharness.engine.query import QueryContext
     from questorharness.providers.llm.client import AnthropicApiClient
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool
@@ -300,11 +300,11 @@ async def task_migration_plan_with_memory():
 
     from questorharness.runtime.coordinator.agent_definitions import get_agent_definition
     from questorharness.capabilities.skills.registry import SkillRegistry
-    from questorharness.capabilities.skills.types import SkillDefinition
-    from questorharness.capabilities.memory.manager import add_memory_entry, list_memory_files, remove_memory_entry
+    from questorharness.capabilities.skills.definition import SkillDefinition
+    from questorharness.capabilities.memory.entry_store import add_memory_entry, list_memory_files, remove_memory_entry
     from questorharness.platform.session_storage import save_session_snapshot, export_session_markdown
     import questorharness.capabilities.memory.paths as mp
-    import questorharness.capabilities.memory.manager as mm
+    import questorharness.capabilities.memory.entry_store as mm
 
     with tempfile.TemporaryDirectory() as tmpdir:
         mem_dir = Path(tmpdir) / "memory"
@@ -521,7 +521,7 @@ async def task_full_pipeline():
         get_coordinator_system_prompt, format_task_notification, TaskNotification,
     )
     from questorharness.runtime.swarm.in_process import start_in_process_teammate, TeammateAbortController
-    from questorharness.runtime.swarm.types import TeammateSpawnConfig
+    from questorharness.runtime.swarm.models import TeammateSpawnConfig
     from questorharness.runtime.swarm.permission_sync import (
         create_permission_request, write_permission_request,
         read_pending_permissions, resolve_permission, PermissionResolution,
@@ -532,7 +532,7 @@ async def task_full_pipeline():
     from questorharness.config.settings import PermissionSettings
     from questorharness.capabilities.policy.checker import PermissionChecker
     from questorharness.contracts.policy import PermissionMode
-    from questorharness.capabilities.tools.base import ToolRegistry
+    from questorharness.capabilities.tools.contract import ToolRegistry
     from questorharness.capabilities.tools.shell.bash_tool import BashTool
     from questorharness.capabilities.tools.fs.file_read_tool import FileReadTool
     from questorharness.capabilities.tools.fs.glob_tool import GlobTool

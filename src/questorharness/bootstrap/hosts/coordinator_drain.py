@@ -19,7 +19,7 @@ from questorharness.runtime.coordinator.coordinator_mode import (
 )
 from questorharness.engine.query import MaxTurnsExceeded
 from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
-from questorharness.runtime.tasks.manager import get_task_manager
+from questorharness.runtime.tasks.task_manager import get_task_manager
 from questorharness.runtime.output import format_pending_tool_results
 
 

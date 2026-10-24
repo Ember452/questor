@@ -1,6 +1,7 @@
 # config — Agent Contract
 
 职责：设置模型（`settings_models.py`）、加载/环境覆盖/持久化（`settings_loader.py`）与公开门面（`settings.py`）。
+不负责：凭据解析在 `src/questorharness/providers/auth`，设置项的运行时效果在 `src/questorharness/engine`。
 公开入口：`config/__init__.py`（`Settings` / `ProviderProfile` / `load_settings` / `save_settings`）。
 拥有的数据：`Settings` 全部嵌套模型、provider profile 默认值、凭据解析辅助函数。
 允许依赖：`contracts` + 标准库；不得 import `runtime` / `capabilities` / `engine` / `ui` / `plugins` / `surfaces`。

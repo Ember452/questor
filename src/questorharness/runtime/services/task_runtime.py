@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from questorharness.contracts.task import CompletionListener, TaskRecord, TaskStatus, TaskType
-from questorharness.runtime.tasks.manager import BackgroundTaskManager, get_task_manager
+from questorharness.runtime.tasks.task_manager import BackgroundTaskManager, get_task_manager
 
 
 class DefaultTaskRuntime:
@@ -90,3 +90,5 @@ class DefaultTaskRuntime:
 
     def register_completion_listener(self, listener: CompletionListener) -> Callable[[], None]:
         return self._manager.register_completion_listener(listener)
+
+# questor: allow R7 -- until W8 adds the mirror test

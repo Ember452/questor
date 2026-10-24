@@ -1,28 +1,28 @@
-                                                                               
- Usage: questor [OPTIONS] COMMAND [ARGS]...                                    
-                                                                               
- questor: a personal-agent app built on top of QuestorHarness.                 
-                                                                               
-┌─ Options ───────────────────────────────────────────────────────────────────┐
-│ --print      -p      <str>  Run a single prompt and exit                    │
-│ --model              <str>  Model override for this session                 │
-│ --profile            <str>  Provider profile to use                         │
-│ --workspace          <str>  Path to the questor workspace (defaults to      │
-│                             ~/.questor/agent)                               │
-│ --max-turns          <int>  Override max turns                              │
-│ --cwd                <str>  Working directory                               │
-│                             [default: <REPO>]      │
-│ --resume             <str>  Resume an questor session by id                 │
-│ --continue                  Continue the latest questor session             │
-│ --help                      Show this message and exit.                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-┌─ Commands ──────────────────────────────────────────────────────────────────┐
-│ init     Initialize the questor workspace.                                  │
-│ config   Configure provider profile and gateway channels.                   │
-│ doctor   Check questor workspace and provider readiness.                    │
-│ memory   Manage questor memory                                              │
-│ soul     Inspect or edit soul.md                                            │
-│ user     Inspect or edit user.md                                            │
-│ gateway  Run the questor gateway                                            │
-└─────────────────────────────────────────────────────────────────────────────┘
+                                                                                
+ Usage: questor [OPTIONS] COMMAND [ARGS]...                                     
+                                                                                
+ questor: a personal-agent app built on top of QuestorHarness.                  
+                                                                                
+┌─ Options ────────────────────────────────────────────────────────────────────┐
+│ --print      -p      <str>  Run a single prompt and exit                     │
+│ --model              <str>  Model override for this session                  │
+│ --profile            <str>  Provider profile to use                          │
+│ --workspace          <str>  Path to the questor workspace (defaults to       │
+│                             ~/.questor/agent)                                │
+│ --max-turns          <int>  Override max turns                               │
+│ --cwd                <str>  Working directory                                │
+│                             [default: <REPO>]
+│ --resume             <str>  Resume an questor session by id                  │
+│ --continue                  Continue the latest questor session              │
+│ --help                      Show this message and exit.                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+┌─ Commands ───────────────────────────────────────────────────────────────────┐
+│ init     Initialize the questor workspace.                                   │
+│ config   Configure provider profile and gateway channels.                    │
+│ doctor   Check questor workspace and provider readiness.                     │
+│ memory   Manage questor memory                                               │
+│ soul     Inspect or edit soul.md                                             │
+│ user     Inspect or edit user.md                                             │
+│ gateway  Run the questor gateway                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
 

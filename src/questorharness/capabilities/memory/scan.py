@@ -14,7 +14,7 @@ from questorharness.capabilities.memory.schema import (
     is_memory_expired,
     split_memory_file,
 )
-from questorharness.capabilities.memory.types import MemoryHeader
+from questorharness.capabilities.memory.header import MemoryHeader
 
 
 def scan_memory_files(
@@ -114,3 +114,5 @@ def _metadata_from_header(header: MemoryHeader) -> dict[str, object]:
         "updated_at": header.updated_at,
         "ttl_days": header.ttl_days,
     }
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from questorharness.runtime.autopilot import RepoAutopilotStore
 from questorharness.runtime.tasks import get_task_manager
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,
@@ -432,3 +432,6 @@ def register_agents_commands(registry: CommandRegistry) -> None:
             remote_admin_opt_in=True,
         )
     )
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

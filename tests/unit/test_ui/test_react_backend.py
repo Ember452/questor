@@ -11,7 +11,7 @@ import pytest
 
 from questorharness.providers.llm.client import ApiMessageCompleteEvent
 from questorharness.contracts.usage import UsageSnapshot
-from questorharness.contracts.domain.events import CompactProgressEvent
+from questorharness.contracts.domain.events import CompactProgressEvent, ToolExecutionCompleted
 from questorharness.contracts.domain.message import ConversationMessage, ImageBlock, TextBlock
 from questorharness.config.settings import Settings, save_settings
 from questorharness.bootstrap.hosts.backend_host import (
@@ -351,6 +351,116 @@ async def test_run_active_request_recovers_from_cancel(tmp_path, monkeypatch):
         for event in events
     )
     assert any(event.type == "line_complete" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_unexpected_engine_exception_keeps_the_host_running(monkeypatch):
+    """主循环兜底:handle_line 抛出意外异常时,后端发 error 事件并继续处理后续请求。
+
+    修复前该异常会穿透主循环的 finally,静默关闭 reader 与 runtime 并以退出码 0
+    结束整个后端 —— 前端看不到任何错误,会话直接失联。
+    """
+    events: list[BackendEvent] = []
+
+    async def _fake_build_runtime(**kwargs):
+        del kwargs
+        return SimpleNamespace(
+            app_state=SimpleNamespace(get=dict),
+            commands=SimpleNamespace(list_commands=list),
+        )
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    async def _exploding_handle_line(bundle, line, **kwargs):
+        del bundle, line, kwargs
+        raise RuntimeError("compaction exploded")
+
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.build_runtime", _fake_build_runtime)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.start_runtime", _noop)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.close_runtime", _noop)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.handle_line", _exploding_handle_line)
+    monkeypatch.setattr(
+        "questorharness.bootstrap.hosts.backend_host.BackendEvent.ready",
+        staticmethod(lambda *args, **kwargs: BackendEvent(type="ready")),
+    )
+    monkeypatch.setattr(ReactBackendHost, "_read_requests", _noop)
+    monkeypatch.setattr(ReactBackendHost, "_status_snapshot", lambda self: BackendEvent(type="state_snapshot"))
+
+    host = ReactBackendHost(BackendHostConfig(api_client=StaticApiClient("unused")))
+
+    async def _capture(event):
+        events.append(event)
+
+    host._emit = _capture  # type: ignore[method-assign]
+    host._request_queue.put_nowait(FrontendRequest(type="submit_line", line="hello"))
+    host._request_queue.put_nowait(FrontendRequest(type="shutdown"))
+
+    result = await host.run()
+
+    assert result == 0
+    error_events = [event for event in events if event.type == "error"]
+    assert error_events, "the unexpected exception must surface as an error event"
+    assert "compaction exploded" in error_events[0].message
+    assert any(event.type == "line_complete" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_enter_plan_mode_completion_emits_plan_mode_change(monkeypatch):
+    """计划工具完成时前端必须收到 plan_mode_change;读取的是 settings 的新值。
+
+    修复前该事件被两个不存在的工具名(set_permission_mode/plan_mode)挡死,永远
+    不触发;真实工具是 enter_plan_mode / exit_plan_mode。
+    """
+    events: list[BackendEvent] = []
+
+    async def _fake_build_runtime(**kwargs):
+        del kwargs
+        return SimpleNamespace(
+            app_state=SimpleNamespace(get=dict),
+            commands=SimpleNamespace(list_commands=list),
+            current_settings=lambda: SimpleNamespace(
+                permission=SimpleNamespace(mode=SimpleNamespace(value="plan"))
+            ),
+        )
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    async def _plan_tool_handle_line(bundle, line, *, render_event, **kwargs):
+        del bundle, line, kwargs
+        await render_event(
+            ToolExecutionCompleted(tool_name="enter_plan_mode", output="Permission mode set to plan", is_error=False)
+        )
+        return True
+
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.build_runtime", _fake_build_runtime)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.start_runtime", _noop)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.close_runtime", _noop)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.handle_line", _plan_tool_handle_line)
+    monkeypatch.setattr("questorharness.bootstrap.hosts.backend_host.get_task_manager", lambda: SimpleNamespace(list_tasks=list))
+    monkeypatch.setattr(
+        "questorharness.bootstrap.hosts.backend_host.BackendEvent.ready",
+        staticmethod(lambda *args, **kwargs: BackendEvent(type="ready")),
+    )
+    monkeypatch.setattr(ReactBackendHost, "_read_requests", _noop)
+    monkeypatch.setattr(ReactBackendHost, "_status_snapshot", lambda self: BackendEvent(type="state_snapshot"))
+
+    host = ReactBackendHost(BackendHostConfig(api_client=StaticApiClient("unused")))
+
+    async def _capture(event):
+        events.append(event)
+
+    host._emit = _capture  # type: ignore[method-assign]
+    host._request_queue.put_nowait(FrontendRequest(type="submit_line", line="/plan"))
+    host._request_queue.put_nowait(FrontendRequest(type="shutdown"))
+
+    result = await host.run()
+
+    assert result == 0
+    plan_events = [event for event in events if event.type == "plan_mode_change"]
+    assert plan_events, "enter_plan_mode completion must emit plan_mode_change"
+    assert plan_events[0].plan_mode == "plan"
 
 
 @pytest.mark.asyncio

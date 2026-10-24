@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import httpx
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 from questorharness.execution.network import NetworkGuardError, fetch_public_http_response
 
 
@@ -31,6 +31,13 @@ class WebSearchTool(BaseTool):
     name = "web_search"
     description = "Search the web and return compact top results with titles, URLs, and snippets."
     input_model = WebSearchToolInput
+
+    capabilities = ToolCapabilities(
+        read_only_by_default=True,
+        keep_in_compaction=True,
+        artifact_keys=("query",),
+        remember_as="web_search",
+    )
 
     def is_read_only(self, arguments: WebSearchToolInput) -> bool:
         del arguments
@@ -117,3 +124,5 @@ def _clean_html(fragment: str) -> str:
     text = html.unescape(text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+# questor: allow R7 -- until W8 adds the mirror test

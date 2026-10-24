@@ -11,7 +11,11 @@ from uuid import uuid4
 
 from questorharness.contracts.usage import UsageSnapshot
 from questorharness.platform.paths import get_sessions_dir
-from questorharness.contracts.domain.message import ConversationMessage, sanitize_conversation_messages
+from questorharness.contracts.domain.message import (
+    ConversationMessage,
+    ToolResultBlock,
+    sanitize_conversation_messages,
+)
 from questorharness.platform.io import atomic_write_text
 
 
@@ -223,8 +227,8 @@ def export_session_markdown(
             parts.append(text)
         for block in message.tool_uses:
             parts.append(f"\n```tool\n{block.name} {json.dumps(block.input, ensure_ascii=True)}\n```")
-        for block in message.content:
-            if getattr(block, "type", "") == "tool_result":
-                parts.append(f"\n```tool-result\n{block.content}\n```")
+        for part in message.content:
+            if isinstance(part, ToolResultBlock):
+                parts.append(f"\n```tool-result\n{part.content}\n```")
     atomic_write_text(path, "\n".join(parts).strip() + "\n")
     return path

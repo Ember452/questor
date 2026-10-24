@@ -168,16 +168,17 @@ def _remember_async_agent_activity(
     tool_metadata: dict[str, object] | None,
     *,
     tool_name: str,
+    category: str | None,
     tool_input: dict[str, object],
     output: str,
 ) -> None:
     bucket = _tool_metadata_bucket(tool_metadata, "async_agent_state")
-    if tool_name == "agent":
+    if category == "async_agent":
         description = str(tool_input.get("description") or tool_input.get("prompt") or "").strip()
         summary = f"Spawned async agent. {description}".strip()
         if output.strip():
             summary = f"{summary} [{output.strip()[:180]}]".strip()
-    elif tool_name == "send_message":
+    elif category == "async_message":
         target = str(tool_input.get("task_id") or "").strip()
         summary = f"Sent follow-up message to async agent {target}".strip()
     else:
@@ -205,12 +206,13 @@ def _parse_spawned_agent_identity(
 def _remember_async_agent_task(
     tool_metadata: dict[str, object] | None,
     *,
+    category: str | None,
     tool_name: str,
     tool_input: dict[str, object],
     output: str,
     result_metadata: dict[str, object] | None = None,
 ) -> None:
-    if tool_name != "agent":
+    if category != "async_agent":
         return
     identity = _parse_spawned_agent_identity(output, result_metadata)
     if identity is None:
@@ -256,6 +258,18 @@ def _update_plan_mode(tool_metadata: dict[str, object] | None, mode: str) -> Non
     tool_metadata["permission_mode"] = mode
 
 
+def _artifact_text(tool_input: dict[str, object], capabilities: object) -> str:
+    """Return the invocation's first declared artifact key, stripped.
+
+    The field name lives on the tool (``ToolCapabilities.artifact_keys``), so a
+    tool that renames its input field does not need an edit here.
+    """
+    keys = getattr(capabilities, "artifact_keys", ())
+    if not keys:
+        return ""
+    return str(tool_input.get(keys[0]) or "").strip()
+
+
 def _record_tool_carryover(
     context: QueryContext,
     *,
@@ -268,9 +282,16 @@ def _record_tool_carryover(
 ) -> None:
     if is_error:
         return
+    # The category comes from the tool's own declaration; this module no longer
+    # keeps a list of tool names. A tool without a declaration is simply not
+    # carried over (the same outcome as the old trailing ``else``).
+    from questorharness.capabilities.tools.registry import capability_index
+
+    capabilities = capability_index().by_name.get(tool_name)
+    category = getattr(capabilities, "remember_as", None)
     if resolved_file_path is not None:
         _remember_active_artifact(context.tool_metadata, resolved_file_path)
-    if tool_name == "read_file" and resolved_file_path is not None:
+    if category == "file_read" and resolved_file_path is not None:
         offset = int(tool_input.get("offset") or 0)
         limit = int(tool_input.get("limit") or 200)
         _remember_read_file(
@@ -284,7 +305,7 @@ def _record_tool_carryover(
             context.tool_metadata,
             f"Inspected file {resolved_file_path} (lines {offset + 1}-{offset + limit})",
         )
-    elif tool_name == "skill":
+    elif category == "skill":
         _remember_skill_invocation(
             context.tool_metadata,
             skill_name=str(tool_input.get("name") or ""),
@@ -293,15 +314,17 @@ def _record_tool_carryover(
         if skill_name:
             _remember_active_artifact(context.tool_metadata, f"skill:{skill_name}")
             _remember_verified_work(context.tool_metadata, f"Loaded skill {skill_name}")
-    elif tool_name in {"agent", "send_message"}:
+    elif category in {"async_agent", "async_message"}:
         _remember_async_agent_activity(
             context.tool_metadata,
             tool_name=tool_name,
+            category=category,
             tool_input=tool_input,
             output=tool_output,
         )
         _remember_async_agent_task(
             context.tool_metadata,
+            category=category,
             tool_name=tool_name,
             tool_input=tool_input,
             output=tool_output,
@@ -312,63 +335,66 @@ def _record_tool_carryover(
             context.tool_metadata,
             f"Confirmed async-agent activity via {tool_name}: {description[:180]}",
         )
-    elif tool_name == "enter_plan_mode":
+    elif category == "plan_enter":
         _update_plan_mode(context.tool_metadata, "plan")
-    elif tool_name == "exit_plan_mode":
+    elif category == "plan_exit":
         _update_plan_mode(context.tool_metadata, "default")
-    elif tool_name == "web_fetch":
-        url = str(tool_input.get("url") or "").strip()
+    elif category == "web_fetch":
+        url = _artifact_text(tool_input, capabilities)
         if url:
             _remember_active_artifact(context.tool_metadata, url)
             _remember_verified_work(context.tool_metadata, f"Fetched remote content from {url}")
-    elif tool_name == "web_search":
-        query = str(tool_input.get("query") or "").strip()
+    elif category == "web_search":
+        query = _artifact_text(tool_input, capabilities)
         if query:
             _remember_verified_work(context.tool_metadata, f"Ran web search for {query[:180]}")
-    elif tool_name == "glob":
-        pattern = str(tool_input.get("pattern") or "").strip()
+    elif category == "glob":
+        pattern = _artifact_text(tool_input, capabilities)
         if pattern:
             _remember_verified_work(context.tool_metadata, f"Expanded glob pattern {pattern[:180]}")
-    elif tool_name == "grep":
-        pattern = str(tool_input.get("pattern") or "").strip()
+    elif category == "grep":
+        pattern = _artifact_text(tool_input, capabilities)
         if pattern:
             _remember_verified_work(context.tool_metadata, f"Checked repository matches for grep pattern {pattern[:180]}")
-    elif tool_name == "bash":
-        command = str(tool_input.get("command") or "").strip()
+    elif category == "shell":
+        command = _artifact_text(tool_input, capabilities)
         summary = tool_output.splitlines()[0].strip() if tool_output.strip() else "no output"
         _remember_verified_work(
             context.tool_metadata,
             f"Ran bash command {command[:160]} [{summary[:120]}]",
         )
-    if tool_name == "read_file" and resolved_file_path is not None:
+    if category == "file_read" and resolved_file_path is not None:
         _remember_work_log(
             context.tool_metadata,
             entry=f"Read file {resolved_file_path}",
         )
-    elif tool_name == "bash":
-        command = str(tool_input.get("command") or "").strip()
+    elif category == "shell":
+        command = _artifact_text(tool_input, capabilities)
         summary = tool_output.splitlines()[0].strip() if tool_output.strip() else "no output"
         _remember_work_log(
             context.tool_metadata,
             entry=f"Ran bash: {command[:160]} [{summary[:120]}]",
         )
-    elif tool_name == "grep":
-        pattern = str(tool_input.get("pattern") or "").strip()
+    elif category == "grep":
+        pattern = _artifact_text(tool_input, capabilities)
         _remember_work_log(
             context.tool_metadata,
             entry=f"Searched with grep pattern={pattern[:160]}",
         )
-    elif tool_name == "skill":
+    elif category == "skill":
         _remember_work_log(
             context.tool_metadata,
             entry=f"Loaded skill {str(tool_input.get('name') or '').strip()}",
         )
-    elif tool_name in {"agent", "send_message"}:
+    elif category in {"async_agent", "async_message"}:
         _remember_work_log(
             context.tool_metadata,
             entry=f"Async agent action via {tool_name}",
         )
-    elif tool_name == "enter_plan_mode":
+    elif category == "plan_enter":
         _remember_work_log(context.tool_metadata, entry="Entered plan mode")
-    elif tool_name == "exit_plan_mode":
+    elif category == "plan_exit":
         _remember_work_log(context.tool_metadata, entry="Exited plan mode")
+
+# questor: allow R7 -- until W8 adds the mirror test
+# questor: allow R8 -- refactor the offenders in W8

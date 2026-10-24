@@ -9,7 +9,7 @@ from typing import Iterable
 from pydantic import BaseModel, Field
 
 from questorharness.contracts.errors import SandboxUnavailableError
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 from questorharness.execution.shell import create_shell_subprocess
 
 
@@ -30,6 +30,12 @@ class BashTool(BaseTool):
     name = "bash"
     description = "Run a shell command in the local repository."
     input_model = BashToolInput
+
+    capabilities = ToolCapabilities(
+        keep_in_compaction=True,
+        artifact_keys=("command",),
+        remember_as="shell",
+    )
 
     async def execute(self, arguments: BashToolInput, context: ToolExecutionContext) -> ToolResult:
         cwd = Path(arguments.cwd).expanduser() if arguments.cwd else context.cwd

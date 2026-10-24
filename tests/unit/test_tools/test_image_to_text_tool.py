@@ -8,7 +8,7 @@ import pytest
 
 from questorharness.providers.llm.provider import is_model_multimodal
 from questorharness.config.settings import VisionModelConfig
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.capabilities.tools.media.image_to_text_tool import ImageToTextTool, ImageToTextToolInput
 from questorharness.providers.llm.tool_runtime import ProviderLlmToolRuntime
 

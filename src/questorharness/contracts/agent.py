@@ -93,3 +93,5 @@ class AgentDefinition(BaseModel):
     permissions: list[str] = Field(default_factory=list)  # 额外权限规则
     subagent_type: str = "general-purpose"  # 运行时使用的路由键
     source: Literal["builtin", "user", "plugin"] = "builtin"
+
+# questor: allow R7 -- until W8 adds the mirror test

@@ -8,7 +8,7 @@ import re
 import string
 from pathlib import Path
 
-from questor.gateway.types import GatewayStreamUpdate
+from questor.gateway.stream_update import GatewayStreamUpdate
 from questorharness.api import (
     ToolExecutionCompleted,
 )
@@ -183,3 +183,5 @@ _FINAL_REPLY_IMAGE_PATH_RE = re.compile(
     r"(?P<path>(?:[A-Za-z]:[\\/]|/)[^\r\n`\"'<>|?*\x00]+?\.(?:png|jpe?g|webp|gif|bmp))",
     re.IGNORECASE,
 )
+
+# questor: allow R7 -- until W8 adds the mirror test

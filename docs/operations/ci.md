@@ -42,25 +42,17 @@ QUESTOR_RUN_E2E=1 uv run pytest -m e2e -v
 
 ```bash
 uv sync --extra dev --frozen
-uv run python scripts/guards/_guard_kit.py --self-test
-uv run python scripts/guards/check_thread_leak.py --self-test
-uv run python scripts/guards/check_secret_projection.py --self-test
-uv run python scripts/guards/check_doc_cross_refs.py --self-test
-uv run python scripts/guards/check_thread_leak.py --fail-on-empty
-uv run python scripts/guards/check_secret_projection.py --fail-on-empty
-uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
-uv run pre-commit run --all-files
-uv run lint-imports
-uv run pytest -m "unit or integration"
+uv run python scripts/check.py            # guards job: self-tests + live guards + snapshot checks
+uv run pytest -m "unit or integration"    # tests job
 ```
 
-The Makefile wraps the same checks:
+The Makefile is a thin alias for the same single entry point, not a second
+list of commands:
 
 ```bash
-make guards
-make lint
-make test
-make ci
+make guards   # scripts/check.py --fast (pre-commit caliber)
+make test     # pytest -m "unit or integration"
+make ci       # guards + lint + test
 ```
 
 ## Design notes

@@ -1,6 +1,7 @@
 # bootstrap — Agent Contract
 
 职责：进程装配。`runtime.py` 是组合根（读配置、建引擎、装工具、连 provider），`hosts/` 是进程宿主（stdio REPL、React backend、前端启动器）。
+不负责：领域规则与工具本体在 `src/questorharness/capabilities`，回合循环在 `src/questorharness/engine`；装配只做接线。
 公开入口：`build_runtime` / `start_runtime` / `close_runtime` / `handle_line` / `RuntimeBundle`；宿主侧 `hosts/__init__.py` 导出 run_repl / run_print_mode，`hosts/backend_host.py` 导出 run_backend_host。
 拥有的数据：`RuntimeBundle`（引擎 + 设置 + app state + 命令表 + 会话后端）、宿主进程的输入输出循环。
 允许依赖：本层是依赖秩最高的一层，可以 import 任何下层；反向不允许——`surfaces-are-thin` 契约禁止 `surfaces` import 本包。

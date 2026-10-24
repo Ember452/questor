@@ -13,10 +13,10 @@ from questorharness.config.settings import load_settings
 from questorharness.contracts.domain.message import ConversationMessage, sanitize_conversation_messages
 from questorharness.platform.paths import get_data_dir, get_project_config_dir
 from questorharness.runtime.bridge import get_bridge_manager
-from questorharness.runtime.bridge.types import WorkSecret
+from questorharness.runtime.bridge.models import WorkSecret
 from questorharness.runtime.bridge.work_secret import build_sdk_url, decode_work_secret, encode_work_secret
 
-from questorharness.commands.types import (
+from questorharness.commands.models import (
     CommandContext,
     CommandRegistry,
     CommandResult,

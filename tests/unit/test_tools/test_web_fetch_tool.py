@@ -7,7 +7,7 @@ import time
 import httpx
 import pytest
 
-from questorharness.capabilities.tools.base import ToolExecutionContext
+from questorharness.capabilities.tools.contract import ToolExecutionContext
 from questorharness.capabilities.tools.web.web_fetch_tool import WebFetchTool, WebFetchToolInput, _html_to_text
 from questorharness.capabilities.tools.web.web_search_tool import WebSearchTool, WebSearchToolInput
 from questorharness.execution.network import fetch_public_http_response

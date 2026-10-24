@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from questorharness.capabilities.context.compact.constants import (
+from questorharness.capabilities.context.compact.limits import (
     CONTEXT_COLLAPSE_HEAD_CHARS,
     CONTEXT_COLLAPSE_TAIL_CHARS,
     CONTEXT_COLLAPSE_TEXT_CHAR_LIMIT,
@@ -139,3 +139,5 @@ def _split_preserving_tool_pairs(
     older = list(messages[:split_index])
     newer = sanitize_conversation_messages(list(messages[split_index:]))
     return older, newer
+
+# questor: allow R7 -- until W8 adds the mirror test

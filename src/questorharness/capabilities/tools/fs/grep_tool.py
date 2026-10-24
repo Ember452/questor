@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from questorharness.capabilities.tools.base import BaseTool, ToolExecutionContext, ToolResult
+from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
 class GrepToolInput(BaseModel):
@@ -32,6 +32,13 @@ class GrepTool(BaseTool):
     name = "grep"
     description = "Search file contents with a regular expression."
     input_model = GrepToolInput
+
+    capabilities = ToolCapabilities(
+        read_only_by_default=True,
+        keep_in_compaction=True,
+        artifact_keys=("pattern",),
+        remember_as="grep",
+    )
 
     def is_read_only(self, arguments: GrepToolInput) -> bool:
         del arguments
