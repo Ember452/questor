@@ -284,7 +284,8 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/runtime/swarm/lockfile.py` | 24 |
 | `src/questorharness/runtime/swarm/mailbox.py` | 522 |
 | `src/questorharness/runtime/swarm/models.py` | 356 |
-| `src/questorharness/runtime/swarm/permission_sync.py` | 1162 |
+| `src/questorharness/runtime/swarm/permission_models.py` | 209 |
+| `src/questorharness/runtime/swarm/permission_sync.py` | 968 |
 | `src/questorharness/runtime/swarm/registry.py` | 410 |
 | `src/questorharness/runtime/swarm/spawn_utils.py` | 229 |
 | `src/questorharness/runtime/swarm/subprocess_backend.py` | 171 |

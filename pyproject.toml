@@ -122,6 +122,9 @@ files = [
     # annotations intact, so they join the whitelist rather than the deferred pool.
     "src/questorharness/bootstrap/cli/setup.py",
     "src/questorharness/bootstrap/cli/auth_commands.py",
+    # W8: the swarm wire models came out of permission_sync already annotated, so they
+    # join the whitelist instead of enlarging the deferred pool.
+    "src/questorharness/runtime/swarm/permission_models.py",
 ]
 plugins = ["pydantic.mypy"]
 
