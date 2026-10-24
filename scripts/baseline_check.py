@@ -88,7 +88,37 @@ def _normalize(text: str) -> str:
     # Pin its presence, not its value: prompt content is covered by
     # scripts/ci/prompt_surface.py with fixed rendering inputs.
     text = re.sub(r"(?m)^- system prompt chars: \d+$", "- system prompt chars: <VOLATILE>", text)
+    # 含掩码的行是机器路径行:整行统一分隔符,Windows 的 ``\`` 与 Linux 的
+    # ``/`` 不再造成假差异;不含掩码的正文一字不动。prompt_surface 也经由
+    # 本函数获得同一口径。
+    trailing_newline = text.endswith("\n")
+    lines = [
+        line.replace("\\", "/") if ("<REPO>" in line or "<HOME>" in line) else line
+        for line in text.splitlines()
+    ]
+    text = "\n".join(lines) + ("\n" if trailing_newline else "")
     return text
+
+
+def _doctor_env() -> dict[str, str]:
+    """Run ``questor doctor`` against a scratch home, not the developer's.
+
+    doctor 的本职是诊断用户真实环境,而基线要的是**确定的环境**:不钉住
+    config/data,输出会随机器漂移(本机已配置的认证在 CI 上是 missing auth,
+    workspace 路径随 HOME 变化)。钉到 .tmp-baseline 下的一次性目录,两边
+    渲染的都是"全新机器"视图。
+    """
+    import shutil as _shutil
+
+    scratch = REPO_ROOT / ".tmp-baseline" / "doctor-env"
+    if scratch.exists():
+        _shutil.rmtree(scratch)
+    (scratch / "data").mkdir(parents=True)
+    (scratch / "config").mkdir(parents=True)
+    env = _child_env()
+    env["QUESTORHARNESS_DATA_DIR"] = str(scratch / "data")
+    env["QUESTORHARNESS_CONFIG_DIR"] = str(scratch / "config")
+    return env
 
 
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -210,7 +240,16 @@ def _collect_outputs(*, fast: bool = False) -> tuple[dict[str, object], list[str
     if dry.returncode != 0:
         errors.append(f"dry-run exited {dry.returncode}")
 
-    doctor = _uv(["python", "-m", "questor", "doctor"])
+    doctor = subprocess.run(
+        ["uv", "run", "python", "-m", "questor", "doctor"],
+        cwd=REPO_ROOT,
+        env=_doctor_env(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     outputs["doctor.txt"] = _normalize(doctor.stdout + doctor.stderr)
     if doctor.returncode != 0:
         errors.append(f"doctor exited {doctor.returncode}")

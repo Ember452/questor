@@ -123,17 +123,11 @@ def _tool_payload(host: Host) -> list[dict[str, object]]:
 def _machine_independent(text: str) -> str:
     """抹平随机器变化的渲染,让快照在任意平台可比。
 
-    ① 含掩码(``<HOME>`` / ``<REPO>``)的行是机器路径行:整行统一分隔符,
-    Windows 渲出的 ``\\`` 与 Linux 的 ``/`` 不再造成假差异;不含掩码的正文
-    一字不动,提示词里的反斜杠(如正则示例)不受影响。
-    ② 各宿主记忆目录的路径哈希(如 ``cli-cda39b73afba``)由当机 checkout
-    路径派生,任何机器都不该和别人一致,快照里只留 ``<HASH>`` 占位。
+    路径分隔符的行级归一化已由 ``baseline_check._normalize`` 统一承担(含
+    ``<HOME>``/``<REPO>`` 掩码的行整行统一分隔符);这里只补快照特有的
+    一步——各宿主记忆目录的路径哈希(如 ``cli-cda39b73afba``)由当机
+    checkout 路径派生,任何机器都不该和别人一致,快照里只留 ``<HASH>``。
     """
-    lines = [
-        line.replace("\\", "/") if ("<HOME>" in line or "<REPO>" in line) else line
-        for line in text.splitlines()
-    ]
-    text = "\n".join(lines)
     return re.sub(r"\b(cli|desktop|channel|cron)-[0-9a-f]{6,}\b", r"\1-<HASH>", text)
 
 
