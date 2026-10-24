@@ -16,14 +16,11 @@ uv run python scripts/check.py --fast     # skip the slow snapshot checks (pre-c
 Every step prints its name before it runs and the run ends with a
 `step / result / seconds` table, so a red build names the guard that failed.
 
-Run every guard's self-test by hand (what `--fast` already does for you):
+Run every guard's self-test by hand — that is exactly what `--fast` already
+does for you, via the ten `*-self-test` steps:
 
 ```bash
-uv run python scripts/guards/_guard_kit.py --self-test
-uv run python scripts/guards/check_thread_leak.py --self-test
-uv run python scripts/guards/check_secret_projection.py --self-test
-uv run python scripts/guards/check_doc_cross_refs.py --self-test
-uv run python scripts/guards/check_layout.py --self-test
+uv run python scripts/check.py --fast
 ```
 
 Run a single guard by hand while debugging:

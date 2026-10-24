@@ -120,7 +120,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not TARGET.exists():
         print(f"namespace document missing: {TARGET.relative_to(REPO_ROOT)}", file=sys.stderr)
         return EXIT_RED
-    if TARGET.read_text(encoding="utf-8") != generated:
+    # 与 _guard_kit.read_text 同口径(utf-8-sig):一个 BOM 不该让 --check 永久红。
+    if read_text(TARGET) != generated:
         print(
             "namespace document is stale; run `uv run python scripts/guards/gen_namespaces.py --write`",
             file=sys.stderr,

@@ -34,9 +34,10 @@ class Step:
     slow: bool = False
 
 
-# The four entity commands the guards job must run in CI are layout, tree-map,
-# structure-baseline and baseline-check; the self-tests above them only prove
-# the guards can still detect a violation.
+# Order: ten guard self-tests first (each proves its guard can still go red),
+# then the live guards, then the generated-doc byte compares, then the
+# type/surface checks, and finally baseline-check — the only slow step, which
+# additionally pins pytest collection counts and node ids in CI.
 STEPS: tuple[Step, ...] = (
     Step("kit-self-test", (PYTHON, "scripts/guards/_guard_kit.py", "--self-test")),
     Step("thread-leak-self-test", (PYTHON, "scripts/guards/check_thread_leak.py", "--self-test")),
@@ -70,7 +71,9 @@ STEPS: tuple[Step, ...] = (
     Step("import-contracts", ("uv", "run", "lint-imports")),
     Step(
         "baseline-check",
-        ("uv", "run", "python", "scripts/baseline_check.py", "--check", "--fast"),
+        # 不传 --fast:pytest 收集计数与 node-id 集是这份基线存在的意义,
+        # 传了 --fast 它们在 CI 里永远不生效,"删测试静默通过"就会回来。
+        ("uv", "run", "python", "scripts/baseline_check.py", "--check"),
         slow=True,
     ),
 )

@@ -436,8 +436,9 @@ def collect() -> dict[str, dict[str, object]]:
 
 def render(metrics: dict[str, dict[str, object]]) -> str:
     head = _git("rev-parse", "HEAD")[0]
+    head_date = _git("log", "-1", "--format=%cs", head)[0]
     payload = {
-        "pin": {"commit": head, "date": "2026-10-23"},
+        "pin": {"commit": head, "date": head_date},
         "caliber": {
             "scan": "git ls-files (never walk the working tree)",
             "lines": "len(text.splitlines())",
@@ -502,9 +503,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--reason", default="", help="why the baseline is being refreshed (required)")
     parser.add_argument(
         "--fail-on-empty",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
-        help="treat an empty scan target as a configuration error (default: on)",
+        help="treat an empty scan target as a configuration error (default: on; --no-fail-on-empty to disable)",
     )
     args = parser.parse_args(argv)
 

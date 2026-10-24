@@ -170,12 +170,25 @@ def _vacuous_contracts(root: Path) -> tuple[list[str], int]:
 
 
 def _kind(relative: str) -> str:
+    """Classify a module for the Top10 dashboard's 类型 column.
+
+    The label must be able to differ per row: the shared-point alarm
+    (``门面``/``禁用名`` squeezing back into the Top10) is the column's whole
+    purpose, so the catch-all bucket is split into the three vocabularies the
+    ladder actually distinguishes — contracts (词表), platform (原语) and
+    everything else (实现).
+    """
     name = Path(relative).name
     if name == "__init__.py":
         return "门面"
     if name in BANNED:
         return f"禁用名 {name}"
-    return "契约/原语/实现"
+    package = relative.replace("\\", "/").rsplit("/", 1)[0]
+    if package == "questorharness" or package.startswith("questorharness/contracts"):
+        return "契约"
+    if package.startswith("questorharness/platform"):
+        return "原语"
+    return "实现"
 
 
 def render(root: Path) -> str:
@@ -247,7 +260,23 @@ def render(root: Path) -> str:
     ]
     top = sorted(file_in.items(), key=lambda item: (-item[1], item[0]))[:TOP_IMPORTED]
     for module, degree in top:
-        lines.append(f"| `{module}` | {degree} | {_kind(module.replace('.', '/') + '.py')} |")
+        # Top10 按点分模块名列出,包的 ``__init__`` 要还原成目录形态才能标「门面」。
+        relative = module.replace(".", "/") + ("/__init__.py" if module in packages else ".py")
+        lines.append(f"| `{module}` | {degree} | {_kind(relative)} |")
+
+    lines += [
+        "",
+        "## 包级扇入（Top10）",
+        "",
+        "每个包被多少个**包** import。与上一节的模块级表互补：这里是 W11-P2「横切点位封顶」",
+        "的观察窗——某个包的扇入持续爬升，说明横切关注点正在向它集中。",
+        "",
+        "| package | imported by |",
+        "| --- | ---: |",
+    ]
+    top_fan_in = sorted(in_degree.items(), key=lambda item: (-item[1], item[0]))[:TOP_IMPORTED]
+    for package, degree in top_fan_in:
+        lines.append(f"| `{package}` | {degree} |")
 
     over = [
         (count_lines(path), path.relative_to(root).as_posix())

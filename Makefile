@@ -16,14 +16,7 @@ e2e:
 	QUESTOR_RUN_E2E=1 uv run pytest -m e2e -v
 
 guards:
-	uv run python scripts/guards/_guard_kit.py --self-test
-	uv run python scripts/guards/check_thread_leak.py --self-test
-	uv run python scripts/guards/check_secret_projection.py --self-test
-	uv run python scripts/guards/check_doc_cross_refs.py --self-test
-	uv run python scripts/guards/check_thread_leak.py --fail-on-empty
-	uv run python scripts/guards/check_secret_projection.py --fail-on-empty
-	uv run python scripts/guards/check_doc_cross_refs.py --fail-on-empty
-	uv run lint-imports
+	uv run python scripts/check.py --fast
 
 lint:
 	uv run pre-commit run --all-files

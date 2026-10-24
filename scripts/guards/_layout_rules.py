@@ -258,6 +258,37 @@ def _source_files(root: Path) -> list[Path]:
     return tracked_files(root, ("src",))
 
 
+# 一轮检查里同一路径会被 5-8 条规则各读一遍、各 parse 一遍。缓存按
+# (mtime, size) 失效,所以「写文件再扫」的自测与契约测试语义不变。
+_TEXT_CACHE: dict[Path, tuple[tuple[int, int], str]] = {}
+_TREE_CACHE: dict[Path, tuple[tuple[int, int], ast.Module]] = {}
+
+
+def _fingerprint(path: Path) -> tuple[int, int]:
+    stat = path.stat()
+    return (stat.st_mtime_ns, stat.st_size)
+
+
+def _read_cached(path: Path) -> str:
+    validity = _fingerprint(path)
+    cached = _TEXT_CACHE.get(path)
+    if cached is not None and cached[0] == validity:
+        return cached[1]
+    text = read_text(path)
+    _TEXT_CACHE[path] = (validity, text)
+    return text
+
+
+def _parse_cached(path: Path) -> ast.Module:
+    validity = _fingerprint(path)
+    cached = _TREE_CACHE.get(path)
+    if cached is not None and cached[0] == validity:
+        return cached[1]
+    tree = ast.parse(read_text(path))
+    _TREE_CACHE[path] = (validity, tree)
+    return tree
+
+
 def _literal_exports(tree: ast.Module) -> list[str] | None:
     """Return the declared ``__all__``, or None when the package has none.
 
@@ -462,9 +493,9 @@ def rule_r4_facade(root: Path) -> list[Violation]:
             # git ls-files lists staged paths; a file deleted but not yet unstaged
             # must not crash the guard.
             continue
-        text = read_text(path)
+        text = _read_cached(path)
         try:
-            tree = ast.parse(text)
+            tree = _parse_cached(path)
         except SyntaxError:
             continue
         shape, detail, exported = _facade_shape(tree)
@@ -543,7 +574,7 @@ def rule_r5_exports(root: Path) -> list[Violation]:
                 top_level.append(init)
 
     for init in top_level:
-        tree = ast.parse(read_text(init))
+        tree = _parse_cached(init)
         exports = _literal_exports(tree)
         if exports is not None:
             continue
@@ -556,7 +587,7 @@ def rule_r5_exports(root: Path) -> list[Violation]:
     for path in _source_files(root):
         if path.name != "__init__.py":
             continue
-        exports = _literal_exports(ast.parse(read_text(path)))
+        exports = _literal_exports(_parse_cached(path))
         if exports is None:
             continue
         relative = _relative(path, root)
@@ -668,7 +699,7 @@ def rule_r8_complexity(root: Path) -> tuple[list[Violation], int]:
     violations: list[Violation] = []
     exempted = 0
     for path in _source_files(root):
-        tree = ast.parse(read_text(path))
+        tree = _parse_cached(path)
         exempt = "R8" in parse_exemptions(path)
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):

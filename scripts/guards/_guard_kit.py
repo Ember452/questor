@@ -78,8 +78,20 @@ def tracked_files(
     ``git ls-files`` is the single scanning caliber: untracked scratch output
     (``__pycache__``, ``.tmp-baseline``) can never make a guard report on files
     that are not part of the repository.
+
+    Results are cached per process, keyed by the git index's mtime and size:
+    any ``git add``/``git rm`` rewrites ``.git/index`` and invalidates the
+    entry, so mutate-then-rescan flows (the layout self-test, the guard
+    contract tests) keep seeing fresh listings without paying a subprocess
+    per rule. A root without a readable ``.git/index`` is simply not cached.
     """
     base = Path(root)
+    cache_key = (base, tuple(pathspecs), tuple(suffixes))
+    validity = _index_fingerprint(base)
+    if validity is not None:
+        cached = _TRACKED_CACHE.get(cache_key)
+        if cached is not None and cached[0] == validity:
+            return list(cached[1])
     result = subprocess.run(
         ["git", "ls-files", "--", *pathspecs],
         cwd=base,
@@ -96,7 +108,22 @@ def tracked_files(
         for line in result.stdout.splitlines()
         if line.strip() and line.strip().endswith(tuple(suffixes))
     ]
-    return sorted(base / name for name in names)
+    listing = sorted(base / name for name in names)
+    if validity is not None:
+        _TRACKED_CACHE[cache_key] = (validity, listing)
+    return list(listing)
+
+
+_TRACKED_CACHE: dict[tuple[Path, tuple[str, ...], tuple[str, ...]], tuple[tuple[int, int], list[Path]]] = {}
+
+
+def _index_fingerprint(base: Path) -> tuple[int, int] | None:
+    index = base / ".git" / "index"
+    try:
+        stat = index.stat()
+    except OSError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size)
 
 
 def parse_exemptions(path: str | Path, *, rule: str | None = None) -> dict[str, Exemption]:

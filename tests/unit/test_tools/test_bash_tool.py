@@ -196,7 +196,10 @@ async def test_bash_tool_timeout_does_not_hang_when_stdout_stays_open(monkeypatc
     async def fake_create_shell_subprocess(*args, **kwargs):
         return process
 
-    monkeypatch.setattr("questorharness.capabilities.tools.shell.bash_tool.create_shell_subprocess", fake_create_shell_subprocess)
+    # 对测试自己导入的模块对象打补丁,不用字符串形式:全量套件里若有前序
+    # 测试扰动 sys.modules(reload/插件发现),字符串解析可能落到另一个模块
+    # 对象上,真实子进程就会顶替假件跑进来(表现为外层守卫超时的flake)。
+    monkeypatch.setattr(bash_tool_module, "create_shell_subprocess", fake_create_shell_subprocess)
     monkeypatch.setattr(
         bash_tool_module,
         "_READ_REMAINING_OUTPUT_TIMEOUT_SECONDS",
@@ -209,8 +212,14 @@ async def test_bash_tool_timeout_does_not_hang_when_stdout_stays_open(monkeypatc
             BashToolInput(command="sleep 10", timeout_seconds=1),
             ToolExecutionContext(cwd=tmp_path),
         ),
-        timeout=2.0,
+        # 挂死守卫,不是限时赛跑:被测的是"stdout 永不关闭时排空会放弃",
+        # 正常路径 ~1.05s。预算放宽到 10s 仍能抓住真挂死(永不返回),
+        # 同时不再在全量套件的负载尖峰上误伤。
+        timeout=10.0,
     )
 
+    # 假件必须被真正用到:如果补丁被绕过、真实子进程顶替,这里会以清晰的
+    # 断言失败暴露,而不是退化为外层守卫超时的谜语。
+    assert process.killed is True
     assert result.is_error is True
     assert result.metadata["timed_out"] is True

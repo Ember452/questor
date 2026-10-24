@@ -54,16 +54,34 @@
 
 | module | imported by | 类型 |
 | --- | ---: | --- |
-| `questorharness.config.settings` | 41 | 契约/原语/实现 |
-| `questorharness.platform.paths` | 30 | 契约/原语/实现 |
-| `questorharness.api` | 29 | 契约/原语/实现 |
-| `questorharness.contracts.domain.message` | 28 | 契约/原语/实现 |
-| `questorharness.providers.auth.auth_manager` | 18 | 契约/原语/实现 |
-| `questorharness.config` | 15 | 契约/原语/实现 |
-| `questorharness.contracts.domain.events` | 15 | 契约/原语/实现 |
-| `questorharness.contracts.hooks` | 14 | 契约/原语/实现 |
-| `questorharness.platform.io` | 14 | 契约/原语/实现 |
-| `questorharness.contracts.mcp` | 11 | 契约/原语/实现 |
+| `questorharness.config.settings` | 41 | 实现 |
+| `questorharness.platform.paths` | 30 | 原语 |
+| `questorharness.api` | 29 | 门面 |
+| `questorharness.contracts.domain.message` | 28 | 契约 |
+| `questorharness.providers.auth.auth_manager` | 18 | 实现 |
+| `questorharness.config` | 15 | 门面 |
+| `questorharness.contracts.domain.events` | 15 | 契约 |
+| `questorharness.contracts.hooks` | 14 | 契约 |
+| `questorharness.platform.io` | 14 | 原语 |
+| `questorharness.contracts.mcp` | 11 | 契约 |
+
+## 包级扇入（Top10）
+
+每个包被多少个**包** import。与上一节的模块级表互补：这里是 W11-P2「横切点位封顶」
+的观察窗——某个包的扇入持续爬升，说明横切关注点正在向它集中。
+
+| package | imported by |
+| --- | ---: |
+| `questorharness.contracts` | 118 |
+| `questorharness.platform` | 64 |
+| `questorharness.capabilities` | 61 |
+| `questorharness.config` | 61 |
+| `questorharness.providers` | 61 |
+| `questorharness.runtime` | 39 |
+| `questorharness.api` | 29 |
+| `questorharness.plugins` | 14 |
+| `questor.workspace` | 9 |
+| `questorharness.execution` | 8 |
 
 ## 超阈值清单
 
