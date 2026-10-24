@@ -47,6 +47,10 @@ CompletionListener = Callable[[TaskRecord], Awaitable[None] | None]
 
 _TERMINAL_TASK_STATUSES = frozenset({"completed", "failed", "killed"})
 
+# 写作决策的有界收尾宽限:给 EOF/回收的登记回调几个事件循环节拍。它不是
+# 负载超时,只覆盖"最后一批输出可见"到"EOF 登记"之间那一个 IOCP 周期。
+_WRITE_GRACE_SECONDS = 0.02
+
 
 class BackgroundTaskManager:
     """Manage shell and agent subprocess tasks."""
@@ -59,6 +63,11 @@ class BackgroundTaskManager:
         self._input_locks: dict[str, asyncio.Lock] = {}
         self._generations: dict[str, int] = {}
         self._completion_listeners: dict[str, CompletionListener] = {}
+        # stdout 已到 EOF 的任务集合。终态记账(status/returncode)由 waiter
+        # 收尾序列事后写,负载下可滞后任意久;输出文件却由 _copy_output 并发
+        # 落盘,总是先可见。EOF 是"该进程永远不会再产出"的自成判据,让写作
+        # 决策不再依赖那只滞后的钟(2026-10-24 CI flake 的根治点)。
+        self._stdout_eof: set[str] = set()
 
     async def create_shell_task(
         self,
@@ -218,17 +227,27 @@ class BackgroundTaskManager:
         """Write one line to task stdin, auto-resuming local agents when needed."""
         task = self._require_task(task_id)
         payload = _encode_task_worker_payload(data)
+
+        async def _restart_and_rewrite(current: asyncio.subprocess.Process) -> asyncio.subprocess.Process:
+            if task.type not in {"local_agent", "remote_agent", "in_process_teammate"}:
+                raise ValueError(f"Task {task_id} does not accept input") from None
+            replacement = await self._restart_agent_task(task)
+            replacement.stdin.write(payload)
+            await replacement.stdin.drain()
+            return replacement
+
         async with self._input_locks[task_id]:
             process = await self._ensure_writable_process(task)
-            process.stdin.write(payload)
             try:
-                await process.stdin.drain()
-            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
-                if task.type not in {"local_agent", "remote_agent", "in_process_teammate"}:
-                    raise ValueError(f"Task {task_id} does not accept input") from None
-                process = await self._restart_agent_task(task)
                 process.stdin.write(payload)
                 await process.stdin.drain()
+                # drain 成功 ≠ 投递成功:proactor 上写缓冲可能尚未刷出,传输层
+                # 就被 waiter 收尾关闭,数据静默丢失且不抛任何管道异常。写完
+                # 复核传输层与进程存活,未证实投递就重启重写一次。
+                if process.stdin.is_closing() or process.returncode is not None:
+                    await _restart_and_rewrite(process)
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                await _restart_and_rewrite(process)
 
     def read_task_output(self, task_id: str, *, max_bytes: int = 12000) -> str:
         """Return the tail of a task's output file."""
@@ -278,6 +297,8 @@ class BackgroundTaskManager:
         while True:
             chunk = await process.stdout.read(4096)
             if not chunk:
+                # EOF:登记在本任务自己的集合里,写作决策即刻可见,不等 waiter。
+                self._stdout_eof.add(task_id)
                 return
             async with self._output_locks[task_id]:
                 with self._tasks[task_id].output_file.open("ab") as handle:
@@ -328,27 +349,41 @@ class BackgroundTaskManager:
                 stderr=asyncio.subprocess.STDOUT,
                 env=merged_env,
             )
+        # 新进程带来全新的 stdout;重启语义下先清 EOF 判据再入映射。
+        self._stdout_eof.discard(task_id)
         self._processes[task_id] = process
         self._waiters[task_id] = asyncio.create_task(
             self._watch_process(task_id, process, generation)
         )
         return process
 
-    async def _ensure_writable_process(
-        self,
-        task: TaskRecord,
-    ) -> asyncio.subprocess.Process:
-        process = self._processes.get(task.id)
-        # A task that already reached a terminal state must restart even if the OS
-        # has not reported the exit code yet: writing into the dying process's
-        # stdin silently drops the payload and the follow-up output never appears.
-        if (
+    def _is_writable_process(self, task: TaskRecord, process: asyncio.subprocess.Process | None) -> bool:
+        """Return True only when every liveness signal agrees the process can still receive.
+
+        终态记账滞后是常态而不是异常,所以判据必须四项全过:进程仍在映射里、
+        stdin 还在、OS 未回收、任务未到终态——外加**输出通道未关**:stdout
+        已 EOF 的交互代理永远不会再读 stdin,复用它就是丢消息。
+        """
+        return (
             process is not None
             and process.stdin is not None
             and process.returncode is None
             and task.status not in _TERMINAL_TASK_STATUSES
-        ):
-            return process
+            and task.id not in self._stdout_eof
+        )
+
+    async def _ensure_writable_process(
+        self,
+        task: TaskRecord,
+    ) -> asyncio.subprocess.Process:
+        # 最后一批输出落盘与 EOF/回收的登记之间隔着一个 IOCP 周期;快速
+        # 检查全"活着"时让出一个有界宽限再复核一次,把"输出已可见 ⇒ 决策
+        # 已可判"钉成不变式。这不是负载超时——登记回调只需要事件循环转几拍。
+        process = self._processes.get(task.id)
+        if self._is_writable_process(task, process):
+            await asyncio.sleep(_WRITE_GRACE_SECONDS)
+            if self._is_writable_process(task, self._processes.get(task.id)):
+                return process
         if task.type not in {"local_agent", "remote_agent", "in_process_teammate"}:
             raise ValueError(f"Task {task.id} does not accept input")
         return await self._restart_agent_task(task)

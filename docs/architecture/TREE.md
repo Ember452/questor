@@ -293,7 +293,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/runtime/tasks/local_agent_task.py` | 30 |
 | `src/questorharness/runtime/tasks/local_shell_task.py` | 19 |
 | `src/questorharness/runtime/tasks/stop_task.py` | 13 |
-| `src/questorharness/runtime/tasks/task_manager.py` | 485 |
+| `src/questorharness/runtime/tasks/task_manager.py` | 520 |
 | `src/questorharness/state/__init__.py` | 6 |
 | `src/questorharness/state/app_state.py` | 32 |
 | `src/questorharness/state/store.py` | 42 |
