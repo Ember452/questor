@@ -224,6 +224,21 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 
 ---
 
+## 5.5 计划 02 交付记录（feat/studio-serve，阶段 1–3）
+
+按 `docs/plan/02-studio-serve-host.md` 交付，验收 commit 见该计划 §7。要点：
+
+- **契约**：`protocol/app-wire.schema.json` 为唯一真源，双侧 codegen（`serve/wire_types.py` /
+  `protocol/_gen/app-wire.ts`），两侧 `--check` 进 `scripts/check.py`；13 帧黄金样本在
+  `tests/fixtures/serve_wire/`（逐 kind 一例，构造器与样本逐字段比对）。
+- **宿主**：`bootstrap/hosts/serve/`（路由 / 广播 / SSE / 租约 / 提示桥），内存 transport 与
+  回环 TCP 共用同一组 handler；凭据五件套在 `serve/auth.py` + `serve/http_server.py`。
+- **形态**：`questorharness/profiles`（解析）+ `questor/profiles`（coding / personal 数据）+
+  `/rt/r1/profile`；工具面由 `allowed_tools / denied_tools` 经 `build_runtime` 进入 policy。
+- **删除**：frontend/terminal/（已删）、`backend_host.py` + OHJSON、`protocol.py`、`react_launcher.py`、
+  `--backend-only`；终端入口改为 `hosts/terminal_client.py`（瘦客户端）。
+- **门槛**：`scripts/check.py` 现有 37 步，其中 6 条是 serve 契约 / 删除刀守卫。
+
 ## 6. 触发条件（防止规划变成第二个项目）
 
 | 事项 | 触发条件（不满足就不做） |
