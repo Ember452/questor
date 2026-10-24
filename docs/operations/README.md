@@ -41,5 +41,6 @@ QUESTOR_RUN_E2E=1 uv run pytest -m e2e -v
 
 ## Documentation
 
-Current documentation is in `docs/`. The v1 archive in `docs-pre-reset-v1/` is
+Current documentation is in `docs/`. The v1 archive lives outside the repository at
+`../questor-archive/docs-pre-reset-v1/` (`docs-pre-reset-v1/README.md` is only a pointer), is
 read-only and must not be edited during current work.

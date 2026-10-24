@@ -13,7 +13,7 @@
 
 | 守则里写的 | 现状 |
 |---|---|
-| `docs/ROADMAP.md`、`docs/VISION.md`、`docs/design/`、`docs/pitfalls.md`、`docs/plan-archive/` | 旧版留在 `docs-pre-reset-v1/`（如 `docs-pre-reset-v1/VISION.md`、`docs-pre-reset-v1/design/HARD-CONSTRAINTS.md`、`docs-pre-reset-v1/pitfalls.md`）；活动文档改为 `docs/ARCHITECTURE.md`、`docs/adr/`、`docs/architecture/`、`docs/guides/`、`docs/operations/`、`docs/plan/` |
+| `docs/ROADMAP.md`、`docs/VISION.md`、`docs/design/`、`docs/pitfalls.md`、`docs/plan-archive/` | 旧版自 W10 起不在仓内：110 个文件搬到仓外 `../questor-archive/docs-pre-reset-v1/`（仓内 `docs-pre-reset-v1/README.md` 只是指针，如 `.../VISION.md`、`.../design/HARD-CONSTRAINTS.md`、`.../pitfalls.md`）；活动文档为 `docs/ARCHITECTURE.md`、`docs/adr/`、`docs/architecture/`、`docs/guides/`、`docs/operations/`、`docs/plan/` |
 | `CONTRIBUTING.md` | 仍在仓库根，但本文里的写法是 `./CONTRIBUTING.md`（从仓库根算），搬进 `docs/` 后需要手工补一层 `../` |
 
 所以读到 §5.5「Living Docs」时按上表把路径换成活路径；规则本身不变。守门用下面这行机器可读的

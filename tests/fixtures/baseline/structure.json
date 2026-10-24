@@ -9,7 +9,7 @@
     "archive_files": {
       "caliber": "git ls-files docs-pre-reset-v1",
       "gate": true,
-      "value": 110
+      "value": 1
     },
     "banned_name_files": {
       "caliber": "basename in ADR-0003 section 3 banned list",
@@ -117,10 +117,10 @@
       "value": 1178
     },
     "root_agents": {
-      "bytes": 4786,
+      "bytes": 4827,
       "caliber": "len(read_text('AGENTS.md').splitlines())",
       "gate": true,
-      "value": 87
+      "value": 88
     },
     "src_files": {
       "caliber": "git ls-files src | *.py",
@@ -153,7 +153,7 @@
     }
   },
   "pin": {
-    "commit": "c36305eb5026b751332f8ee8b8a8b1d66495e2da",
+    "commit": "707eb9c87cdef89284b6e3e5b4c0879f5dd8beed",
     "date": "2026-10-23"
   }
 }

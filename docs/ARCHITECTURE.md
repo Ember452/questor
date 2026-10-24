@@ -18,7 +18,7 @@
 | `tests/e2e/` | Real end-to-end suites and their pytest gate |
 | `scripts/` | Operational scripts only |
 | `docs/` | Current documentation |
-| `docs-pre-reset-v1/` | Archived v1 documentation, read-only |
+| `docs-pre-reset-v1/` | One-line pointer; the v1 archive itself lives outside the repository |
 
 Both Python packages use the `src` layout. Do not add importable packages at the
 repository root.

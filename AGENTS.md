@@ -5,7 +5,8 @@ here: §0–§6 of the old file moved verbatim to [docs/CONVENTIONS.md](./docs/C
 Priority: user instruction → [ARCHITECTURE](./docs/ARCHITECTURE.md) → [docs/adr](./docs/adr)
 → [docs/architecture](./docs/architecture) → [docs/plan](./docs/plan) → elsewhere. The rulebook's
 own §5.5 still cites the pre-reset doc set (`docs/design/`, `docs/ROADMAP.md`, `docs/pitfalls.md`);
-those files now live under `docs-pre-reset-v1/` — see the 勘误 block at the top of CONVENTIONS.md.
+those files left the repository in W10 — see the pointer at `docs-pre-reset-v1/README.md` and the
+勘误 block at the top of CONVENTIONS.md.
 Never work from memory: these links are the truth, and they move.
 
 ## 顶层结构

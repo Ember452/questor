@@ -94,7 +94,8 @@ Checks:
 - repository paths written in backticks, such as `src/...` and `tests/...`
 - empty documentation sets or reference sets when `--fail-on-empty` is used
 
-The v1 archive in `docs-pre-reset-v1/` is excluded.
+The v1 archive is out of scope: it left the repository in W10, and the only tracked file
+under `docs-pre-reset-v1/` is the pointer README.
 
 ## `check_layout.py`
 
