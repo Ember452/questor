@@ -10,8 +10,7 @@ modules are reshaped.
 
 from __future__ import annotations
 
-from questorharness.bootstrap.hosts.backend_host import run_backend_host
-from questorharness.bootstrap.hosts.react_launcher import get_frontend_dir, resolve_npm, resolve_tsx
+from questorharness.bootstrap.hosts.terminal_client import run_terminal_repl
 from questorharness.bootstrap.runtime import (
     RuntimeBundle,
     build_runtime,
@@ -125,7 +124,6 @@ __all__ = [
     "format_datetime",
     "generate_memory_id",
     "get_base_system_prompt",
-    "get_frontend_dir",
     "handle_line",
     "last_user_text",
     "list_profiles",
@@ -137,9 +135,7 @@ __all__ = [
     "persistable_tool_metadata",
     "register_notification_handler",
     "render_memory_file",
-    "resolve_npm",
-    "resolve_tsx",
-    "run_backend_host",
+    "run_terminal_repl",
     "sanitize_conversation_messages",
     "sanitize_snapshot_payload",
     "scan_memory_files",

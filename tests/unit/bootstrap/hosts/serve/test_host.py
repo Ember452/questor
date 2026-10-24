@@ -15,6 +15,6 @@ def test_host_wires_notifier_and_keeps_injected_runtime(tmp_path: Path) -> None:
     runtime = SimpleNamespace(cwd=str(tmp_path), session_id="sid")
     host = ServeHost(runtime, authority=authority, profile_root=tmp_path)  # type: ignore[arg-type]
     assert host.runtime is runtime
-    assert authority._on_prompt is not None  # noqa: SLF001 - 校验接线
+    assert authority._on_prompt is not None
     assert host.profile_id == "coding"
     assert host.router is not None

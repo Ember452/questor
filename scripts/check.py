@@ -78,6 +78,7 @@ STEPS: tuple[Step, ...] = (
         "persistence-version",
         (PYTHON, "-m", "pytest", "tests/ci/test_persistence_version.py", "-q"),
     ),
+    Step("legacy-host-removed", (PYTHON, "-m", "pytest", "tests/ci/test_legacy_host_removed.py", "-q")),
     Step(
         "baseline-check",
         # 不传 --fast:pytest 收集计数与 node-id 集是这份基线存在的意义,

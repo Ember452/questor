@@ -68,7 +68,7 @@ def test_approval_settles_once_and_only_for_owner() -> None:
         authority.begin("owner", "r1", "one")
         waiter = asyncio.create_task(authority.permission_prompt("bash", "rm -rf x"))
         await asyncio.sleep(0)
-        prompt_id = next(iter(authority._prompts))  # noqa: SLF001 - 单测读取内部表
+        prompt_id = next(iter(authority._prompts))
         with pytest.raises(refusals.Refusal) as excinfo:
             authority.settle(prompt_id, True, "intruder")
         assert excinfo.value.code == refusals.APPROVAL_NOT_OWNER
@@ -88,7 +88,7 @@ def test_ask_uses_ask_specific_refusal_codes() -> None:
         authority.begin("owner", "r1", "one")
         waiter = asyncio.create_task(authority.ask_user_prompt("which file?"))
         await asyncio.sleep(0)
-        prompt_id = next(iter(authority._prompts))  # noqa: SLF001
+        prompt_id = next(iter(authority._prompts))
         with pytest.raises(refusals.Refusal) as excinfo:
             authority.settle(prompt_id, "a.txt", "intruder")
         assert excinfo.value.code == refusals.ASK_NOT_OWNER

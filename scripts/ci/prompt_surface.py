@@ -66,11 +66,10 @@ class Host:
     provenance: str
 
 
-# All four hosts share one assembly function (bootstrap/runtime.py:367); the
+# The remaining hosts share one assembly function (bootstrap/runtime.py:367); the
 # differences below are the inputs each host really passes.
 HOSTS: tuple[Host, ...] = (
     Host("cli", True, None, False, "bootstrap/runtime.py:367 with default settings"),
-    Host("desktop", True, "Summarize the open editor.", False, "bootstrap/hosts/backend_host.py via build_runtime"),
     Host("channel", False, None, True, "questor/gateway/runtime.py:702 include_project_memory=False"),
     Host("cron", True, "Run the scheduled task.", False, "bootstrap/runtime.py:680 with a cron prompt"),
 )
@@ -237,7 +236,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         for host in HOSTS:
             print(f"{host.name}: {host.provenance}")
         return 0
-    assert len(HOSTS) == 4, "host coverage dropped below four"
+    # 阶段 2 删除刀：desktop（React backend）宿主消失，覆盖数从 4 降到 3。
+    assert len(HOSTS) == 3, "host coverage dropped below three"
     return record() if args.record else check()
 
 

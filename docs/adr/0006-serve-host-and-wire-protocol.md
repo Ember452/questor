@@ -74,7 +74,7 @@ Electron（`apps/desktop`）与浏览器（`apps/web`）。现状却是每个客
 
 ## Consequences
 
-- 判死清单（`frontend/terminal`、`backend_host` + OHJSON、`react_launcher`、
+- 判死清单（frontend/terminal（阶段 2 已删除）、`backend_host` + OHJSON、`react_launcher`、
   `--backend-only`）与删除红线归 ADR-0005 Updated 2026-10-24；阶段推进与
   验收标准归 `docs/plan/02-studio-serve-host.md`。
 - `bootstrap/hosts` 收缩后，宿主面只剩 serve 装配与进程内入口；`surfaces`

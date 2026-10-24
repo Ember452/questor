@@ -1,7 +1,7 @@
 """单写者租约、幂等表、排队槽与三模态提示桥。
 
 一个 RuntimeBundle 同时只允许一个 active turn；提示（approval / ask / edit）
-以 Future 形式挂在这里，由 HTTP 路由结算——这正是原 backend_host 的形状，
+以 Future 形式挂在这里，由 HTTP 路由结算——这正是旧 React 宿主的形状，
 移植而非重新发明。提示打开时通过注入的 ``on_prompt`` 回调交给宿主广播。
 """
 

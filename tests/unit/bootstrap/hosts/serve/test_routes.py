@@ -6,8 +6,6 @@ import asyncio
 import json
 from pathlib import Path
 
-import pytest
-
 from questorharness.bootstrap.hosts.serve.authority import Authority, TurnRecord
 from questorharness.bootstrap.hosts.serve.broadcaster import Broadcaster
 from questorharness.bootstrap.hosts.serve.routes import Router

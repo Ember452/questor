@@ -126,7 +126,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `config/` | 已收敛为叶子：模型与加载同包，只依赖 `platform` + `contracts`；`resolve_auth` 已移到 `providers.auth.resolver` | `config → providers` 已归零 |
 | `bridge/` | `runtime/bridge/`（已完成） | 有策略时再拆 |
 | `questor/gateway/` | **Phase 1 不动**（W5） | 协议路由进 `surfaces/gateway/`，产品策略留在产品包 |
-| `frontend/terminal/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `apps/terminal/`；wheel force-include 同步删除 |
+| frontend/terminal/（阶段 2 已删除） | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `apps/terminal/`；wheel force-include 同步删除 |
 
 > `mcp` 不能整体挂在 eager 的 `capabilities/tools/__init__.py` 之下：`config.settings` 需要 `McpServerConfig`，导入 `capabilities.tools.mcp.types` 会执行整个工具门面，形成 `config → tools → agent_tool → swarm → tasks → config` 循环。Phase 1 实测后改为 transport 落 `providers/mcp/`，工具适配器留 `capabilities/tools/mcp/`；Phase 2 再做瘦身与策略拆分。
 
@@ -138,7 +138,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 - 不改函数签名、不改协议、不改事件/快照类型；
 - 不引入新依赖；
 - 不建 `contracts/`、`kernel/`、`profiles/`；
-- 不动 `frontend/terminal/`、不建 `apps/desktop` / `apps/web`；
+- 不动 frontend/terminal/（阶段 2 已删除）、不建 `apps/desktop` / `apps/web`；
 - 不写 memory provider；ADR-0004 只记录契约，代码到 Phase 3。
 - **不做任何语义归位**（这些都不是 move-only，归 Phase 2）：config 注入、`state/` 拆分、`plugins/skills` 拆代码与数据、`prompts/` 重定位、`ui/` 移除、`utils/` 解散。
 

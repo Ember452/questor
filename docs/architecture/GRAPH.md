@@ -23,7 +23,7 @@
 | `questorharness` | — |
 | `questorharness.__main__` | `questorharness.bootstrap` |
 | `questorharness.api` | `questorharness.bootstrap`, `questorharness.capabilities`, `questorharness.commands`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.platform`, `questorharness.profiles`, `questorharness.providers`, `questorharness.runtime`, `questorharness.surfaces` |
-| `questorharness.bootstrap` | `questorharness.capabilities`, `questorharness.commands`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.keybindings`, `questorharness.output_styles`, `questorharness.platform`, `questorharness.plugins`, `questorharness.profiles`, `questorharness.providers`, `questorharness.runtime`, `questorharness.state`, `questorharness.themes` |
+| `questorharness.bootstrap` | `questorharness.capabilities`, `questorharness.commands`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.keybindings`, `questorharness.platform`, `questorharness.plugins`, `questorharness.profiles`, `questorharness.providers`, `questorharness.runtime`, `questorharness.state` |
 | `questorharness.capabilities` | `questorharness.config`, `questorharness.contracts`, `questorharness.execution`, `questorharness.platform` |
 | `questorharness.commands` | `questorharness.capabilities`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.keybindings`, `questorharness.output_styles`, `questorharness.platform`, `questorharness.plugins`, `questorharness.providers`, `questorharness.runtime`, `questorharness.state`, `questorharness.themes` |
 | `questorharness.config` | `questorharness.contracts`, `questorharness.platform` |
@@ -56,16 +56,16 @@
 
 | module | imported by | 类型 |
 | --- | ---: | --- |
-| `questorharness.config.settings` | 41 | 实现 |
+| `questorharness.config.settings` | 39 | 实现 |
 | `questorharness.platform.paths` | 30 | 原语 |
-| `questorharness.api` | 29 | 门面 |
-| `questorharness.contracts.domain.message` | 28 | 契约 |
-| `questorharness.providers.auth.auth_manager` | 18 | 实现 |
-| `questorharness.contracts.domain.events` | 17 | 契约 |
+| `questorharness.contracts.domain.message` | 27 | 契约 |
+| `questorharness.api` | 25 | 门面 |
+| `questorharness.providers.auth.auth_manager` | 17 | 实现 |
+| `questorharness.contracts.domain.events` | 16 | 契约 |
 | `questorharness.config` | 15 | 门面 |
 | `questorharness.contracts.hooks` | 14 | 契约 |
 | `questorharness.platform.io` | 14 | 原语 |
-| `questorharness.contracts.mcp` | 11 | 契约 |
+| `questorharness.contracts.usage` | 11 | 契约 |
 
 ## 包级扇入（Top10）
 
@@ -74,13 +74,13 @@
 
 | package | imported by |
 | --- | ---: |
-| `questorharness.contracts` | 121 |
+| `questorharness.contracts` | 117 |
 | `questorharness.platform` | 65 |
 | `questorharness.capabilities` | 61 |
-| `questorharness.config` | 61 |
-| `questorharness.providers` | 61 |
-| `questorharness.runtime` | 39 |
-| `questorharness.api` | 29 |
+| `questorharness.config` | 59 |
+| `questorharness.providers` | 59 |
+| `questorharness.runtime` | 34 |
+| `questorharness.api` | 25 |
 | `questorharness.plugins` | 14 |
 | `questor.workspace` | 9 |
 | `questorharness.execution` | 8 |

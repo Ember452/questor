@@ -87,7 +87,7 @@
 | B2 | 引擎事件类型数 | **7**：`AssistantTextDelta`/`AssistantTurnComplete`/`ToolExecutionStarted`/`ToolExecutionCompleted`/`ErrorEvent`/`StatusEvent`/`CompactProgressEvent`（frozen dataclass，含 9 相位 Literal）。**勘误：ADR-0006 §5 与本计划旧版写"8 种"，与实测不符** | 读 `src/questorharness/contracts/domain/events.py` |
 | B3 | 事件 id 字段 | **零**——wire id 全部在适配层铸造 | 同上 |
 | B4 | 服务端依赖 | 无 aiohttp；`httpx` 仅客户端；`rich` 已在 | 读 `pyproject.toml` |
-| B5 | 旧 UI 链（阶段 2 删除对象） | `frontend/terminal`（ink 5/react 18/tsx）；`src/questorharness/bootstrap/hosts/backend_host.py`、`react_launcher.py`、`protocol.py`、`app.py` 的 `run_repl` | `ls` + 读文件 |
+| B5 | 旧 UI 链（阶段 2 删除对象） | frontend/terminal（阶段 2 已删除）（ink 5/react 18/tsx）；src/questorharness/bootstrap/hosts/backend_host.py（阶段 2 已删除）、`react_launcher.py`、`protocol.py`、`app.py` 的 `run_repl` | `ls` + 读文件 |
 | B6 | backend_host 消费者 | `src/questorharness/api.py:13,138`（re-export `run_backend_host`）；`src/questor/runtime.py:13,45` | `grep -rn "backend_host\|OHJSON" src` |
 | B7 | prompt_surface 基线 | 4 份：channel/cli/cron/desktop | `ls tests/fixtures/baseline/prompt_surface` |
 | B8 | apps/ 注册 | `docs/architecture/STRUCTURE.md:5,40,138,447,452,468`；:468 明文"apps/web 必须能单独在浏览器跑" | 读 STRUCTURE |
@@ -289,13 +289,13 @@ DeepCode **src/rpc/contracts.ts** 的 `ClientRuntime` 方法清单与 Reasonix `
 
 ### 阶段 2：终端 REPL 瘦客户端 + 删除刀（同一刀）
 
-**前置核查**：①`src/questorharness/bootstrap/hosts/protocol.py` 是否只服务 backend_host；
+**前置核查**：①src/questorharness/bootstrap/hosts/protocol.py（阶段 2 已删除） 是否只服务 backend_host；
 ②`src/questor/runtime.py:45` 的产品交互场景是否真实需要 REPL 入口。
 **新建**：**src/questorharness/bootstrap/hosts/terminal_client.py**（内存 transport 客户端 +
 rich StreamRenderer + 三模态终端问答，B13 模式；Ctrl-C → `/cancel`，与浏览器 Stop 同一端点）。
 **复用强制项**：REPL 主循环 = `handle_line` 注入 rich 渲染器（与 /submit 同链）；斜杠命令 =
 B15 registry 零重写；单写者租约复用阶段 1 的 `authority.py`。
-**动作**：`app.py` 的 `run_repl` 改调 terminal_client；**同刀删除**：`frontend/terminal/`、
+**动作**：`app.py` 的 `run_repl` 改调 terminal_client；**同刀删除**：frontend/terminal/（阶段 2 已删除）、
 `backend_host.py` + OHJSON、`react_launcher.py` + React TUI 启动路径、`--backend-only`、
 `api.py:13,138` re-export、`src/questor/runtime.py:13,45` 改造；appearance 四包（themes/
 keybindings/vim/output_styles）按 REPL 实际渲染需求裁决；`prompt_surface/desktop.txt` 移除；
@@ -475,7 +475,7 @@ Agents）在五卡之后逐张评估。
 
 1. 契约 codegen 守卫红了想"先跳过"——禁止。
 2. 想改既有 kind/字段名——停，回 ADR-0006 补变更记录并经用户批准。
-3. 想在阶段 2 之前删 `frontend/terminal` 或 backend_host 链——禁止，时点锁死阶段 2。
+3. 想在阶段 2 之前删 frontend/terminal（阶段 2 已删除） 或 backend_host 链——禁止，时点锁死阶段 2。
 4. vendored 树想顺手重构/拆分——禁止，第一刀零修改（4a-3 的目录改名是**已登记的一刀**，
    不属于顺手重构；其他拆分在后置池）。
 5. 启动扇出表之外的端点被调用致 404——停，先补表再实现。

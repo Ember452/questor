@@ -19,7 +19,7 @@
     "capabilities_size": {
       "caliber": "git ls-files src | non-__init__ under capabilities/",
       "gate": true,
-      "ratio": 31.1,
+      "ratio": 31.0,
       "subdirs_ge2": 18,
       "tool_files": 44,
       "value": 87
@@ -57,8 +57,8 @@
         "R2": 1,
         "R4": 1,
         "R5": 1,
-        "R7": 154,
-        "R8": 31
+        "R7": 152,
+        "R8": 30
       }
     },
     "long_files": {
@@ -68,7 +68,7 @@
       "max_file": "src/questorharness/capabilities/context/compact/__init__.py",
       "over_limit": 0,
       "value": 1,
-      "warning_band": 4
+      "warning_band": 3
     },
     "mypy_errors": {
       "caliber": "uv run mypy src (historical pin; gate lives in check_mypy_scope.py from W4)",
@@ -116,7 +116,7 @@
       "value": 1178
     },
     "root_agents": {
-      "bytes": 7054,
+      "bytes": 7043,
       "caliber": "len(read_text('AGENTS.md').splitlines())",
       "gate": true,
       "value": 114
@@ -124,22 +124,22 @@
     "src_files": {
       "caliber": "git ls-files src | *.py",
       "gate": true,
-      "modules": 280,
-      "value": 347
+      "modules": 281,
+      "value": 348
     },
     "test_files": {
       "caliber": "git ls-files tests | *.py",
-      "e2e": 12,
+      "e2e": 13,
       "gate": true,
       "integration": 32,
-      "unit": 149,
-      "value": 202
+      "unit": 150,
+      "value": 205
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
       "gate": true,
-      "percent": 46.4,
-      "value": "130/280"
+      "percent": 47.3,
+      "value": "133/281"
     },
     "tool_radius": {
       "caliber": "shared files a new tool must touch: registration point + consumers with hard-coded names",
@@ -152,7 +152,7 @@
     }
   },
   "pin": {
-    "commit": "9508560efab4211371b87fd8db8bd42cf7d8ea53",
+    "commit": "f05ac1ceb68e1792f03e5b13384c1b2741ad9f24",
     "date": "2026-10-24"
   }
 }

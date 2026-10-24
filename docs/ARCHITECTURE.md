@@ -12,7 +12,7 @@
 | --- | --- |
 | `src/questorharness/` | Engine: agent loop, providers, tools, permissions, memory, channels, cron, sandbox |
 | `src/questor/` | Product app: gateway, onboarding, workspace, Feishu group policy |
-| `frontend/terminal/` | Terminal UI (deprecated, ADR-0005 Updated 2026-10-24; removed in the same change that lands the REPL thin client — see plan 02) |
+| frontend/terminal/（阶段 2 已删除） | Terminal UI (deprecated, ADR-0005 Updated 2026-10-24; removed in the same change that lands the REPL thin client — see plan 02) |
 | `tests/unit/` | Fast, isolated tests |
 | `tests/integration/` | Tests crossing process, filesystem, transport, or service boundaries |
 | `tests/e2e/` | Real end-to-end suites and their pytest gate |

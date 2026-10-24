@@ -2,22 +2,33 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 import os
 import sys
 from pathlib import Path
 
-from questorharness.api import SupportsStreamingMessages
-from questorharness.api import AssistantTextDelta, AssistantTurnComplete, CompactProgressEvent, ErrorEvent, StatusEvent
-from questorharness.api import run_backend_host
-from questorharness.api import build_runtime, close_runtime, handle_line, start_runtime
-from questorharness.api import resolve_npm, resolve_tsx, get_frontend_dir
-
 from questor.memory import create_memory_command_backend
 from questor.prompts import build_questor_system_prompt
 from questor.session_storage import QuestorSessionBackend
-from questor.workspace import get_memory_dir, get_plugins_dir, get_sessions_dir, get_skills_dir, initialize_workspace
+from questor.workspace import (
+    get_memory_dir,
+    get_plugins_dir,
+    get_sessions_dir,
+    get_skills_dir,
+    initialize_workspace,
+)
+from questorharness.api import (
+    AssistantTextDelta,
+    AssistantTurnComplete,
+    CompactProgressEvent,
+    ErrorEvent,
+    StatusEvent,
+    SupportsStreamingMessages,
+    build_runtime,
+    close_runtime,
+    handle_line,
+    run_terminal_repl,
+    start_runtime,
+)
 
 
 def _questor_extra_roots(workspace: str | Path | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -42,106 +53,29 @@ async def run_questor_backend(
     cwd_path = str(Path(cwd or Path.cwd()).resolve())
     workspace_root = initialize_workspace(workspace)
     extra_skill_dirs, extra_plugin_roots = _questor_extra_roots(workspace_root)
-    return await run_backend_host(
+    return await run_terminal_repl(
         cwd=cwd_path,
         model=model,
         max_turns=max_turns,
         system_prompt=build_questor_system_prompt(cwd_path, workspace=workspace_root),
-        active_profile=provider_profile,
         api_client=api_client,
         restore_messages=restore_messages,
         restore_tool_metadata=restore_tool_metadata,
-        enforce_max_turns=max_turns is not None,
-        session_backend=QuestorSessionBackend(workspace_root),
-        extra_skill_dirs=extra_skill_dirs,
-        extra_plugin_roots=extra_plugin_roots,
-        memory_backend=create_memory_command_backend(workspace_root),
-        include_project_memory=False,
-        autodream_context={
-            "memory_dir": str(get_memory_dir(workspace_root)),
-            "session_dir": str(get_sessions_dir(workspace_root)),
-            "app_label": "questor personal memory",
-            "runner_module": "questor",
+        overrides={
+            "active_profile": provider_profile,
+            "session_backend": QuestorSessionBackend(workspace_root),
+            "extra_skill_dirs": extra_skill_dirs,
+            "extra_plugin_roots": extra_plugin_roots,
+            "memory_backend": create_memory_command_backend(workspace_root),
+            "include_project_memory": False,
+            "autodream_context": {
+                "memory_dir": str(get_memory_dir(workspace_root)),
+                "session_dir": str(get_sessions_dir(workspace_root)),
+                "app_label": "questor personal memory",
+                "runner_module": "questor",
+            },
         },
     )
-
-
-def build_questor_backend_command(
-    *,
-    cwd: str | None = None,
-    workspace: str | Path | None = None,
-    model: str | None = None,
-    max_turns: int | None = None,
-    provider_profile: str | None = None,
-) -> list[str]:
-    """Return the backend command for the React terminal UI."""
-    command = [sys.executable, "-m", "questor", "--backend-only"]
-    if cwd:
-        command.extend(["--cwd", cwd])
-    if workspace:
-        command.extend(["--workspace", str(workspace)])
-    if model:
-        command.extend(["--model", model])
-    if max_turns is not None:
-        command.extend(["--max-turns", str(max_turns)])
-    if provider_profile:
-        command.extend(["--profile", provider_profile])
-    return command
-
-
-async def launch_questor_react_tui(
-    *,
-    cwd: str | None = None,
-    workspace: str | Path | None = None,
-    model: str | None = None,
-    max_turns: int | None = None,
-    provider_profile: str | None = None,
-) -> int:
-    """Launch the shared React terminal UI with an questor backend."""
-    frontend_dir = get_frontend_dir()
-    package_json = frontend_dir / "package.json"
-    if not package_json.exists():
-        raise RuntimeError(f"React terminal frontend is missing: {package_json}")
-
-    npm = resolve_npm()
-    if not (frontend_dir / "node_modules").exists():
-        install = await asyncio.create_subprocess_exec(
-            npm,
-            "install",
-            "--no-fund",
-            "--no-audit",
-            cwd=str(frontend_dir),
-        )
-        if await install.wait() != 0:
-            raise RuntimeError("Failed to install React terminal frontend dependencies")
-
-    cwd_path = str(Path(cwd or Path.cwd()).resolve())
-    workspace_root = initialize_workspace(workspace)
-    env = os.environ.copy()
-    env["QUESTORHARNESS_FRONTEND_CONFIG"] = json.dumps(
-        {
-            "backend_command": build_questor_backend_command(
-                cwd=cwd_path,
-                workspace=workspace_root,
-                model=model,
-                max_turns=max_turns,
-                provider_profile=provider_profile,
-            ),
-            "initial_prompt": None,
-            "theme": "default",
-        }
-    )
-    tsx_cmd = resolve_tsx(frontend_dir)
-    process = await asyncio.create_subprocess_exec(
-        *tsx_cmd,
-        "src/index.tsx",
-        cwd=str(frontend_dir),
-        env=env,
-        stdin=None,
-        stdout=None,
-        stderr=None,
-    )
-    return await process.wait()
 
 
 async def run_questor_print_mode(
@@ -216,5 +150,6 @@ async def run_questor_print_mode(
         return 1 if saw_error else 0
     finally:
         os.chdir(previous_cwd)
+
 
 # questor: allow R7 -- until W8 adds the mirror test

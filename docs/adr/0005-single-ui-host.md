@@ -9,7 +9,7 @@
 
 当前仓内同时存在两套终端 UI：
 
-- `frontend/terminal`：Node Ink（`ink` 5 / `react` 18 / `tsx`），打包时以 force-include 注入 `questorharness/_frontend`；
+- frontend/terminal（阶段 2 已删除）：Node Ink（`ink` 5 / `react` 18 / `tsx`），打包时以 force-include 注入 `questorharness/_frontend`；
 - `src/questorharness/bootstrap/hosts`：Python IPC 宿主，历史上依赖 `textual` 与 `prompt-toolkit`。
 
 同时产品路线要求 Electron 桌面端（`apps/desktop` + `apps/web`），并且 personal / coding 两种模式要共用同一套 run/session。三套 UI 意味着三份状态投影、三份输入/快捷键/主题实现，以及两条打包链。
@@ -51,7 +51,7 @@
 
 ## Verification
 
-- Phase 1 结束时：改动文件不包含 `themes/`、`keybindings/`、`vim/`、`output_styles/`、`frontend/terminal`。
+- Phase 1 结束时：改动文件不包含 `themes/`、`keybindings/`、`vim/`、`output_styles/`、frontend/terminal（阶段 2 已删除）。
 - Phase 2 移除后（2026-10-23 实测）：
   - `rg "questorharness\.ui|prompt_toolkit|textual" src` 为 0；
   - `uv run questorharness --help` 与 `uv run python -m questor --help` 输出逐字不变；
@@ -69,10 +69,10 @@
    transport（不开端口、无凭据），Studio/Web 走回环 TCP + 凭据五件套。
 2. **判死清单**（删除时点 = REPL 瘦客户端验收通过的**同一次变更**，见
    `docs/plan/02-studio-serve-host.md` 阶段 2）：
-   - `frontend/terminal/`（Node Ink）；
-   - `src/questorharness/bootstrap/hosts/backend_host.py` 及其 OHJSON stdio 协议
+   - frontend/terminal/（阶段 2 已删除）（Node Ink）；
+   - src/questorharness/bootstrap/hosts/backend_host.py（已删除，2026-10-24 阶段 2） 及其 OHJSON stdio 协议
      （`protocol.py` 的 `OHJSON:` 前缀）；
-   - `src/questorharness/bootstrap/hosts/react_launcher.py` 与 `hosts/app.py`
+   - src/questorharness/bootstrap/hosts/react_launcher.py（已删除，2026-10-24 阶段 2） 与 `hosts/app.py`
      的 React TUI 启动路径；
    - `--backend-only` CLI 开关（`bootstrap/cli/main.py`）。
    在判死前**不加任何新能力**；缺陷照修（2026-10-24 的宿主兜底与
@@ -87,6 +87,6 @@
 5. **删除刀红线**（进 Verification）：
    - `rg "OHJSON|backend_host" src` = 0；
    - `rg "react_launcher|--backend-only" src pyproject.toml` = 0；
-   - `frontend/terminal` 目录消失，打包不再 force-include 任何前端产物；
+   - frontend/terminal（阶段 2 已删除） 目录消失，打包不再 force-include 任何前端产物；
    - 删除同一刀内完成 `prompt_surface/desktop.txt`、`doctor.txt`、help 基线
      与 TREE/GRAPH/structure 基线重录（`--refresh-baseline --reason`）。
