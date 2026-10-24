@@ -100,22 +100,28 @@ def _normalize(text: str) -> str:
     return text
 
 
-def _doctor_env() -> dict[str, str]:
-    """Run ``questor doctor`` against a scratch home, not the developer's.
+def _scratch_env(name: str) -> dict[str, str]:
+    """Build a child environment pinned to a one-shot scratch home.
 
-    doctor 的本职是诊断用户真实环境,而基线要的是**确定的环境**:不钉住
-    config/data,输出会随机器漂移(本机已配置的认证在 CI 上是 missing auth,
-    workspace 路径随 HOME 变化)。钉到 .tmp-baseline 下的一次性目录,两边
-    渲染的都是"全新机器"视图。
+    doctor 与 dry-run 的本职是反映真实环境,而基线要的是**确定的 环境**:
+    不钉住的话,输出随机器漂移——本机已配置的认证在 CI 上是 missing auth,
+    skill 发现会数到 ``~/.agents/skills`` 里装的每一个技能(基线曾因此带上
+    42 个只有这台机器有的条目)。HOME/USERPROFILE、config、data 全部指向
+    ``.tmp-baseline/<name>`` 下的一次性目录,两边渲染的都是"全新装机"视图。
+
+    注意:HOME 被重定向后**不能再用 ``uv run``**(uv 依赖家目录缓存),调用方
+    必须用 ``sys.executable -m ...`` 直跑 venv 解释器。
     """
     import shutil as _shutil
 
-    scratch = REPO_ROOT / ".tmp-baseline" / "doctor-env"
+    scratch = REPO_ROOT / ".tmp-baseline" / name
     if scratch.exists():
         _shutil.rmtree(scratch)
-    (scratch / "data").mkdir(parents=True)
-    (scratch / "config").mkdir(parents=True)
+    for sub in ("home", "data", "config"):
+        (scratch / sub).mkdir(parents=True)
     env = _child_env()
+    env["HOME"] = str(scratch / "home")
+    env["USERPROFILE"] = str(scratch / "home")
     env["QUESTORHARNESS_DATA_DIR"] = str(scratch / "data")
     env["QUESTORHARNESS_CONFIG_DIR"] = str(scratch / "config")
     return env
@@ -233,7 +239,16 @@ def _collect_outputs(*, fast: bool = False) -> tuple[dict[str, object], list[str
         if result.returncode != 0:
             errors.append(f"{name} exited {result.returncode}")
 
-    dry = _uv(["questorharness", "--dry-run"])
+    dry = subprocess.run(
+        [sys.executable, "-m", "questorharness", "--dry-run"],
+        cwd=REPO_ROOT,
+        env=_scratch_env("dryrun-env"),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     dry_text = _normalize(dry.stdout + dry.stderr)
     dry_text = "\n".join(line for line in dry_text.splitlines() if not GIT_LINE.match(line))
     outputs["dryrun.txt"] = dry_text + ("\n" if dry_text else "")
@@ -241,9 +256,9 @@ def _collect_outputs(*, fast: bool = False) -> tuple[dict[str, object], list[str
         errors.append(f"dry-run exited {dry.returncode}")
 
     doctor = subprocess.run(
-        ["uv", "run", "python", "-m", "questor", "doctor"],
+        [sys.executable, "-m", "questor", "doctor"],
         cwd=REPO_ROOT,
-        env=_doctor_env(),
+        env=_scratch_env("doctor-env"),
         capture_output=True,
         text=True,
         encoding="utf-8",
