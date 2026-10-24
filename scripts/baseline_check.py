@@ -47,7 +47,10 @@ HELP_COMMANDS = {
     "help-questor.txt": ["questor", "--help"],
 }
 
-SUMMARY_LINE = re.compile(r"^(\d+) passed, (\d+) skipped, (\d+) deselected")
+# pytest -q 的末行形如 ``1 failed, 1920 passed, 6 skipped, 10 deselected``;各项按需
+# 出现,所以按 "数字 + 结果名" 取,不写死顺序。
+OUTCOME_COUNT = re.compile(r"(\d+) (passed|failed|error|errors|skipped|deselected)")
+FAILED_LINE = re.compile(r"^FAILED ")
 LINT_LINE = re.compile(r"^Contracts: (\d+) kept, (\d+) broken\.")
 MESSAGES_LINE = re.compile(r"^messages= (\d+)$", re.MULTILINE)
 GIT_LINE = re.compile(r"^\s*-\s*Git:\s*yes \(branch:.*\)\s*$")
@@ -169,17 +172,27 @@ def _uv(args: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def _pytest_counts() -> tuple[dict[str, int], str]:
+    """Run the suite and return the counts that are comparable across machines.
+
+    基线不是在 CI 那个 OS 上录的(Windows 开发机 vs ubuntu runner),``passed`` 与
+    ``skipped`` 的拆分跟着平台走:23 个 POSIX-only 用例在 Windows 被 skip、在 Linux
+    真跑,于是同一套代码是 ``1898+29`` 还是 ``1920+6`` 取决于机器。能跨机器比的是
+    "收集到多少个"和 "deselect 了多少";失败由退出码与 FAILED 行报,不再伪装成
+    "summary not found"。
+    """
     result = _uv(["pytest", "-m", PYTEST_MARK, "-q"])
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     for line in reversed(lines):
-        match = SUMMARY_LINE.match(line)
-        if match:
-            counts = {
-                "passed": int(match.group(1)),
-                "skipped": int(match.group(2)),
-                "deselected": int(match.group(3)),
-            }
-            return counts, ""
+        if " passed" not in line:
+            continue
+        counts = {name: int(number) for number, name in OUTCOME_COUNT.findall(line)}
+        broken = counts.get("failed") or counts.get("error") or counts.get("errors")
+        if result.returncode != 0 or broken:
+            failures = [line for line in lines if FAILED_LINE.match(line)]
+            detail = "\n  ".join(failures) or line
+            return {}, f"pytest did not pass (exit {result.returncode}):\n  {detail}"
+        total = counts.get("passed", 0) + counts.get("skipped", 0) + counts.get("failed", 0)
+        return {"deselected": counts.get("deselected", 0), "total": total}, ""
     tail = "\n".join(lines[-15:])
     return {}, f"pytest summary not found (exit {result.returncode}):\n{tail}"
 
@@ -378,7 +391,9 @@ def check(*, fast: bool = False) -> int:
     summary = json.loads((BASELINE_DIR / "summary.json").read_text(encoding="utf-8"))
     if not fast:
         expected_counts = summary["pytest"]
-        if outputs["pytest"] != expected_counts:
+        # pytest 挂了已经由 _pytest_counts 报了具体 FAILED 行;这里只在拿到计数时
+        # 才比,不重复报一条 "counts changed -> {}"。
+        if outputs["pytest"] and outputs["pytest"] != expected_counts:
             failures.append(f"pytest counts changed: {expected_counts} -> {outputs['pytest']}")
     if outputs["lint"] != summary["lint"]:
         failures.append(f"lint changed: {summary['lint']} -> {outputs['lint']}")

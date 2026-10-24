@@ -12,8 +12,7 @@
   "node_id_count": 1928,
   "pytest": {
     "deselected": 10,
-    "passed": 1899,
-    "skipped": 29
+    "total": 1928
   },
   "snapshot_messages": 4
 }
