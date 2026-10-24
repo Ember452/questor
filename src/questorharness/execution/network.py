@@ -338,5 +338,3 @@ def _format_blocked_addresses(
             "web.resolution_mode=synthetic_dns and web.synthetic_dns_cidrs=<cidr>"
         )
     return message
-
-# questor: allow R7 -- until W8 adds the mirror test

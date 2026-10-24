@@ -33,7 +33,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/__init__.py` | 7 |
 | `src/questorharness/capabilities/context/__init__.py` | 1 |
 | `src/questorharness/capabilities/context/compact/__init__.py` | 1171 |
-| `src/questorharness/capabilities/context/compact/attachments.py` | 337 |
+| `src/questorharness/capabilities/context/compact/attachments.py` | 339 |
 | `src/questorharness/capabilities/context/compact/collapse.py` | 143 |
 | `src/questorharness/capabilities/context/compact/limits.py` | 98 |
 | `src/questorharness/capabilities/context/compact/prompts.py` | 96 |
@@ -188,7 +188,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/engine/tool_metadata.py` | 400 |
 | `src/questorharness/engine/vision.py` | 89 |
 | `src/questorharness/execution/__init__.py` | 15 |
-| `src/questorharness/execution/network.py` | 342 |
+| `src/questorharness/execution/network.py` | 340 |
 | `src/questorharness/execution/shell.py` | 147 |
 | `src/questorharness/keybindings/__init__.py` | 14 |
 | `src/questorharness/keybindings/default_bindings.py` | 13 |

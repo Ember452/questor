@@ -143,7 +143,7 @@ def create_recent_files_attachment_if_needed(
 ) -> CompactAttachment | None:
     if not isinstance(read_file_state, list) or not read_file_state:
         return None
-    lines = ["Recently read files that may still matter:"]
+    lines: list[str] = ["Recently read files that may still matter:"]
     entries: list[dict[str, Any]] = []
     normalized_entries = [
         entry
@@ -170,6 +170,10 @@ def create_recent_files_attachment_if_needed(
         if preview:
             lines.append(f"  Preview: {preview}")
         entries.append({"path": path, "span": span, "preview": preview, "timestamp": timestamp})
+    if not entries:
+        # Same contract as every sibling factory: nothing listable means nothing to
+        # carry across the compaction boundary, and no slot is consumed.
+        return None
     return _create_attachment("recent_files", "Recently read files", lines, metadata={"entries": entries})
 
 def create_task_focus_attachment_if_needed(
@@ -333,5 +337,3 @@ def _build_compact_attachments(
     ]
     attachments.extend(attachment for attachment in builders if attachment is not None)
     return attachments
-
-# questor: allow R7 -- until W8 adds the mirror test
