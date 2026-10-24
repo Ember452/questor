@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 
-from questorharness.cli_preview import (
+from questorharness.bootstrap.cli.preview import (
     _safe_short,
 )
 

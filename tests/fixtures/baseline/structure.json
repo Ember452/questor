@@ -66,7 +66,7 @@
       "caliber": "len(read_text(path).splitlines()) over tracked src/*.py",
       "gate": true,
       "max": 1190,
-      "max_file": "src/questorharness/cli.py",
+      "max_file": "src/questorharness/bootstrap/cli/main.py",
       "over_limit": 0,
       "value": 4,
       "warning_band": 5
@@ -117,7 +117,7 @@
       "value": 1178
     },
     "root_agents": {
-      "bytes": 4680,
+      "bytes": 4786,
       "caliber": "len(read_text('AGENTS.md').splitlines())",
       "gate": true,
       "value": 87
@@ -126,7 +126,7 @@
       "caliber": "git ls-files src | *.py",
       "gate": true,
       "modules": 265,
-      "value": 328
+      "value": 329
     },
     "test_files": {
       "caliber": "git ls-files tests | *.py",
@@ -153,7 +153,7 @@
     }
   },
   "pin": {
-    "commit": "2c2a60703d1f5a9314d8b2d5af62f29b468cab46",
+    "commit": "becde80dbe7bdacdbe6ea356a6303486f1b18a54",
     "date": "2026-10-23"
   }
 }

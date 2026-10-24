@@ -13,7 +13,7 @@ import typer
 __version__ = "0.1.0"
 
 
-from questorharness.cli_preview import (
+from questorharness.bootstrap.cli.preview import (
     _build_dry_run_preview,
     _format_dry_run_preview,
 )
@@ -44,15 +44,15 @@ app = typer.Typer(
 
 auth_app = typer.Typer(name="auth", help="Manage authentication")
 
-from questorharness.cli_autopilot import autopilot_app
-from questorharness.cli_cron import cron_app
-from questorharness.cli_mcp import mcp_app
-from questorharness.cli_plugin import plugin_app
+from questorharness.bootstrap.cli.autopilot_commands import autopilot_app
+from questorharness.bootstrap.cli.cron_commands import cron_app
+from questorharness.bootstrap.cli.mcp_commands import mcp_app
+from questorharness.bootstrap.cli.plugin_commands import plugin_app
 
 app.add_typer(mcp_app)
 app.add_typer(plugin_app)
-from questorharness.cli_config import config_app
-from questorharness.cli_provider import provider_app
+from questorharness.bootstrap.cli.config_commands import config_app
+from questorharness.bootstrap.cli.provider_commands import provider_app
 
 app.add_typer(auth_app)
 app.add_typer(provider_app)

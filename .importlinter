@@ -124,7 +124,7 @@ forbidden_modules =
     questorharness.output_styles
     questorharness.personalization
     questorharness.platform
-    questorharness.cli
+    questorharness.bootstrap.cli.main
 # The facade re-exports these modules; only direct product imports are forbidden.
 allow_indirect_imports = True
 

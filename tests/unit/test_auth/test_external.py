@@ -20,7 +20,7 @@ from questorharness.providers.auth.external import (
     refresh_claude_oauth_credential,
 )
 from questorharness.providers.auth.storage import ExternalAuthBinding, load_external_binding, store_external_binding
-from questorharness.cli import app
+from questorharness.bootstrap.cli.main import app
 from questorharness.config.settings import Settings, load_settings
 
 

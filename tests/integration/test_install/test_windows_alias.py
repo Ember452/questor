@@ -13,8 +13,8 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
 def test_pyproject_exposes_openh_console_script():
     data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     scripts = data["project"]["scripts"]
-    assert scripts["openh"] == "questorharness.cli:app"
-    assert scripts["oh"] == "questorharness.cli:app"
+    assert scripts["openh"] == "questorharness.bootstrap.cli.main:app"
+    assert scripts["oh"] == "questorharness.bootstrap.cli.main:app"
 
 
 def test_powershell_installer_recommends_openh_for_windows():

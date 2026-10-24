@@ -20,18 +20,10 @@
 | `questor.session_storage` | `questor.workspace`, `questorharness.api` |
 | `questor.workspace` | — |
 | `questorharness` | — |
-| `questorharness.__main__` | `questorharness.cli` |
+| `questorharness.__main__` | `questorharness.bootstrap` |
 | `questorharness.api` | `questorharness.bootstrap`, `questorharness.capabilities`, `questorharness.commands`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.platform`, `questorharness.providers`, `questorharness.runtime`, `questorharness.surfaces` |
 | `questorharness.bootstrap` | `questorharness.capabilities`, `questorharness.commands`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.keybindings`, `questorharness.output_styles`, `questorharness.platform`, `questorharness.plugins`, `questorharness.providers`, `questorharness.runtime`, `questorharness.state`, `questorharness.themes` |
 | `questorharness.capabilities` | `questorharness.config`, `questorharness.contracts`, `questorharness.execution`, `questorharness.platform` |
-| `questorharness.cli` | `questorharness.bootstrap`, `questorharness.cli_autopilot`, `questorharness.cli_config`, `questorharness.cli_cron`, `questorharness.cli_mcp`, `questorharness.cli_plugin`, `questorharness.cli_preview`, `questorharness.cli_provider`, `questorharness.config`, `questorharness.platform`, `questorharness.providers` |
-| `questorharness.cli_autopilot` | `questorharness.cli_preview`, `questorharness.runtime` |
-| `questorharness.cli_config` | `questorharness.commands`, `questorharness.config` |
-| `questorharness.cli_cron` | `questorharness.capabilities`, `questorharness.platform` |
-| `questorharness.cli_mcp` | `questorharness.config`, `questorharness.plugins`, `questorharness.providers` |
-| `questorharness.cli_plugin` | `questorharness.config`, `questorharness.plugins` |
-| `questorharness.cli_preview` | `questorharness.bootstrap`, `questorharness.capabilities`, `questorharness.commands`, `questorharness.config`, `questorharness.platform`, `questorharness.plugins`, `questorharness.providers` |
-| `questorharness.cli_provider` | `questorharness.config`, `questorharness.providers` |
 | `questorharness.commands` | `questorharness.capabilities`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.keybindings`, `questorharness.output_styles`, `questorharness.platform`, `questorharness.plugins`, `questorharness.providers`, `questorharness.runtime`, `questorharness.state`, `questorharness.themes` |
 | `questorharness.config` | `questorharness.contracts`, `questorharness.platform` |
 | `questorharness.contracts` | — |
@@ -77,7 +69,7 @@
 
 ### 文件（>1000 行）
 
-- `src/questorharness/cli.py`: 1190 lines
+- `src/questorharness/bootstrap/cli/main.py`: 1190 lines
 - `src/questorharness/capabilities/context/compact/__init__.py`: 1171 lines
 - `src/questorharness/runtime/swarm/permission_sync.py`: 1162 lines
 - `src/questor/gateway/runtime.py`: 1089 lines

@@ -60,7 +60,7 @@ exceptions, and one more is a failure.
 | 事件与消息协议 | `src/questorharness/contracts/domain/events.py` |
 | 配置模型与环境变量 | `src/questorharness/config/settings_models.py` |
 | 会话存储与快照 | `src/questorharness/platform/session_storage.py` |
-| 命令行入口 | `src/questorharness/cli.py` |
+| 命令行入口 | `src/questorharness/bootstrap/cli/main.py` |
 | 运行时装配根 | `src/questorharness/bootstrap/runtime.py` |
 | 桌面 / 后端宿主 | `src/questorharness/bootstrap/hosts/backend_host.py` |
 | 渠道适配（飞书 / QQ） | `src/questorharness/surfaces/channels` |

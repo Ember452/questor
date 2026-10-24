@@ -2,8 +2,8 @@
   "caliber": "non-__init__ modules per package outside the mypy whitelist; counts may only go down",
   "packages": {
     "src/questor": 19,
-    "src/questorharness": 10,
-    "src/questorharness/bootstrap": 6,
+    "src/questorharness": 2,
+    "src/questorharness/bootstrap": 14,
     "src/questorharness/capabilities": 81,
     "src/questorharness/commands": 16,
     "src/questorharness/engine": 9,

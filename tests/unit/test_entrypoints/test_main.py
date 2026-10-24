@@ -8,7 +8,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import questorharness.cli as cli
+import questorharness.bootstrap.cli.main as cli
 from questorharness.config import load_settings
 from questorharness.config.settings import Settings
 from questorharness.contracts.mcp import McpStdioServerConfig
@@ -46,9 +46,9 @@ def test_setup_flow_selects_profile_and_model(tmp_path: Path, monkeypatch):
     def fake_login(provider):
         logged_in.append(provider)
 
-    monkeypatch.setattr("questorharness.cli._select_setup_workflow", fake_select)
-    monkeypatch.setattr("questorharness.cli._prompt_model_for_profile", lambda profile: "gpt-5.4")
-    monkeypatch.setattr("questorharness.cli._login_provider", fake_login)
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._select_setup_workflow", fake_select)
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._prompt_model_for_profile", lambda profile: "gpt-5.4")
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._login_provider", fake_login)
 
     result = runner.invoke(app, ["setup"])
     assert result.exit_code == 0
@@ -104,11 +104,11 @@ def test_setup_flow_existing_api_key_profile_can_update_secret(tmp_path: Path, m
     manager.store_profile_credential("openai-compatible", "api_key", "old-key")
 
     selections = iter(["openai-compatible", "openai-compatible"])
-    monkeypatch.setattr("questorharness.cli._select_setup_workflow", lambda *args, **kwargs: next(selections))
-    monkeypatch.setattr("questorharness.cli._select_from_menu", lambda *args, **kwargs: next(selections))
-    monkeypatch.setattr("questorharness.cli._confirm_prompt", lambda *args, **kwargs: True)
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._select_setup_workflow", lambda *args, **kwargs: next(selections))
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._select_from_menu", lambda *args, **kwargs: next(selections))
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._confirm_prompt", lambda *args, **kwargs: True)
     monkeypatch.setattr("questorharness.providers.auth.flows.ApiKeyFlow.run", lambda self: "new-key")
-    monkeypatch.setattr("questorharness.cli._prompt_model_for_profile", lambda profile: "gpt-4.1")
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._prompt_model_for_profile", lambda profile: "gpt-4.1")
 
     result = runner.invoke(app, ["setup"])
 
@@ -132,9 +132,9 @@ def test_setup_flow_creates_kimi_profile_with_profile_scoped_key(tmp_path: Path,
         ]
     )
 
-    monkeypatch.setattr("questorharness.cli._select_setup_workflow", lambda *args, **kwargs: next(selections))
-    monkeypatch.setattr("questorharness.cli._select_from_menu", lambda *args, **kwargs: next(selections))
-    monkeypatch.setattr("questorharness.cli._text_prompt", lambda *args, **kwargs: next(prompts))
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._select_setup_workflow", lambda *args, **kwargs: next(selections))
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._select_from_menu", lambda *args, **kwargs: next(selections))
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._text_prompt", lambda *args, **kwargs: next(prompts))
     monkeypatch.setattr("questorharness.providers.auth.flows.ApiKeyFlow.run", lambda self: "sk-kimi-test")
 
     result = runner.invoke(app, ["setup"])
@@ -275,7 +275,7 @@ def test_dry_run_uses_preview_builder_and_skips_repl(monkeypatch):
     async def fake_run_repl(**kwargs):  # pragma: no cover - should never be called
         raise AssertionError(f"run_repl should not be called during dry-run: {kwargs}")
 
-    monkeypatch.setattr("questorharness.cli._build_dry_run_preview", fake_build_dry_run_preview)
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._build_dry_run_preview", fake_build_dry_run_preview)
     monkeypatch.setattr("questorharness.bootstrap.hosts.app.run_repl", fake_run_repl)
 
     result = runner.invoke(app, ["--dry-run", "--print", "ship it", "--model", "gpt-5.4"])
@@ -323,7 +323,7 @@ def test_dry_run_json_output(monkeypatch):
             "system_prompt_preview": "preview",
         }
 
-    monkeypatch.setattr("questorharness.cli._build_dry_run_preview", fake_build_dry_run_preview)
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._build_dry_run_preview", fake_build_dry_run_preview)
 
     result = runner.invoke(app, ["--dry-run", "--output-format", "json", "--print", "preview this"])
 
@@ -335,7 +335,7 @@ def test_dry_run_json_output(monkeypatch):
 
 def test_dry_run_rejects_continue_resume(monkeypatch):
     runner = CliRunner()
-    monkeypatch.setattr("questorharness.cli._build_dry_run_preview", lambda **kwargs: {"mode": "dry-run"})
+    monkeypatch.setattr("questorharness.bootstrap.cli.main._build_dry_run_preview", lambda **kwargs: {"mode": "dry-run"})
 
     result = runner.invoke(app, ["--dry-run", "--continue"])
 

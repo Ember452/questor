@@ -42,9 +42,9 @@ dev = [
 ]
 
 [project.scripts]
-questorharness = "questorharness.cli:app"
-oh = "questorharness.cli:app"
-openh = "questorharness.cli:app"
+questorharness = "questorharness.bootstrap.cli.main:app"
+oh = "questorharness.bootstrap.cli.main:app"
+openh = "questorharness.bootstrap.cli.main:app"
 questor = "questor.cli:app"
 
 [project.entry-points."questorharness.notification_handlers"]
