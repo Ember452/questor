@@ -71,7 +71,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/memory/session/__init__.py` | 33 |
 | `src/questorharness/capabilities/memory/session/document.py` | 79 |
 | `src/questorharness/capabilities/memory/session/store.py` | 75 |
-| `src/questorharness/capabilities/memory/team.py` | 90 |
+| `src/questorharness/capabilities/memory/team.py` | 107 |
 | `src/questorharness/capabilities/memory/usage.py` | 155 |
 | `src/questorharness/capabilities/policy/__init__.py` | 27 |
 | `src/questorharness/capabilities/policy/checker.py` | 202 |

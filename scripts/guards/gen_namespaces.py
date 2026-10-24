@@ -126,6 +126,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             "namespace document is stale; run `uv run python scripts/guards/gen_namespaces.py --write`",
             file=sys.stderr,
         )
+        # 直接给出差异行:这份文档的骨架从真实导入枚举,平台差异(若有)只有
+        # 看得到 diff 才能定位,一句 stale 在远端 CI 上等于零信息。
+        import difflib
+
+        diff = list(
+            difflib.unified_diff(
+                read_text(TARGET).splitlines(),
+                generated.splitlines(),
+                fromfile="NAMESPACES.md (committed)",
+                tofile="NAMESPACES.md (rendered here)",
+                lineterm="",
+                n=1,
+            )
+        )[:60]
+        if diff:
+            print("\n".join(diff), file=sys.stderr)
         return EXIT_RED
     print("namespace document: OK (up to date)")
     return EXIT_OK

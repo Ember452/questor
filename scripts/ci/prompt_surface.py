@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 from collections.abc import Sequence
@@ -119,6 +120,18 @@ def _tool_payload(host: Host) -> list[dict[str, object]]:
     return registry.to_api_schema()
 
 
+def _machine_independent(text: str) -> str:
+    """抹平两处随机器变化的渲染,让快照在任意平台可比。
+
+    ① 掩码后的路径分隔符:提示词里会出现 ``<REPO>\\CLAUDE.md`` 这类真实路径,
+    Windows 渲成反斜杠、Linux 渲成正斜杠;只替换掩码前缀,不动提示词正文。
+    ② cron 记忆目录的路径哈希(如 ``cron-15d23c73a196``):由当机 checkout
+    路径派生,任何机器都不该和别人一致,快照里只留 ``<HASH>`` 占位。
+    """
+    text = text.replace("<REPO>\\", "<REPO>/").replace("<HOME>\\", "<HOME>/")
+    return re.sub(r"cron-[0-9a-f]{6,}", "cron-<HASH>", text)
+
+
 def _render(host: Host) -> str:
     from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
     from questorharness.capabilities.skills.loader import configure_plugin_source
@@ -154,7 +167,7 @@ def _render(host: Host) -> str:
             "",
             "## system_prompt",
             "",
-            _normalize(prompt).rstrip(),
+            _machine_independent(_normalize(prompt)).rstrip(),
             "",
             "## tools",
             "",

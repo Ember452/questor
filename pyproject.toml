@@ -88,6 +88,11 @@ target-version = "py311"
 
 [tool.mypy]
 python_version = "3.11"
+# 分析平台钉死为 win32:typeshed 会按运行平台裁剪 msvcrt/fcntl 等属性,
+# 不钉的话本地(Windows)与 CI(Ubuntu)对 platform/locking.py 会给出相反的
+# 结论——一边是 unused type: ignore,一边是 attr-defined。严格白名单的
+# 验证基线在 Windows,两边按同一平台语义检查才有可比性。
+platform = "win32"
 strict = true
 # ``src/__init__.py`` makes ``src`` a package, so mypy would otherwise name the
 # same file ``src.questorharness...`` and ``questorharness...``. Pin the base.

@@ -94,13 +94,13 @@ Prefer a normal direct answer for simple tasks. Use subagents only when they mat
 
 # Project Instructions
 
-## <REPO>\CLAUDE.md
+## <REPO>/CLAUDE.md
 ```md
 行为守则见根目录 `AGENTS.md`（路由）与 `docs/CONVENTIONS.md`（§0–§6 原文）。
 ```
 
 # Memory
-- Persistent memory directory: <HOME>\.questorharness\data\memory\cli-c370a92e5eb2
+- Persistent memory directory: <HOME>/.questorharness\data\memory\cli-c370a92e5eb2
 - Use this directory to store durable project and repository context that should survive future sessions.
 - Prefer concise topic files plus an index entry in MEMORY.md.
 
