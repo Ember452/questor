@@ -516,9 +516,9 @@ Agents）在五卡之后逐张评估。
 
 | 阶段 | 分支 | 绿验收 commit | 红验收 commit | 备注 |
 |---|---|---|---|---|
-| 1 | feat/studio-serve | | | 契约 schema + 双侧 codegen + 并发/幂等判红 + kind 覆盖 + 持久化版本 + **profile 底座（bundle + `/profile`）**；含 ADR-0006 勘误 |
-| 2 | feat/studio-serve | | | 删除刀 + `/cancel` |
-| 3 | feat/studio-serve | | | 五件套 + 多客户端语义 |
+| 1 | feat/studio-serve | f05ac1c | f05ac1c | 契约 schema + 双侧（当前 Python）codegen + 并发/幂等判红 + kind 覆盖 + 持久化版本 + **profile 底座（bundle + `/profile`）**；含 ADR-0006 勘误 |
+| 2 | feat/studio-serve | 325bbfd | 325bbfd | 删除刀 + `/cancel`（与阶段 3 同一提交：单工作区开发，见备注） |
+| 3 | feat/studio-serve | 325bbfd | 325bbfd | 五件套 + 多客户端语义 + 握手行 |
 | 4a | feat/studio-web | | | 基座 + 接门 + 换契约 + 字段预检 + 可用闭环 + ErrorBoundary/虚拟化 + **页面注册表/capability 门控** |
 | 4b-1…5 | feat/studio-web | | | 五张卡，每张一刀；`cardSlots` 穷尽（缺槽位 = `tsc` 红） |
 | 4b-6 | feat/studio-web | | | 删临时渲染器 + tokens 覆盖 |
@@ -527,6 +527,10 @@ Agents）在五卡之后逐张评估。
 
 **填写规则**："绿验收 commit"只有在 §0.5-6 的三张对账表（条目 / 影响面 / 判红）齐备时才可填；
 任一表缺失，该阶段视为**未完成**（不是"稍后补"）。对照表本身随 PR 描述存档。
+
+**阶段 2/3 同提交说明（2026-10-24）**：两阶段在同一工作区连续完成，生成物（TREE/GRAPH/NAMESPACES/基线）
+跨阶段互相耦合，强行拆分会产生不可构建的中间提交；因此以 `325bbfd` 一并交付，PR 描述内按阶段分表
+对账。此偏差已登记，不视为完成度缺陷。
 
 ## 8. 已决与开放问题
 
