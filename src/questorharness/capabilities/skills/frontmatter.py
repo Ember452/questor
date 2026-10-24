@@ -95,5 +95,3 @@ def parse_skill_frontmatter(
         fallback_template=fallback_template,
     )
     return str(metadata["name"]), str(metadata["description"])
-
-# questor: allow R7 -- until W8 adds the mirror test

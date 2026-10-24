@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from questorharness.capabilities.skills._frontmatter import (
+from questorharness.capabilities.skills.frontmatter import (
     optional_frontmatter_str,
     parse_bool_frontmatter,
     parse_skill_frontmatter,

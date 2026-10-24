@@ -47,7 +47,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/memory/__init__.py` | 26 |
 | `src/questorharness/capabilities/memory/agent.py` | 93 |
 | `src/questorharness/capabilities/memory/consolidate/__init__.py` | 35 |
-| `src/questorharness/capabilities/memory/consolidate/backup.py` | 106 |
+| `src/questorharness/capabilities/memory/consolidate/backup.py` | 104 |
 | `src/questorharness/capabilities/memory/consolidate/dream.py` | 355 |
 | `src/questorharness/capabilities/memory/consolidate/lock.py` | 140 |
 | `src/questorharness/capabilities/memory/consolidate/prompt.py` | 130 |
@@ -62,7 +62,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/memory/paths.py` | 22 |
 | `src/questorharness/capabilities/memory/personalization/__init__.py` | 6 |
 | `src/questorharness/capabilities/memory/personalization/extractor.py` | 138 |
-| `src/questorharness/capabilities/memory/personalization/rules.py` | 66 |
+| `src/questorharness/capabilities/memory/personalization/rules.py` | 64 |
 | `src/questorharness/capabilities/memory/personalization/session_hook.py` | 67 |
 | `src/questorharness/capabilities/memory/relevance.py` | 145 |
 | `src/questorharness/capabilities/memory/scan.py` | 118 |
@@ -80,10 +80,10 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/schedule/cron.py` | 137 |
 | `src/questorharness/capabilities/schedule/cron_scheduler.py` | 612 |
 | `src/questorharness/capabilities/skills/__init__.py` | 45 |
-| `src/questorharness/capabilities/skills/_frontmatter.py` | 99 |
 | `src/questorharness/capabilities/skills/bundled/__init__.py` | 10 |
 | `src/questorharness/capabilities/skills/bundled/discovery.py` | 81 |
 | `src/questorharness/capabilities/skills/definition.py` | 24 |
+| `src/questorharness/capabilities/skills/frontmatter.py` | 97 |
 | `src/questorharness/capabilities/skills/loader.py` | 263 |
 | `src/questorharness/capabilities/skills/registry.py` | 29 |
 | `src/questorharness/capabilities/tools/__init__.py` | 38 |
@@ -175,7 +175,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/contracts/subagent.py` | 46 |
 | `src/questorharness/contracts/task.py` | 39 |
 | `src/questorharness/contracts/tokens.py` | 17 |
-| `src/questorharness/contracts/tool_outputs.py` | 57 |
+| `src/questorharness/contracts/tool_outputs.py` | 55 |
 | `src/questorharness/contracts/usage.py` | 19 |
 | `src/questorharness/engine/__init__.py` | 81 |
 | `src/questorharness/engine/context.py` | 39 |

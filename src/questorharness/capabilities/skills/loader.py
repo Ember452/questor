@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Iterable
 
 from questorharness.platform.paths import get_config_dir
 from questorharness.config.settings import load_settings
-from questorharness.capabilities.skills._frontmatter import (
+from questorharness.capabilities.skills.frontmatter import (
     optional_frontmatter_str,
     parse_bool_frontmatter,
     parse_skill_frontmatter,
