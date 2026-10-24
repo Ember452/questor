@@ -16,7 +16,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/cli/autopilot_commands.py` | 243 |
 | `src/questorharness/bootstrap/cli/cli_prompts.py` | 139 |
 | `src/questorharness/bootstrap/cli/config_commands.py` | 74 |
-| `src/questorharness/bootstrap/cli/cron_commands.py` | 135 |
+| `src/questorharness/bootstrap/cli/cron_commands.py` | 133 |
 | `src/questorharness/bootstrap/cli/main.py` | 442 |
 | `src/questorharness/bootstrap/cli/mcp_commands.py` | 68 |
 | `src/questorharness/bootstrap/cli/plugin_commands.py` | 52 |
@@ -161,7 +161,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/config/schema.py` | 62 |
 | `src/questorharness/config/settings.py` | 72 |
 | `src/questorharness/config/settings_loader.py` | 200 |
-| `src/questorharness/config/settings_models.py` | 775 |
+| `src/questorharness/config/settings_models.py` | 774 |
 | `src/questorharness/contracts/__init__.py` | 7 |
 | `src/questorharness/contracts/agent.py` | 97 |
 | `src/questorharness/contracts/domain/__init__.py` | 1 |
