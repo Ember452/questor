@@ -16,6 +16,7 @@ src/questorharness   引擎：contracts → platform → config → providers / 
                      runtime → engine → capabilities → commands → surfaces → bootstrap，
                      另有 plugins（扩展层）与五个表现层叶子包
 src/questor          产品组合根：gateway、groups、personal memory
+apps/                规划中的非 Python 宿主：web（唯一 renderer）+ desktop（Electron 壳），见 ADR-0006
 docs/architecture    STRUCTURE（意图）· GRAPH（生成的关系图）· TREE（生成的目录树）
                      · NAMESPACES（注册表）· MIGRATION · APPEARANCE
 tests                unit / integration / e2e / ci（守卫契约）/ fixtures/baseline
@@ -62,7 +63,8 @@ tests                unit / integration / e2e / ci（守卫契约）/ fixtures/b
 | 会话存储与快照 | `src/questorharness/platform/session_storage.py` |
 | 命令行入口 | `src/questorharness/bootstrap/cli/main.py` |
 | 运行时装配根 | `src/questorharness/bootstrap/runtime.py` |
-| 桌面 / 后端宿主 | `src/questorharness/bootstrap/hosts/backend_host.py` |
+| serve 宿主与线协议（规划中） | `docs/adr/0006-serve-host-and-wire-protocol.md` |
+| 桌面 / 后端宿主（已弃用，判死清单见 ADR-0005） | `src/questorharness/bootstrap/hosts/backend_host.py` |
 | 渠道适配（飞书 / QQ） | `src/questorharness/surfaces/channels` |
 | 产品网关与群策略 | `src/questor/gateway/runtime.py` |
 | 名字是否重名 | `docs/architecture/NAMESPACES.md` |
