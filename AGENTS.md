@@ -68,6 +68,14 @@ tests                unit / integration / e2e / ci（守卫契约）/ fixtures/b
 | 名字是否重名 | `docs/architecture/NAMESPACES.md` |
 | 门禁都跑什么 | `scripts/check.py` |
 
+## 新功能落位
+
+新增任何功能，先读目标包 AGENTS.md 的「职责 / 不负责」两行再动手：
+
+- 归属明确 → 进该包，遵守其「允许依赖」与叶子语法（ADR-0003）。
+- 两个包都像、或都不像 → 先查 [NAMESPACES.md](./docs/architecture/NAMESPACES.md) 里最近的注册名与上面的路由表再裁决；裁决不出来按下一条处理。
+- 找不到位置、或职责与现有包都不重合 → **新开包**：目录 + 带 `__all__` 的 `__init__.py` + 包 AGENTS.md + CODEOWNERS 规则 + 路由表加行 + 结构基线 `--refresh-baseline --reason`；进分层阶梯的包还要在 `.importlinter` 一并声明（ADR-0002 修订版：不设数量封顶，无内容的目录才是违规）。
+
 ## 全局禁令与命令
 
 - 行为守则、注释规范、Git 纪律、完成定义：只在 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md) 维护。
@@ -75,13 +83,26 @@ tests                unit / integration / e2e / ci（守卫契约）/ fixtures/b
   `scripts/guards` 机械执行，不靠自觉；每条都能构造违规判红。
 - 本地一条命令跑完全部阻断门禁：`uv run python scripts/check.py`（pre-commit 走 `--fast`，CI 走全量）。
 
+## 行为守则速览
+
+正文只在 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md)（§0–§6）；最常被违反的几条先钉在这里：
+
+- **不偷工减料**：读全、做全，不为了显得有进度而少做（§0）。
+- **想清楚再写**：假设摆明，多种解读呈现出来，不许默默选一种（§1）。
+- **最简实现**：只写被要求的功能；单次使用的代码不做抽象（§2）。
+- **外科手术式修改**：只动必须动的，不顺手"改进"无关代码；每一行改动都能追溯到请求（§3）。
+- **目标驱动**：任务先转成可验证目标（红用例 → 变绿）再动手（§4）。
+- **代码注释用中文**（§5.6）。
+- **文档实时维护**：行为变更与文档更新同一刀；失活的文档比没有更糟（§5.5）。
+- **commit 与 push 都需要用户当轮明确授权**；提交信息用英文 Conventional Commits（§6）。
+
 ## 第一个 PR
 
 1. 用上面的路由表定位文件，改前先 `uv run python scripts/check.py --fast` 看清基线。
 2. 只改请求触及的东西；行为变更必须先有一个红用例，模型可见面变更看
    `scripts/ci/prompt_surface.py --check` 与 `tests/fixtures/baseline/tool_metadata_golden.json`。
-3. 提交前跑 `uv run python scripts/check.py` 与 `uv run pytest -q`；提交信息用 Conventional
-   Commits，subject 小写开头；未获授权不 push。
+3. 提交前跑 `uv run python scripts/check.py` 与 `uv run pytest -q`；commit 与 push 都需要
+   用户当轮明确授权，提交信息用英文 Conventional Commits，subject 小写开头。
 
 ---
 **完整行为守则（§0–§6 原文）在 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md)。**
