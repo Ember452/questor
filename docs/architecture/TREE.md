@@ -335,8 +335,9 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questor/gateway/models.py` | 34 |
 | `src/questor/gateway/notify.py` | 106 |
 | `src/questor/gateway/provider_commands.py` | 140 |
+| `src/questor/gateway/redaction.py` | 343 |
 | `src/questor/gateway/router.py` | 33 |
-| `src/questor/gateway/runtime.py` | 1089 |
+| `src/questor/gateway/runtime.py` | 774 |
 | `src/questor/gateway/stream_update.py` | 15 |
 | `src/questor/group_registry.py` | 95 |
 | `src/questor/memory.py` | 221 |

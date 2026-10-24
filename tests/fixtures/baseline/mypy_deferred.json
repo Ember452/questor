@@ -19,8 +19,9 @@
     "src/questorharness/vim": 1
   },
   "pinned_at": "741c3840979376ffa2bd5de398a7f81b0977601a",
-  "whitelist_modules": 34,
+  "whitelist_modules": 35,
   "whitelist_roots": [
+    "src/questor/gateway/redaction.py",
     "src/questorharness/bootstrap/cli/auth_commands.py",
     "src/questorharness/bootstrap/cli/cli_prompts.py",
     "src/questorharness/bootstrap/cli/setup.py",

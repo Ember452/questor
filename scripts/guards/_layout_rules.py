@@ -123,7 +123,7 @@ DISTRIBUTIONS = ("questorharness", "questor")
 # facade held by a line cap in FACADE_IMPLEMENTATION_PACKAGES. Only context.compact
 # still carries behavior worth relocating behind an exemption.
 EXEMPTION_BUDGET: dict[str, int] = {
-    "R2": 2,
+    "R2": 1,
     "R3": 1,
     "R4": 1,
     "R5": 1,
