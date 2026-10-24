@@ -67,11 +67,21 @@ def _tool_names(root: Path) -> list[tuple[str, str]]:
 
 def _command_names(root: Path) -> list[tuple[str, str]]:
     from inspect import getsourcefile
+    from unittest import mock
 
     from questorharness.commands.registry import create_default_command_registry
 
     fallback = "src/questorharness/commands/registry.py"
-    registry = create_default_command_registry()
+    # 注册表在注册期会把**用户家目录**里装的技能提升为斜杠命令
+    # (families/account.py 的 _register_user_invocable_skill_commands)。
+    # 不钉住它,本文档会随开发机安装的技能漂移——CI 上家目录干净,渲染
+    # 就少一截,--check 永远红。与 prompt_surface 同一个补丁口径:用户技能为零,
+    # 只让仓库自带(bundled)的技能与内建命令进文档。
+    with mock.patch(
+        "questorharness.capabilities.skills.loader.get_user_skill_dirs",
+        return_value=[],
+    ):
+        registry = create_default_command_registry()
     found: list[tuple[str, str]] = []
     for command in registry.list_commands():
         source = getsourcefile(command.handler) or ""

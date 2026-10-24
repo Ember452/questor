@@ -121,15 +121,20 @@ def _tool_payload(host: Host) -> list[dict[str, object]]:
 
 
 def _machine_independent(text: str) -> str:
-    """抹平两处随机器变化的渲染,让快照在任意平台可比。
+    """抹平随机器变化的渲染,让快照在任意平台可比。
 
-    ① 掩码后的路径分隔符:提示词里会出现 ``<REPO>\\CLAUDE.md`` 这类真实路径,
-    Windows 渲成反斜杠、Linux 渲成正斜杠;只替换掩码前缀,不动提示词正文。
-    ② cron 记忆目录的路径哈希(如 ``cron-15d23c73a196``):由当机 checkout
+    ① 含掩码(``<HOME>`` / ``<REPO>``)的行是机器路径行:整行统一分隔符,
+    Windows 渲出的 ``\\`` 与 Linux 的 ``/`` 不再造成假差异;不含掩码的正文
+    一字不动,提示词里的反斜杠(如正则示例)不受影响。
+    ② 各宿主记忆目录的路径哈希(如 ``cli-cda39b73afba``)由当机 checkout
     路径派生,任何机器都不该和别人一致,快照里只留 ``<HASH>`` 占位。
     """
-    text = text.replace("<REPO>\\", "<REPO>/").replace("<HOME>\\", "<HOME>/")
-    return re.sub(r"cron-[0-9a-f]{6,}", "cron-<HASH>", text)
+    lines = [
+        line.replace("\\", "/") if ("<HOME>" in line or "<REPO>" in line) else line
+        for line in text.splitlines()
+    ]
+    text = "\n".join(lines)
+    return re.sub(r"\b(cli|desktop|channel|cron)-[0-9a-f]{6,}\b", r"\1-<HASH>", text)
 
 
 def _render(host: Host) -> str:

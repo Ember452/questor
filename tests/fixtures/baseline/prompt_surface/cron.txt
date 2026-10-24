@@ -100,7 +100,7 @@ Prefer a normal direct answer for simple tasks. Use subagents only when they mat
 ```
 
 # Memory
-- Persistent memory directory: <HOME>/.questorharness\data\memory\cron-<HASH>
+- Persistent memory directory: <HOME>/.questorharness/data/memory/cron-<HASH>
 - Use this directory to store durable project and repository context that should survive future sessions.
 - Prefer concise topic files plus an index entry in MEMORY.md.
 
