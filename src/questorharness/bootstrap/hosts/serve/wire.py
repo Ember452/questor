@@ -44,6 +44,50 @@ def usage_frame(usage: UsageSnapshot) -> Frame:
     return {"inputTokens": usage.input_tokens, "outputTokens": usage.output_tokens}
 
 
+# ---- 宿主直出的 5 帧：唯一构造函数 ------------------------------------
+def turn_started_frame(*, turn_id: str, index: int, via: str) -> Frame:
+    """提交到达：回合开始。"""
+    return {"kind": "turn_started", "turnId": turn_id, "index": index, "via": via}
+
+
+def turn_done_frame(
+    *,
+    turn_id: str,
+    cancelled: bool,
+    outcome: str,
+    duration_ms: int,
+    checkpoint_turn: bool = False,
+    usage: UsageSnapshot | None = None,
+) -> Frame:
+    """回合结束；`checkpointTurn` 在引擎 P1 落地前恒为 false。"""
+    frame: Frame = {
+        "kind": "turn_done",
+        "turnId": turn_id,
+        "cancelled": cancelled,
+        "outcome": outcome,
+        "durationMs": duration_ms,
+        "checkpointTurn": checkpoint_turn,
+    }
+    if usage is not None:
+        frame["usage"] = usage_frame(usage)
+    return frame
+
+
+def approval_request_frame(*, prompt_id: str, tool: str, subject: str) -> Frame:
+    """权限审批请求；客户端用 id 回 `/approve`。"""
+    return {"kind": "approval_request", "id": prompt_id, "tool": tool, "subject": subject}
+
+
+def ask_request_frame(*, prompt_id: str, question: str) -> Frame:
+    """工具提问；客户端用 id 回 `/ask`。"""
+    return {"kind": "ask_request", "id": prompt_id, "question": question}
+
+
+def stream_reset_frame(*, reason: str, watermark: int) -> Frame:
+    """重放窗口越界；客户端应重取 `/history`。"""
+    return {"kind": "stream_reset", "reason": reason, "seq": watermark}
+
+
 def _blocks(message: Any) -> list[Frame]:
     """把 ConversationMessage 的内容块展平；不认识的块类型直接报错。"""
     blocks: list[Frame] = []
@@ -78,6 +122,7 @@ class WireEncoder:
         self.via: str = "studio"
         self.last_usage: UsageSnapshot | None = None
         self._tool_calls: dict[str, deque[str]] = {}
+        self._tool_seq = 0
 
     def start_turn(self, *, turn_id: str, index: int, via: str) -> Frame:
         """生成 turn_started 帧并重置工具配对表。"""
@@ -85,13 +130,18 @@ class WireEncoder:
         self.index = index
         self.via = via
         self._tool_calls.clear()
-        return {"kind": "turn_started", "turnId": turn_id, "index": index, "via": via}
+        self._tool_seq = 0
+        return turn_started_frame(turn_id=turn_id, index=index, via=via)
 
     def _mint_tool_call(self, tool_name: str) -> str:
-        """为一次工具调用铸造关联 id（引擎事件不携带 id）。"""
-        pending = self._tool_calls.setdefault(tool_name, deque())
-        call_id = f"{tool_name}-{self.index}-{len(pending)}-{id(pending) % 1000}"
-        pending.append(call_id)
+        """为一次工具调用铸造关联 id（引擎事件不携带 id）。
+
+        id 必须可复现：用 turn 内单调计数，不能用内存地址（前者进黄金帧，
+        后者会随进程变化）。
+        """
+        self._tool_seq += 1
+        call_id = f"{tool_name}-{self.index}-{self._tool_seq}"
+        self._tool_calls.setdefault(tool_name, deque()).append(call_id)
         return call_id
 
     def _take_tool_call(self, tool_name: str) -> str:

@@ -15,7 +15,13 @@ from questorharness.bootstrap.hosts.serve.authority import Authority, PendingPro
 from questorharness.bootstrap.hosts.serve.broadcaster import Broadcaster
 from questorharness.bootstrap.hosts.serve.routes import Router
 from questorharness.bootstrap.hosts.serve.transport import MemoryTransport
-from questorharness.bootstrap.hosts.serve.wire import Frame, WireEncoder
+from questorharness.bootstrap.hosts.serve.wire import (
+    Frame,
+    WireEncoder,
+    approval_request_frame,
+    ask_request_frame,
+    turn_done_frame,
+)
 
 if TYPE_CHECKING:
     from questorharness.bootstrap.runtime import RuntimeBundle
@@ -119,14 +125,12 @@ class ServeHost:
                 {"kind": "notice", "level": "error", "text": f"{type(exc).__name__}: {exc}"}
             )
         await self.broadcaster.publish(
-            {
-                "kind": "turn_done",
-                "turnId": record.turn_id,
-                "cancelled": cancelled,
-                "outcome": outcome,
-                "durationMs": int((time.monotonic() - started_at) * 1000),
-                "checkpointTurn": False,
-            }
+            turn_done_frame(
+                turn_id=record.turn_id,
+                cancelled=cancelled,
+                outcome=outcome,
+                duration_ms=int((time.monotonic() - started_at) * 1000),
+            )
         )
         self.authority.finish(record.turn_id)
         queued = self.authority.pop_queued()
@@ -155,14 +159,11 @@ class ServeHost:
     async def _publish_prompt(self, prompt: PendingPrompt, subject: str) -> None:
         """把 approval / ask 广播成对应帧。"""
         if prompt.kind == "approval":
-            frame: Frame = {
-                "kind": "approval_request",
-                "id": prompt.prompt_id,
-                "tool": prompt.tool or "unknown",
-                "subject": subject,
-            }
+            frame: Frame = approval_request_frame(
+                prompt_id=prompt.prompt_id, tool=prompt.tool or "unknown", subject=subject
+            )
         else:
-            frame = {"kind": "ask_request", "id": prompt.prompt_id, "question": subject}
+            frame = ask_request_frame(prompt_id=prompt.prompt_id, question=subject)
         await self.broadcaster.publish(frame)
 
     def _spawn(self, coro: Any) -> None:

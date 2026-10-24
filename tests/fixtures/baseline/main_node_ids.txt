@@ -40,6 +40,10 @@ tests/ci/test_legacy_host_removed.py::test_selftest_probe_can_go_red
 tests/ci/test_persistence_version.py::test_new_snapshot_carries_schema_version
 tests/ci/test_persistence_version.py::test_selftest_version_guard_can_go_red
 tests/ci/test_persistence_version.py::test_v1_snapshot_without_version_still_loads
+tests/ci/test_serve_wire_fixtures.py::test_builders_round_trip_against_fixtures
+tests/ci/test_serve_wire_fixtures.py::test_fixtures_match_schema_shape
+tests/ci/test_serve_wire_fixtures.py::test_one_fixture_per_kind
+tests/ci/test_serve_wire_fixtures.py::test_selftest_mutation_is_detected
 tests/ci/test_tool_schemas.py::test_every_tool_property_is_enumerable
 tests/ci/test_tool_schemas.py::test_predicate_can_go_red
 tests/ci/test_tool_schemas.py::test_registry_is_not_empty
@@ -381,6 +385,7 @@ tests/unit/bootstrap/hosts/serve/test_wire_encode.py::test_turn_complete_flatten
 tests/unit/bootstrap/hosts/serve/test_wire_encode.py::test_unknown_event_fails_loudly
 tests/unit/bootstrap/hosts/serve/test_wire_types.py::test_generated_kind_by_def_is_consistent
 tests/unit/bootstrap/hosts/serve/test_wire_types.py::test_generated_kinds_match_schema_union
+tests/unit/bootstrap/hosts/test_terminal_client.py::test_build_serve_host_forwards_profile_tool_surface
 tests/unit/bootstrap/hosts/test_terminal_client.py::test_default_profile_root_honours_env
 tests/unit/bootstrap/hosts/test_terminal_client.py::test_sse_frame_parsing
 tests/unit/profiles/test_model.py::test_defaults_are_empty

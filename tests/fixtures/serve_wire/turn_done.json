@@ -1,0 +1,9 @@
+{
+  "cancelled": false,
+  "checkpointTurn": false,
+  "durationMs": 42,
+  "kind": "turn_done",
+  "outcome": "completed",
+  "seq": 12,
+  "turnId": "turn-0001"
+}

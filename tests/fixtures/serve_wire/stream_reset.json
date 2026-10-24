@@ -1,0 +1,5 @@
+{
+  "kind": "stream_reset",
+  "reason": "replay_gap",
+  "seq": 13
+}

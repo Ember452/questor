@@ -1,0 +1,7 @@
+{
+  "id": "approval-1",
+  "kind": "approval_request",
+  "seq": 1,
+  "subject": "rm -rf build",
+  "tool": "bash"
+}

@@ -16,7 +16,7 @@ from questorharness.bootstrap.hosts.serve import eventstream, refusals
 from questorharness.bootstrap.hosts.serve.authority import Authority, TurnRecord
 from questorharness.bootstrap.hosts.serve.broadcaster import Broadcaster
 from questorharness.bootstrap.hosts.serve.transport import Request, Response
-from questorharness.bootstrap.hosts.serve.wire import WireEncoder
+from questorharness.bootstrap.hosts.serve.wire import WireEncoder, stream_reset_frame
 from questorharness.platform.session_storage import load_session_snapshot
 from questorharness.profiles import ProfileError, load_profile
 
@@ -199,7 +199,7 @@ class Router:
             try:
                 if replay.gap:
                     watermark = relay.watermark
-                    reset = {"kind": "stream_reset", "reason": "replay_gap", "seq": watermark}
+                    reset = stream_reset_frame(reason="replay_gap", watermark=watermark)
                     yield eventstream.format_sse(watermark, reset)
                 for seq, frame in replay.frames:
                     yield eventstream.format_sse(seq, frame)

@@ -1,0 +1,6 @@
+{
+  "attempt": 1,
+  "kind": "compaction_progress",
+  "phase": "compact_retry",
+  "seq": 4
+}

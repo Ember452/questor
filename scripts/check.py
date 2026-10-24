@@ -75,6 +75,8 @@ STEPS: tuple[Step, ...] = (
     Step("wire-codegen", (PYTHON, "-m", "pytest", "tests/ci/test_wire_codegen.py", "-q")),
     # TS 侧的同一份契约：schema → protocol/_gen/app-wire.ts，漂移即红。
     Step("wire-codegen-ts", ("node", "scripts/codegen/gen_wire_ts.mjs", "--check")),
+    # 黄金帧：13 kind 各一例，构造器与冻结样本逐字段一致。
+    Step("serve-wire-fixtures", (PYTHON, "-m", "pytest", "tests/ci/test_serve_wire_fixtures.py", "-q")),
     Step("kind-coverage", (PYTHON, "-m", "pytest", "tests/ci/test_kind_coverage.py", "-q")),
     Step(
         "persistence-version",

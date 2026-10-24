@@ -1,0 +1,6 @@
+{
+  "kind": "tool_dispatch",
+  "seq": 10,
+  "tool": "bash",
+  "toolCallId": "bash-1-1"
+}

@@ -31,13 +31,13 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/serve/authority.py` | 223 |
 | `src/questorharness/bootstrap/hosts/serve/broadcaster.py` | 131 |
 | `src/questorharness/bootstrap/hosts/serve/eventstream.py` | 46 |
-| `src/questorharness/bootstrap/hosts/serve/host.py` | 178 |
+| `src/questorharness/bootstrap/hosts/serve/host.py` | 179 |
 | `src/questorharness/bootstrap/hosts/serve/http_server.py` | 111 |
 | `src/questorharness/bootstrap/hosts/serve/refusals.py` | 52 |
 | `src/questorharness/bootstrap/hosts/serve/routes.py` | 251 |
 | `src/questorharness/bootstrap/hosts/serve/studio.py` | 76 |
 | `src/questorharness/bootstrap/hosts/serve/transport.py` | 87 |
-| `src/questorharness/bootstrap/hosts/serve/wire.py` | 158 |
+| `src/questorharness/bootstrap/hosts/serve/wire.py` | 208 |
 | `src/questorharness/bootstrap/hosts/serve/wire_types.py` | 248 |
 | `src/questorharness/bootstrap/hosts/terminal_client.py` | 269 |
 | `src/questorharness/bootstrap/runtime.py` | 831 |
@@ -354,7 +354,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questor/gateway/stream_update.py` | 15 |
 | `src/questor/group_registry.py` | 95 |
 | `src/questor/memory.py` | 221 |
-| `src/questor/profiles/__init__.py` | 6 |
+| `src/questor/profiles/__init__.py` | 7 |
 | `src/questor/prompts.py` | 74 |
 | `src/questor/runtime.py` | 155 |
 | `src/questor/session_storage.py` | 202 |

@@ -28,7 +28,11 @@ files / tests / browser）。如果不在骨架落地时留下形态扩展点，
 list_profiles`、`:1377 create_profile`；`ProfileInfo` 含 `model / provider / skill_count /
 description`），前端用 `/api/profiles` + `$activeGatewayProfile` 驱动设置/技能/工具作用域；
 CowAgent 的个人形态控件是 `AgentSelector / AgentScopeSelect / ChannelTeamSelect /
-ContextUsageDonut`；业界 Roo Code 的 custom modes 把"模式"定义为 roleDefinition + tool groups。
+ContextUsageDonut`；业界 Roo Code 的 custom modes 把“模式”定义为 roleDefinition + tool groups。
+
+> **更新（2026-10-25）**：上文“只有文档、没有实现”描述的是**立项前状态**。阶段 1 已落地
+> `questorharness/profiles`（解析 + fail-closed 校验）、产品侧 `coding/personal` bundle、
+> `/rt/r1/profile` 契约帧与工具面接线（`allowed_tools/denied_tools` → `build_runtime`）。
 
 ## Decision
 
@@ -79,8 +83,9 @@ ContextUsageDonut`；业界 Roo Code 的 custom modes 把"模式"定义为 roleD
 
 ## Verification
 
-- **tests/ci/test_kind_coverage.py** 按 profile 选表：某 kind 在当前形态为 absent 时，映射表
-  必须有"不展示"行，否则红。
+- **tests/ci/test_kind_coverage.py** 阶段 1 校验 schema ↔ 事件映射 ↔ 宿主直出；
+  “按 profile 选表”随 4b 的 `cardSlots` 落地并入（计划 02 §4b），届时 absent 必须在当前形态
+  表里有“不展示”行，否则红。
 - `rg "mode ===|isPersonal" apps/web/src` = 0。
 - 把某页 capability 置为 absent → 导航 / 命令面板 / 卡片同步消失（4a 判绿）。
 - 两个 profile 的 `allowed_tools` 可枚举且互不相同；personal 形态下 coding 专属工具不可见。
