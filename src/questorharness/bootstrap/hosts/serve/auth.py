@@ -17,6 +17,7 @@ from typing import Final
 from questorharness.bootstrap.hosts.serve import refusals
 
 COOKIE_NAME: Final[str] = "questor_launch"
+CLIENT_COOKIE: Final[str] = "questor_client"
 CLIENT_HEADER: Final[str] = "X-Questor-Client"
 ALLOWED_HOSTNAMES: Final[frozenset[str]] = frozenset({"127.0.0.1", "localhost"})
 TOKEN_MIN_BYTES: Final[int] = 32
@@ -37,6 +38,11 @@ class LaunchCredential:
 def cookie_header(token: str) -> str:
     """种植凭据用的 Set-Cookie 值。"""
     return f"{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/"
+
+
+def client_cookie(client_id: str) -> str:
+    """客户端身份 cookie：首次请求种植后，后续请求（含无 header 的 GET）可复用。"""
+    return f"{CLIENT_COOKIE}={client_id}; HttpOnly; SameSite=Strict; Path=/"
 
 
 def _hostname(value: str) -> str:

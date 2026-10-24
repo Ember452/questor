@@ -62,7 +62,7 @@ def test_wrong_host_origin_and_token_are_rejected() -> None:
                 )
                 assert bad_host.status_code == 403
                 assert bad_host.json()["code"] == "auth.host"
-                bad_origin = await client.get(
+                bad_origin = await client.post(
                     f"http://127.0.0.1:{port}/x",
                     headers={"Origin": "https://evil.example.com"},
                     cookies=cookie,
@@ -99,6 +99,75 @@ def test_authorized_request_echoes_client_id() -> None:
                 )
             assert response.status_code == 200
             assert response.headers[auth.CLIENT_HEADER] == "client-a"
+        finally:
+            await server.close()
+
+    asyncio.run(scenario())
+
+
+def test_get_without_origin_is_allowed() -> None:
+    """浏览器同源 GET 不带 Origin：GET 只靠 Host + cookie，不得 403。"""
+
+    async def scenario() -> None:
+        server, credential = _server()
+        port = await server.start()
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"http://127.0.0.1:{port}/rt/r1/events",
+                    cookies={auth.COOKIE_NAME: credential.token},
+                )
+            assert response.status_code == 200
+        finally:
+            await server.close()
+
+    asyncio.run(scenario())
+
+
+def test_post_without_origin_is_rejected() -> None:
+    """改状态请求仍强制 Origin（CSRF 面）。"""
+
+    async def scenario() -> None:
+        server, credential = _server()
+        port = await server.start()
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"http://127.0.0.1:{port}/rt/r1/submit",
+                    json={"line": "hi", "clientRequestId": "r1"},
+                    cookies={auth.COOKIE_NAME: credential.token},
+                )
+            assert response.status_code == 403
+            assert response.json()["code"] == "auth.origin"
+        finally:
+            await server.close()
+
+    asyncio.run(scenario())
+
+
+def test_client_identity_cookie_keeps_approvals_same_owner() -> None:
+    """无 header 的浏览器：首次请求种植身份 cookie，后续请求同一 client_id。"""
+
+    async def scenario() -> None:
+        server, credential = _server()
+        port = await server.start()
+        try:
+            async with httpx.AsyncClient() as client:
+                first = await client.get(
+                    f"http://127.0.0.1:{port}/rt/r1/profile",
+                    cookies={auth.COOKIE_NAME: credential.token},
+                )
+                minted = first.headers[auth.CLIENT_HEADER]
+                assert auth.CLIENT_COOKIE in first.headers.get("set-cookie", "")
+                second = await client.get(
+                    f"http://127.0.0.1:{port}/rt/r1/profile",
+                    cookies={
+                        auth.COOKIE_NAME: credential.token,
+                        auth.CLIENT_COOKIE: minted,
+                    },
+                )
+            assert second.headers[auth.CLIENT_HEADER] == minted
+            assert "set-cookie" not in second.headers
         finally:
             await server.close()
 

@@ -73,9 +73,14 @@ def turn_done_frame(
     return frame
 
 
-def approval_request_frame(*, prompt_id: str, tool: str, subject: str) -> Frame:
-    """权限审批请求；客户端用 id 回 `/approve`。"""
-    return {"kind": "approval_request", "id": prompt_id, "tool": tool, "subject": subject}
+def approval_request_frame(
+    *, prompt_id: str, tool: str, subject: str, detail: str = ""
+) -> Frame:
+    """权限审批请求；detail 携带编辑类的补丁摘要（可为空），客户端用 id 回 `/approve`。"""
+    frame: Frame = {"kind": "approval_request", "id": prompt_id, "tool": tool, "subject": subject}
+    if detail:
+        frame["detail"] = detail
+    return frame
 
 
 def ask_request_frame(*, prompt_id: str, question: str) -> Frame:
@@ -88,9 +93,14 @@ def stream_reset_frame(*, reason: str, watermark: int) -> Frame:
     return {"kind": "stream_reset", "reason": reason, "seq": watermark}
 
 
-def _blocks(message: Any) -> list[Frame]:
-    """把 ConversationMessage 的内容块展平；不认识的块类型直接报错。"""
+def _blocks(message: Any) -> tuple[list[Frame], list[str]]:
+    """把 ConversationMessage 的内容块展平。
+
+    未知块类型不脉断整个回合：返回降级后的块列表 + 未知类型清单，
+    由调用方补一帧 notice（可见降级，不静默吞）。
+    """
     blocks: list[Frame] = []
+    unknown: list[str] = []
     for block in getattr(message, "content", []):
         kind = getattr(block, "type", None)
         if kind == "text":
@@ -109,8 +119,8 @@ def _blocks(message: Any) -> list[Frame]:
                 }
             )
         else:
-            raise ValueError(f"unsupported content block: {kind!r}")
-    return blocks
+            unknown.append(str(kind))
+    return blocks, unknown
 
 
 class WireEncoder:
@@ -157,13 +167,24 @@ class WireEncoder:
             return [{"kind": "text", "text": event.text}]
         if isinstance(event, AssistantTurnComplete):
             self.last_usage = event.usage
-            return [
+            blocks, unknown = _blocks(event.message)
+            frames: list[Frame] = []
+            if unknown:
+                frames.append(
+                    {
+                        "kind": "notice",
+                        "level": "warning",
+                        "text": "unsupported content block(s): " + ", ".join(sorted(set(unknown))),
+                    }
+                )
+            frames.append(
                 {
                     "kind": "message",
-                    "blocks": _blocks(event.message),
+                    "blocks": blocks,
                     "usage": usage_frame(event.usage),
                 }
-            ]
+            )
+            return frames
         if isinstance(event, ToolExecutionStarted):
             return [
                 {

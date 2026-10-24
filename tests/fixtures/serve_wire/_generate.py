@@ -65,7 +65,10 @@ def build_frames() -> dict[str, dict[str, object]]:
         "tool_dispatch": dispatch,
         "tool_result": result,
         "approval_request": approval_request_frame(
-            prompt_id="approval-1", tool="bash", subject="rm -rf build"
+            prompt_id="approval-1",
+            tool="edit",
+            subject="src/app.py",
+            detail="+3/-1\n@@ -1 +1,3 @@\n-old\n+new",
         ),
         "ask_request": ask_request_frame(prompt_id="ask-1", question="which file?"),
         "notice": notice,

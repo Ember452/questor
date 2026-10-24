@@ -104,7 +104,7 @@ class ServeHost:
         started_at = time.monotonic()
         index = self.authority.next_index()
         await self.broadcaster.publish(
-            self.encoder.start_turn(turn_id=record.turn_id, index=index, via="studio")
+            self.encoder.start_turn(turn_id=record.turn_id, index=index, via=record.via)
         )
         cancelled = False
         outcome = "completed"
@@ -124,18 +124,28 @@ class ServeHost:
             await self.broadcaster.publish(
                 {"kind": "notice", "level": "error", "text": f"{type(exc).__name__}: {exc}"}
             )
-        await self.broadcaster.publish(
-            turn_done_frame(
-                turn_id=record.turn_id,
-                cancelled=cancelled,
-                outcome=outcome,
-                duration_ms=int((time.monotonic() - started_at) * 1000),
+        finally:
+            # 租约释放不得依赖 publish 是否被第二次取消打断：先起 publish 任务，再 shield 等待，
+            # 无论结果如何都在 finally 里 finish/pop_queued，否则会永久 turn.busy。
+            publisher = asyncio.create_task(
+                self.broadcaster.publish(
+                    turn_done_frame(
+                        turn_id=record.turn_id,
+                        cancelled=cancelled,
+                        outcome=outcome,
+                        duration_ms=int((time.monotonic() - started_at) * 1000),
+                    )
+                )
             )
-        )
-        self.authority.finish(record.turn_id)
-        queued = self.authority.pop_queued()
-        if queued is not None:
-            self.start_turn_task(queued)
+            try:
+                await asyncio.shield(publisher)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self.authority.finish(record.turn_id)
+                queued = self.authority.pop_queued()
+                if queued is not None:
+                    self.start_turn_task(queued)
 
     # ---- 渲染器（注入给 handle_line） -----------------------------------
     async def render_event(self, event: StreamEvent) -> None:
@@ -160,7 +170,10 @@ class ServeHost:
         """把 approval / ask 广播成对应帧。"""
         if prompt.kind == "approval":
             frame: Frame = approval_request_frame(
-                prompt_id=prompt.prompt_id, tool=prompt.tool or "unknown", subject=subject
+                prompt_id=prompt.prompt_id,
+                tool=prompt.tool or "unknown",
+                subject=subject,
+                detail=prompt.detail,
             )
         else:
             frame = ask_request_frame(prompt_id=prompt.prompt_id, question=subject)

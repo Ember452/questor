@@ -21,6 +21,7 @@ class Request:
     query: Mapping[str, str] = field(default_factory=dict)
     body: bytes = b""
     last_event_id: str | None = None
+    via: str = "studio"
 
 
 @dataclass
@@ -64,8 +65,9 @@ class MemoryTransport:
         client_id: str = "local",
         query: Mapping[str, str] | None = None,
         last_event_id: str | None = None,
+        via: str = "cli",
     ) -> Response:
-        """客户端便捷入口（REPL 与测试共用）。"""
+        """客户端便捷入口（REPL 与测试共用）；进程内提交的 via 是 cli。"""
         return await self.handle(
             Request(
                 method=method,
@@ -74,6 +76,7 @@ class MemoryTransport:
                 query=query or {},
                 body=body or b"",
                 last_event_id=last_event_id,
+                via=via,
             )
         )
 

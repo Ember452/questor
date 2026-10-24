@@ -32,6 +32,7 @@ class TurnRecord:
     request_id: str
     state: TurnState
     line: str = ""
+    via: str = "studio"
     created_at: float = field(default_factory=time.monotonic)
 
 
@@ -54,6 +55,7 @@ class PendingPrompt:
     subject: str
     tool: str
     future: asyncio.Future[Any]
+    detail: str = ""
 
 
 class Authority:
@@ -93,7 +95,7 @@ class Authority:
         running = self._running
         return running is not None and running.turn_id == turn_id and running.client_id == client_id
 
-    def begin(self, client_id: str, request_id: str, line: str) -> Begin:
+    def begin(self, client_id: str, request_id: str, line: str, *, via: str = "studio") -> Begin:
         """提交裁决：重放 / 入队 / 开新回合 / 忙。"""
         self._sweep()
         existing = self._requests.get(request_id)
@@ -107,6 +109,7 @@ class Authority:
                     request_id=request_id,
                     state="queued",
                     line=line,
+                    via=via,
                 )
                 self._queued = record
                 self._requests[request_id] = record
@@ -118,10 +121,16 @@ class Authority:
             request_id=request_id,
             state="running",
             line=line,
+            via=via,
         )
         self._running = record
         self._requests[request_id] = record
         return Begin(kind="started", turn_id=record.turn_id)
+
+    def state_of(self, request_id: str) -> TurnState | None:
+        """幂等重放的登记状态（排队中的请求不得被谎报为 started）。"""
+        record = self._requests.get(request_id)
+        return None if record is None else record.state
 
     def finish(self, turn_id: str) -> None:
         """回合结束，释放租约。"""
@@ -155,9 +164,9 @@ class Authority:
         """注入提示广播回调（宿主在构造时接线）。"""
         self._on_prompt = notifier
 
-    async def permission_prompt(self, tool: str, subject: str) -> bool:
+    async def permission_prompt(self, tool: str, subject: str, *, detail: str = "") -> bool:
         """权限审批：超时或无人作答时 fail-closed。"""
-        prompt = self._open("approval", subject, tool=tool)
+        prompt = self._open("approval", subject, tool=tool, detail=detail)
         try:
             return bool(await asyncio.wait_for(prompt.future, timeout=self._prompt_timeout))
         except TimeoutError:
@@ -177,12 +186,19 @@ class Authority:
         return str(answer)
 
     async def edit_approval_prompt(self, path: str, diff: str, added: int, removed: int) -> str:
-        """编辑审批：复用 approval 槽位，返回 approve / deny。"""
-        del diff, added, removed
-        approved = await self.permission_prompt("edit", path)
+        """编辑审批：复用 approval 槽位，返回 approve / deny。
+
+        diff 不能丢：旧 UI 能看到改了什么，新协议至少给出 +added/-removed 与
+        截断后的补丁正文（上限 4000 字符），供 ApprovalCard 展示。
+        """
+        patch = diff[:4000]
+        detail = f"+{added}/-{removed}" + (f"\n{patch}" if patch else "")
+        approved = await self.permission_prompt("edit", path, detail=detail)
         return "approve" if approved else "deny"
 
-    def _open(self, kind: PromptKind, subject: str, *, tool: str = "") -> PendingPrompt:
+    def _open(
+        self, kind: PromptKind, subject: str, *, tool: str = "", detail: str = ""
+    ) -> PendingPrompt:
         """登记一个待答提示，并通过回调交给宿主广播。"""
         loop = asyncio.get_running_loop()
         owner = self._running.client_id if self._running is not None else ""
@@ -192,6 +208,7 @@ class Authority:
             owner=owner,
             subject=subject,
             tool=tool,
+            detail=detail,
             future=loop.create_future(),
         )
         self._prompts[prompt.prompt_id] = prompt

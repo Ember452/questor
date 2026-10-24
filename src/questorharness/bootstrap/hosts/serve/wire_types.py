@@ -14,6 +14,7 @@ class ApprovalRequest(TypedDict):
     id: str
     tool: str
     subject: str
+    detail: NotRequired[str]
 
 
 class ApproveRequest(TypedDict):

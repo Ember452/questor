@@ -96,7 +96,20 @@ def _history_block(raw: Any) -> dict[str, Any]:
             "content": str(raw.get("content", "")),
             "isError": bool(raw.get("is_error", False)),
         }
-    raise refusals.Refusal(refusals.SUBMIT_INVALID, f"unknown history block {kind!r}", status=500)
+    raise ValueError(f"unknown history block {kind!r}")
+
+
+def _history_blocks(raw_blocks: Any) -> list[dict[str, Any]]:
+    """历史回放对未知块降级为文本占位（不让整个端点 500）。"""
+    blocks: list[dict[str, Any]] = []
+    if not isinstance(raw_blocks, list):
+        return blocks
+    for block in raw_blocks:
+        try:
+            blocks.append(_history_block(block))
+        except ValueError as exc:  # 未知块类型：可见降级，不静默
+            blocks.append({"type": "text", "text": f"[unsupported block] {exc}"})
+    return blocks
 
 
 class Router:
@@ -141,9 +154,13 @@ class Router:
             raise refusals.Refusal(
                 refusals.SUBMIT_INVALID, "clientRequestId is required", status=400
             )
-        begin = self._host.authority.begin(request.client_id, request_id, line)
+        begin = self._host.authority.begin(
+            request.client_id, request_id, line, via=request.via
+        )
         if begin.kind == "replay":
-            return _ok({"turnId": begin.turn_id, "state": "started"})
+            # 幂等重放必须回真实登记状态：排队中的请求不能谎报为 started。
+            state = self._host.authority.state_of(request_id) or "running"
+            return _ok({"turnId": begin.turn_id, "state": "started" if state == "running" else state})
         if begin.kind == "queued":
             return _ok(
                 {"turnId": begin.turn_id, "state": "queued", "position": begin.position or 1},
@@ -189,13 +206,14 @@ class Router:
         return _ok({"ok": True})
 
     def _events(self, request: Request) -> Response:
-        """SSE：先补重放，再进实时循环；空闲发心跳。"""
+        """SSE：生成器内先订阅再取重放快照（同一同步段，无 await），然后去重。"""
         last_id = eventstream.parse_last_event_id(request.last_event_id)
         relay = self._host.broadcaster
-        replay = relay.replay(last_id)
 
         async def stream() -> AsyncIterator[bytes]:
             subscriber = relay.subscribe()
+            replay = relay.replay(last_id)
+            replayed_to = replay.frames[-1][0] if replay.frames else 0
             try:
                 if replay.gap:
                     watermark = relay.watermark
@@ -212,6 +230,14 @@ class Router:
                     if item is None:
                         return
                     seq, frame = item
+                    if seq <= replayed_to:
+                        continue
+                    if subscriber.overflowed:
+                        # 事实帧挤掉过最旧帧：显式告诉客户端“丢过”，让它重取 /history。
+                        subscriber.overflowed = False
+                        watermark = relay.watermark
+                        reset = stream_reset_frame(reason="replay_gap", watermark=watermark)
+                        yield eventstream.format_sse(watermark, reset)
                     yield eventstream.format_sse(seq, frame)
             finally:
                 relay.unsubscribe(subscriber)
@@ -227,7 +253,7 @@ class Router:
         messages = [
             {
                 "role": str(message.get("role", "assistant")),
-                "blocks": [_history_block(block) for block in message.get("content", [])],
+                "blocks": _history_blocks(message.get("content", [])),
             }
             for message in raw_messages
             if isinstance(message, dict)

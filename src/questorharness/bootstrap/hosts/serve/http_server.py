@@ -15,6 +15,7 @@ from questorharness.bootstrap.hosts.serve import auth, refusals
 from questorharness.bootstrap.hosts.serve.transport import Handler, Request, Response
 
 _BIND_HOST: Final[str] = "127.0.0.1"
+_STATEFUL_METHODS: Final[frozenset[str]] = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 class HttpServer:
@@ -66,27 +67,46 @@ class HttpServer:
         """鉴权 → 转换 → 交给 handler → 写回（含 SSE 流）。"""
         try:
             self._authorize(request)
-            converted = await self._convert(request)
+            client_id, minted = self._client_identity(request)
+            converted = await self._convert(request, client_id)
             response = await self._handler(converted)
         except refusals.Refusal as exc:
             return web.json_response({"code": exc.code, "message": exc.message}, status=exc.status)
         headers = dict(response.headers)
         headers.setdefault("X-Questor-Client", str(converted.client_id))
+        if minted:
+            # 浏览器无 header 可用：首次请求种植身份 cookie，后续审批/提交才是同一人。
+            headers["Set-Cookie"] = auth.client_cookie(converted.client_id)
         if response.stream is None:
             return web.Response(status=response.status, body=response.body, headers=headers)
         return await self._stream(request, response, headers)
 
     def _authorize(self, request: web.Request) -> None:
-        """五件套里的 ②③④：token cookie、Host、Origin。"""
+        """五件套里的 ②③④：Host、Origin（仅改状态方法）、token cookie。
+
+        Origin 只对 POST/PUT/PATCH/DELETE 强制：浏览器同源 GET（fetch/EventSource）
+        往往不发 Origin，对所有方法统一强校验会把 /events、/history 全拦成 403。
+        GET 的回环防护由 Host + SameSite=Strict cookie 承担。
+        """
         if self._allow_no_auth:
             return
         auth.validate_host(request.host)
-        auth.validate_origin(request.headers.get("Origin"))
+        if request.method in _STATEFUL_METHODS:
+            auth.validate_origin(request.headers.get("Origin"))
         auth.validate_cookie(request.cookies, self._credential)
 
-    async def _convert(self, request: web.Request) -> Request:
-        """把 aiohttp 请求转成传输无关 Request。"""
-        client_id = request.headers.get(auth.CLIENT_HEADER) or uuid.uuid4().hex
+    def _client_identity(self, request: web.Request) -> tuple[str, bool]:
+        """header → 身份 cookie → 现铸；返回 (client_id, 是否新铸需要种 cookie)。"""
+        header = request.headers.get(auth.CLIENT_HEADER)
+        if header:
+            return header, False
+        cookie = request.cookies.get(auth.CLIENT_COOKIE)
+        if cookie:
+            return cookie, False
+        return uuid.uuid4().hex, True
+
+    async def _convert(self, request: web.Request, client_id: str) -> Request:
+        """把 aiohttp 请求转成传输无关 Request；经 TCP 提交的 via 是 studio。"""
         body = await request.read() if request.method in {"POST", "PUT", "PATCH"} else b""
         return Request(
             method=request.method,
@@ -95,6 +115,7 @@ class HttpServer:
             query=dict(request.query),
             body=body,
             last_event_id=request.headers.get("Last-Event-ID"),
+            via="studio",
         )
 
     async def _stream(

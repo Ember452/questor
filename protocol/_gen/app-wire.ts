@@ -95,6 +95,7 @@ export interface ApprovalRequest {
   id: string;
   tool: string;
   subject: string;
+  detail?: string;
 }
 export interface AskRequest {
   seq: number;

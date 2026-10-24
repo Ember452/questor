@@ -1,7 +1,8 @@
 {
+  "detail": "+3/-1\n@@ -1 +1,3 @@\n-old\n+new",
   "id": "approval-1",
   "kind": "approval_request",
   "seq": 1,
-  "subject": "rm -rf build",
-  "tool": "bash"
+  "subject": "src/app.py",
+  "tool": "edit"
 }

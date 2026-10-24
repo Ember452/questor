@@ -39,6 +39,46 @@ def test_repeated_request_id_is_replay_not_a_second_turn() -> None:
     assert replay.turn_id == first.turn_id
 
 
+def test_edit_approval_carries_patch_detail() -> None:
+    """编辑审批不得丢 diff：detail 至少带增删行数与截断补丁。"""
+    authority = Authority()
+    authority.begin("c1", "r1", "edit src/app.py")
+    seen = []
+    authority.set_notifier(lambda prompt, subject: seen.append(prompt))
+
+    async def scenario() -> str:
+        task = asyncio.create_task(
+            authority.edit_approval_prompt("src/app.py", "@@ -1 +1 @@\n-old\n+new", 1, 1)
+        )
+        await asyncio.sleep(0)
+        prompt = seen[0]
+        assert prompt.tool == "edit"
+        assert prompt.detail.startswith("+1/-1")
+        assert "+new" in prompt.detail
+        authority.settle(prompt.prompt_id, True, "c1")
+        return await task
+
+    assert asyncio.run(scenario()) == "approve"
+
+
+def test_edit_approval_truncates_huge_diff() -> None:
+    """超大补丁截断到 4000 字符，帧不被撑爆。"""
+    authority = Authority()
+    authority.begin("c1", "r1", "edit")
+    seen = []
+    authority.set_notifier(lambda prompt, subject: seen.append(prompt))
+
+    async def scenario() -> None:
+        task = asyncio.create_task(authority.edit_approval_prompt("big.py", "x" * 9000, 5, 0))
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(scenario())
+    assert len(seen[0].detail) <= len("+5/-0\n") + 4000
+
+
 def test_finish_releases_lease_and_queue_can_promote() -> None:
     """回合结束后可取出排队回合。"""
     authority = Authority()

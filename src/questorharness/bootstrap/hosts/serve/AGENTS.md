@@ -6,6 +6,8 @@
 拥有的数据：一次进程内的回合租约、提示 Future 表、帧重放窗口（8MB 有界）；**不拥有**会话快照。
 允许依赖：本包在 bootstrap 层，可 import 任何下层；`routes.py` 不得 import aiohttp（传输适配在后续 `http_server.py`）；`wire.py` 不得 import broadcaster。
 不变式：宿主**接收**已装配的 `RuntimeBundle`、不构造它；`seq` 只由 broadcaster 分配；拒绝码只出 `refusals` 白名单；`wire_types.py` 由 `scripts/codegen/gen_wire_py.py` 生成，**禁止手改**。
+
+四条硬约束：① **stdout 只跑协议**——`--studio-host` 握手行之后任何 print 都会污染父进程启动流，日志一律 stderr；② **GET 不校验 Origin**（浏览器同源 GET 不带该头），Origin 只在 POST/PUT/PATCH/DELETE 强制；③ **SSE 先 subscribe 再 replay**，同段内用 `seq <= replayed_to` 去重；④ **租约释放放 `finally`**，`turn_done` 广播用 `shield`，二次取消不得饿死 `turn.busy`。
 测试：`uv run pytest tests/unit/bootstrap/hosts/serve tests/unit/profiles tests/unit/test_permissions/test_profile_tool_surface.py -q`，
 端到端：`uv run pytest tests/e2e/test_serve_host_{smoke,engine,loopback}.py -q -m e2e`
 关键文件：`routes.py`（端点）、`host.py`（装配与回合调度）、`authority.py`（租约/幂等/提示）、`broadcaster.py`（seq/重放）、`wire.py`（帧编码）

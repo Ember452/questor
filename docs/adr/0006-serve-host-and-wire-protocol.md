@@ -25,8 +25,11 @@ Electron（`apps/desktop`）与浏览器（`apps/web`）。现状却是每个客
    - **Studio / Web**：同一组路由挂**回环 TCP + 凭据五件套**（Reasonix
      `main.go:300-348`、`host.js:151-167` 先例）：① 仅监听 127.0.0.1 的随机
      端口；② 一次性 launch credential（≥32 字节随机，**永不出自配置、永不
-     落盘**）；③ 凭据经 HttpOnly cookie 种植；④ Host + Origin 校验且 hostname
-     必须是 127.0.0.1；⑤ 父进程租约——宿主父进程退出即服务失效。
+     落盘**）；③ 凭据经 HttpOnly cookie 种植；④ Host 校验 + **仅改状态方法
+     （POST/PUT/PATCH/DELETE）的 Origin 校验**，hostname 必须是 127.0.0.1——
+     浏览器同源 GET（fetch/EventSource）往往不发 Origin，对所有方法强校验会把
+     `/events`、`/history` 全拦成 403；GET 靠 Host + SameSite=Strict cookie 防护；
+     ⑤ 父进程租约——宿主父进程退出即服务失效。
 2. **帧模型**。事件下行 = SSE：单调 `seq` + `Last-Event-ID` 双通道恢复
    （`eventstream.go:66,89`）+ watermark 心跳帧（`:361`）+ droppable 可丢
    分类——进度类可丢、事实类不可丢（`broadcaster.go:39-43`）+ `/events/mux`

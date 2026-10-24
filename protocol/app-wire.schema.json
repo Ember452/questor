@@ -135,7 +135,8 @@
         "kind": { "const": "approval_request" },
         "id": { "type": "string" },
         "tool": { "type": "string" },
-        "subject": { "type": "string" }
+        "subject": { "type": "string" },
+        "detail": { "type": "string" }
       }
     },
     "AskRequest": {

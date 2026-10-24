@@ -249,7 +249,9 @@ DeepCode **src/rpc/contracts.ts** 的 `ClientRuntime` 方法清单与 Reasonix `
 空壳（只登记"待裁决"行，不预设功能）。
 **验收绿**：进程内 transport 上脚本驱动完整回合（提交→事件流→快照），不依赖任何网络端口；
 黄金 fixture round-trip 稳定；映射表覆盖 7 类事件；**并发判红用例**：并行两次 submit，
-第二次得到 `turn.busy`（不得静默排队，也不得双写）；**幂等判红用例**：同一
+第二次得到 `queued`（容量 1 的排队槽，position=1），第三次才是 `turn.busy`；
+**不得静默丢弃、不得双写**。排队是 2026-10-25 的实测修订：REPL 连续输入需要"下一句不丢"，
+且 `turn_done` 后自动推进队列，浏览器 Stop 只取消当前回合（与 §8「插话队列」同一口径）；**幂等判红用例**：同一
 `clientRequestId` 连发两次 → 只产生一个回合，第二次拿回同一 turn id；`gen_wire_py --check`
 与 `gen_wire_ts --check` 双绿；kind 覆盖守卫绿；持久化版本守卫绿（v1 旧文件可读）；
 `/profile` 的 capabilities 与分表一致，且两个 profile 的工具面可枚举、互不相同
@@ -280,7 +282,9 @@ legacy 节点。
 ### 阶段 3：回环 TCP 宿主 + 凭据五件套 + 多客户端语义
 
 **动作**：host.py 增回环模式——仅监听 127.0.0.1 随机端口；一次性 launch credential（≥32 字节，
-永不出自配置、永不落盘）；HttpOnly cookie 种植；Host+Origin 校验（hostname 必须 127.0.0.1）；
+永不出自配置、永不落盘）；HttpOnly cookie 种植；Host 校验 + 仅改状态方法
+（POST/PUT/PATCH/DELETE）的 Origin 校验（hostname 必须 127.0.0.1；GET 不强制 Origin，
+因为浏览器同源 GET 往往不带该头）；
 父进程租约。dev 允许 `--serve-no-auth`（默认五件套）。**多客户端**：broadcaster 支持 N 个
 订阅者（REPL + 浏览器 + 桌面同时在线）；approval / ask 的 Future 表带**归属声明**，非发起
 客户端回 `approval.not_owner`，已被结算再答回 `approval.already_settled`；turn 句柄只属于
@@ -418,12 +422,12 @@ Agents）在五卡之后逐张评估。
 | 引擎侧 | wire 帧 | 手法 | 备注 |
 |---|---|---|---|
 | （submit 到达） | `turn_started{authoredTurn,msgIndex,via,attachments}` | 铸造+派生 | msgIndex=适配层计数；attachments=[] 空态 |
-| `AssistantTextDelta.text` | `text` | 直通 | droppable |
+| `AssistantTextDelta.text` | `text` | 直通 | 不可丢（REPL 逐字渲染依赖；慢消费者以 `message` 帧兜底） |
 | `AssistantTurnComplete{message,usage}` | `message` + `usage` | 直通 | ConversationMessage→wire 文本块映射 |
 | `ToolExecutionStarted{tool_name,tool_input}` | `tool_dispatch` | 铸造 toolCallId | partial:false（引擎无参数流式） |
 | `ToolExecutionCompleted{...}` | `tool_result` | 铸造关联 | 同 toolCallId |
 | （回合结束） | `turn_done{cancelled,outcome,checkpointTurn,workDurationMs,receipt,readiness,err}` | 派生 | checkpointTurn 常量 false（引擎 P1 后变真，前端零改） |
-| permission_prompt 回调 | `approval_request{id,tool,subject}` | 铸造 | `/approve{id}` 查 Future 表（B13 模式） |
+| permission_prompt 回调 | `approval_request{id,tool,subject,detail}` | 铸造 | `/approve{id}` 查 Future 表（B13 模式）；detail=编辑审批的 +added/-removed 与截断 patch（≤4000 字符） |
 | `ErrorEvent{message,recoverable}` | `notice` / `turn_done.err` | 映射 | |
 | `StatusEvent{message}` | `notice` | 映射 | droppable |
 | `CompactProgressEvent{phase×9,...}` | `compaction_started/progress/done` | 派生 | 9 相位→三帧映射写在 wire.py；compact_failed 归处阶段 1 定 |
@@ -518,20 +522,31 @@ Agents）在五卡之后逐张评估。
 - **personal 首批 page id = `chat` / `persona` / `memory` / `schedule` / `channels`**。
   这是**首批注册集，不是上限**：页面可随功能增量新增，新增不改本计划，只走 4a-8 的四步
   （注册表 + `ui.capabilities` + 必要时的 schema kind + 映射表）。
-- **插话队列**：契约先留 `queued` 状态位（`/submit` 忙时可返回 `queued`，`authority.py` 预留
-  1 个 pending 槽），**行为实现后置**到 personal 首批。
+- **插话队列**：契约留 `queued` 状态位（`/submit` 忙时返回 `queued`，`authority.py` 预留
+  1 个 pending 槽）；**容量 1 的排队行为已在阶段 1 落地**（started→queued→busy，
+  `turn_done` 后自动推进），personal 的插话 UI 归 4a。
+- **appearance 四包保留**（2026-10-25 实测校正）：`themes` / `output_styles` / `keybindings`
+  仍被 `runtime.py:29` 与 `/theme`、`/output-style`、键位加载使用，不是删 UI 后的残留；
+  `vim` 包无包外引用，另立开放项。
+- **评审对质（2026-10-25，分支一复审）**：H1 Origin 仅限改状态方法；H2 SSE 先订阅再取重放快照
+  并用 `seq <= replayed_to` 去重；H3 租约释放移入 `finally` + `shield` 广播 turn_done；
+  M1 幂等重放回真实 `queued` 状态；M2 编辑审批不再丢 diff（`detail` 字段）；
+  附加：未知内容块降级 notice/文本占位、溢出时补发 `stream_reset`、浏览器身份 cookie、
+  `via` 改由传输层提供。均带判红用例。
 - **导航容量规则**：一级导航固定 ≤7 项；超出归入“更多 / 设置”分组。新增页面优先并入既有
   分组，**不得为单页新开一级入口**。
 
 **开放（执行 agent 不得代答）**：
 
-1. appearance 四包去留——阶段 2 裁决。
-2. `src/questor/runtime.py:45` 产品 REPL 入口去留——阶段 2 前置核查后裁决。
-3. `protocol.py` 若含 backend_host 之外内容，拆分方案——阶段 2 前置核查后定。
-4. studio 宿主 prompt_surface flavor 时机（4a 或顺延）。
-5. ADR-0006 §5 "8 种"勘误提交时点（默认随阶段 1，用户可提前）。
-6. 4b 之后是否追加 RememberCard / MeterRail / Jobs / Agents 四卡（默认后置池）。
-7. 中文术语表（渠道 / 任务 / 团队 / 记忆召回 / 快照）定稿时点——建议 4a 之前。
+1. `vim` 包无包外引用（2026-10-25 实测）——删除或接入键位表，阶段 4a 前裁决。
+2. `baseline-check` 在 2026-10-25 首次全量跑中红过一次、随后两次绿，未能复现；
+   CI 再现时必须抓该 step 的 stdout 存档（不归因、不掩盖）。
+3. `src/questor/runtime.py:45` 产品 REPL 入口去留——阶段 2 前置核查后裁决。
+4. `protocol.py` 若含 backend_host 之外内容，拆分方案——阶段 2 前置核查后定。
+5. studio 宿主 prompt_surface flavor 时机（4a 或顺延）。
+6. ADR-0006 §5 "8 种"勘误提交时点（默认随阶段 1，用户可提前）。
+7. 4b 之后是否追加 RememberCard / MeterRail / Jobs / Agents 四卡（默认后置池）。
+8. 中文术语表（渠道 / 任务 / 团队 / 记忆召回 / 快照）定稿时点——建议 4a 之前。
 
 ## 9. 与计划 01 及引擎功能线的协调
 

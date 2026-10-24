@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from questorharness.bootstrap.hosts.serve.wire import WireEncoder
@@ -40,6 +42,20 @@ def test_turn_complete_flattens_blocks_and_usage() -> None:
     assert frames[0]["kind"] == "message"
     assert frames[0]["blocks"] == [{"type": "text", "text": "done"}]
     assert frames[0]["usage"] == {"inputTokens": 3, "outputTokens": 4}
+
+
+def test_unknown_content_block_degrades_visibly() -> None:
+    """引擎新增块类型不得炸掉整回合：先发 warning notice，再发剩余块。"""
+    message = SimpleNamespace(
+        content=[SimpleNamespace(type="thinking"), SimpleNamespace(type="text", text="ok")]
+    )
+    frames = _encoder().encode(
+        AssistantTurnComplete(message=message, usage=UsageSnapshot(input_tokens=1, output_tokens=1))
+    )
+    assert [frame["kind"] for frame in frames] == ["notice", "message"]
+    assert frames[0]["level"] == "warning"
+    assert "thinking" in frames[0]["text"]
+    assert frames[1]["blocks"] == [{"type": "text", "text": "ok"}]
 
 
 def test_tool_started_and_completed_share_call_id() -> None:

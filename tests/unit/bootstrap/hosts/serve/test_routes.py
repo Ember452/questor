@@ -188,6 +188,124 @@ def test_events_first_frame_is_replay_gap_when_window_lost(tmp_path: Path) -> No
     asyncio.run(scenario())
 
 
+def test_replay_of_queued_request_reports_queued(tmp_path: Path) -> None:
+    """幂等重放不得谎报状态：排队中的请求重放回 queued。"""
+
+    async def scenario() -> None:
+        transport, _ = _transport(tmp_path)
+        await transport.request(
+            "POST",
+            "/rt/r1/submit",
+            body=json.dumps({"line": "one", "clientRequestId": "r1"}).encode(),
+        )
+        queued = await transport.request(
+            "POST",
+            "/rt/r1/submit",
+            body=json.dumps({"line": "two", "clientRequestId": "r2"}).encode(),
+        )
+        assert _json(queued)["state"] == "queued"
+        replay = await transport.request(
+            "POST",
+            "/rt/r1/submit",
+            body=json.dumps({"line": "two", "clientRequestId": "r2"}).encode(),
+        )
+        assert _json(replay)["state"] == "queued"
+        assert _json(replay)["turnId"] == _json(queued)["turnId"]
+
+    asyncio.run(scenario())
+
+
+def test_submit_records_transport_via(tmp_path: Path) -> None:
+    """via 来自传输层：进程内是 cli，显式传 studio 才是 studio。"""
+
+    async def scenario() -> None:
+        transport, host = _transport(tmp_path)
+        await transport.request(
+            "POST",
+            "/rt/r1/submit",
+            body=json.dumps({"line": "hi", "clientRequestId": "r1"}).encode(),
+        )
+        assert host.started[0].via == "cli"
+        host.authority.finish(host.started[0].turn_id)
+        await transport.request(
+            "POST",
+            "/rt/r1/submit",
+            body=json.dumps({"line": "ui", "clientRequestId": "r2"}).encode(),
+            via="studio",
+        )
+        assert host.started[1].via == "studio"
+
+    asyncio.run(scenario())
+
+
+def _sse_payload(chunk: bytes) -> dict:
+    """从 SSE 分块里取出 data 帧。"""
+    for line in chunk.splitlines():
+        if line.startswith(b"data: "):
+            return json.loads(line[len(b"data: ") :])
+    raise AssertionError(f"no data line in {chunk!r}")
+
+
+def test_events_keep_frames_published_before_first_read(tmp_path: Path) -> None:
+    """订阅必须在取重放快照之前：handler 返回后、首次读取前发的帧不能丢。"""
+
+    async def scenario() -> None:
+        transport, host = _transport(tmp_path)
+        response = await transport.request("GET", "/rt/r1/events", last_event_id="0")
+        assert response.stream is not None
+        await host.broadcaster.publish({"kind": "text", "text": "a"})
+        await host.broadcaster.publish({"kind": "text", "text": "b"})
+        first = await asyncio.wait_for(response.stream.__anext__(), timeout=1.0)
+        second = await asyncio.wait_for(response.stream.__anext__(), timeout=1.0)
+        assert _sse_payload(first)["text"] == "a"
+        assert _sse_payload(second)["text"] == "b"
+
+    asyncio.run(scenario())
+
+
+def test_events_dedupe_live_frames_already_replayed(tmp_path: Path) -> None:
+    """先订阅再重放会产生重复：seq ≤ 重放高位必须跳过。"""
+
+    async def scenario() -> None:
+        transport, host = _transport(tmp_path)
+        for index in range(3):
+            await host.broadcaster.publish({"kind": "text", "text": str(index)})
+        response = await transport.request("GET", "/rt/r1/events", last_event_id="0")
+        assert response.stream is not None
+        await host.broadcaster.publish({"kind": "text", "text": "3"})
+        texts = []
+        for _ in range(4):
+            chunk = await asyncio.wait_for(response.stream.__anext__(), timeout=1.0)
+            texts.append(_sse_payload(chunk)["text"])
+        assert texts == ["0", "1", "2", "3"]
+
+    asyncio.run(scenario())
+
+
+def test_history_unknown_block_degrades_to_text(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """未知内容块不得把 /history 打成 500：降级为文本占位。"""
+    from questorharness.bootstrap.hosts.serve import routes
+
+    monkeypatch.setattr(
+        routes,
+        "load_session_snapshot",
+        lambda cwd: {
+            "session_id": "sid",
+            "messages": [{"role": "assistant", "content": [{"type": "thinking"}]}],
+        },
+    )
+
+    async def scenario() -> None:
+        transport, _ = _transport(tmp_path)
+        response = await transport.request("GET", "/rt/r1/history")
+        assert response.status == 200
+        block = _json(response)["messages"][0]["blocks"][0]
+        assert block["type"] == "text"
+        assert "unsupported block" in block["text"]
+
+    asyncio.run(scenario())
+
+
 def test_unknown_route_is_404(tmp_path: Path) -> None:
     """未注册端点 404（停工症状 §6-5 的触发点）。"""
 

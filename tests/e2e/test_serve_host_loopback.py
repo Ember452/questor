@@ -60,13 +60,17 @@ def test_loopback_auth_matrix_and_client_ownership(tmp_path: Path, monkeypatch) 
                     cookies={auth.COOKIE_NAME: "wrong"},
                 )
                 assert bad_token.status_code == 401
-                bad_origin = await client.get(
-                    f"{base}/rt/r1/profile",
+                bad_origin = await client.post(
+                    f"{base}/rt/r1/submit",
                     headers={"Origin": "https://evil.example.com"},
+                    json={"line": "hi", "clientRequestId": "bad-origin"},
                     cookies=cookie,
                 )
                 assert bad_origin.status_code == 403
                 assert bad_origin.json()["code"] == "auth.origin"
+                # 浏览器同源 GET 不带 Origin：GET 不得因缺头被 403。
+                browser_get = await client.get(f"{base}/rt/r1/profile", cookies=cookie)
+                assert browser_get.status_code == 200
                 bad_host = await client.get(
                     f"{base}/rt/r1/profile",
                     headers={"Host": "evil.example.com", "Origin": base},
