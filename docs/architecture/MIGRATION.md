@@ -171,7 +171,12 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 
 ### 4.1 拆 god file（按“patch 目标少 → 多”排）
 
-| 现状 | 行数 | patch 目标 | 拆成 |
+> **历史表格（2026-10-22 的测量口径）**：路径与行数是迁移启动前的快照，
+> 多数目标已按计划 01 的波次执行完毕（如 commands 拆族、cli 拆包、compact
+> 收豁免）。当前的真实路径与行数以 [TREE.md](TREE.md) 为准，本表只保留
+> 决策依据，不作为现状陈述。
+
+| 迁移时现状 | 行数 | patch 目标 | 拆成 |
 |---|---:|---:|---|
 | `runtime/commands/registry.py` | 2586 | ≈0 | `commands/{session,run,turn,memory,tool,profile}.py` + `registry.py` |
 | `questor/cli.py` | 2245 | 3 | `cli/{main,repl,render,input,commands}.py` |

@@ -118,11 +118,11 @@ Non-compliant comments = the change is **not done** (§5).
 - **Never run `git commit` or `git push` without the user's explicit, in-turn permission.** Staging and
   preparing are fine; committing/pushing require an ask-and-yes every time (§3.2 of the repo rules).
 - Never `--no-verify`; never force-push to a shared branch unless explicitly requested.
-- **Branch policy** (ADR-0012, switched to plan **B** on 2026-10-16): everything goes through branch + PR — the
-  maintainer no longer pushes `main` directly either. The gate is CI's independent blocking `boundaries` job
-  (layering guards / cold import / protocol drift / guard self-tests), not human review. Until `boundaries` is
-  marked *required* in GitHub settings and admin bypass is disallowed, "no direct pushes to main" is a
-  convention rather than an enforced block — see the ADR's switch record.
+- **Branch policy** (switched to branch + PR on 2026-10-16): everything goes through branch + PR — the
+  maintainer no longer pushes `main` directly either. The gate is CI's independent blocking `guards` job
+  (self-tests, live guards, generated-doc compares, cold import, import contracts), not human review. Until
+  `guards` is marked *required* in GitHub settings and admin bypass is disallowed, "no direct pushes to
+  main" is a convention rather than an enforced block.
 
 ---
 **These rules are working when:** every diff traces to the request, few rewrites happen from
