@@ -1,4 +1,4 @@
-﻿"""审批 detail → diff 卡。
+"""审批 detail → diff 卡。
 
 `authority.edit_approval_prompt` 交出来的形状是：
 

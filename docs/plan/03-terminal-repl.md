@@ -541,3 +541,59 @@ UNSUPPORTED: dict[str, str] = {
 
 **评审之外我另外报的一条（自查发现）**：评审说“行数差异来自计数口径而非漂移”，方向对但结论不完整——
 `Get-Content | Measure-Object -Line` 会忽略空行（348 vs 393），本仓已有同类坑记录；因此 §0-12 同时禁止该命令。
+
+---
+
+## 附录 B：三张对账表（§0.5-6；应原样贴进 PR 描述）
+
+### B-1 条目对账（计划条目 → 实现位置 / commit）
+
+| 波 | 条目 | 实现位置 | commit |
+|---|---|---|---|
+| A1 | 扁平包 + `__all__` + 包 AGENTS + `unsupported` + `strings` + 白名单目录级放行 | `hosts/terminal/{__init__,unsupported,strings}.py`、`scripts/guards/check_layout.py` | 5b635d6 |
+| A2 | 帧→VM（13 kind 穷尽、未知/坏帧降级、不持 raw frame） | `terminal/wire_view.py` | 9f0e436 |
+| A3 | 宽度（rich.cells 薄封装 + 一致性） | `terminal/width.py` | 210b482 |
+| A4 | 流式 markdown 块状态机 | `terminal/markdown.py` | c4b926e |
+| A5/A6 | 七图元 + diff 卡 + FooterVM + F1 接活 | `terminal/{cards,diff,footer}.py`、`serve/terminal_theme.py` | 21b8f87 / 80d9dcc |
+| B1–B4 | 队列、补全、粘贴、截止与本地超时、渲染降级、Ctrl-C 四语义 | `terminal_client.py`（当时代理） | 9eca9bb / 07ef8ba |
+| C1/C2 | 面板状态机 + alt-screen owner + 搜索 + 只读 transcript | `terminal/overlay.py`、`terminal/pickers.py` | bdd89e8 |
+| W-D1/D2 | usage 扩展 + 结构化 approval patch | `serve/wire.py`、`protocol/app-wire.schema.json` | be5ee5e |
+| W-D3/D4 | `GET /catalog/{kind}`（8 kind）+ `todos` kind | `serve/catalog/*`、`serve/routes.py`、`host.py`、`web/TodoCard` | 11112d8 / ad0b5bb |
+| §2.2 结构 | 循环/渲染/键位入包，门面降为装配 | `terminal/{app,renderer,keymap}.py` + 门面 170 行 | 3c77fbd |
+| §5 | 徽标守卫 #2/#3 + 启动缺口行 | `terminal/cards.gaps`、`tests/ci/test_unsupported_badges.py` | 7f93ff2 |
+| 波 B 补 | 审批/提问倒计时工具条 + 无控制台回退 | `terminal/approval.py`、`renderer.py`、`input_session.py` | f1a3059 |
+| 波 E 补 | `plugins` catalog kind + `:help` 命令面板 | `serve/catalog/providers.py`、`terminal/pickers.py`、`terminal/app.py` | a40eb35 |
+
+### B-2 影响面对账（被改文件 → 上下游）
+
+| 被改文件 | 谁调用它 | 它调用谁 | 同步了谁 |
+|---|---|---|---|
+| `protocol/app-wire.schema.json` | 双侧 codegen、`test_wire_codegen*`、`test_kind_coverage`、fixtures 守卫 | — | `wire_types.py`、`protocol/_gen/app-wire.ts`、`apps/web/src/generated/app-wire.ts`、`tests/fixtures/serve_wire/*`、`apps/web/src/generated/wire-fixtures.json`、`cardSlots.ts` |
+| `serve/wire.py` | `host.render_event`、fixtures 生成器、`test_wire*` | `contracts.domain.events`、`wire_types` | 3 个生成物同上 |
+| `serve/host.py` | `terminal_client.build_serve_host`、`bootstrap/hosts/app.py` | `authority`、`broadcaster`、`routes`、`wire`、`plugins/cron/skills`（catalog 侧） | 无其他消费者（单宿主） |
+| `serve/routes.py` | `MemoryTransport`、`http_server`、`test_routes` | `authority`、`catalog`、`session_storage` | R8 复杂度从 22 降到表驱动 |
+| `hosts/terminal_client.py` | `bootstrap/hosts/app.py`、`api.py`、`serve/studio.py`、e2e/单测 | `terminal.app`/`renderer` | 5 个导入方零改动（公开名全保留） |
+| `apps/web/src/app/{cardSlots,viewModel}.ts`、`pages/ChatPage.tsx` | web 测试、`test_card_slots_cover_every_schema_kind` | generated types | 新增 `todos` 槽位 + 穷尽 case + TodoCard |
+| `docs/plan/mapping/terminal-coding.md` | `test_unsupported_badges` 双向断言 | `terminal/unsupported.py` | 新增 T1–T18 行 |
+
+### B-3 判红对账（计划声明的红用例 == 实际存在且可复现为红）
+
+| 红用例 | 测试文件::用例 |
+|---|---|
+| 宽度回退成 `len()` / 另立宽度表 | `test_width.py::test_cell_len_matches_rich_on_every_sample` |
+| 未闭合围栏不缓冲 | `test_markdown.py::test_open_fence_is_held_back_until_it_closes` |
+| 单卡异常杀死消费循环 | `test_terminal_degrade.py::test_render_exception_degrades_and_the_frame_after_it_still_renders` |
+| 未知 kind 静默吞 | `test_terminal_degrade.py::test_unknown_kind_is_rendered_not_swallowed` |
+| 审批默认改成 approve | `test_terminal_degrade.py::test_timeout_answer_is_treated_as_deny` |
+| 回合中丢弃输入 | `test_queue_during_turn.py::test_second_line_is_queued_while_the_first_turn_runs` |
+| 绕过单一出口写终端 | `test_package_contract.py::test_interactive_writes_go_through_one_patched_channel` |
+| 未登记文件 import prompt_toolkit | `test_package_contract.py::test_prompt_toolkit_exemption_is_scoped_to_the_terminal_package` |
+| 徽标登记表与映射表漂移 | `test_unsupported_badges.py::test_registry_equals_mapping_absent_rows` |
+| 裸写徽标字面量 | `test_unsupported_badges.py::test_badges_are_only_built_by_the_registry` |
+| 登记了但不可见 | `test_unsupported_badges.py::test_every_registered_gap_is_visible_at_startup` |
+| catalog kind 与 provider 漂移 / 未知 kind 回空表 | `test_catalog_coverage.py::test_schema_kinds_equal_provider_registry`、`test_providers.py::test_unknown_kind_is_404_and_never_an_empty_success` |
+| `CatalogResponse` 混进 `ServerFrame` | `test_catalog_coverage.py::test_catalog_response_is_not_a_server_frame` |
+| 新 kind 不补 cardSlots | `test_kind_coverage.py::test_card_slots_cover_every_schema_kind` |
+| 成功/失败/缺文件的 todos 发布时机 | `test_host_todos.py`（四条） |
+| 面板游标越界/空表/只读面板误发命令 | `test_overlay.py`、`test_pickers.py::test_transcript_panel_is_read_only` |
+| 图元零调用（F1 回归） | `test_terminal_theme_usage.py::test_every_public_theme_primitive_is_called` |

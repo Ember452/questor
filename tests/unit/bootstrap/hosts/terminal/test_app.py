@@ -108,6 +108,24 @@ async def _eof(_session: object) -> str:
     return app_module.EOF
 
 
+def test_profile_info_feeds_the_footer_even_without_a_banner() -> None:
+    """非交互（单次 prompt / 管道）也要拿到形态名，否则状态栏永远是 `？`。"""
+
+    transport = _CommandTransport([])
+    transport.body = b'{"id":"coding","name":"coding","description":"local-first"}'
+    name, description = asyncio.run(app_module.profile_info(_host(transport)))  # type: ignore[arg-type]
+    assert (name, description) == ("coding", "local-first")
+    assert transport.calls == [("GET", "/rt/r1/profile")]
+
+
+def test_profile_info_is_fail_soft() -> None:
+    class _Boom(_CommandTransport):
+        async def request(self, method: str, path: str, **_kwargs: object) -> SimpleNamespace:
+            raise RuntimeError("down")
+
+    assert asyncio.run(app_module.profile_info(_host(_Boom([])))) == ("?", "")  # type: ignore[arg-type]
+
+
 class _CommandTransport:
     def __init__(self, commands: list[dict[str, object]]) -> None:
         import json

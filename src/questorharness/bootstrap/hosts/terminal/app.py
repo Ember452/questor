@@ -97,20 +97,23 @@ async def fetch_commands(host: ServeHost) -> list[dict[str, Any]]:
         return []
 
 
-async def print_banner(host: ServeHost, output: Console) -> str:
-    """交互模式横幅：Reasonix ASCII art + 形态 + 用法提示；返回形态名供状态栏用。"""
-    output.print(cards.banner())
-    name = "?"
+async def profile_info(host: ServeHost) -> tuple[str, str]:
+    """`/profile` → (名称, 描述)；取不到就返 (`?`, 空)。非交互模式也要拿名称供状态栏用。"""
+
     try:
         response = await host.transport.request("GET", f"{PREFIX}/profile")
         profile = json.loads(response.body)
-        name = str(profile.get("name", "?"))
-        output.print(
-            f"[bold]{name}[/bold] · {profile.get('description', '')}",
-            style=theme.DIM,
-        )
-    except Exception:  # noqa: BLE001 - 横幅失败不阻断
-        pass
+    except Exception:  # noqa: BLE001 - 横幅/状态栏失败不阻断
+        return "?", ""
+    return str(profile.get("name", "?")), str(profile.get("description", ""))
+
+
+async def print_banner(host: ServeHost, output: Console) -> str:
+    """交互模式横幅：Reasonix ASCII art + 形态 + 用法提示；返回形态名供状态栏用。"""
+    output.print(cards.banner())
+    name, description = await profile_info(host)
+    if description or name != "?":
+        output.print(f"[bold]{name}[/bold] · {description}", style=theme.DIM)
     output.print(cards.empty_state())
     output.print(cards.gaps())
     return name
@@ -283,7 +286,7 @@ async def run_terminal_client(
     events = await host.transport.request("GET", f"{PREFIX}/events")
     assert events.stream is not None
     interactive = prompt is None and sys.stdin.isatty()
-    profile_name = await print_banner(host, output) if interactive else "?"
+    profile_name = await print_banner(host, output) if interactive else (await profile_info(host))[0]
     renderer = TerminalRenderer(host, output, profile_name=profile_name)
     consumer = asyncio.create_task(renderer.consume(events.stream))
     session = None

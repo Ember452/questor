@@ -43,7 +43,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/serve/wire.py` | 295 |
 | `src/questorharness/bootstrap/hosts/serve/wire_types.py` | 284 |
 | `src/questorharness/bootstrap/hosts/terminal/__init__.py` | 15 |
-| `src/questorharness/bootstrap/hosts/terminal/app.py` | 301 |
+| `src/questorharness/bootstrap/hosts/terminal/app.py` | 304 |
 | `src/questorharness/bootstrap/hosts/terminal/approval.py` | 68 |
 | `src/questorharness/bootstrap/hosts/terminal/cards.py` | 195 |
 | `src/questorharness/bootstrap/hosts/terminal/completer.py` | 92 |
