@@ -8,14 +8,17 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 from pathlib import Path
 from typing import Any
 
 import pytest
+from rich.console import Console
 
 from questorharness.bootstrap.hosts.serve import ServeHost
 from questorharness.bootstrap.hosts.serve.authority import Authority
+from questorharness.bootstrap.hosts.terminal_client import run_terminal_client
 from questorharness.bootstrap.runtime import build_runtime
 from questorharness.contracts.domain.message import ConversationMessage, TextBlock
 from questorharness.contracts.usage import UsageSnapshot
@@ -87,5 +90,47 @@ def test_real_engine_turn_over_memory_transport(tmp_path: Path, monkeypatch: pyt
             assert payload["messages"], "引擎回合应写入会话快照"
         finally:
             await host.close()
+
+    asyncio.run(scenario())
+
+
+def test_repl_survives_two_turns_against_real_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """真 REPL 客户端 + 真引擎：连输两句，两句都必须拿到 turn_done。"""
+    (tmp_path / "coding.yaml").write_text(PROFILE_YAML, encoding="utf-8")
+    monkeypatch.setenv("QUESTORHARNESS_CONFIG_DIR", str(tmp_path / "cfg"))
+    lines = iter(["ping one", "ping two"])
+
+    def fake_input(_prompt: str = "") -> str:
+        try:
+            return next(lines)
+        except StopIteration as exc:
+            raise EOFError from exc
+
+    monkeypatch.setattr("builtins.input", fake_input)
+
+    async def scenario() -> None:
+        client = ScriptedClient("pong")
+        runtime = await build_runtime(
+            cwd=str(tmp_path),
+            model="fake-model",
+            system_prompt="you are a test double",
+            api_client=client,
+            enforce_max_turns=False,
+        )
+        host = ServeHost(runtime, authority=Authority(), profile_root=tmp_path)
+        await host.start()
+        output = Console(file=io.StringIO(), force_terminal=False)
+        try:
+            code = await asyncio.wait_for(
+                run_terminal_client(host, console=output), timeout=30
+            )
+        finally:
+            await host.close()
+        assert code == 0
+        assert client.calls == 2, "两轮必须各自调用一次模型"
+        text = output.file.getvalue()  # type: ignore[union-attr]
+        assert text.count("completed") == 2, text
 
     asyncio.run(scenario())

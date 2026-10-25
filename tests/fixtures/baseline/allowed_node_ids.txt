@@ -25,6 +25,7 @@ tests/unit/profiles/test_profile_loader.py::test_runtime_capabilities_declared_a
 tests/unit/profiles/test_profile_loader.py::test_missing_runtime_section_defaults_to_all_off
 tests/unit/profiles/test_profile_loader.py::test_runtime_unknown_key_and_value_are_rejected
 tests/unit/test_permissions/test_profile_tool_surface.py::test_personal_denies_write_tools_and_coding_allows_them
+tests/unit/bootstrap/hosts/test_terminal_client_multi_turn.py::test_two_turns_both_complete
 tests/ci/test_agent_tool_names.py::test_builtin_agent_tool_names_exist
 tests/ci/test_agent_tool_names.py::test_unknown_tool_name_is_detected
 tests/ci/test_agent_tool_names.py::test_wildcard_and_none_are_allowed
