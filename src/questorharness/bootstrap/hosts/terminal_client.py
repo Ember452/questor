@@ -65,8 +65,8 @@ class TerminalRenderer:
                 frame = _frame_from_sse(block)
                 if frame is not None:
                     await self._render(frame)
-                if self.done.is_set():
-                    return
+                # 不能在 turn_done 后 return：交互模式要连续多轮；单次 prompt
+                # 由调用方 done.wait() 收尾，两种模式都靠 finally 的 cancel 退订。
 
     async def _render(self, frame: dict[str, Any]) -> None:
         """按 kind 渲染；审批/提问直接就地询问。"""
