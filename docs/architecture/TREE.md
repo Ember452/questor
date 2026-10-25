@@ -99,7 +99,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/capabilities/skills/registry.py` | 29 |
 | `src/questorharness/capabilities/tools/__init__.py` | 38 |
 | `src/questorharness/capabilities/tools/agent/__init__.py` | 1 |
-| `src/questorharness/capabilities/tools/agent/agent_tool.py` | 131 |
+| `src/questorharness/capabilities/tools/agent/agent_tool.py` | 145 |
 | `src/questorharness/capabilities/tools/agent/ask_user_question_tool.py` | 50 |
 | `src/questorharness/capabilities/tools/agent/send_message_tool.py` | 64 |
 | `src/questorharness/capabilities/tools/agent/team_create_tool.py` | 35 |
@@ -174,7 +174,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/config/settings_loader.py` | 200 |
 | `src/questorharness/config/settings_models.py` | 774 |
 | `src/questorharness/contracts/__init__.py` | 7 |
-| `src/questorharness/contracts/agent.py` | 97 |
+| `src/questorharness/contracts/agent.py` | 99 |
 | `src/questorharness/contracts/domain/__init__.py` | 1 |
 | `src/questorharness/contracts/domain/events.py` | 92 |
 | `src/questorharness/contracts/domain/message.py` | 225 |
@@ -289,7 +289,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/runtime/hooks/loader.py` | 68 |
 | `src/questorharness/runtime/output.py` | 77 |
 | `src/questorharness/runtime/services/__init__.py` | 11 |
-| `src/questorharness/runtime/services/subagent_runtime.py` | 78 |
+| `src/questorharness/runtime/services/subagent_runtime.py` | 86 |
 | `src/questorharness/runtime/services/task_runtime.py` | 94 |
 | `src/questorharness/runtime/session/__init__.py` | 1 |
 | `src/questorharness/runtime/session/backend.py` | 99 |
@@ -297,10 +297,10 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/runtime/swarm/in_process.py` | 693 |
 | `src/questorharness/runtime/swarm/lockfile.py` | 24 |
 | `src/questorharness/runtime/swarm/mailbox.py` | 322 |
-| `src/questorharness/runtime/swarm/models.py` | 356 |
+| `src/questorharness/runtime/swarm/models.py` | 362 |
 | `src/questorharness/runtime/swarm/registry.py` | 410 |
-| `src/questorharness/runtime/swarm/spawn_utils.py` | 229 |
-| `src/questorharness/runtime/swarm/subprocess_backend.py` | 171 |
+| `src/questorharness/runtime/swarm/spawn_utils.py` | 238 |
+| `src/questorharness/runtime/swarm/subprocess_backend.py` | 173 |
 | `src/questorharness/runtime/swarm/team_lifecycle.py` | 910 |
 | `src/questorharness/runtime/swarm/worktree.py` | 315 |
 | `src/questorharness/runtime/tasks/__init__.py` | 18 |

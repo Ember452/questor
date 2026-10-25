@@ -57,6 +57,8 @@ class SubprocessBackend:
             system_prompt=config.system_prompt,
             system_prompt_mode=config.system_prompt_mode,
             plan_mode_required=config.plan_mode_required,
+            allowed_tools=config.allowed_tools,
+            disallowed_tools=config.disallowed_tools,
         )
         # 仅当我们自己构建命令时才注入继承的队友环境变量。
         # 若调用方提供了自定义

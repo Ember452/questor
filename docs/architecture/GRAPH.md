@@ -74,7 +74,7 @@
 
 | package | imported by |
 | --- | ---: |
-| `questorharness.contracts` | 117 |
+| `questorharness.contracts` | 118 |
 | `questorharness.platform` | 65 |
 | `questorharness.capabilities` | 61 |
 | `questorharness.config` | 59 |

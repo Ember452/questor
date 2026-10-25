@@ -6,11 +6,22 @@ import logging
 
 from pydantic import BaseModel, Field
 
+from questorharness.contracts.agent import AgentProfile
 from questorharness.contracts.hooks import HookEvent
 from questorharness.contracts.task import TaskRecord
 from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 logger = logging.getLogger(__name__)
+
+
+def _tool_surface(profile: AgentProfile | None) -> tuple[list[str] | None, list[str] | None]:
+    """从 agent 定义取出（白名单，黑名单）；未声明一律 None（继承全部）。"""
+    if profile is None:
+        return None, None
+    return (
+        list(profile.tools) if profile.tools else None,
+        list(profile.disallowed_tools) if profile.disallowed_tools else None,
+    )
 
 
 class AgentToolInput(BaseModel):
@@ -56,6 +67,7 @@ class AgentTool(BaseTool):
             return ToolResult(output="subagent runtime unavailable", is_error=True)
         tasks = context.tasks
         profile = subagents.resolve_profile(arguments.subagent_type) if arguments.subagent_type else None
+        allowed_tools, disallowed_tools = _tool_surface(profile)
 
         # 为群协作后端解析团队和 Agent 名称
         team = arguments.team or "default"
@@ -72,6 +84,8 @@ class AgentTool(BaseTool):
                 command=arguments.command,
                 system_prompt=profile.system_prompt if profile else None,
                 permissions=list(profile.permissions) if profile else [],
+                allowed_tools=allowed_tools,
+                disallowed_tools=disallowed_tools,
                 task_type=arguments.mode,
             )
         except Exception as exc:
