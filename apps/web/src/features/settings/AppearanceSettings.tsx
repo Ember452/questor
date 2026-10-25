@@ -1,0 +1,334 @@
+import { Monitor, Moon, Sun } from "lucide-react";
+import { useEffect, useId, useState } from "react";
+
+import {
+  APPEARANCE_DEFAULTS,
+  APPEARANCE_SETTINGS,
+  THEME_PREFERENCES,
+  type AppearanceState,
+  type ThemePreference,
+} from "../../app/appearance";
+import {
+  appendFamily,
+  availableFontCandidates,
+  type FontCandidate,
+} from "../../app/fontCandidates";
+import { useAppearance } from "../../app/useAppearance";
+import { parseVsCodeTheme, ThemeImportError } from "../../app/importedTheme";
+import { useTranslation } from "react-i18next";
+import styles from "../management/ManagementWorkspace.module.css";
+import modeStyles from "./AppearanceSettings.module.css";
+
+// The dsh tri-state: the three modes everyone reaches for, as cards. The
+// full palette list (Paper, Midnight, Claude, …) stays in the advanced
+// select below; picking a palette there simply means none of the three
+// cards is pressed.
+const MODE_CARDS = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+] as const satisfies readonly {
+  value: ThemePreference;
+  label: string;
+  icon: typeof Sun;
+}[];
+
+// Record, not Partial — TypeScript fails the build if a palette is added to
+// THEME_PREFERENCES without a name to show for it.
+const THEME_LABELS: Record<ThemePreference, string> = {
+  system: "Match system",
+  light: "Light",
+  dark: "Dark",
+  paper: "Paper — warm, low blue",
+  midnight: "Midnight — deep, cool",
+  claude: "Claude — ivory & terracotta",
+  "claude-dark": "Claude Dark — slate & terracotta",
+  contrast: "High contrast — AAA",
+  imported: "Imported theme",
+};
+
+function themeTranslationKey(preference: ThemePreference): string {
+  const suffix = preference === "claude-dark" ? "claudeDark" : preference;
+  return `settings.appearance.${suffix}`;
+}
+
+const FONT_GROUPS = [
+  {
+    value: "Interface",
+    key: "settings.appearance.fontGroup.interface",
+    defaultValue: "Interface",
+  },
+  {
+    value: "Monospace",
+    key: "settings.appearance.fontGroup.monospace",
+    defaultValue: "Monospace",
+  },
+  {
+    value: "CJK",
+    key: "settings.appearance.fontGroup.cjk",
+    defaultValue: "CJK",
+  },
+] as const;
+
+/**
+ * Appearance controls, rendered from `APPEARANCE_SETTINGS`.
+ *
+ * The table owns each preference's label, range and validation, so adding one
+ * is a row there rather than another block of near-identical JSX here.
+ * Changes apply immediately and persist locally — these are per-machine
+ * display choices, not project configuration, so there is nothing to save.
+ */
+export function AppearanceSettings() {
+  const { appearance, set, update, reset } = useAppearance();
+  const { t } = useTranslation();
+  const fieldId = useId();
+  const [importError, setImportError] = useState<string | null>(null);
+  // The installed set is probed once per mount — it does not change while the
+  // settings page is open — and the probe is asynchronous because the engine's
+  // only reliable answer, a `local()` font load, is.
+  const [installed, setInstalled] = useState<FontCandidate[]>([]);
+  useEffect(() => {
+    void availableFontCandidates().then(setInstalled);
+  }, []);
+  const isDefault = APPEARANCE_SETTINGS.every(
+    (setting) => appearance[setting.key] === APPEARANCE_DEFAULTS[setting.key],
+  ) && appearance.importedTheme === null;
+
+  const importTheme = async (file: File | null) => {
+    if (!file) return;
+    setImportError(null);
+    try {
+      if (file.size > 1_000_000) {
+        throw new ThemeImportError("Theme files must be 1 MB or smaller.");
+      }
+      const importedTheme = parseVsCodeTheme(await file.text(), file.name);
+      update({ importedTheme, theme: "imported" });
+    } catch (cause) {
+      setImportError(
+        cause instanceof Error ? cause.message : "The theme could not be imported.",
+      );
+    }
+  };
+
+  return (
+    <section className={styles.formCard}>
+      <header>
+        <div>
+          <p className={styles.eyebrow}>
+            {t("settings.appearance.eyebrow", "Display")}
+          </p>
+          <h2>{t("settings.appearance.title", "Appearance")}</h2>
+        </div>
+      </header>
+
+      <div
+        className={modeStyles.modeRow}
+        role="group"
+        aria-label={t("settings.appearance.mode", "Appearance mode")}
+      >
+        {MODE_CARDS.map((mode) => {
+          const Icon = mode.icon;
+          return (
+            <button
+              key={mode.value}
+              type="button"
+              className={modeStyles.modeCard}
+              aria-pressed={appearance.theme === mode.value}
+              onClick={() => set("theme", mode.value)}
+            >
+              <Icon size={18} />
+              {t(themeTranslationKey(mode.value), mode.label)}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className={styles.formGrid}>
+        {APPEARANCE_SETTINGS.map((setting) => {
+          const id = `${fieldId}-${setting.key}`;
+          const value = appearance[setting.key];
+          const label = t(`settings.appearance.${setting.key}`, setting.label);
+
+          if (setting.key === "theme") {
+            return (
+              <label key={setting.key} htmlFor={id}>
+                {label}
+                <select
+                  id={id}
+                  value={value as ThemePreference}
+                  onChange={(event) =>
+                    set("theme", event.target.value as ThemePreference)
+                  }
+                >
+                  {THEME_PREFERENCES.map((preference) => (
+                    <option
+                      key={preference}
+                      value={preference}
+                      disabled={preference === "imported" && !appearance.importedTheme}
+                    >
+                      {t(
+                        themeTranslationKey(preference),
+                        preference === "imported" && appearance.importedTheme
+                          ? `Imported — ${appearance.importedTheme.name}`
+                          : THEME_LABELS[preference],
+                      )}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          }
+
+          if (setting.range) {
+            const { min, max, step, unit } = setting.range;
+            return (
+              <label key={setting.key} htmlFor={id}>
+                {label}
+                <span className={styles.note}>
+                  {value}
+                  {unit}
+                </span>
+                <input
+                  id={id}
+                  type="range"
+                  min={min}
+                  max={max}
+                  step={step}
+                  value={value as number}
+                  onChange={(event) =>
+                    set(
+                      setting.key as "conversationWidth" | "fontSize",
+                      Number(event.target.value),
+                    )
+                  }
+                />
+              </label>
+            );
+          }
+
+          return (
+            <label key={setting.key} htmlFor={id}>
+              {label}
+              <input
+                id={id}
+                type="text"
+                value={value as string}
+                placeholder={t(
+                  "settings.appearance.fontPlaceholder",
+                  "e.g. Sarasa Mono SC, Inter",
+                )}
+                onChange={(event) =>
+                  set(setting.key as "fontFamily", event.target.value)
+                }
+              />
+              {installed.length > 0 ? (
+                <select
+                  aria-label={t(
+                    "settings.appearance.addInstalledFont",
+                    "Add an installed font",
+                  )}
+                  value=""
+                  onChange={(event) => {
+                    if (!event.target.value) return;
+                    set(
+                      "fontFamily",
+                      appendFamily(appearance.fontFamily, event.target.value),
+                    );
+                  }}
+                >
+                  <option value="">
+                    {t(
+                      "settings.appearance.addInstalledFont",
+                      "Add an installed font…",
+                    )}
+                  </option>
+                  {FONT_GROUPS.map((group) => {
+                    const members = installed.filter(
+                      (candidate) => candidate.group === group.value,
+                    );
+                    if (members.length === 0) return null;
+                    return (
+                      <optgroup
+                        key={group.value}
+                        label={t(group.key, group.defaultValue)}
+                      >
+                        {members.map((candidate) => (
+                          <option
+                            key={candidate.family}
+                            value={candidate.family}
+                          >
+                            {candidate.family}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+              ) : null}
+            </label>
+          );
+        })}
+      </div>
+
+      <div className={modeStyles.importTheme}>
+        <label>
+          <span>
+            {t("settings.appearance.importTheme", "Import VS Code theme")}
+          </span>
+          <input
+            type="file"
+            accept=".json,.jsonc,application/json"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0] ?? null;
+              event.currentTarget.value = "";
+              void importTheme(file);
+            }}
+          />
+        </label>
+        <p>
+          {appearance.importedTheme
+            ? t(
+                "settings.appearance.importedReady",
+                "Imported {{name}} · {{base}} base",
+                {
+                  name: appearance.importedTheme.name,
+                  base: appearance.importedTheme.base,
+                },
+              )
+            : t(
+                "settings.appearance.importHint",
+                "Reads one local JSON/JSONC color-theme file. Theme includes and syntax colors are not imported.",
+              )}
+        </p>
+        {importError ? <p role="alert">{importError}</p> : null}
+      </div>
+
+      <p className={styles.note}>
+        {t(
+          "settings.appearance.fontDescription",
+          APPEARANCE_SETTINGS.find((setting) => setting.key === "fontFamily")
+            ?.description ?? "Choose fonts for the interface.",
+        )}
+      </p>
+
+      <footer className={styles.formActions}>
+        <span>
+          {t(
+            "settings.appearance.localOnly",
+            "These are per-machine display settings. They apply immediately and are not part of project configuration.",
+          )}
+        </span>
+        <button
+          className={styles.primaryButton}
+          type="button"
+          disabled={isDefault}
+          onClick={reset}
+        >
+          {t("settings.appearance.reset", "Reset to defaults")}
+        </button>
+      </footer>
+    </section>
+  );
+}
+
+export type { AppearanceState };

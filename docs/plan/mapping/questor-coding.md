@@ -13,7 +13,20 @@
 kind 覆盖守卫（`tests/ci/test_kind_coverage.py`）以本表与 `tests/ci/test_serve_wire_fixtures.py`
 为数据源：schema 的帧集合必须等于"引擎映射 ∪ 宿主直出 ∪ 登记为不展示"。
 
-初版基于 2026-10-24 引擎探索事实（39 工具 / 16 命令族 / 各能力域）：
+初版基于 2026-10-24 引擎探索事实（39 工具 / 16 命令族 / 各能力域） ：
+
+## 4a 页面首批（coding 形态）
+
+| page id | capability | 载体 | 后端依据 |
+|---|---|---|---|
+| `chat` | ready | 对话流 + 五卡 + Composer | `/submit` `/events` `/cancel` `/approve` `/ask` |
+| `thread` | ready | 当前会话快照视图（只读） | `/history` |
+| `inspector` | declared | 入口不出现（待端点） | 无 `/inspect` 端点 |
+| `settings` | declared | 入口不出现（待端点） | 无 settings 端点 |
+| `workbench` | declared | 入口不出现（待端点） | 无文件/diff 端点 |
+
+`files` / `tests` / `browser` **不注册**（无端点，登记为未实现）；新增页面走
+`apps/web/docs/ADDING_A_PAGE.md` 四步。三态语义见 ADR-0008。
 
 ## 映射
 

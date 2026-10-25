@@ -1,0 +1,110 @@
+import { useCallback, useSyncExternalStore } from "react";
+
+import {
+  APPEARANCE_DEFAULTS,
+  applyAppearance,
+  applyAppearanceSetting,
+  readAppearance,
+  writeAppearance,
+  type AppearanceState,
+} from "./appearance";
+
+/**
+ * One module-level store, read through `useSyncExternalStore`.
+ *
+ * The shell mounts this to apply saved preferences at startup and the settings
+ * page mounts it to edit them. Per-component `useState` would give those two
+ * separate copies that silently disagree, and threading a controller down
+ * through the workspace would be prop drilling for a value that is neither
+ * server state nor scoped to a subtree. `useSystemDarkMode` uses the same
+ * pattern for the same reason.
+ */
+
+let state: AppearanceState = readAppearance();
+let applied = false;
+const listeners = new Set<() => void>();
+
+function root(): HTMLElement | null {
+  return typeof document === "undefined" ? null : document.documentElement;
+}
+
+function flush(): void {
+  const element = root();
+  if (element) applyAppearance(state, element);
+}
+
+/**
+ * Paint a width that is not stored yet — a drag in progress — or put the stored
+ * one back with `null`.
+ *
+ * Storage is untouched either way and only the width property moves, so this
+ * stays one apply path rather than a second one: the next `commit` repaints
+ * everything from `state`, which also means a commit made during a drag wins
+ * until the next pointermove previews again.
+ */
+function previewConversationWidth(value: number | null): void {
+  const element = root();
+  if (element) {
+    applyAppearanceSetting("conversationWidth", value ?? state.conversationWidth, element);
+  }
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  // The first subscriber marks the app as mounted; paint the saved
+  // preferences now rather than waiting for the first edit.
+  if (!applied) {
+    applied = true;
+    flush();
+  }
+  return () => listeners.delete(listener);
+}
+
+function snapshot(): AppearanceState {
+  return state;
+}
+
+function commit(next: AppearanceState): void {
+  state = next;
+  writeAppearance(state);
+  flush();
+  for (const listener of listeners) listener();
+}
+
+export interface AppearanceController {
+  appearance: AppearanceState;
+  /** Update one preference; the others are untouched. */
+  set<K extends keyof AppearanceState>(key: K, value: AppearanceState[K]): void;
+  /** Update related preferences atomically (used when importing a palette). */
+  update(patch: Partial<AppearanceState>): void;
+  reset(): void;
+  /** Show an in-progress width without storing it; `null` restores the stored one. */
+  previewConversationWidth(value: number | null): void;
+}
+
+export function useAppearance(): AppearanceController {
+  const appearance = useSyncExternalStore(subscribe, snapshot, snapshot);
+
+  const set = useCallback(
+    <K extends keyof AppearanceState>(key: K, value: AppearanceState[K]) => {
+      commit({ ...state, [key]: value });
+    },
+    [],
+  );
+
+  const update = useCallback(
+    (patch: Partial<AppearanceState>) => commit({ ...state, ...patch }),
+    [],
+  );
+
+  const reset = useCallback(() => commit({ ...APPEARANCE_DEFAULTS }), []);
+
+  return { appearance, set, update, reset, previewConversationWidth };
+}
+
+/** Reset module state between tests. */
+export function __resetAppearanceStoreForTests(): void {
+  state = readAppearance();
+  applied = false;
+  listeners.clear();
+}
