@@ -35,7 +35,7 @@ def test_no_throwaway_or_mode_branches() -> None:
 
 
 def test_no_app_server_contract() -> None:
-    """旧 DeepCode 契约（生成物与类型）不得被引用。"""
+    """旧 上游骨架 契约（生成物与类型）不得被引用。"""
     hits = [p for p in scan_forbidden(WEB_SRC, "generated/app-server") if "generated/" not in p]
     assert hits == []
 

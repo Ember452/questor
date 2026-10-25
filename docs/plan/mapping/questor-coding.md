@@ -33,7 +33,7 @@ kind 覆盖守卫（`tests/ci/test_kind_coverage.py`）以本表与 `tests/ci/te
 | questor 功能 | 界面载体 | 复用来源（§0 三序） |
 |---|---|---|
 | 对话流 / 流式回复 / 思考 | Transcript 卡片流（SayCard） | Reasonix 原样 |
-| 取消当前回合（Stop） | Composer 停止按钮 → `turn_done{cancelled}` | 阶段 1 `/cancel` 端点；按钮取自 DeepCode `Composer` |
+| 取消当前回合（Stop） | Composer 停止按钮 → `turn_done{cancelled}` | 阶段 1 `/cancel` 端点；按钮取自 上游骨架 `Composer` |
 | 提交队列 / 插话（followup / steer） | 无独立界面 | **初版登记：暂不暴露**（引擎单回合无队列；要开先走计划 §3） |
 | 工具执行可视化（fs/shell/web/media…） | ToolCard 原位展开 + diff/输出面板 | Reasonix 原样 |
 | 权限审批（三态+敏感路径拦截） | ApprovalCard 三档按钮 | Reasonix 原样 |
@@ -63,7 +63,7 @@ kind 覆盖守卫（`tests/ci/test_kind_coverage.py`）以本表与 `tests/ci/te
 
 ## 表的读法
 
-"Reasonix 原样" 指**交互与视觉形态**的来源；实际落地载体优先用 **DeepCode 骨架内的同名区域**
+"Reasonix 原样" 指**交互与视觉形态**的来源；实际落地载体优先用 **上游骨架内的同名区域**
 （Settings / Inspector / Composer / navigation），只有五张对话卡直接搬 Reasonix 组件。
 新造任何一项前，先按计划 §0-9 的三序登记。
 

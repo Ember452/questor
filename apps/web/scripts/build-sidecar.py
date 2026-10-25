@@ -19,7 +19,7 @@ DESKTOP_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = DESKTOP_ROOT.parent
 BUILD_ROOT = DESKTOP_ROOT / "build" / "sidecar"
 DIST_ROOT = BUILD_ROOT / "dist"
-APP_SERVER_ROOT = DIST_ROOT / "deepcode-app-server"
+APP_SERVER_ROOT = DIST_ROOT / "questor-app-server"
 SIDECAR_ENV_ROOT = BUILD_ROOT / ".venv"
 BUNDLED_DATA = (
     (REPOSITORY_ROOT / "app_server" / "web_assets", "app_server/web_assets"),
@@ -55,9 +55,9 @@ EXCLUDED_MODULES = (
     # renders code in React/Monaco and the App Server never creates images.
     "PIL",
     # OpenAI voice helpers and tiktoken type annotations are the only references.
-    # DeepCode's text/tool runtime does not use NumPy.
+    # Upstream's text/tool runtime does not use NumPy.
     "numpy",
-    # DeepCode uses Pydantic v2 only; the compatibility tree is unnecessary.
+    # Upstream uses Pydantic v2 only; the compatibility tree is unnecessary.
     "pydantic.v1",
     # No runtime path builds or installs Python distributions.
     "setuptools",
@@ -65,7 +65,7 @@ EXCLUDED_MODULES = (
 
 
 def target_triple() -> str:
-    configured = os.environ.get("DEEPCODE_TARGET_TRIPLE") or os.environ.get(
+    configured = os.environ.get("QUESTOR_TARGET_TRIPLE") or os.environ.get(
         "CARGO_BUILD_TARGET"
     )
     if configured:
@@ -83,12 +83,12 @@ def target_triple() -> str:
 
 
 def builder_python() -> Path:
-    configured = os.environ.get("DEEPCODE_SIDECAR_PYTHON")
+    configured = os.environ.get("QUESTOR_SIDECAR_PYTHON")
     if configured:
         candidate = Path(configured).expanduser().resolve()
         reason = _invalid_builder_reason(candidate)
         if reason is not None:
-            raise RuntimeError(f"invalid DEEPCODE_SIDECAR_PYTHON: {reason}")
+            raise RuntimeError(f"invalid QUESTOR_SIDECAR_PYTHON: {reason}")
         return candidate
 
     relative_python = "Scripts/python.exe" if os.name == "nt" else "bin/python"
@@ -107,7 +107,7 @@ def builder_python() -> Path:
     raise RuntimeError(
         "no complete Python 3.12 sidecar environment was found.\n"
         "Run `npm run setup:sidecar` from desktop or set "
-        "DEEPCODE_SIDECAR_PYTHON.\n"
+        "QUESTOR_SIDECAR_PYTHON.\n"
         f"{detail}"
     )
 
@@ -149,7 +149,7 @@ def _invalid_builder_reason(python: Path) -> str | None:
 
 def main() -> int:
     target = target_triple()
-    name = "deepcode-app-server"
+    name = "questor-app-server"
     shutil.rmtree(APP_SERVER_ROOT, ignore_errors=True)
     command = [
         str(builder_python()),
@@ -210,8 +210,8 @@ def _verify_bundle(binary: Path) -> None:
     home = smoke_root / "home"
     database = smoke_root / "state.sqlite3"
     environment = dict(os.environ)
-    environment["DEEPCODE_HOME"] = str(home)
-    environment["DEEPCODE_SESSIONS_DIR"] = str(home / "sessions")
+    environment["QUESTOR_SIDECAR_HOME"] = str(home)
+    environment["QUESTOR_SIDECAR_SESSIONS_DIR"] = str(home / "sessions")
     initialize = {
         "jsonrpc": "2.0",
         "id": 1,

@@ -14,7 +14,7 @@ loader（fail-closed）+ 两份产品 yaml + `/rt/r1/profile` 路由 + `allowed_
 经 `build_runtime` 进 policy；**仍缺的只有两件**：能力位门控在前端落地（阶段 4a-8）、
 `runtime` 段的消费方（personal 开工）。
 
-计划 02 的阶段 4 以 DeepCode 骨架落地**单一编码形态**（thread / workbench / inspector /
+计划 02 的阶段 4 以 上游骨架落地**单一编码形态**（thread / workbench / inspector /
 files / tests / browser）。如果不在骨架落地时留下形态扩展点，第二个形态（个人 agent：人设 /
 记忆 / 日程 / 渠道 / 会话）只能靠组件里的 `if (mode === 'personal')`——那正是 ADR-0005 否掉
 "两套 renderer"的同一个坑，只是换了个入口。

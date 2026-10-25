@@ -14,7 +14,7 @@ $outputDirectory = [System.IO.Path]::GetDirectoryName($outputPath)
 [System.IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
 $pfxPath = [System.IO.Path]::Combine(
     [System.IO.Path]::GetTempPath(),
-    "deepcode-signing-$([System.Guid]::NewGuid().ToString('N')).pfx"
+    "questor-signing-$([System.Guid]::NewGuid().ToString('N')).pfx"
 )
 
 try {

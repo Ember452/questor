@@ -21,7 +21,7 @@ def _python_executable(environment: Path) -> Path:
 
 
 def _find_python312() -> Path:
-    configured = os.environ.get("DEEPCODE_SIDECAR_BOOTSTRAP_PYTHON")
+    configured = os.environ.get("QUESTOR_SIDECAR_BOOTSTRAP_PYTHON")
     if configured:
         return Path(configured).expanduser().resolve()
     candidate = shutil.which("python3.12")
@@ -53,7 +53,7 @@ def _find_python312() -> Path:
             return Path(resolved).resolve()
     raise RuntimeError(
         "Python 3.12 was not found. Install it or set "
-        "DEEPCODE_SIDECAR_BOOTSTRAP_PYTHON."
+        "QUESTOR_SIDECAR_BOOTSTRAP_PYTHON."
     )
 
 

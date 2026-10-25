@@ -1,17 +1,17 @@
 # 计划 02：Studio / serve 宿主与统一线协议
 
 - Status: Active（2026-10-24 立项；同日依真实代码复检重写。**同日二修：前端基座由「Reasonix
-  整树 vendor」改为「DeepCode 骨架 + Reasonix 对话面」，契约改为单 schema 双侧 codegen**，
+  整树 vendor」改为「上游骨架 + Reasonix 对话面」，契约改为单 schema 双侧 codegen**，
   见 [ADR-0007](../adr/0007-frontend-base-and-contract-codegen.md)）
 - 决策依据：[ADR-0005 Updated](../adr/0005-single-ui-host.md)（客户端拓扑与判死清单）、
   [ADR-0006](../adr/0006-serve-host-and-wire-protocol.md)（一份契约两种传输、帧模型）、
   [ADR-0007](../adr/0007-frontend-base-and-contract-codegen.md)（前端基座、契约 codegen、
   CONVENTIONS §4.5 作用域例外）
-- 参照系（三参照，不再单指一仓）：**结构/骨架 = DeepCode `desktop/`**（Python 服务端同构、
+- 参照系（三参照，不再单指一仓）：**结构/骨架 = 上游骨架**（Python 服务端同构、
   37,130 行、契约由 schema 生成）；**对话面与设计法典 = Reasonix**（五张对话卡 +
   TOKENS.md/LAYOUT.md/tokens.css）；**传输与安全 = ADR-0006**（SSE + POST + 凭据五件套）。
   两侧实测数字见 §1b；行号经维护者 2026-10-24 逐条亲验，见文末参考地图。刻意不抄：
-  Reasonix 的 Go 服务端实现、DeepCode 的 WebSocket 传输与 Tauri 壳、DeepCode 的 P0–P5
+  Reasonix 的 Go 服务端实现、上游骨架的 WebSocket 传输与 Tauri 壳、上游骨架 的 P0–P5
   功能路线图；serve 的层位由本仓 `docs/architecture/STRUCTURE.md` 决定（bootstrap 顶层）。
 - 基线：`c52101a`（`main`，Merge PR #219）。开工前按 §1 复测，任一不符先停。
 - 纪律：**两分支制**（§0）；commit 与 push 需用户当轮明确授权；每阶段
@@ -35,14 +35,14 @@
    （阶段 2 删 Ink 之后、`apps/web` 可用之前，产品不能只剩 REPL）。
 7. **中断-上报-授权**：出现"因后端（字段/事件/依赖等）限制而不得不降级或不优"的局面，
    立即中断当前阶段并按 §3 上报；**经用户同意的后端修改不限规模**。
-8. **开工前复用检索（义务，不是可选）**：每阶段动手写代码之前，先到 **DeepCode（骨架 /
+8. **开工前复用检索（义务，不是可选）**：每阶段动手写代码之前，先到 **上游骨架仓外副本（骨架 /
    组件 / 工程链主参照）** 与 **Reasonix（对话卡 / 设计法典主参照）** 中检索该阶段要做的
    **每个**界面、组件、机制；进程/打包类问题按需查 hermes、CowAgent。能复用或微调复用的
    直接搬，检索结论（找到了什么 / 用了什么 / 为何不用）记入该阶段 PR 描述。§1b 与参考地图
    只登记**已知**复用点，阶段级检索是每次开工的第一动作。
 9. **零视觉自设计，允许 IA 自设计**：界面风格、布局、按钮、图标、交互模式**一律不自行
    设计**；但**信息架构（导航层级、首屏、空态、分区）由 questor 自己裁决**——视觉可抄，
-   结构必须自己定。视觉来源三序：① DeepCode 骨架内现成组件（已 vendor）；② Reasonix 对话
+   结构必须自己定。视觉来源三序：① 上游骨架内现成组件（已 vendor）；② Reasonix 对话
    卡与 tokens（骨架没有时）；③ 才允许新造——必须登记"为何两者皆无"并单独让用户过目。
    视觉真源 = Reasonix TOKENS.md / LAYOUT.md / tokens.css，参数不改（vendored 纪律）。
 10. **形态是数据，不是分支**：personal / coding 等形态由 `profile` 描述（人设 + 模型 + 技能目录
@@ -98,7 +98,7 @@
 
 实测基线（2026-10-24，逐目录读取，非估计）：**Reasonix `frontend-next` = 1,325 个 ts/tsx /
 133,778 行 + 675 个测试文件 / 63,476 行 + 536 KB 全局 CSS（1,262 个唯一类选择器）+
-纯英文 i18n**；**DeepCode `desktop/` = 174 个 ts/tsx / 37,130 行 + 43 测试 + 26 个 CSS
+纯英文 i18n**；**上游骨架 = 174 个 ts/tsx / 37,130 行 + 43 测试 + 26 个 CSS
 Module / 6,936 行 + 内置 zh-CN（226 条）**。这个差距是 ADR-0007 换基座的直接依据；
 Reasonix 只保留"对话卡 + 设计法典"两项复用价值。
 
@@ -110,14 +110,14 @@ Reasonix 只保留"对话卡 + 设计法典"两项复用价值。
 | B14 | 会话读写 | `src/questorharness/platform/session_storage.py`：`save_session_snapshot`/`load_session_snapshot`/`list_session_snapshots`/`load_session_by_id`/`export_session_markdown` | /history 与会话列表端点直调，不新写存储 |
 | B15 | 斜杠命令注册表 | `src/questorharness/commands/registry.py:61,88,111`：`lookup_skill_slash_command`/`register_builtin_commands`/`create_default_command_registry` | REPL 与 /complete 直用；命令语义零重写 |
 | B16 | 事件→JSON 先例 | `src/questorharness/bootstrap/hosts/app.py:235-265`：print 模式 `stream-json` 已有 StreamEvent→JSON 分支 | **微调复用**：wire 帧编码器从这里长出 |
-| B17 | **DeepCode 骨架**（基座） | `DeepCode-main/desktop/`：174 个 ts/tsx / 37,130 行；43 个测试 + `e2e/web.spec.ts`；**src/** 下的 app / features / components / platform / rpc / styles / generated（15 个 features 垂直切片：automations / execution / extensions / goal / inspector / management / mcp / navigation / plugins / presets / settings / skills / thread / workbench / workflows） | 阶段 4a **整树 vendor**（骨架）；目录改名到 STRUCTURE §7 字面 |
-| B18 | DeepCode 对话 UI（可用闭环的底） | `features/thread/TurnBlock.tsx` 17.3 KB、`ReasoningBlock.tsx`、`ThreadConversation.tsx`、`conversationModel.ts`；`features/execution/Composer.tsx` 26.5 KB、`ModelPicker.tsx` 15.6 KB、`ApprovalCard.tsx` | 4a 直接跑通可用闭环（登记 throwaway）；4b 逐卡替换后**同刀删除** |
-| B19 | DeepCode 契约 codegen（关键手法） | `protocol/app-server.schema.json`（176.8 KB，手写真源）→ `desktop/scripts/generate-protocol.mjs` → **src/generated/app-server.ts**（47.9 KB）；`check:protocol` 用 `--check` 断陈旧 | 阶段 1 照此建立 questor 的 `protocol/app-wire.schema.json` + **双侧**生成器 |
-| B20 | DeepCode 双 Transport | **src/rpc/contracts.ts**（`ClientRuntime` 接口）+ `browserRuntime.ts`（WS，19.2 KB）+ `tauriRuntime.ts`（7.1 KB）；服务端 `app_server/service.py:108` 装配 `WebSocketTransport`，`browser_auth.py` 用 `Sec-WebSocket-Protocol` 传会话 | `contracts.ts` 保留；`browserRuntime`（WS）**由 `sseRuntime` 取代**；`tauriRuntime` 与 `app_server/websocket.py` **不搬** |
-| B21 | DeepCode 中文与样式体系 | **src/app/i18n.ts**（14.5 KB）内置 `ZH_CN` 226 条 + 按 `navigator.language` 切换；26 个 CSS Module / 6,936 行；`styles/tokens.css` 20.2 KB + `tokens.test.ts` | 阶段 4 直用；4b-6 用 Reasonix tokens 覆盖 token 层 |
-| B22 | DeepCode 工程链 | `desktop/package.json`：`lint`(eslint) / `typecheck`(tsc) / `test`(vitest) / `test:web`(playwright) / `audit:licenses` / `build:sidecar` / `check:tauri` | 阶段 4a 全量接入 `scripts/check.py` 的 frontend lane 与 CI 新 job |
+| B17 | **上游骨架**（基座） | `上游骨架仓外副本/`：174 个 ts/tsx / 37,130 行；43 个测试 + `e2e/web.spec.ts`；**src/** 下的 app / features / components / platform / rpc / styles / generated（15 个 features 垂直切片：automations / execution / extensions / goal / inspector / management / mcp / navigation / plugins / presets / settings / skills / thread / workbench / workflows） | 阶段 4a **整树 vendor**（骨架）；目录改名到 STRUCTURE §7 字面 |
+| B18 | 上游对话 UI（可用闭环的底） | `features/thread/TurnBlock.tsx` 17.3 KB、`ReasoningBlock.tsx`、`ThreadConversation.tsx`、`conversationModel.ts`；`features/execution/Composer.tsx` 26.5 KB、`ModelPicker.tsx` 15.6 KB、`ApprovalCard.tsx` | 4a 直接跑通可用闭环（登记 throwaway）；4b 逐卡替换后**同刀删除** |
+| B19 | 上游契约 codegen（关键手法） | `protocol/app-server.schema.json`（176.8 KB，手写真源）→ `desktop/scripts/generate-protocol.mjs` → **src/generated/app-server.ts**（47.9 KB）；`check:protocol` 用 `--check` 断陈旧 | 阶段 1 照此建立 questor 的 `protocol/app-wire.schema.json` + **双侧**生成器 |
+| B20 | 上游双 Transport | **src/rpc/contracts.ts**（`ClientRuntime` 接口）+ `browserRuntime.ts`（WS，19.2 KB）+ `tauriRuntime.ts`（7.1 KB）；服务端 `app_server/service.py:108` 装配 `WebSocketTransport`，`browser_auth.py` 用 `Sec-WebSocket-Protocol` 传会话 | `contracts.ts` 保留；`browserRuntime`（WS）**由 `sseRuntime` 取代**；`tauriRuntime` 与 `app_server/websocket.py` **不搬** |
+| B21 | 上游中文与样式体系 | **src/app/i18n.ts**（14.5 KB）内置 `ZH_CN` 226 条 + 按 `navigator.language` 切换；26 个 CSS Module / 6,936 行；`styles/tokens.css` 20.2 KB + `tokens.test.ts` | 阶段 4 直用；4b-6 用 Reasonix tokens 覆盖 token 层 |
+| B22 | 上游工程链 | `desktop/package.json`：`lint`(eslint) / `typecheck`(tsc) / `test`(vitest) / `test:web`(playwright) / `audit:licenses` / `build:sidecar` / `check:tauri` | 阶段 4a 全量接入 `scripts/check.py` 的 frontend lane 与 CI 新 job |
 | B23 | **Reasonix 对话卡**（唯一要搬的前端部分） | `ui/cards/`：`SayCard.tsx` 13.4 KB、`ToolCard.tsx` 19.5 KB、`ApprovalCard.tsx` 15.5 KB、`AskCard.tsx` 15.5 KB、`CompactionCard` 系列；配套 `*.test.tsx`（如 `NoticeCard.test.tsx` 17.3 KB） | 4b 逐刀搬迁：组件 + CSS 类块 + i18n key + 测试 |
-| B24 | Reasonix 设计法典 | `styles/TOKENS.md` 19.9 KB / `LAYOUT.md` 102 KB / `tokens.css` 13.2 KB；`styles/*.test.ts`（读 `app.css ?raw` 的 token/间距/字体栈守卫） | 4b-6 覆盖 DeepCode token 层；守卫测试同搬 |
+| B24 | Reasonix 设计法典 | `styles/TOKENS.md` 19.9 KB / `LAYOUT.md` 102 KB / `tokens.css` 13.2 KB；`styles/*.test.ts`（读 `app.css ?raw` 的 token/间距/字体栈守卫） | 4b-6 覆盖 上游骨架 token 层；守卫测试同搬 |
 | B25 | Reasonix 契约与宿主先例（只读思路） | `internal/contract/eventwire/kinds.go`（36 kind）、`wire.go`、`frontend_contract_test.go`（**单向 + `Skipf` + `compared>=10`**，故不可直接照抄为守卫）；`internal/frontend/serve/{broadcaster,eventstream,hub,routes}.go`；`desktop/electron/src/host.js,main.js`；`cli/tui_command.go`（进程内 transport） | 阶段 1/3 翻译**语义**（Go 实现不进仓）；阶段 5 壳照抄 |
 | B26 | CowAgent 进程管理片段 | `CowAgent-master/desktop/`：111 文件 / 32,931 行、**0 个前端测试**；`python-manager` 类模块含 Windows 端口保留区逻辑 | 阶段 5 只借端口保留 / 进程监护片段，不借骨架 |
 | B27 | **hermes 的 profile 体系（形态参照）** | `hermes_cli/profiles.py:1048 list_profiles` / `:1377 create_profile`；`ProfileInfo{name,path,is_default,gateway_running,model,provider,has_env,skill_count,alias,distribution_*,description}`；前端 `/api/profiles` + `$activeGatewayProfile` 驱动设置/技能/工具/模型作用域 | 阶段 1 建 `profiles/` bundle 的同构参照（**只译语义**） |
@@ -135,25 +135,25 @@ serve 宿主（bootstrap/hosts/serve/：wire + broadcaster + eventstream + route
   ┌─────┼──────────────────────────┐
   │内存 transport            回环 TCP + SSE（凭据五件套）
   │（不开端口/无凭据）               │
-终端瘦客户端 REPL            apps/web（DeepCode 骨架 + Reasonix 对话卡）
+终端瘦客户端 REPL            apps/web（上游骨架 + Reasonix 对话卡）
 (handle_line + rich 渲染器)          │
                             apps/desktop Electron 壳（spawn 引擎）
 ```
 
-- **三参照**：**结构/骨架 = DeepCode** `desktop/`（目录形状与 `docs/architecture/STRUCTURE.md`
+- **三参照**：**结构/骨架 = 上游骨架** `desktop/`（目录形状与 `docs/architecture/STRUCTURE.md`
   §7 的 `app/features/shared/generated` 逐条对应，差异仅两处：Transport 实现与 `platform`→
   `shared` 目录名；Python 服务端 `app_server/` 作为同语言对齐参考）；**对话面/设计 = Reasonix**
   （五张对话卡 + TOKENS.md/LAYOUT.md/tokens.css）；**传输/安全 = ADR-0006**（SSE + POST +
   五件套 + 父租约）、**文件组织 = ADR-0006/Reasonix `internal/frontend/serve`**（broadcaster /
   eventstream / routes 分文件对齐，只译语义不搬代码）。
 - **前端三层分区（这张表就是 `apps/web/VENDOR.md` 的分类与守卫白名单）**。
-  **基座实际形态（ADR-0007 Updated 2026-10-25）**：DeepCode 的 `features/`、`app/`、`rpc/`、
+  **基座实际形态（ADR-0007 Updated 2026-10-25）**：上游骨架 的 `features/`、`app/`、`rpc/`、
   `ui-kit/` 已裁（VENDOR.md"已裁"清单，用户裁决 2026-10-24）——实际为 **wire-native 自写壳 +
-  DeepCode 工程链/styles 底座**，下表按此更新：
+  上游工程链/styles 底座**，下表按此更新：
 
 | 层 | 内容 | 归属 | 允许改动 | 升级方式 |
 |---|---|---|---|---|
-| 骨架层 | 工程链（vite/tsconfig、playwright 配置、`package.json` scripts）+ `styles/` 底座 | vendored（DeepCode） | 仅限 VENDOR.md 禁区/已改清单内的条目 | 与首刀 commit 的 diff（不跟上游） |
+| 骨架层 | 工程链（vite/tsconfig、playwright 配置、`package.json` scripts）+ `styles/` 底座 | vendored（上游） | 仅限 VENDOR.md 禁区/已改清单内的条目 | 与首刀 commit 的 diff（不跟上游） |
 | 契约层 | `protocol/app-wire.schema.json` → 两侧 `generated/` | owned（questor 真源） | schema 只加不改；生成物**禁手改** | 改 schema + 重新生成 |
 | **形态层** | `profile` bundle（人设/模型/技能/工具白名单）+ `profile.ui` 能力位 + 页面注册表 + `cardSlots` 门控 | owned | 自由；**不得在被依赖层里插形态判断** | 新增形态 = 新增 bundle + 注册项，不动已有页 |
 | 对话面 | 五张对话卡 + `shared/theme/tokens.css` | vendored（Reasonix） | 参数不改；类块搬迁需登记 | 与 4b 首刀 commit 的 diff（不跟上游） |
@@ -245,7 +245,7 @@ approval / ask = B13 Future 模式移植；/cancel = 持有 turn 任务句柄取
 （至少覆盖一次重试窗口），重复提交返回同一回合而不是开第二个；**profile 选择** =
 `build_runtime(active_profile=...)` + `allowed_tools` 注入；`/profile` 直读 loader，不新写存储。
 **动作**：映射表落地（附录）；droppable 分类表；refusal code 常量；启动扇出盘点（取
-DeepCode **src/rpc/contracts.ts** 的 `ClientRuntime` 方法清单与 Reasonix `port.ts`
+上游骨架 **src/rpc/contracts.ts** 的 `ClientRuntime` 方法清单与 Reasonix `port.ts`
 285 方法的并集，逐端点"实现 / stub"登记成表随本计划维护）；功能可见性映射表初版核对
 （§2 逐行对照引擎现状，确认无功能黑洞）；勘误 ADR-0006 §5 "8 种"→7（随本阶段提交）；
 映射表迁到 **docs/plan/mapping/questor-coding.md** 并建 **docs/plan/mapping/questor-personal.md**
@@ -306,7 +306,7 @@ legacy 节点。
 
 #### 4a：基座落地与可用闭环（先能跑，再好看）
 
-**新建**：**apps/web/**（整树复制 DeepCode `desktop/` 的 `src/`、`package.json` + lockfile、
+**新建**：**apps/web/**（整树复制 上游骨架 的 `src/`、`package.json` + lockfile、
 `index.html`、vite/tsconfig、`e2e/`、`scripts/`；**不搬** `src-tauri/` 与
 `rpc/tauriRuntime.ts`；**第一刀零修改**）、**apps/web/VENDOR.md**（**禁区清单** + 逐目录归属 + 首刀基线 commit）、
 仓根 **THIRD_PARTY_NOTICES.md**（MIT 版权声明）、**tests/ci/test_vendor_pristine.py**
@@ -316,7 +316,7 @@ legacy 节点。
 `apps/web/src/generated/app-wire.ts` 落位。
 
 **动作（按序，每步一刀）**：
-1. 复制 + `VENDOR.md` + NOTICE；`npm ci`（DeepCode 用 npm，仓内是 `package-lock.json`，
+1. 复制 + `VENDOR.md` + NOTICE；`npm ci`（上游骨架 用 npm，仓内是 `package-lock.json`，
    不是 pnpm）；`npm test` 绿（43 个测试）。
 2. **接门**：`eslint` / `tsc --noEmit` / `vitest` / `vite build` 进 `scripts/check.py` 的
    `frontend` lane 与 `.github/workflows/ci.yml` 新 job；同步 `docs/operations/ci.md` 的
@@ -330,9 +330,9 @@ legacy 节点。
    `usage`、`tool_dispatch`/`tool_result`/`tool_progress`、`approval_request`、`ask_request`、
    `compaction_started/progress/done`、`turn_started`/`turn_done`。任一字段缺失 → §3 上报，
    **此刀不绿不进 4b**。
-6. **可用闭环**：DeepCode 原生 `TurnBlock`/`Composer` 驱动真实回合（提交→流式→工具→审批→
+6. **可用闭环**：上游骨架 原生 `TurnBlock`/`Composer` 驱动真实回合（提交→流式→工具→审批→
    快照→恢复）；临时对话渲染器登记为 **throwaway**（4b-6 同刀删除）。
-7. **骨架补齐（可用性两块，实测 DeepCode 骨架缺）**：①按**卡片边界**包 `ErrorBoundary`
+7. **骨架补齐（可用性两块，实测 上游骨架缺）**：①按**卡片边界**包 `ErrorBoundary`
    （一张卡 throw 只降级该卡，不许整屏白）；②transcript 列表虚拟化（骨架无 virtualizer，
    实测 0 处），以 10k 条消息为基线留滚动与内存数值。
 8. **形态接线（页面注册表 + profile.ui）**：新建 **apps/web/src/pages/registry.ts**（每页声明
@@ -370,16 +370,16 @@ serve 宿主提示面与 cli 共用 `bootstrap/runtime.py` 同一装配，flavor
 
 **每刀固定动作**：从 Reasonix `ui/cards/` 搬组件 → 从 `app.css` 只搬它用到的**类块**（按类名
 定位，不整表复制）→ 搬对应 `*.test.tsx` 与 i18n key → 接 `cardSlots` → **同刀删除**
-DeepCode 原本渲染该 kind 的路径。顺序按用户可见价值：Say → Tool → Approval → Ask → Compaction。
+上游骨架 原本渲染该 kind 的路径。顺序按用户可见价值：Say → Tool → Approval → Ask → Compaction。
 
 **验收绿/红（每张卡）**：绿 = 该卡由真实事件驱动（golden fixture 回放 + 一次真跑）+ 截图
 对齐 tokens + 该卡测试进 frontend lane；红 = 旧渲染路径仍在（`rg` 探针）→ 红。
 
 #### 4b-6：删临时件 + 设计法典覆盖
 
-**动作**：删 `TurnBlock` 临时渲染分支；**token 层迁移（不是覆盖）**——实测 DeepCode 的 69 个
+**动作**：删 `TurnBlock` 临时渲染分支；**token 层迁移（不是覆盖）**——实测 上游骨架 的 69 个
 CSS 变量与 Reasonix 的 128 个**只重叠 1 个**（交集 = `--shadow-float`），直接覆盖会让骨架
-68 个变量全部失效、样式裸奔。做法：①两套并存于 **src/shared/theme/**（`tokens.deepcode.css` /
+68 个变量全部失效、样式裸奔。做法：①两套并存于 **src/shared/theme/**（`tokens.base.css` /
 `tokens.reasonix.css`）；②建**变量别名映射表** **src/shared/theme/alias.css**（旧名 → 新名，
 69 个逐一登记；无对应语义的保留原值并标"无对应"）；③逐组件迁移，迁移完的组件才可删旧变量；
 ④新守卫 **tests/ci/test_css_vars.py**（扫 `apps/web` 内所有 `var(--x)`，未在定义集出现即红）；
@@ -417,7 +417,7 @@ tokens 与 Reasonix 原值不一致且未登记 → 红。
 mux 多 pane、手机配对、扩展 structured UI、CUA、主题包 Python 注入端、品牌与文案替换（中文
 已是一等公民，剩余为品牌词）、REPL 渲染增强、额外卡片（RememberCard / MeterRail / Jobs /
 Agents）在五卡之后逐张评估。
-**已从中移除**："vendored 巨石 CSS 拆分"——DeepCode 是 CSS Module，本身已分文件。
+**已从中移除**："vendored 巨石 CSS 拆分"——上游骨架 是 CSS Module，本身已分文件。
 
 ### 附录：StreamEvent → wire 帧映射表（阶段 1 初版，逐阶段回填）
 
@@ -443,7 +443,7 @@ Agents）在五卡之后逐张评估。
 - 行为变更先红用例；模型可见面（StreamEvent→wire 映射）变更看 prompt-surface 同款金标思路。
 - 每刀开工前先在本刀 PR 里列**条目清单**（逐条可勾选）；收刀时按 §0.5-6 三张表逐条对账，
   **清单上的条目不得合并、不得省略**；实际改动超出清单也要补登（防止"顺手多改"与"隐形成本"）。
-- 每阶段开工第一动作 = §0-8 复用检索（**DeepCode → Reasonix** → 按需 hermes/CowAgent），
+- 每阶段开工第一动作 = §0-8 复用检索（**上游骨架 → Reasonix** → 按需 hermes/CowAgent），
   结论入 PR 描述；界面元素受 §0-9 零视觉自设计三序约束（IA 自定）。
 - 每阶段同一刀完成 TREE/GRAPH/`--refresh-baseline --reason "plan02 阶段 <n>: ..."`；结构红线
   （行数/扇出/禁用名/门面零逻辑）照常生效。
@@ -470,7 +470,7 @@ Agents）在五卡之后逐张评估。
 10. 未经 §0-8 的开工前复用检索就开写界面/机制，或自行设计任何**视觉元素**（风格、布局、
     按钮、图标、交互）——停；界面元素只能来自 §0-9 的三序来源，新造必须先登记并让用户过目。
 11. 引擎有、界面无的功能未登记"暂不暴露"——功能黑洞，停，补功能可见性映射表或上报。
-12. 临时渲染器（DeepCode `TurnBlock` 的对话分支）未在 4b-6 删除却进了阶段 5——停。
+12. 临时渲染器（上游骨架 `TurnBlock` 的对话分支）未在 4b-6 删除却进了阶段 5——停。
 13. `apps/web` 内出现 WebSocket 传输（`new WebSocket`、`tauriRuntime` 残留）——停，
      ADR-0006/0007 已定 SSE。
 14. 4a 的字段预检未绿就一次性搬五张卡——停，那是把两个未知量同时引入。
@@ -500,7 +500,7 @@ Agents）在五卡之后逐张评估。
 | 1 | feat/studio-serve | f05ac1c | f05ac1c | 契约 schema + 双侧（当前 Python）codegen + 并发/幂等判红 + kind 覆盖 + 持久化版本 + **profile 底座（bundle + `/profile` + `runtime` 占位段）**；含 ADR-0006 勘误 |
 | 2 | feat/studio-serve | 325bbfd | 325bbfd | 删除刀 + `/cancel`（与阶段 3 同一提交：单工作区开发，见备注） |
 | 3 | feat/studio-serve | 325bbfd | 325bbfd | 五件套 + 多客户端语义 + 握手行 |
-| 4a | feat/studio-web | a6303ff / dbb526a | 071851d | DeepCode 骨架 vendored + 接门 + 改名 + 剪枝到 wire 骨架 + SSE 传输 + 13 帧视图模型 + 页面注册表/能力位门控；卡片与临时壳拆分见 4b |
+| 4a | feat/studio-web | a6303ff / dbb526a | 071851d | 上游骨架 vendored + 接门 + 改名 + 剪枝到 wire 骨架 + SSE 传输 + 13 帧视图模型 + 页面注册表/能力位门控；卡片与临时壳拆分见 4b |
 | 4b-1…5 | feat/studio-web | 071851d | 071851d | 五卡（Say/Tool/Approval/Ask/Compaction）语义移植 + cardSlots 穷尽 + 旧渲染分支删除；CSS 类块抽自 Reasonix（视觉对齐待 4b-6 token 完成） |
 | 4b-6 | feat/studio-web | 6d7f612 | 0702921 | token 两套并存 + alias 全量登记（实测旧 68 / Reasonix 119 / 交集 1）+ `test_css_vars`；`THROWAWAY`/`mode ===`/`isPersonal` 探针清零；主题切换由 `data-theme` 驱动（亮/暗截图矩阵可比） |
 | 5 | feat/studio-web | 0702921 | 回滚矩阵=updater.test.mjs；握手拒绝=auth e2e；2026-10-25 CI 双事故即天然红证（已修复）| Electron 主进程 + HttpOnly cookie + 父租约/重启/托盘 + updater 回滚矩阵 + **PyInstaller onedir 实打包**（握手 0.3s、stdin EOF 0.3s 退出）+ **Electron 真壳 e2e**（真引擎 + `apps/web/dist`，截图入库）+ **60s soak 通过**（RSS 149.8→149.7MB）；**8h soak 与 NSIS 签名仍待桌面环境实跑** |
@@ -582,13 +582,13 @@ unknown；wireRuntime.test.ts 判红）。另核实：M2（编辑审批 detail�
    前端零改。
 4. 渠道线（飞书/QQ）不经 serve 宿主，本线不触碰 `src/questorharness/surfaces/`。
 5. `docs/ARCHITECTURE.md` 的"客户端拓扑"一节在 4a 落位时补一行：`apps/web` 基座 =
-   DeepCode 骨架 + Reasonix 对话面（ADR-0007），避免拓扑文档与实物脱节。
+   上游骨架 + Reasonix 对话面（ADR-0007），避免拓扑文档与实物脱节。
 6. 双形态由 ADR-0008 落地：`profile.ui` 与 `STRUCTURE.md` §7 边界 5 同源——改一处必须同刀改
    另一处；`src/` 内仍不得出现形态判断。
 
 ## 10. 非目标
 
-- **不**做 Go 单二进制分发（questor 用 PyInstaller + Electron，参照 hermes/DeepCode）。
+- **不**做 Go 单二进制分发（questor 用 PyInstaller + Electron，参照 hermes/上游骨架）。
 - **不**抄 Reasonix 的 Go 内部实现，只读思路与协议形态（服务端为语义翻译，非复制代码）。
 - **不**采用 WebSocket（ADR-0006 已否），**不**采用 Tauri 壳（ADR-0005 §3 已否）。
 - **不** vendor Reasonix 整树：只取五张对话卡 + 设计法典（ADR-0007）。
@@ -601,7 +601,7 @@ unknown；wireRuntime.test.ts 判红）。另核实：M2（编辑审批 detail�
 - **不**立项 durable spine / 事件溯源（STRUCTURE §11 未变；传输 seq ≠ 会话事实流，重放是
   有界尾巴）。
 - **不**做分布式高可用（单用户本地应用，永久负收益）。
-- **不**改动 DeepCode 对标得出的 P0–P5 功能路线图。
+- **不**改动引擎对标得出的 P0–P5 功能路线图。
 
 ## 参考地图
 
@@ -622,7 +622,7 @@ unknown；wireRuntime.test.ts 判红）。另核实：M2（编辑审批 detail�
 | 设计法典 | `styles/TOKENS.md`(329 行) / `styles/LAYOUT.md`(1591 行) / `tokens.css`(279 行) | 设计真源可移植 |
 | 服务端结构镜像源 | `internal/frontend/serve/`（serve.go/routes.go/eventstream.go/broadcaster.go/hub.go） | 阶段 1 文件组织对齐 |
 
-### DeepCode（骨架 / 契约 codegen / 工程链；实测 2026-10-24）
+### 上游骨架仓外副本（工程链 / 契约 codegen / 中文；实测 2026-10-24）
 
 | 先例 | 位置 | 借什么 |
 | --- | --- | --- |

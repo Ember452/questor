@@ -1,4 +1,4 @@
-"""token 迁移守卫：`var(--x)` 必须已定义；alias 必须覆盖全部 DeepCode 旧变量。"""
+"""token 迁移守卫：`var(--x)` 必须已定义；alias 必须覆盖全部 上游骨架 旧变量。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 THEME = REPO / "apps/web/src/shared/theme"
 SRC = REPO / "apps/web/src"
-FILES = ("tokens.deepcode.css", "tokens.reasonix.css", "alias.css")
+FILES = ("tokens.base.css", "tokens.reasonix.css", "alias.css")
 
 DECL = re.compile(r"(--[a-z0-9-]+)\s*:")
 BARE_VAR = re.compile(r"var\(\s*(--[a-z0-9-]+)\s*\)")
@@ -34,16 +34,16 @@ def undefined_bare_vars() -> list[str]:
 
 
 def alias_coverage() -> list[str]:
-    deepcode = set(DECL.findall((THEME / "tokens.deepcode.css").read_text(encoding="utf-8")))
+    legacy = set(DECL.findall((THEME / "tokens.base.css").read_text(encoding="utf-8")))
     alias = set(DECL.findall((THEME / "alias.css").read_text(encoding="utf-8")))
-    return sorted(deepcode - alias)
+    return sorted(legacy - alias)
 
 
 def test_every_bare_var_is_defined() -> None:
     assert undefined_bare_vars() == []
 
 
-def test_alias_covers_every_deepcode_variable() -> None:
+def test_alias_covers_every_legacy_variable() -> None:
     missing = alias_coverage()
     assert missing == [], f"alias 漏登记：{missing}"
 

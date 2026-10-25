@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 
 import { App } from "./app/App";
-import "./shared/theme/tokens.deepcode.css";
+import "./shared/theme/tokens.base.css";
 import "./shared/theme/tokens.reasonix.css";
 import "./shared/theme/alias.css";
 

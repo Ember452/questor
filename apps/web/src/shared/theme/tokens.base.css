@@ -111,7 +111,7 @@
      values below and `theme:` in TerminalPanel.tsx have to agree or a seam
      shows between the panel and the terminal inside it, which is what happened
      when one drifted green (#171b19) and the other blue (#171a20). These are
-     the app's own dark surfaces, so the terminal reads as part of DeepCode. */
+     the app's own dark surfaces, so the terminal reads as part of the app. */
   --surface-terminal: #151816;
   --surface-terminal-raised: #1f2421;
   --border-terminal: #333b36;

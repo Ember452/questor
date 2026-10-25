@@ -355,6 +355,7 @@ tests/unit/bootstrap/hosts/serve/test_eventstream.py::test_dumps_keeps_unicode
 tests/unit/bootstrap/hosts/serve/test_eventstream.py::test_format_sse_bytes_are_exact
 tests/unit/bootstrap/hosts/serve/test_eventstream.py::test_heartbeat_carries_watermark
 tests/unit/bootstrap/hosts/serve/test_eventstream.py::test_last_event_id_parsing_is_strict
+tests/unit/bootstrap/hosts/serve/test_host.py::test_api_rejection_notice_carries_provider_context
 tests/unit/bootstrap/hosts/serve/test_host.py::test_host_wires_notifier_and_keeps_injected_runtime
 tests/unit/bootstrap/hosts/serve/test_http_server.py::test_allow_no_auth_is_dev_only_and_explicit
 tests/unit/bootstrap/hosts/serve/test_http_server.py::test_authorized_request_echoes_client_id

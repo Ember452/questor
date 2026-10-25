@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
       ...(web
         ? [
             {
-              name: "deepcode-web-release",
+              name: "questor-web-release",
               generateBundle() {
                 this.emitFile({
                   type: "asset",

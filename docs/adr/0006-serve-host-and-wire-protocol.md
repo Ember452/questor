@@ -69,7 +69,7 @@ Electron（`apps/desktop`）与浏览器（`apps/web`）。现状却是每个客
   恢复模型已被参照实现完整验证。拒绝。
 - **JSON-RPC**。请求/响应范式对单向事件流是错配，事件推送还得在其上再发明
   一层。拒绝。
-- **全量 codegen**（DeepCode 式 8k 行 schema 生成）。当前只有一个前端消费者，
+- **全量 codegen**（8k 行级全量 schema 生成）。当前只有一个前端消费者，
   镜像文件 + 守卫测试已覆盖漂移；前端多到手工同步成为痛点时再升级，不预先
   建层（STRUCTURE §0-7）。现在拒绝。
 - **OHJSON 扩展**。在 stdio 专用协议上继续加能力，等于把 backend_host 越焊
@@ -84,7 +84,7 @@ Electron（`apps/desktop`）与浏览器（`apps/web`）。现状却是每个客
   契约不变。
 - aiohttp 进入依赖树；StreamEvent→wire 映射表成为新的模型可见面之一，
   变更须过 prompt-surface 同款金标思路。
-- DeepCode 对标得出的 P0–P5 功能路线图不受本 ADR 影响，照旧推进。
+- 引擎对标得出的 P0–P5 功能路线图不受本 ADR 影响，照旧推进。
 
 ## Verification
 

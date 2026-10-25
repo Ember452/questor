@@ -2,14 +2,6 @@
 
 本仓包含以下第三方代码/资产。原始许可证文件与其声明一并保留。
 
-## DeepCode（`apps/web` 的 vendored 基座）
-
-- 来源：DeepCode `desktop/`（骨架、构建链、CSS Module/token 体系、部分表现层原语）
-- 许可证：MIT
-- 版权：DeepCode contributors
-- 原件：`apps/web/LICENSE.deepcode`
-- 范围与禁区：`apps/web/VENDOR.md`
-
 ## Reasonix（对话卡与设计法典）
 
 - 来源：Reasonix `desktop/frontend-next`（Say / Tool / Approval / Ask / Compaction 卡片结构、

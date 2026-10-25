@@ -15,13 +15,13 @@ from pathlib import Path
 DESKTOP_ROOT = Path(__file__).resolve().parents[1]
 TARGET_ROOT = DESKTOP_ROOT / "src-tauri" / "target" / "release"
 BUNDLE_ROOT = TARGET_ROOT / "bundle"
-SIDECAR_ROOT = DESKTOP_ROOT / "build" / "sidecar" / "dist" / "deepcode-app-server"
+SIDECAR_ROOT = DESKTOP_ROOT / "build" / "sidecar" / "dist" / "questor-app-server"
 NOTICE_NAMES = ("THIRD_PARTY_NOTICES.md", "PRIVACY_AND_DIAGNOSTICS.md")
 
 
 def _sidecar_binary(root: Path) -> Path:
     candidate = root / (
-        "deepcode-app-server.exe" if os.name == "nt" else "deepcode-app-server"
+        "questor-app-server.exe" if os.name == "nt" else "questor-app-server"
     )
     if not candidate.is_file():
         raise RuntimeError(f"App Server executable is missing: {candidate}")
@@ -48,7 +48,7 @@ def _verify_runtime(binary: Path) -> None:
 
 def _verify_resource_tree(root: Path) -> Path:
     binary_name = (
-        "deepcode-app-server.exe" if os.name == "nt" else "deepcode-app-server"
+        "questor-app-server.exe" if os.name == "nt" else "questor-app-server"
     )
     sidecars = [
         path
@@ -171,7 +171,7 @@ def _verify_deb() -> list[Path]:
     package = _single("deb/*.deb")
     listing = _archive_listing(["dpkg-deb", "--contents", str(package)])
     _require_archive_contents(listing)
-    with tempfile.TemporaryDirectory(prefix="deepcode-deb-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="questor-deb-") as temporary:
         root = Path(temporary)
         subprocess.run(
             ["dpkg-deb", "--extract", str(package), str(root)],
@@ -193,7 +193,7 @@ def _verify_appimage(*, signed: bool) -> list[Path]:
         )
         if not completed.stdout.strip():
             raise RuntimeError("signed AppImage did not expose an embedded signature")
-    with tempfile.TemporaryDirectory(prefix="deepcode-appimage-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="questor-appimage-") as temporary:
         root = Path(temporary)
         subprocess.run(
             [str(appimage.resolve()), "--appimage-extract"],
@@ -229,8 +229,8 @@ def _verify_nsis(*, signed: bool) -> list[Path]:
     installer = _single("nsis/*-setup.exe")
     if signed:
         _verify_authenticode(installer)
-    with tempfile.TemporaryDirectory(prefix="deepcode-nsis-") as temporary:
-        install_root = Path(temporary) / "DeepCode"
+    with tempfile.TemporaryDirectory(prefix="questor-nsis-") as temporary:
+        install_root = Path(temporary) / "Upstream"
         subprocess.run(
             [str(installer.resolve()), "/S", f"/D={install_root}"],
             check=True,
@@ -256,7 +256,7 @@ def _verify_nsis(*, signed: bool) -> list[Path]:
 
 def _require_archive_contents(listing: str) -> None:
     required = (
-        "app-server/deepcode-app-server",
+        "app-server/questor-app-server",
         "third_party_notices.md",
         "privacy_and_diagnostics.md",
     )

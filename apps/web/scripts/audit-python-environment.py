@@ -40,7 +40,7 @@ def main() -> int:
         raise RuntimeError(f"target Python executable is missing: {python}")
     output = args.output.expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="deepcode-pip-audit-") as cache:
+    with tempfile.TemporaryDirectory(prefix="questor-pip-audit-") as cache:
         subprocess.run(
             [
                 sys.executable,

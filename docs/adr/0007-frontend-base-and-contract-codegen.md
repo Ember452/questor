@@ -1,4 +1,4 @@
-# ADR 0007: 前端基座与契约 codegen（DeepCode 骨架 + Reasonix 对话面）
+# ADR 0007: 前端基座与契约 codegen（既有授权骨架 + Reasonix 对话面）
 
 - Status: Accepted
 - Date: 2026-10-24
@@ -17,7 +17,7 @@ ADR-0005 定了唯一 renderer 与 Electron 壳，ADR-0006 定了 serve 宿主�
   **只有英文**；`port.ts` **285 个方法** / 47 KB；`wire.ts` 52 个 interface；88 个 UI 文件属于
   cloud / peers / graph / 地图 / 浏览器 dock 等 questor 永远不会有后端的域；服务端为 Go
   （`internal/frontend/serve`：198 个非测试文件 / 24,762 行）。
-- DeepCode `desktop/`：174 个 ts/tsx、37,130 行；43 个测试文件 + playwright `web.spec.ts`；
+- 上游骨架：174 个 ts/tsx、37,130 行；43 个测试文件 + playwright `web.spec.ts`；
   26 个 CSS 文件 / 6,936 行 + `tokens.css` 20 KB；`protocol/app-server.schema.json` 176 KB
   经 `json-schema-to-typescript` 生成 **src/generated/app-server.ts**，由 `check:protocol` 守卫；
   **src/rpc/** 有 `browserRuntime` 与 `tauriRuntime` **两个 Transport 实现**；`i18n.ts` 内置
@@ -25,22 +25,22 @@ ADR-0005 定了唯一 renderer 与 Electron 壳，ADR-0006 定了 serve 宿主�
   `browser_auth.py`、`dispatcher.py` 71 KB）。
 - 结构与本仓意图文档吻合：`docs/architecture/STRUCTURE.md` §7 已规定
   `apps/web/{src/app, src/features, src/shared, src/generated}`、"Transport 的第二个实现与
-  HttpTransport 共用同一套 Command/Event envelope"、"feature 之间零引用"。DeepCode 的目录
+  HttpTransport 共用同一套 Command/Event envelope"、"feature 之间零引用"。上游骨架 的目录
   形状逐条对应，差异只有两处：Transport 实现（WebSocket → SSE）与目录名（`platform/` → `shared/`）。
 - 规则冲突必须显式裁决：`docs/CONVENTIONS.md` §4.5 要求"the merged code carries no external
   source/license/attribution marker"。整树 vendor 与该条冲突；不开作用域例外，计划与守则自相矛盾。
 
 ## Decision
 
-1. **基座 = DeepCode `desktop/`**：骨架、`features/` 垂直切片、状态与控制器
+1. **基座 = 上游骨架**：骨架、`features/` 垂直切片、状态与控制器
    （`workspaceState` / `useWorkspaceController` / `threadEventStream` / `replayThreadHistory`）、
    CSS Module 体系、工程链（eslint / tsc / vitest / playwright / license audit）。
 2. **对话面与设计法典 = Reasonix**：Say / Tool / Approval / Ask / Compaction 五张对话卡，
    连同其 CSS 类块与测试逐刀搬迁；`TOKENS.md` / `LAYOUT.md` 作为视觉真源。token 变量层
-   **迁移而非覆盖**：实测 DeepCode 69 个变量与 Reasonix 128 个**只重叠 1 个**
+   **迁移而非覆盖**：实测 上游 69 个变量与 Reasonix 128 个**只重叠 1 个**
    （`--shadow-float`），覆盖会让骨架 68 个变量失效；做法是两套并存 + 别名映射表 +
    `var()` 未定义守卫（归计划 02 §4b-6）。
-3. **传输 = ADR-0006**（SSE + POST + 凭据五件套 + 父租约），**不采用** DeepCode 的
+3. **传输 = ADR-0006**（SSE + POST + 凭据五件套 + 父租约），**不采用** 上游骨架 的
    WebSocket。**src/rpc/contracts.ts** 的 `ClientRuntime` 接口保留，`browserRuntime.ts`
    重写为 SSE 实现；Tauri runtime 不进入本仓。
 4. **契约真源 = 单份 JSON Schema，双侧 codegen**。`protocol/app-wire.schema.json`（手写，
@@ -77,8 +77,8 @@ ADR-0005 定了唯一 renderer 与 Electron 壳，ADR-0006 定了 serve 宿主�
 
 - 变得容易：AI 工作面从 13.4 万行降到 3.7 万行；中文一等公民（ZH_CN 226 条）；契约漂移由
   `--check` 机械拦截；阶段 1/3 的服务端对齐参考从 Go 换成**同语言同框架**实现。
-- 变得难 / 必须接受：DeepCode 视觉成熟度低于 Reasonix，需在 4b-6 把设计法典**迁移**进
-  DeepCode 的 token 体系（别名映射，非覆盖）；`apps/` 成为 vendored 区，永久需要
+- 变得难 / 必须接受：上游视觉成熟度低于 Reasonix，需在 4b-6 把设计法典**迁移**进
+  其 token 体系（别名映射，非覆盖）；`apps/` 成为 vendored 区，永久需要
   `VENDOR.md` 与“与首刀 commit 的 diff”守卫；
   WebSocket 路径（`rpc/tauriRuntime.ts`、`app_server/websocket.py`）不得进入 questor 传输层。
 - 保留不变：ADR-0005 的 Electron 壳；ADR-0006 的 SSE/POST/五件套/36 kind/at-least-once + seq 去重。
@@ -98,11 +98,14 @@ ADR-0005 定了唯一 renderer 与 Electron 壳，ADR-0006 定了 serve 宿主�
 
 ## Updated（2026-10-25）：基座实际形态 = 工程链 + token 底座，非整骨架
 
+另：凭所有者已获之授权，本仓于同日移除上游具体来源标识；本 ADR 以「上游骨架」指代该
+授权来源，谱系细节不入库。
+
 4a 执行时（用户裁决 2026-10-24，`apps/web/VENDOR.md`"已裁"清单）将 §Decision-1 的范围收窄：
-DeepCode 的 `src/features/**`（15 切片）、`src/app/**`（workspaceState /
+上游的 `src/features/**`（15 切片）、`src/app/**`（workspaceState /
 useWorkspaceController / i18n）、`src/rpc/**` 与 `ui-kit/` **裁掉不搬**，实际落地为
 **wire-native 自写壳**（App / cardSlots / viewModel / wireRuntime / pages，全 owned）+
-DeepCode 工程链与 styles 底座。理由：所裁各域与 questor 契约形态的差异大于适配成本，
+上游工程链与 styles 底座。理由：所裁各域与 questor 契约形态的差异大于适配成本，
 自写壳总量 <2k 行且由 tsc 穷尽 + kind 覆盖守卫兜底；中文由自写层直出。
 §Decision-2/3/4（对话卡、传输、契约 codegen）不变。三层分区表以
 `docs/plan/02-studio-serve-host.md` §2 为准。

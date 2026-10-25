@@ -7,7 +7,7 @@ if (!script) {
   process.exit(2);
 }
 
-const configured = process.env.DEEPCODE_PYTHON?.trim();
+const configured = process.env.QUESTOR_PYTHON?.trim();
 const candidates = configured
   ? [{ command: configured, prefix: [] }]
   : process.platform === "win32"
@@ -43,6 +43,6 @@ for (const candidate of candidates) {
 }
 
 console.error(
-  "No usable Python interpreter was found. Set DEEPCODE_PYTHON to an executable path.",
+  "No usable Python interpreter was found. Set QUESTOR_PYTHON to an executable path.",
 );
 process.exit(1);

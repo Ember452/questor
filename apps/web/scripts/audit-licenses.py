@@ -108,7 +108,7 @@ def _rust_packages() -> list[dict[str, str]]:
     metadata = json.loads(completed.stdout)
     packages = []
     for package in metadata["packages"]:
-        if package["name"] == "deepcode-desktop":
+        if package["name"] == "questor-desktop":
             continue
         packages.append(
             {

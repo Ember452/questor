@@ -1,6 +1,7 @@
 # apps/web — vendored 归属与基线
 
-`apps/web` 是 DeepCode `desktop/` 的 vendored 副本（MIT），只允许存在于 `apps/` 下；
+`apps/web` 是既有授权骨架的 vendored 副本（授权与谱系由所有者持有，不入库），
+只允许存在于 `apps/` 下；
 `src/` 内的 CONVENTIONS §4.5 不适用于这里，但 `apps/web/VENDOR.md` 是硬约束。
 
 基线: a6303ff4ec4425bce7efda36fd940480b0f85d73
@@ -11,6 +12,7 @@
 
 ## 已改
 
+- `src/shared/theme/**`（token 底座改名与别名注释；内容语义未动）
 - `.gitignore` — 新增（忽略 `.dev-server.json` 运行时产物）
 - `package.json` — scripts 改为 owned；新增 `@tanstack/react-virtual`
 - `package-lock.json` — 新增 owned 依赖后的锁文件
@@ -23,6 +25,7 @@
 
 ## 已裁
 
+- `LICENSE*`（上游许可文件不入本仓）
 - `src/features/**`
 - `src/shared/ui-kit/**`
 - `src/shared/transport/**`
@@ -46,7 +49,6 @@
 ## 新增
 
 - `VENDOR.md`
-- `LICENSE.deepcode`
 - `src/generated/app-wire.ts`
 - `src/generated/wire-fixtures.json`
 - `src/shared/transport/wireRuntime.ts`
@@ -78,7 +80,7 @@
 
 | 目录 | 归属 | 说明 |
 |---|---|---|
-| `src/styles/**` | vendored | DeepCode token/CSS Module 体系 |
+| `src/styles/**` | vendored | 上游骨架 token/CSS Module 体系 |
 | `src/shared/**`（改名后） | vendored → owned | 4a 起逐文件迁移为 owned |
 | `src/generated/app-wire.ts` | owned（生成物） | 由 `scripts/codegen/gen_wire_ts.mjs` 生成 |
 | `src/app/**`、`src/features/**` | 4a 剪枝后 owned | RPC 控制器删除，新 shell 由本仓编写 |
