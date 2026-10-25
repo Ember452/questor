@@ -8,6 +8,8 @@ The workflows are `.github/workflows/ci.yml` and
 - `guards` on Ubuntu: pre-commit, guard self-tests, real guards, and
   `lint-imports`.
 - `tests` on Windows: `uv run pytest -m "unit or integration" -ra --tb=long --durations=20`.
+- `web` on Ubuntu: `apps/web` 的 lint / typecheck / vitest / `vite build --mode web`（合约生成物由
+  `npm run check:protocol` 守卫）。
 - `pr-title` on pull requests: Conventional Commits type plus a lowercase
   subject.
 

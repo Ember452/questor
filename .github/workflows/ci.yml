@@ -102,6 +102,10 @@ jobs:
       - name: Install wire codegen deps
         run: npm ci --prefix scripts/codegen --no-fund --no-audit --loglevel=error
 
+      # check.py 的 web lane 需要 apps/web 的 node_modules。
+      - name: Install web deps
+        run: npm ci --prefix apps/web --no-fund --no-audit --loglevel=error
+
       - name: Unit and integration tests
         run: uv run pytest -m "unit or integration" -ra --tb=long --durations=20
 
@@ -118,3 +122,36 @@ jobs:
           git status --short
           git diff --stat
           echo "::endgroup::"
+
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit --loglevel=error
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build (web)
+        run: npm run build:web

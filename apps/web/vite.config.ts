@@ -53,7 +53,7 @@ export default defineConfig(({ mode }) => {
     ],
     define: { __WEB_BUILD_ID__: JSON.stringify(buildId) },
     ...(web
-      ? { build: { outDir: "../app_server/web_assets", emptyOutDir: true } }
+      ? { build: { outDir: "dist", emptyOutDir: true } }
       : {}),
     clearScreen: false,
     server: {

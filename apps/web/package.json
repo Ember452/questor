@@ -5,22 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run check:version && npm run check:tauri && npm run check:protocol && tsc --noEmit && vite build",
-    "build:web": "npm run check:protocol && tsc --noEmit && vite build --mode web",
-    "test:web": "npm run build:web && playwright test",
-    "setup:sidecar": "node scripts/run-python.mjs scripts/setup-sidecar-env.py",
-    "build:sidecar": "npm run build:web && node scripts/run-python.mjs scripts/build-sidecar.py",
-    "audit:licenses": "node scripts/run-python.mjs scripts/audit-licenses.py --output build/licenses/dependencies.json",
-    "check:version": "node scripts/check-version.mjs",
-    "check:tauri": "node scripts/check-tauri-config.mjs",
-    "generate:protocol": "node scripts/generate-protocol.mjs",
-    "check:protocol": "node scripts/generate-protocol.mjs --check",
+    "build": "npm run build:web",
+    "build:web": "tsc --noEmit && vite build --mode web",
+    "generate:protocol": "node ../../scripts/codegen/gen_wire_ts.mjs --schema ../../protocol/app-wire.schema.json --out src/generated/app-wire.ts",
+    "check:protocol": "node ../../scripts/codegen/gen_wire_ts.mjs --schema ../../protocol/app-wire.schema.json --out src/generated/app-wire.ts --check",
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "tauri": "tauri",
-    "tauri:build": "tauri build"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

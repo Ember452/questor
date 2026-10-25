@@ -23,6 +23,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYTHON = sys.executable
+# npm 在 Windows 上是 npm.cmd；直接 exec "npm" 会 FileNotFoundError。
+NPM = "npm.cmd" if sys.platform == "win32" else "npm"
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,15 @@ STEPS: tuple[Step, ...] = (
         "agent-tool-names",
         (PYTHON, "-m", "pytest", "tests/ci/test_agent_tool_names.py", "-q"),
     ),
+    Step(
+        "vendor-pristine",
+        (PYTHON, "-m", "pytest", "tests/ci/test_vendor_pristine.py", "-q"),
+    ),
+    # apps/web 的前端 lane：lint / typecheck / unit / build（需先 npm ci --prefix apps/web）。
+    Step("web-lint", (NPM, "--prefix", "apps/web", "run", "lint")),
+    Step("web-typecheck", (NPM, "--prefix", "apps/web", "run", "typecheck")),
+    Step("web-test", (NPM, "--prefix", "apps/web", "run", "test")),
+    Step("web-build", (NPM, "--prefix", "apps/web", "run", "build:web"), slow=True),
     Step(
         "baseline-check",
         # 不传 --fast:pytest 收集计数与 node-id 集是这份基线存在的意义,
