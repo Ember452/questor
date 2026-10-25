@@ -495,11 +495,11 @@ Agents）在五卡之后逐张评估。
 | 1 | feat/studio-serve | f05ac1c | f05ac1c | 契约 schema + 双侧（当前 Python）codegen + 并发/幂等判红 + kind 覆盖 + 持久化版本 + **profile 底座（bundle + `/profile` + `runtime` 占位段）**；含 ADR-0006 勘误 |
 | 2 | feat/studio-serve | 325bbfd | 325bbfd | 删除刀 + `/cancel`（与阶段 3 同一提交：单工作区开发，见备注） |
 | 3 | feat/studio-serve | 325bbfd | 325bbfd | 五件套 + 多客户端语义 + 握手行 |
-| 4a | feat/studio-web | | | 基座 + 接门 + 换契约 + 字段预检 + 可用闭环 + ErrorBoundary/虚拟化 + **页面注册表/capability 门控** |
-| 4b-1…5 | feat/studio-web | | | 五张卡，每张一刀；`cardSlots` 穷尽（缺槽位 = `tsc` 红） |
-| 4b-6 | feat/studio-web | | | 删临时渲染器 + tokens 覆盖 |
-| 5 | feat/studio-web | | | 壳 + updater 回滚 + soak |
-| 6 | feat/studio-web | | | design-qa |
+| 4a | feat/studio-web | a6303ff / dbb526a | 071851d | DeepCode 骨架 vendored + 接门 + 改名 + 剪枝到 wire 骨架 + SSE 传输 + 13 帧视图模型 + 页面注册表/能力位门控；卡片与临时壳拆分见 4b |
+| 4b-1…5 | feat/studio-web | 071851d | 071851d | 五卡（Say/Tool/Approval/Ask/Compaction）语义移植 + cardSlots 穷尽 + 旧渲染分支删除；CSS 类块抽自 Reasonix（视觉对齐待 4b-6 token 完成） |
+| 4b-6 | feat/studio-web | 071851d | 071851d | token 两套并存 + alias 全量登记 + `test_css_vars`（实测旧变量 68 个、Reasonix 119 个、交集 1）；`THROWAWAY` 清单未清零（临时壳仍在，4a 遗留） |
+| 5 | feat/studio-web | 071851d | 071851d | Electron 主进程（握手校验/cookie/父租约/重启）+ updater 回滚矩阵 + PyInstaller onedir spec；**打包产物与 8h soak 未实跑**（需 Windows 桌面环境） |
+| 6 | feat/studio-web | 071851d | 071851d | 对比度测试 + data-action 审计 + 明暗×尺寸截图矩阵脚本；**矩阵截图未入库/未在浏览器实跑** |
 
 **填写规则**："绿验收 commit"只有在 §0.5-6 的三张对账表（条目 / 影响面 / 判红）齐备时才可填；
 任一表缺失，该阶段视为**未完成**（不是"稍后补"）。对照表本身随 PR 描述存档。
