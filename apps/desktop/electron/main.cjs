@@ -126,14 +126,30 @@ function shutdownEngine() {
 app.requestSingleInstanceLock();
 app.on("second-instance", () => window?.show());
 
+function createTray() {
+  try {
+    // 空图像在部分 Windows/CI 环境会抛异常并让进程提前退出：用 16x16 透明 PNG。
+    const icon = nativeImage.createFromDataURL(
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAOSURBVBhXY3jP4M/wHw0AAG6fBdkAAAAASUVORK5CYII=",
+    );
+    const created = new Tray(icon);
+    created.setToolTip("Questor");
+    created.on("click", () => window?.show());
+    return created;
+  } catch (error) {
+    // 托盘是可选体验：无桌面会话时降级，不得阻断主窗口。
+    process.stderr.write(`[tray] disabled: ${String(error)}\n`);
+    return null;
+  }
+}
+
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
-  tray = new Tray(nativeImage.createEmpty());
-  tray.setToolTip("Questor");
-  tray.on("click", () => window?.show());
+  tray = createTray();
   try {
     await boot();
   } catch (error) {
+    process.stderr.write(`[boot] failed: ${String(error)}\n`);
     window?.webContents.send("engine-crashed", String(error));
   }
 });

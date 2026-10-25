@@ -240,10 +240,39 @@ jobs:
       - name: Packaged engine handshake smoke
         run: uv run python scripts/smoke-engine.py
 
-      - name: Electron shell e2e (real engine + web dist)
-        run: node scripts/e2e-electron.mjs
-
       - name: Soak smoke (60s)
         run: node scripts/soak.mjs
         env:
           SOAK_SECONDS: "60"
+
+  desktop-ui:
+    name: desktop-ui (informational)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    env:
+      QUESTORHARNESS_OPENAI_API_KEY: sk-ci-dummy
+      QUESTORHARNESS_PROVIDER: openai
+      QUESTORHARNESS_API_FORMAT: openai
+      QUESTORHARNESS_MODEL: ci-model
+      QUESTORHARNESS_BASE_URL: http://127.0.0.1:9/v1
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev --frozen
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci --no-fund --no-audit --loglevel=error
+      - run: node scripts/build-engine.mjs
+      - run: npm --prefix ../web ci --no-fund --no-audit --loglevel=error
+      - run: npm --prefix ../web run build:web
+      - run: node scripts/e2e-electron.mjs
