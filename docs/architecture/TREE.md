@@ -52,12 +52,12 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/terminal/markdown.py` | 76 |
 | `src/questorharness/bootstrap/hosts/terminal/overlay.py` | 171 |
 | `src/questorharness/bootstrap/hosts/terminal/paste.py` | 43 |
-| `src/questorharness/bootstrap/hosts/terminal/pickers.py` | 80 |
+| `src/questorharness/bootstrap/hosts/terminal/pickers.py` | 87 |
 | `src/questorharness/bootstrap/hosts/terminal/strings.py` | 55 |
 | `src/questorharness/bootstrap/hosts/terminal/unsupported.py` | 37 |
 | `src/questorharness/bootstrap/hosts/terminal/width.py` | 104 |
 | `src/questorharness/bootstrap/hosts/terminal/wire_view.py` | 393 |
-| `src/questorharness/bootstrap/hosts/terminal_client.py` | 528 |
+| `src/questorharness/bootstrap/hosts/terminal_client.py` | 554 |
 | `src/questorharness/bootstrap/hosts/tool_policy.py` | 65 |
 | `src/questorharness/bootstrap/runtime.py` | 831 |
 | `src/questorharness/capabilities/__init__.py` | 7 |

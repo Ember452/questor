@@ -70,7 +70,8 @@ def test_unknown_alias_shows_the_available_panels_without_requesting(monkeypatch
 
     assert asyncio.run(terminal_client._open_panel(host, renderer, ":nope")) is None
     assert host.requested == []
-    assert pickers.list_hint() in buffer.getvalue()
+    # 不断原文：rich 会按宽度折行，只比“归一化后的内容完全等于清单”（不得多不得少）。
+    assert " ".join(buffer.getvalue().split()) == " ".join(pickers.list_hint().split())
 
 
 def test_empty_catalog_renders_an_empty_state(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -87,6 +88,51 @@ def test_empty_catalog_renders_an_empty_state(monkeypatch) -> None:  # type: ign
     assert asyncio.run(terminal_client._open_panel(host, renderer, ":model")) is None
     assert strings.PANEL_EMPTY in buffer.getvalue()
     assert called["pick"] is False
+
+
+def test_transcript_panel_lists_history_rows_without_submitting(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """只读 transcript：数据来自 `/history`，选中也不回命令。"""
+
+    import json
+
+    buffer = io.StringIO()
+    seen: list[list[dict[str, object]]] = []
+
+    host = _CatalogHost([])
+
+    async def history_handler(_method: str, path: str, **_kwargs: object) -> SimpleNamespace:
+        host.requested.append(path)
+        body = json.dumps(
+            {
+                "sessionId": "sid",
+                "messages": [
+                    {"role": "user", "blocks": [{"type": "text", "text": "第一行\n第二行"}]},
+                    {"role": "assistant", "blocks": [{"type": "text", "text": "好的"}]},
+                ],
+            }
+        ).encode("utf-8")
+        return SimpleNamespace(status=200, body=body, headers={}, stream=None)
+
+    host.transport.request = history_handler  # type: ignore[attr-defined]
+
+    def spy(panel, items, **_kwargs):  # type: ignore[no-untyped-def]
+        seen.append(list(items))
+        return "2"
+
+    monkeypatch.setattr(pickers, "open_panel", spy)
+    renderer = terminal_client.TerminalRenderer(
+        host, Console(file=buffer, force_terminal=False)
+    )
+
+    assert asyncio.run(terminal_client._open_panel(host, renderer, ":transcript")) is None
+    assert host.requested == ["/rt/r1/history"]
+    assert seen == [
+        [
+            {"id": "1", "label": "1. user", "detail": "第一行"},
+            {"id": "2", "label": "2. assistant", "detail": "好的"},
+        ]
+    ]
+    assert buffer.getvalue() == ""
 
 
 def test_unavailable_catalog_does_not_open_a_panel(monkeypatch) -> None:  # type: ignore[no-untyped-def]

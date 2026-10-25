@@ -49,7 +49,16 @@ def test_list_panels_refresh_through_their_own_command() -> None:
         assert pickers.action_line(panel, "whatever") == command, alias
 
 
-def test_hint_lists_every_alias_target() -> None:
+def test_hint_lists_every_panel_kind() -> None:
     hint = pickers.list_hint()
-    for alias in pickers.ALIASES:
-        assert alias in hint
+    for kind in pickers.PANELS:
+        assert f":{kind}" in hint, kind
+
+
+def test_transcript_panel_is_read_only() -> None:
+    """transcript 面板只给人看，选中不能误发命令。"""
+
+    panel = pickers.resolve(":t")
+    assert panel is not None and panel.kind == "transcript"
+    assert pickers.resolve(":history") is panel
+    assert pickers.action_line(panel, "3") is None

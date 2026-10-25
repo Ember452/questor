@@ -40,8 +40,8 @@
 | T12 | git 面板 | ready | `:git` → `/catalog/git` → `/branch` | Claude Code `branch` |
 | T13 | 插件面板 | declared | catalog 暂无 `plugins` kind（无公开枚举 API），故不开放 `:plugin` | — |
 | T14 | 费用 / 上下文占比 | declared | 窗口已知则显比例；`costUsd`/`cachedTokens` 引擎无数据 → 显 `—` | Reasonix `footer.go` |
-| T15 | transcript 浏览与搜索 | declared | 面板状态机已支持搜索；REPL 专用覆盖层入口待接 | Claude Code transcript mode |
+| T15 | transcript 浏览与搜索 | ready | `:transcript`（等价 `:t` / `:history`）读 `/history`，面板内 `/` 过滤 + j/k 游标；只读不发命令 | Claude Code transcript mode |
 
 > `id` 一入表即不重新编号、不删除；下线只改 `status`。`absent` 行集合必须与
 > `terminal/unsupported.py` 的 key 集合相等（`tests/ci/test_unsupported_badges.py`）；
-> `todos` 面板、`plugins` kind、transcript 覆盖层入口落地时把对应行改 `ready`。
+> `todos` 面板与 `plugins` kind 落地时把对应行改 `ready`。

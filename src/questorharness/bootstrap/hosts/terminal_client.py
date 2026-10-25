@@ -335,26 +335,52 @@ async def _drain_pending(renderer: TerminalRenderer, *, timeout: float = 300.0) 
             return
 
 
+async def _history_rows(host: ServeHost) -> list[dict[str, Any]]:
+    """`/history` → 面板行（只读 transcript 浏览）。"""
+
+    response = await host.transport.request("GET", f"{_PREFIX}/history")
+    if response.status >= 400:
+        raise RuntimeError(f"history {response.status}")
+    payload = json.loads(response.body)
+    rows: list[dict[str, Any]] = []
+    for position, message in enumerate(payload.get("messages", []), start=1):
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role", "assistant"))
+        first = ""
+        for block in message.get("blocks", []):
+            if isinstance(block, dict) and block.get("type") == "text" and block.get("text"):
+                first = str(block["text"]).strip().splitlines()[0]
+                break
+        rows.append({"id": str(position), "label": f"{position}. {role}", "detail": first})
+    return rows
+
+
 async def _open_panel(
     host: ServeHost, renderer: TerminalRenderer, line: str
 ) -> str | None:
-    """`:` 开头的本地面板入口：拉 catalog → 打开面板 → 返回要提交的命令。"""
+    """`:` 开头的本地面板入口：拉数据 → 打开面板 → 返回要提交的命令。"""
 
     panel = pickers.resolve(line)
     if panel is None:
         renderer.show(pickers.list_hint())
         return None
     try:
-        response = await host.transport.request("GET", f"{_PREFIX}/catalog/{panel.kind}")
-        payload = json.loads(response.body)
-        status = response.status
+        if panel.kind == "transcript":
+            # 只读 transcript：数据已在会话里，走 `/history`，不动 catalog。
+            items = await _history_rows(host)
+        else:
+            response = await host.transport.request("GET", f"{_PREFIX}/catalog/{panel.kind}")
+            payload = json.loads(response.body)
+            if response.status >= 400:
+                renderer.show(
+                    strings.PANEL_UNAVAILABLE.format(reason=payload.get("code", "error"))
+                )
+                return None
+            items = [dict(item) for item in payload.get("items", [])]
     except Exception as exc:  # noqa: BLE001 - 面板取数失败不得影响 REPL
         renderer.show(strings.PANEL_UNAVAILABLE.format(reason=exc))
         return None
-    if status >= 400:
-        renderer.show(strings.PANEL_UNAVAILABLE.format(reason=payload.get("code", "error")))
-        return None
-    items = [dict(item) for item in payload.get("items", [])]
     if not items:
         renderer.show(strings.PANEL_EMPTY)
         return None

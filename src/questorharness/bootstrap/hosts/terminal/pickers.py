@@ -17,7 +17,7 @@ from questorharness.bootstrap.hosts.terminal import overlay
 class Panel:
     kind: str
     title: str
-    action: str  # 斜杠命令模板，`{id}` 会被选中项替换
+    action: str  # 斜杠命令模板，`{id}` 会被选中项替换；空串 = 只看不动
     uses_id: bool = False
 
 
@@ -29,6 +29,8 @@ PANELS: Final[dict[str, Panel]] = {
     "jobs": Panel("jobs", "定时任务", "/tasks"),
     "tasks": Panel("tasks", "后台任务", "/tasks"),
     "git": Panel("git", "分支与工作区", "/branch"),
+    # transcript 不走 catalog：数据源是 `/history`（已在会话里的内容）。
+    "transcript": Panel("transcript", "会话记录（只读）", ""),
 }
 
 ALIASES: Final[dict[str, str]] = {
@@ -44,6 +46,9 @@ ALIASES: Final[dict[str, str]] = {
     ":task": "tasks",
     ":tasks": "tasks",
     ":git": "git",
+    ":t": "transcript",
+    ":transcript": "transcript",
+    ":history": "transcript",
 }
 
 
@@ -56,8 +61,10 @@ def resolve(kind_or_alias: str) -> Panel | None:
 
 
 def action_line(panel: Panel, selected_id: str | None) -> str | None:
-    """选中项 → 要提交的斜杠命令；列表型面板无选中项也返回刷新命令。"""
+    """选中项 → 要提交的斜杠命令；列表型面板回刷新命令，只读面板不回命令。"""
 
+    if not panel.action:
+        return None
     if not panel.uses_id:
         return panel.action
     if not selected_id:
