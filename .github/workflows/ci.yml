@@ -18,6 +18,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 变更分类（fail-open）：required 面（tests/web）靠步骤级 if 跳过而不是
+  # workflow paths，required check 永远会报告——这是参照仓（DeepCode ci-scope /
+  # Reasonix changes job）共同防的"路径没命中 → check 卡 pending"坑。
+  scope:
+    name: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      web: ${{ steps.scope.outputs.web }}
+      python: ${{ steps.scope.outputs.python }}
+      desktop: ${{ steps.scope.outputs.desktop }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Classify changes
+        id: scope
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            BASE="$(git merge-base "$BASE" "$GITHUB_SHA" || echo "")"
+          fi
+          python scripts/ci/scope.py --base "$BASE" --head "$GITHUB_SHA" --output "$GITHUB_OUTPUT"
+
   guards:
     name: guards
     runs-on: ubuntu-latest
@@ -26,6 +57,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,6 +81,9 @@ jobs:
 
       - name: Install wire codegen deps
         run: npm ci --prefix scripts/codegen --no-fund --no-audit --loglevel=error
+
+      - name: Install web deps
+        run: npm ci --prefix apps/web --no-fund --no-audit --loglevel=error
 
       - name: Pre-commit
         run: uv run pre-commit run --all-files --show-diff-on-failure
@@ -73,12 +109,17 @@ jobs:
 
   tests:
     name: tests (windows)
+    needs: scope
+    # always()：scope 失败/输出缺失时 != 'false' 成立 → fail-open 全跑。
+    if: always() && needs.scope.outputs.python != 'false'
     runs-on: windows-latest
     timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -102,6 +143,10 @@ jobs:
       - name: Install wire codegen deps
         run: npm ci --prefix scripts/codegen --no-fund --no-audit --loglevel=error
 
+      # check.py 的 web lane 需要 apps/web 的 node_modules。
+      - name: Install web deps
+        run: npm ci --prefix apps/web --no-fund --no-audit --loglevel=error
+
       - name: Unit and integration tests
         run: uv run pytest -m "unit or integration" -ra --tb=long --durations=20
 
@@ -118,3 +163,99 @@ jobs:
           git status --short
           git diff --stat
           echo "::endgroup::"
+
+  web:
+    name: web
+    needs: scope
+    if: always() && needs.scope.outputs.web != 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (studio host for e2e)
+        run: uv sync --extra dev --frozen
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit --loglevel=error
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build (web)
+        run: npm run build:web
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E (real studio host + stub llm)
+        run: npx playwright test
+        env:
+          QUESTOR_PYTHON: ${{ github.workspace }}/.venv/bin/python
+
+      # 产物存档（参照仓通行做法）：报告与截图随失败留存，便于 PR 排障。
+      - name: Upload playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-playwright-${{ github.run_id }}
+          path: |
+            apps/web/test-results
+            apps/web/playwright-report
+            apps/web/.e2e-host.log
+            apps/web/.e2e-preview.log
+            apps/web/.e2e-stub.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # 唯一 required check：只要它绿，PR 就能合（tests/web 被 scope 跳过时按
+  # skipped 放行；desktop 在 desktop.yml，非 required）。
+  ci-ok:
+    name: ci-ok (required gate)
+    needs: [guards, tests, web]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify required faces
+        run: |
+          set -e
+          check() {
+            name="$1"; result="$2"
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "::error::job $name ended as $result"
+              exit 1
+            fi
+          }
+          check guards "${{ needs.guards.result }}"
+          check tests  "${{ needs.tests.result }}"
+          check web    "${{ needs.web.result }}"

@@ -1,0 +1,151 @@
+name: Desktop
+
+# 重作业（PyInstaller 打包 / soak / Electron 真壳）单独成面：
+# - 非 required（ci.yml 的 ci-ok 才是 required gate），因此允许 workflow 级
+#   paths 过滤——没命中的 PR 连 runner 都不分配（这正是它和 required 面的区别）；
+# - 周定时全量跑一次，防止路径过滤漏掉长周期回归；
+# - desktop-ui 的 concurrency 独立成组：informational 作业不得取消质量作业。
+on:
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "apps/web/**"
+      - "src/questorharness/bootstrap/hosts/serve/**"
+      - "protocol/**"
+      - "scripts/codegen/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/desktop.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - "apps/web/**"
+      - "src/questorharness/bootstrap/hosts/serve/**"
+      - "protocol/**"
+      - "scripts/codegen/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/desktop.yml"
+  schedule:
+    - cron: "0 4 * * 1" # 周一 12:00 (UTC+8) 全量
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PYTHONFAULTHANDLER: "1"
+  PYTHONUTF8: "1"
+  QUESTORHARNESS_OPENAI_API_KEY: sk-ci-dummy
+  QUESTORHARNESS_PROVIDER: openai
+  QUESTORHARNESS_API_FORMAT: openai
+  QUESTORHARNESS_MODEL: ci-model
+  QUESTORHARNESS_BASE_URL: http://127.0.0.1:9/v1
+
+jobs:
+  desktop:
+    name: desktop
+    runs-on: windows-latest
+    timeout-minutes: 45
+    concurrency:
+      group: desktop-${{ github.ref }}
+      cancel-in-progress: true
+
+    defaults:
+      run:
+        working-directory: apps/desktop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (pyinstaller)
+        run: uv sync --extra dev --frozen
+
+      - name: Install Node deps (electron)
+        run: npm ci --no-fund --no-audit --loglevel=error
+
+      - name: Syntax check
+        run: npm run check
+
+      - name: Updater rollback matrix
+        run: npm test
+
+      - name: Build engine (PyInstaller onedir)
+        run: node scripts/build-engine.mjs
+
+      - name: Packaged engine handshake smoke
+        run: uv run python scripts/smoke-engine.py
+
+      - name: Soak smoke (60s)
+        run: node scripts/soak.mjs
+        env:
+          SOAK_SECONDS: "60"
+
+      - name: Upload engine artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-engine-${{ github.run_id }}
+          path: apps/desktop/dist
+          if-no-files-found: ignore
+          retention-days: 7
+
+  desktop-ui:
+    name: desktop-ui (informational)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    concurrency:
+      group: desktop-ui-${{ github.ref }}
+      cancel-in-progress: true
+
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev --frozen
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci --no-fund --no-audit --loglevel=error
+      - run: node scripts/build-engine.mjs
+      - run: npm --prefix ../web ci --no-fund --no-audit --loglevel=error
+      - run: npm --prefix ../web run build:web
+      - run: node scripts/e2e-electron.mjs
+      - name: Upload shell screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-ui-${{ github.run_id }}
+          path: |
+            apps/web/e2e/__screenshots__/electron-shell.png
+            apps/web/.e2e-electron-url.txt
+          if-no-files-found: ignore
+          retention-days: 7

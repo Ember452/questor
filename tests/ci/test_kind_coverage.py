@@ -50,3 +50,28 @@ def test_selftest_removing_a_mapping_turns_guard_red() -> None:
     finally:
         wire.STREAM_EVENT_TO_KINDS.clear()
         wire.STREAM_EVENT_TO_KINDS.update(original)
+
+
+def _card_slot_kinds(text: str) -> set[str]:
+    """从 `CARD_SLOTS` 对象字面量里取出帧 kind 键名。"""
+    import re
+
+    match = re.search(r"CARD_SLOTS[^{]*\{(?P<body>.*?)\n\};", text, re.S)
+    assert match, "CARD_SLOTS not found in cardSlots.ts"
+    return set(re.findall(r"^\s{2}([a-z_]+):", match.group("body"), re.M))
+
+
+def test_card_slots_cover_every_schema_kind() -> None:
+    """前端卡槽集合必须等于 schema 帧集合（新增 kind 不补槽位 = 红）。"""
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[2]
+    text = (repo / "apps/web/src/app/cardSlots.ts").read_text(encoding="utf-8")
+    assert _card_slot_kinds(text) == set(SERVER_FRAME_KINDS)
+
+
+def test_card_slot_parser_self_test() -> None:
+    """自证：少写一个 kind，解析结果就必须不等。"""
+    sample = "export const CARD_SLOTS: Record<X, Slot> = {\n  text: { item: 'say' },\n};\n"
+    assert _card_slot_kinds(sample) == {"text"}
+    assert _card_slot_kinds(sample) != set(SERVER_FRAME_KINDS)

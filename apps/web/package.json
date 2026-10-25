@@ -1,0 +1,58 @@
+{
+  "name": "@questor/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build:web",
+    "build:web": "tsc --noEmit && vite build --mode web",
+    "generate:protocol": "node ../../scripts/codegen/gen_wire_ts.mjs --schema ../../protocol/app-wire.schema.json --out src/generated/app-wire.ts",
+    "check:protocol": "node ../../scripts/codegen/gen_wire_ts.mjs --schema ../../protocol/app-wire.schema.json --out src/generated/app-wire.ts --check",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev:vite": "vite",
+    "test:web": "npm run build:web && playwright test"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@tanstack/react-virtual": "^3.14.22",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "i18next": "^26.3.6",
+    "jsonc-parser": "^3.3.1",
+    "lucide-react": "^0.468.0",
+    "monaco-editor": "0.53.0",
+    "prism-react-renderer": "^2.4.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-i18next": "^17.0.11",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.58.2",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "eslint": "^10.7.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.7.0",
+    "jsdom": "^29.1.1",
+    "json-schema-to-typescript": "^15.0.4",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.64.0",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "nanoid": "3.3.18"
+  }
+}

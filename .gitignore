@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+﻿# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -78,7 +78,7 @@ dmypy.json
 # ruff
 .ruff_cache/
 
-# 前端依赖
+# 鍓嶇渚濊禆
 node_modules/
 
 # Pyre type checker
@@ -96,7 +96,7 @@ uv.lock.bak
 # ---------------------------------------------------------------------------
 # IDE / editor
 # ---------------------------------------------------------------------------
-# ZCode agent session workspace (visualizations, scratch) — per-machine
+# ZCode agent session workspace (visualizations, scratch) 鈥?per-machine
 .zcode/
 
 # JetBrains (IntelliJ, PyCharm, ...)
@@ -145,21 +145,28 @@ temp/
 *.tmp
 
 # ---------------------------------------------------------------------------
-# Questor：本地调试 / 跑测试留下的临时输出（不提交）
-# ---------------------------------------------------------------------------
+# Questor锛氭湰鍦拌皟璇?/ 璺戞祴璇曠暀涓嬬殑涓存椂杈撳嚭锛堜笉鎻愪氦锛?# ---------------------------------------------------------------------------
 pytest_live.txt
 pytest_live*.txt
 scratch/
 .tmp-baseline/
 *.out
 *.pid
-# 本地一次性/临时脚本（下划线前缀 = scratch，不入库）
-scripts/_*
-# 例外：共用守卫 kit 是入库资产（新守卫必须复用它；不要再靠 `git add -f`）。
-!scripts/_guard_kit.py
+# 鏈湴涓€娆℃€?涓存椂鑴氭湰锛堜笅鍒掔嚎鍓嶇紑 = scratch锛屼笉鍏ュ簱锛?scripts/_*
+# 渚嬪锛氬叡鐢ㄥ畧鍗?kit 鏄叆搴撹祫浜э紙鏂板畧鍗繀椤诲鐢ㄥ畠锛涗笉瑕佸啀闈?`git add -f`锛夈€?!scripts/_guard_kit.py
 !scripts/__init__.py
-# 本地专用文档（审计提示词库、个人笔记等）一律不入库
+# 鏈湴涓撶敤鏂囨。锛堝璁℃彁绀鸿瘝搴撱€佷釜浜虹瑪璁扮瓑锛変竴寰嬩笉鍏ュ簱
 *.local.md
-# 本地 CLI 运行时数据：event-log store（state.db）+ 记忆库（memory.db / memory_store/），均不入库
+# 鏈湴 CLI 杩愯鏃舵暟鎹細event-log store锛坰tate.db锛? 璁板繂搴擄紙memory.db / memory_store/锛夛紝鍧囦笉鍏ュ簱
 .questor/
 .questorharness/
+
+# web e2e artifacts
+test-results/
+playwright-report/
+.e2e-preview.log
+.e2e-electron-url.txt
+
+# PyInstaller spec (desktop packaging must be tracked)
+!apps/desktop/packaging/questor-engine.spec
+.e2e-host.log

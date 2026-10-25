@@ -1,0 +1,86 @@
+.card {
+  border: 1px solid var(--app-border, #1f2833);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 6px 0;
+  background: var(--surface-raised, #131a22);
+}
+
+.say {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.streaming::after {
+  content: "▌";
+  color: var(--app-accent, #60a5fa);
+  animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--app-muted, var(--muted, #8b9aab));
+  font-size: 12px;
+}
+
+.tool {
+  color: var(--app-accent, var(--app-accent, #7dd3fc));
+  font-weight: 600;
+}
+
+.ok {
+  color: var(--app-success, #34d399);
+}
+
+.error {
+  color: var(--app-danger, var(--app-danger, #f87171));
+}
+
+.output {
+  margin: 6px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.detail {
+  margin: 6px 0 0;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--app-muted, var(--muted, #8b9aab));
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle, var(--app-border, #334155));
+  background: var(--surface-sunken, var(--app-bg, #0b1220));
+  color: inherit;
+  font: inherit;
+}
+
+.phase {
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--app-muted, var(--muted, #8b9aab));
+}

@@ -76,7 +76,7 @@
 | `questorharness.contracts` | 118 |
 | `questorharness.platform` | 65 |
 | `questorharness.capabilities` | 62 |
-| `questorharness.config` | 59 |
+| `questorharness.config` | 60 |
 | `questorharness.providers` | 59 |
 | `questorharness.runtime` | 34 |
 | `questorharness.api` | 25 |

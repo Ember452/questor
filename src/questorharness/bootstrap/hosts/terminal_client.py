@@ -101,7 +101,11 @@ class TerminalRenderer:
             self.done.set()
 
     async def _ask_approval(self, frame: dict[str, Any]) -> None:
-        """审批：y 通过，其余拒绝（fail-closed 由服务端兜底）。"""
+        """审批：y 通过，其余拒绝（fail-closed 由服务端兜底）。编辑类先给 diff 摘要。"""
+        detail = str(frame.get("detail") or "").strip()
+        if detail:
+            preview = "\n".join(detail.splitlines()[:6])
+            self._console.print(f"[dim]{preview}[/dim]")
         prompt = f"允许 {frame.get('tool')} 执行 {frame.get('subject')}? [y/N] "
         answer = await asyncio.to_thread(input, prompt)
         decision = "approve" if answer.strip().lower() in {"y", "yes"} else "deny"

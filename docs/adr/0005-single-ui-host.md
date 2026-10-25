@@ -77,7 +77,7 @@
    - `--backend-only` CLI 开关（`bootstrap/cli/main.py`）。
    在判死前**不加任何新能力**；缺陷照修（2026-10-24 的宿主兜底与
    `plan_mode_change` 修复属于维持期债务偿还，不是续命）。
-3. **Electron 而非 Tauri**：与 DeepCode 的 Tauri 宿主对勘后仍取 Electron——
+3. **Electron 而非 Tauri**：对勘 Tauri 宿主方案后仍取 Electron——
    Node 侧生态（DevTools、崩溃采集、自动更新链）与本仓 React renderer 的
    现状更契合；Tauri 的 Rust 壳对当前团队是纯增量学习成本，收益（二进制
    体积）不落在关键路径上。

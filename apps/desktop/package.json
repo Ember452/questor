@@ -1,0 +1,39 @@
+{
+  "name": "@questor/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Questor Electron shell (spawns python -m questorharness --studio-host)",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test electron/updater.test.mjs",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs",
+    "build:engine": "node scripts/build-engine.mjs",
+    "dist": "electron-builder --win nsis",
+    "smoke": "python scripts/smoke-engine.py",
+    "e2e": "node scripts/e2e-electron.mjs",
+    "soak": "node scripts/soak.mjs"
+  },
+  "devDependencies": {
+    "electron": "^44.9.2",
+    "electron-builder": "^25.1.8",
+    "playwright": "^1.58.2"
+  },
+  "build": {
+    "appId": "dev.questor.studio",
+    "productName": "Questor",
+    "files": [
+      "electron/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "extraResources": [
+      {
+        "from": "dist/engine",
+        "to": "engine"
+      }
+    ]
+  }
+}

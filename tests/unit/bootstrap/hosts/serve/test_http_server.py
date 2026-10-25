@@ -33,7 +33,7 @@ def test_unauthenticated_request_is_rejected() -> None:
         server, _ = _server()
         port = await server.start()
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(trust_env=False) as client:
                 response = await client.get(
                     f"http://127.0.0.1:{port}/rt/r1/profile",
                     headers={"Origin": f"http://127.0.0.1:{port}"},
@@ -54,7 +54,7 @@ def test_wrong_host_origin_and_token_are_rejected() -> None:
         port = await server.start()
         cookie = {auth.COOKIE_NAME: credential.token}
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(trust_env=False) as client:
                 bad_host = await client.get(
                     f"http://127.0.0.1:{port}/x",
                     headers={"Host": "evil.example.com", "Origin": f"http://127.0.0.1:{port}"},
@@ -88,7 +88,7 @@ def test_authorized_request_echoes_client_id() -> None:
         server, credential = _server()
         port = await server.start()
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(trust_env=False) as client:
                 response = await client.get(
                     f"http://127.0.0.1:{port}/rt/r1/profile",
                     headers={
@@ -112,7 +112,7 @@ def test_get_without_origin_is_allowed() -> None:
         server, credential = _server()
         port = await server.start()
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(trust_env=False) as client:
                 response = await client.get(
                     f"http://127.0.0.1:{port}/rt/r1/events",
                     cookies={auth.COOKIE_NAME: credential.token},
@@ -131,7 +131,7 @@ def test_post_without_origin_is_rejected() -> None:
         server, credential = _server()
         port = await server.start()
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(trust_env=False) as client:
                 response = await client.post(
                     f"http://127.0.0.1:{port}/rt/r1/submit",
                     json={"line": "hi", "clientRequestId": "r1"},
@@ -152,7 +152,7 @@ def test_client_identity_cookie_keeps_approvals_same_owner() -> None:
         server, credential = _server()
         port = await server.start()
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(trust_env=False) as client:
                 first = await client.get(
                     f"http://127.0.0.1:{port}/rt/r1/profile",
                     cookies={auth.COOKIE_NAME: credential.token},
@@ -181,9 +181,38 @@ def test_allow_no_auth_is_dev_only_and_explicit() -> None:
         server, _ = _server(allow_no_auth=True)
         port = await server.start()
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(trust_env=False) as client:
                 response = await client.get(f"http://127.0.0.1:{port}/x")
             assert response.status_code == 200
+        finally:
+            await server.close()
+
+    asyncio.run(scenario())
+
+
+def test_static_root_serves_spa_without_auth(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Electron 在种 cookie 前就要能加载 index；/rt 仍走鉴权。"""
+    (tmp_path / "index.html").write_text("<html>questor</html>", encoding="utf-8")
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "assets/app.js").write_text("console.log(1)", encoding="utf-8")
+
+    async def scenario() -> None:
+        server, _ = _server()
+        server._static_root = tmp_path.resolve()  # noqa: SLF001 - 直接注入静态根
+        port = await server.start()
+        try:
+            async with httpx.AsyncClient(trust_env=False) as client:
+                root = await client.get(f"http://127.0.0.1:{port}/")
+                asset = await client.get(f"http://127.0.0.1:{port}/assets/app.js")
+                missing = await client.get(f"http://127.0.0.1:{port}/nope")
+                guarded = await client.get(f"http://127.0.0.1:{port}/rt/r1/profile")
+            assert root.status_code == 200 and "questor" in root.text
+            assert asset.status_code == 200 and asset.headers["content-type"] in {
+                "text/javascript",
+                "application/javascript",
+            }
+            assert missing.status_code == 404
+            assert guarded.status_code == 401
         finally:
             await server.close()
 

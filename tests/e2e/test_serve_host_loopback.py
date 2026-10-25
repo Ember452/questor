@@ -50,7 +50,7 @@ def test_loopback_auth_matrix_and_client_ownership(tmp_path: Path, monkeypatch) 
         origin = {"Origin": base}
         cookie = {auth.COOKIE_NAME: credential.token}
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(trust_env=False) as client:
                 assert (
                     await client.get(f"{base}/rt/r1/profile", headers=origin)
                 ).status_code == 401
@@ -123,7 +123,7 @@ def test_settled_prompt_is_rejected_twice(tmp_path: Path) -> None:
         port = await server.start()
         base = f"http://127.0.0.1:{port}"
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(trust_env=False) as client:
                 response = await client.post(
                     f"{base}/rt/r1/approve",
                     headers={"Origin": base},
@@ -173,7 +173,7 @@ def test_two_clients_race_the_same_approval(tmp_path: Path, monkeypatch) -> None
         origin = {"Origin": base}
         cookie = {auth.COOKIE_NAME: credential.token}
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(trust_env=False) as client:
                 submit = await client.post(
                     f"{base}/rt/r1/submit",
                     headers={**origin, auth.CLIENT_HEADER: "owner"},

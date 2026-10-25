@@ -56,3 +56,4 @@
 /.importlinter @Ember452
 /.pre-commit-config.yaml @Ember452
 /.github/workflows/ @Ember452
+/apps/ @Ember452

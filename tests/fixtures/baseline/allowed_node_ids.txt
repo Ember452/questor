@@ -42,3 +42,15 @@ tests/unit/bootstrap/hosts/test_tool_policy.py::test_disallowed_only_passes_thro
 tests/unit/bootstrap/hosts/test_tool_policy.py::test_no_flags_means_inherit
 tests/unit/bootstrap/hosts/test_tool_policy.py::test_unknown_tool_name_is_rejected
 tests/unit/bootstrap/hosts/test_tool_policy.py::test_wildcard_means_everything
+tests/ci/test_vendor_pristine.py::test_matcher_self_test
+tests/ci/test_vendor_pristine.py::test_vendor_manifest_covers_every_change
+tests/ci/test_web_guards.py::test_no_websocket_transport
+tests/ci/test_web_guards.py::test_no_app_server_contract
+tests/ci/test_web_guards.py::test_generated_contract_and_fixtures_exist
+tests/ci/test_web_guards.py::test_scanner_self_test
+tests/ci/test_css_vars.py::test_every_bare_var_is_defined
+tests/ci/test_css_vars.py::test_alias_covers_every_legacy_variable
+tests/ci/test_css_vars.py::test_any_var_parses_with_fallback
+tests/ci/test_kind_coverage.py::test_card_slots_cover_every_schema_kind
+tests/ci/test_kind_coverage.py::test_card_slot_parser_self_test
+tests/unit/bootstrap/hosts/serve/test_http_server.py::test_static_root_serves_spa_without_auth
