@@ -92,8 +92,22 @@ FILE_BUDGETS = {"src/questorharness/commands/registry.py": 250}
 DIR_BUDGETS = {"src/questorharness/commands/families": 600}
 DROPPED_UI_IMPORTS = ("textual", "prompt_toolkit")
 # prompt-toolkit 以终端瘦客户端的输入层身份回归（ADR-0005 Updated 2026-10-26）；
-# 仅限 terminal_client.py 的输入编辑（补全/历史），其他文件仍然判红。
-DROPPED_UI_EXCEPTIONS = {"src/questorharness/bootstrap/hosts/terminal_client.py": {"prompt_toolkit"}}
+# 仅限门面文件与 hosts/terminal/ 包内的输入/渲染层（plan03 A1），其他文件仍然判红。
+# 键以 "/" 结尾 = 目录级放行，否则为单文件放行。
+DROPPED_UI_EXCEPTIONS = {
+    "src/questorharness/bootstrap/hosts/terminal_client.py": {"prompt_toolkit"},
+    "src/questorharness/bootstrap/hosts/terminal/": {"prompt_toolkit"},
+}
+
+
+def _exempt_modules(rel: str) -> set[str]:
+    """某文件被放行可 import 的"已删 UI"包（单文件键 + 目录前缀键的并集）。"""
+
+    allowed = set(DROPPED_UI_EXCEPTIONS.get(rel, set()))
+    for path, modules in DROPPED_UI_EXCEPTIONS.items():
+        if path.endswith("/") and rel.startswith(path):
+            allowed |= modules
+    return allowed
 
 
 def _rel(path: Path, root: Path) -> str:
@@ -134,9 +148,9 @@ def find_dropped_ui_imports(root: Path) -> list[str]:
                 if marker in text:
                     hits.append(f"{_rel(path, root)}: {marker}")
                     break
-        # 登记的例外文件可以 import 特定的"已删 UI"包（如 prompt_toolkit 作为输入层）。
+        # 登记的例外文件/目录可以 import 特定的"已删 UI"包（如 prompt_toolkit 作为输入层）。
         rel = _rel(path, root)
-        for module in DROPPED_UI_EXCEPTIONS.get(rel, set()):
+        for module in _exempt_modules(rel):
             hits = [h for h in hits if not (h.startswith(rel) and module in h)]
     return hits
 

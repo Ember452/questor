@@ -1,7 +1,7 @@
 # 计划 03：终端版（REPL + 覆盖层）
 
-<!-- known-stale-refs: tests/ci/test_terminal_theme_usage.py, tests/ci/test_unsupported_badges.py -->
-<!-- 上方两条是**前向引用**（反向棘轮）：两个守卫在波 A 创建，创建它们的那一刀必须同时删掉对应条目。 -->
+<!-- known-stale-refs: tests/ci/test_terminal_theme_usage.py -->
+<!-- 上方是**前向引用**（反向棘轮）：该守卫在波 A5 创建，创建它的那一刀必须同时删掉此条目。 -->
 
 - Status: Draft Rev2（2026-10-25 立项；同日经评审 10 条修订后重写，见附录 A）
 - 基线：分支 `feat/terminal-repl`，HEAD `57fb980`
@@ -192,7 +192,7 @@ src/questorharness/bootstrap/hosts/terminal/
 | 新开包四件套 | `terminal/` | 目录 + 带 `__all__` 的 `__init__.py` + 包 `AGENTS.md` + `CODEOWNERS` 规则 + `AGENTS.md` 路由表加行（:48-72，现行 `:69` 那行改为指向本包）+ `--refresh-baseline --reason "plan03 波A: terminal 包"` |
 | prompt_toolkit 白名单扩展 | `scripts/guards/check_layout.py:93-96` | 从单文件放行改为 `terminal/` 前缀 + `terminal_client.py` 两者；**同刀保判红**：未登记文件 import prompt_toolkit 仍必须红 |
 | 门面保留 | `hosts/terminal_client.py` | `run_terminal_repl` / `run_terminal_client` / `build_serve_host` / `merge_tool_overrides` / `default_profile_root` / `completion_catalog` / `_frame_from_sse` 全部保名（B11 的导入者在用）；实现迁入 `terminal/` 后此处只 re-export |
-| 映射表加列 | `docs/plan/mapping/questor-coding.md` + `questor-personal.md` | **F2 的根治**：两张表都加 `id` / `status(ready\|declared\|absent)` 两列（A1–A6 直接用表 A 的 id）；现有散文式“暂不暴露”逐行改成结构化登记 |
+| 映射表（终端） | `docs/plan/mapping/terminal-coding.md` | **F2 的根治**（A1 已落）：新建终端专用映射表，列 = `id` / `功能` / `status(ready\|declared\|absent)` / `终端载体` / `来源`；`unsupported.py` 的 key 集合必须等于 `status=absent` 的行集合，双向断言见 `tests/ci/test_unsupported_badges.py`。**偏离登记**：原计划写“给 `questor-coding.md` 加两列”，实际改为新建终端表——web 的功能行与终端的载体行不是同一张表，混在一起会让两边都漂 |
 | 新增 catalog 路由 | `serve/routes.py` + `serve/catalog/` | 波 D：`GET /catalog/{kind}` → 一个 provider 注册表（每 kind 一个纯函数）；**响应 schema 不得进 `ServerFrame` 联合**（否则触发 `cardSlots` 全等守卫，§2.3 末行） |
 | `apps/web` 同步（唯一例外） | `apps/web/src/app/cardSlots.ts` + `generated/` | 仅当新增 wire kind 时：补一条槽位 + 重生生成物；**不得改页面/交互**。`test_card_slots_cover_every_schema_kind` 会强制 |
 | 形态门控 | 全终端代码 | 面板/命令可见性一律由 `GET /profile` 的 `ui.capabilities` 决定；**禁止硬编码 `profile_id="coding"`**（现 `terminal_client.py:319` 就是硬编码，波 A 同刀改为参数默认取 bundle 的 `is_default`）；`rg "coding" terminal/` 必须归零 |
@@ -357,12 +357,13 @@ UNSUPPORTED: dict[str, str] = {
 }
 ```
 
-**前置（波 A 同刀）**：映射表两张都加 `id` / `status(ready\|declared\|absent)` 两列，现有散文式“暂不暴露”改为
-结构化行（见 §2.3）。不加这两列，下面的守卫 #1 **无法实现**，只能人肉对账。
+**前置（波 A1 已落）**：终端映射表 `docs/plan/mapping/terminal-coding.md` 自带 `id` / `status` 两列，
+`unsupported.py` 与它做双向断言（见 §2.3 的偏离登记）。原版“给 `questor-coding.md` 加两列”已改为
+新建终端表：web 的功能行与终端的载体行不同源，混表必漂。
 
-**守卫** `tests/ci/test_unsupported_badges.py`（三条都必须具判红能力，且带自证用例）：
-1. **双向对齐**：`set(UNSUPPORTED)` == 映射表中 `status ∈ {absent, declared}` 且带 `A*` id 的行集合
-   （左边多 = 穷渲染；右边多 = 真功能黑洞）；
+**守卫** `tests/ci/test_unsupported_badges.py`（三条判红，#1 已在 A1 落地；#2/#3 随渲染代码在 A5 起补齐）：
+1. **双向对齐**（已落）：`set(UNSUPPORTED)` == 映射表中 `status = absent` 的行集合
+   （左边多 = 穷渲染；右边多 = 真功能黑洞）；`declared` 行不挂徽标（如 A4 部分可用）；
 2. **徽标必须登记**：AST 扫描终端包，出现的 `⊘ 未实现` 字面量必须带 `UNSUPPORTED` 里的 id（随手写“未实现”字符串即红）；
 3. **落地即注销**：某 id 对应能力在波 D/E 落地（映射表转 `ready`）后，`UNSUPPORTED` 里残留该 id → 红。
 

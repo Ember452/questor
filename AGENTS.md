@@ -66,7 +66,7 @@ tests                unit / integration / e2e / ci（守卫契约）/ fixtures/b
 | serve 宿主与线协议（规划中） | `docs/adr/0006-serve-host-and-wire-protocol.md` |
 | 前端基座与契约 codegen（规划中） | `docs/adr/0007-frontend-base-and-contract-codegen.md` |
 | 形态与界面能力位（规划中） | `docs/adr/0008-profile-driven-modes.md` |
-| 终端瘦客户端与 serve 宿主（规划中） | `src/questorharness/bootstrap/hosts/terminal_client.py` |
+| 终端瘦客户端（门面与渲染/输入层） | `src/questorharness/bootstrap/hosts/terminal_client.py` + `src/questorharness/bootstrap/hosts/terminal/` |
 | 形态 bundle 与能力位 | `src/questor/profiles`（数据）+ `src/questorharness/profiles`（解析） |
 | 渠道适配（飞书 / QQ） | `src/questorharness/surfaces/channels` |
 | 产品网关与群策略 | `src/questor/gateway/runtime.py` |

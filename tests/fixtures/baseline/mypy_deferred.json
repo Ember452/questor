@@ -23,6 +23,7 @@
   "whitelist_modules": 38,
   "whitelist_roots": [
     "src/questorharness/bootstrap/hosts/serve",
+    "src/questorharness/bootstrap/hosts/terminal",
     "src/questorharness/profiles",
     "src/questorharness/surfaces/channels/filenames.py",
     "src/questorharness/surfaces/channels/message_chunks.py",

@@ -117,6 +117,9 @@ files = [
     # 阶段 1：形态加载器与 serve 宿主零错误，直接进严格白名单（不抬高 deferred 池）。
     "src/questorharness/profiles",
     "src/questorharness/bootstrap/hosts/serve",
+    # plan03: the terminal presentation layer is written annotated from the first
+    # commit, so it joins the strict whitelist instead of the deferred pool.
+    "src/questorharness/bootstrap/hosts/terminal",
     # W8 unit 2: both halves of the split lsp helpers join the strict whitelist
     # instead of enlarging the deferred pool.
     "src/questorharness/providers/lsp/python_index.py",
