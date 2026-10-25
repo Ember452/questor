@@ -1,0 +1,108 @@
+"""`app.py`：提交裁决、哨兵读取、单次与交互两种驱动方式。"""
+
+from __future__ import annotations
+
+import asyncio
+from types import SimpleNamespace
+
+from questorharness.bootstrap.hosts.terminal import app as app_module
+
+
+class _Transport:
+    def __init__(self, *, status: int = 202, body: bytes = b"{}") -> None:
+        self.status = status
+        self.body = body
+        self.calls: list[tuple[str, str]] = []
+
+    async def request(self, method: str, path: str, **_kwargs: object) -> SimpleNamespace:
+        self.calls.append((method, path))
+        return SimpleNamespace(status=self.status, body=self.body, headers={}, stream=None)
+
+
+def _host(transport: _Transport) -> SimpleNamespace:
+    return SimpleNamespace(
+        transport=transport,
+        authority=SimpleNamespace(prompt_timeout=300.0),
+    )
+
+
+def _renderer() -> SimpleNamespace:
+    return SimpleNamespace(
+        note_queued=lambda: None,
+        expect_turn=lambda: None,
+        note_cancel_requested=lambda: None,
+        busy=False,
+        pending_turns=0,
+        done=asyncio.Event(),
+    )
+
+
+def test_completion_catalog_maps_names_and_aliases() -> None:
+    catalog = app_module.completion_catalog(
+        [{"name": "compact", "description": "压缩", "aliases": ["cmp"]}]
+    )
+    assert catalog == {"/compact": "压缩", "/cmp": "压缩"}
+
+
+def test_submit_reports_started_with_turn_id() -> None:
+    transport = _Transport(body=b'{"turnId":"t-1","state":"started"}')
+    result = asyncio.run(app_module.submit(_host(transport), "hello"))  # type: ignore[arg-type]
+    assert result == app_module.SubmitResult(turn_id="t-1", state="started")
+    assert transport.calls == [("POST", "/rt/r1/submit")]
+
+
+def test_submit_reports_queued() -> None:
+    transport = _Transport(status=202, body=b'{"turnId":"t-2","state":"queued"}')
+    result = asyncio.run(app_module.submit(_host(transport), "again"))  # type: ignore[arg-type]
+    assert result.state == "queued"
+
+
+def test_submit_refusal_never_looks_like_success() -> None:
+    transport = _Transport(status=409, body=b'{"code":"turn.busy","message":"busy"}')
+    result = asyncio.run(app_module.submit(_host(transport), "x"))  # type: ignore[arg-type]
+    assert result == app_module.SubmitResult(turn_id=None, state="refused")
+
+
+def test_read_line_returns_eof_and_interrupt_sentinels(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    calls = {"n": 0}
+
+    def fake_input(_prompt: str = "") -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise KeyboardInterrupt
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    assert asyncio.run(app_module.read_line(None)) == app_module.INTERRUPT
+    assert asyncio.run(app_module.read_line(None)) == app_module.EOF
+
+
+def test_single_prompt_mode_waits_for_turn_done() -> None:
+    transport = _Transport(body=b'{"turnId":"t-1","state":"started"}')
+    renderer = _renderer()
+
+    async def scenario() -> int:
+        task = asyncio.create_task(
+            app_module.drive_turns(_host(transport), renderer, None, "hi")  # type: ignore[arg-type]
+        )
+        await asyncio.sleep(0.01)
+        renderer.done.set()
+        return await asyncio.wait_for(task, timeout=2)
+
+    assert asyncio.run(scenario()) == 0
+
+
+def test_eof_exits_without_submitting(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    transport = _Transport()
+    renderer = _renderer()
+    monkeypatch.setattr(app_module, "read_line", _eof)
+
+    result = asyncio.run(
+        app_module.drive_turns(_host(transport), renderer, None, None)  # type: ignore[arg-type]
+    )
+    assert result == 0
+    assert transport.calls == []
+
+
+async def _eof(_session: object) -> str:
+    return app_module.EOF

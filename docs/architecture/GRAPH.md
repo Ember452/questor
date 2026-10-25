@@ -92,7 +92,7 @@
 
 ### 目录（>=17 个非 init 源文件）
 
-- 无
+- `src/questorharness/bootstrap/hosts/terminal`: 17 files
 
 ## vacuous-contracts
 

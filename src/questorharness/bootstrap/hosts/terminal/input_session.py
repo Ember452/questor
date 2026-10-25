@@ -18,7 +18,11 @@ _PROMPT = "> "
 
 
 def build(
-    catalog: Mapping[str, str], *, history_path: Path | None = None, base: Path | None = None
+    catalog: Mapping[str, str],
+    *,
+    history_path: Path | None = None,
+    base: Path | None = None,
+    key_bindings: Any | None = None,
 ) -> Any | None:
     """建一个 PromptSession；非 TTY 或缺依赖时返回 None（调用方回退裸 input）。"""
 
@@ -42,6 +46,7 @@ def build(
         complete_while_typing=True,
         enable_history_search=True,
         reserve_space_for_menu=6,
+        key_bindings=key_bindings,
     )
 
 

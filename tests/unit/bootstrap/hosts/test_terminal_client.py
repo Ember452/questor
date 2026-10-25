@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from types import SimpleNamespace
 from typing import Any
 
@@ -81,5 +82,5 @@ def test_completion_catalog_maps_names_and_aliases() -> None:
 
 def test_build_prompt_session_returns_none_off_tty(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """非 TTY（管道/CI）一律回退裸 input，不建交互会话。"""
-    monkeypatch.setattr(terminal_client.sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
     assert terminal_client._build_prompt_session([]) is None
