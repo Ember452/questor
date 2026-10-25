@@ -527,7 +527,14 @@ Agents）在五卡之后逐张评估。
   `turn_done` 后自动推进），personal 的插话 UI 归 4a。
 - **appearance 四包保留**（2026-10-25 实测校正）：`themes` / `output_styles` / `keybindings`
   仍被 `runtime.py:29` 与 `/theme`、`/output-style`、键位加载使用，不是删 UI 后的残留；
-  `vim` 包无包外引用，另立开放项。
+  `vim` 包已于 `a60da2d` 删除（零引用），`settings.vim_mode` 开关保留兼容。
+- **子代理工具面四段断链已修（2026-10-25，分支 `fix/subagent-tool-surface`）**：
+  ① 内置定义改用注册表真名（`edit_file`/`write_file`，含 `tools` 白名单），并加
+  `agent-tool-names` 守卫（定义里的名字不在注册表 → 红，含守卫自证）；
+  ② `AgentProfile`/`TeammateSpawnConfig`/`build_inherited_cli_flags` 把白/黑名单下发给子进程
+  （`--allowed-tools` / `--disallowed-tools`）；③ CLI 真正消费这两个 flag，`--allowed-tools`
+  定义为**严格白名单**（其余工具补进 denied），未知名字 fail-closed；④ `vim/` 死包删除。
+  遗留：`in_process_teammate` 后端不经过 argv，目前不应用白/黑名单（见开放项）。
 - **评审对质（2026-10-25，分支一复审）**：H1 Origin 仅限改状态方法；H2 SSE 先订阅再取重放快照
   并用 `seq <= replayed_to` 去重；H3 租约释放移入 `finally` + `shield` 广播 turn_done；
   M1 幂等重放回真实 `queued` 状态；M2 编辑审批不再丢 diff（`detail` 字段）；
@@ -538,15 +545,18 @@ Agents）在五卡之后逐张评估。
 
 **开放（执行 agent 不得代答）**：
 
-1. `vim` 包无包外引用（2026-10-25 实测）——删除或接入键位表，阶段 4a 前裁决。
-2. `baseline-check` 在 2026-10-25 首次全量跑中红过一次、随后两次绿，未能复现；
+1. `in_process_teammate` 后端不应用 agent 定义的 `tools`/`disallowed_tools`（spawn 只对
+   subprocess 生效）——要么在 in-process 路径合并进 `PermissionChecker.denied_tools`，
+   要么在 ADR 明写“仅 subprocess 强制”，personal 开工前裁决。
+2. `/vim` 开关目前只持久化、不产生编辑行为（REPL 无行编辑器）——接入编辑或删命令，阶段 4a 前裁决。
+3. `baseline-check` 在 2026-10-25 首次全量跑中红过一次、随后两次绿，未能复现；
    CI 再现时必须抓该 step 的 stdout 存档（不归因、不掩盖）。
-3. `src/questor/runtime.py:45` 产品 REPL 入口去留——阶段 2 前置核查后裁决。
-4. `protocol.py` 若含 backend_host 之外内容，拆分方案——阶段 2 前置核查后定。
-5. studio 宿主 prompt_surface flavor 时机（4a 或顺延）。
-6. ADR-0006 §5 "8 种"勘误提交时点（默认随阶段 1，用户可提前）。
-7. 4b 之后是否追加 RememberCard / MeterRail / Jobs / Agents 四卡（默认后置池）。
-8. 中文术语表（渠道 / 任务 / 团队 / 记忆召回 / 快照）定稿时点——建议 4a 之前。
+4. `src/questor/runtime.py:45` 产品 REPL 入口去留——阶段 2 前置核查后裁决。
+5. `protocol.py` 若含 backend_host 之外内容，拆分方案——阶段 2 前置核查后定。
+6. studio 宿主 prompt_surface flavor 时机（4a 或顺延）。
+7. ADR-0006 §5 "8 种"勘误提交时点（默认随阶段 1，用户可提前）。
+8. 4b 之后是否追加 RememberCard / MeterRail / Jobs / Agents 四卡（默认后置池）。
+9. 中文术语表（渠道 / 任务 / 团队 / 记忆召回 / 快照）定稿时点——建议 4a 之前。
 
 ## 9. 与计划 01 及引擎功能线的协调
 
