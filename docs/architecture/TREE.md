@@ -60,7 +60,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/terminal/unsupported.py` | 37 |
 | `src/questorharness/bootstrap/hosts/terminal/width.py` | 104 |
 | `src/questorharness/bootstrap/hosts/terminal/wire_view.py` | 426 |
-| `src/questorharness/bootstrap/hosts/terminal_client.py` | 170 |
+| `src/questorharness/bootstrap/hosts/terminal_client.py` | 181 |
 | `src/questorharness/bootstrap/hosts/tool_policy.py` | 65 |
 | `src/questorharness/bootstrap/runtime.py` | 831 |
 | `src/questorharness/capabilities/__init__.py` | 7 |

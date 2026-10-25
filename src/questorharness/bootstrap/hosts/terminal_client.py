@@ -19,7 +19,7 @@ from questorharness.bootstrap.hosts.terminal import app as terminal_app
 from questorharness.bootstrap.hosts.terminal.renderer import TerminalRenderer
 from questorharness.bootstrap.hosts.terminal.renderer import frame_from_sse as _frame_from_sse
 from questorharness.bootstrap.runtime import build_runtime
-from questorharness.profiles import load_profile
+from questorharness.profiles import ProfileError, list_profiles, load_profile
 
 # 私有别名：保持既有导入方（宿主/测试）零改动。
 SubmitResult = terminal_app.SubmitResult
@@ -46,6 +46,15 @@ __all__ = [
     "run_terminal_client",
     "run_terminal_repl",
 ]
+
+
+def default_profile_id(root: Path) -> str:
+    """形态 bundle 里标了 `is_default` 的那一个；没有就报错（不隐式兼容某个名字）。"""
+
+    for profile in list_profiles(root):
+        if profile.is_default:
+            return profile.name
+    raise ProfileError(f"{root}: no profile is marked is_default")
 
 
 def default_profile_root() -> Path:
@@ -93,13 +102,15 @@ async def build_serve_host(
     restore_tool_metadata: dict[str, object] | None = None,
     permission_mode: str | None = None,
     profile_root: Path | None = None,
-    profile_id: str = "coding",
+    profile_id: str | None = None,
     overrides: Mapping[str, object] | None = None,
 ) -> ServeHost:
     """装配 runtime 与 serve 宿主（REPL 与 Studio 共用）。"""
     authority = Authority()
     root = profile_root or default_profile_root()
-    profile = load_profile(root, profile_id)
+    # 形态是数据不是分支（plan03 §2.3）：默认取值也来自 bundle 的 is_default，不写死名字。
+    resolved_id = profile_id or default_profile_id(root)
+    profile = load_profile(root, resolved_id)
     extra = merge_tool_overrides(profile, overrides)
     runtime = await build_runtime(
         cwd=cwd,
@@ -124,7 +135,7 @@ async def build_serve_host(
         runtime,
         authority=authority,
         profile_root=root,
-        profile_id=profile_id,
+        profile_id=resolved_id,
     )
 
 
