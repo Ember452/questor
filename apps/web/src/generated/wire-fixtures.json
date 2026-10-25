@@ -1,0 +1,93 @@
+[
+  {
+    "detail": "+3/-1\n@@ -1 +1,3 @@\n-old\n+new",
+    "id": "approval-1",
+    "kind": "approval_request",
+    "seq": 1,
+    "subject": "src/app.py",
+    "tool": "edit"
+  },
+  {
+    "id": "ask-1",
+    "kind": "ask_request",
+    "question": "which file?",
+    "seq": 2
+  },
+  {
+    "kind": "compaction_done",
+    "ok": true,
+    "seq": 3,
+    "trigger": "auto"
+  },
+  {
+    "attempt": 1,
+    "kind": "compaction_progress",
+    "phase": "compact_retry",
+    "seq": 4
+  },
+  {
+    "kind": "compaction_started",
+    "seq": 5,
+    "trigger": "auto"
+  },
+  {
+    "blocks": [
+      {
+        "text": "done",
+        "type": "text"
+      }
+    ],
+    "kind": "message",
+    "seq": 6,
+    "usage": {
+      "inputTokens": 3,
+      "outputTokens": 4
+    }
+  },
+  {
+    "kind": "notice",
+    "level": "info",
+    "seq": 7,
+    "text": "status"
+  },
+  {
+    "kind": "stream_reset",
+    "reason": "replay_gap",
+    "seq": 13
+  },
+  {
+    "kind": "text",
+    "seq": 9,
+    "text": "hello"
+  },
+  {
+    "kind": "tool_dispatch",
+    "seq": 10,
+    "tool": "bash",
+    "toolCallId": "bash-1-1"
+  },
+  {
+    "isError": false,
+    "kind": "tool_result",
+    "output": "ok",
+    "seq": 11,
+    "tool": "bash",
+    "toolCallId": "bash-1-1"
+  },
+  {
+    "cancelled": false,
+    "checkpointTurn": false,
+    "durationMs": 42,
+    "kind": "turn_done",
+    "outcome": "completed",
+    "seq": 12,
+    "turnId": "turn-0001"
+  },
+  {
+    "index": 1,
+    "kind": "turn_started",
+    "seq": 13,
+    "turnId": "turn-0001",
+    "via": "studio"
+  }
+]

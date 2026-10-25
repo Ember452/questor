@@ -7,25 +7,55 @@
 
 ## 禁区
 
-- `src/generated/**`
-- `package-lock.json`
+- `src/styles/tokens.css`
 
 ## 已改
 
-- `package.json` — scripts 改为 owned（lint/typecheck/test/build:web/check:protocol），删 tauri/sidecar 类脚本
+- `package.json` — scripts 改为 owned；新增 `@tanstack/react-virtual`
+- `package-lock.json` — 新增 owned 依赖后的锁文件
 - `vite.config.ts` — version 读取改为常量；web 输出目录改为 `dist`
 - `index.html` — 标题改 Questor；入口改 `webMain.tsx`
+- `src/App.module.css` — 重写为 4a 临时外壳样式
+- `src/App.tsx` — 重写为 wire-native 壳
+- `src/webMain.tsx` — 改指向新 App
 
 ## 已裁
 
-- `src/desktopMain.tsx` — Tauri 桌面入口（Web 形态不适用）
-- `src/main.tsx` — 指向 Tauri 入口，随之删除
+- `src/features/**`
+- `src/shared/ui-kit/**`
+- `src/shared/transport/**`
+- `src/shared/confirmAction.ts`
+- `src/generated/app-server.ts`
+- `src/platform/**`
+- `src/components/**`
+- `src/rpc/**`
+- `src/app/**`
+- `src/desktopMain.tsx`
+- `src/main.tsx`
+- `src/BrowserShell.tsx`
+- `src/webShell.module.css`
+- `src/App.test.tsx`
+- `src/styles/tokens.test.ts`
 
 ## 新增
 
-- `VENDOR.md` — 本文件（归属与基线）
-- `LICENSE.deepcode` — 上游 MIT 原件
-- （逐路径一行：`path — 归属 owned`）
+- `VENDOR.md`
+- `LICENSE.deepcode`
+- `src/generated/app-wire.ts`
+- `src/generated/wire-fixtures.json`
+- `src/shared/transport/wireRuntime.ts`
+- `src/shared/transport/wireTypes.ts`
+- `src/shared/ui-kit/ErrorBoundary.tsx`
+- `src/shared/ui-kit/cards/**`
+- `src/app/App.tsx`
+- `src/app/viewModel.ts`
+- `src/app/viewModel.test.ts`
+- `src/app/cardSlots.ts`
+- `scripts/gen-web-fixtures.mjs`
+- `src/pages/**`
+- `src/shared/theme/**`
+- `apps/web/docs/**`
+- `apps/web/e2e/**`
 
 ---
 
@@ -35,13 +65,13 @@
 - 未复制 `src-tauri/**`、`src/rpc/tauriRuntime.ts`、`src/rpc/tauriRuntime.test.ts`、
   `src/platform/confirmAction.test.ts`（Tauri/对话框绑定；Web 形态不使用）。
 - 未复制 `sidecar-requirements.*`（Python 侧由本仓 PyInstaller onedir 取代）。
-- `src-tauri` 相关依赖保留在 `package.json` 中不删（首刀零改动原则）；4a 接门后按需清理。
+- `src-tauri` 依赖暂保留在 `package.json`（首刀零改动原则）；4a 剪枝后按需清理。
 
 ## 归属
 
 | 目录 | 归属 | 说明 |
 |---|---|---|
 | `src/styles/**` | vendored | DeepCode token/CSS Module 体系 |
-| `src/shared/**`（改名后） | vendored | 4a 起逐文件迁移为 owned |
+| `src/shared/**`（改名后） | vendored → owned | 4a 起逐文件迁移为 owned |
 | `src/generated/app-wire.ts` | owned（生成物） | 由 `scripts/codegen/gen_wire_ts.mjs` 生成 |
 | `src/app/**`、`src/features/**` | 4a 剪枝后 owned | RPC 控制器删除，新 shell 由本仓编写 |

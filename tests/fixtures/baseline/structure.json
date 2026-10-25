@@ -133,7 +133,7 @@
       "gate": true,
       "integration": 32,
       "unit": 155,
-      "value": 216
+      "value": 217
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
@@ -152,7 +152,7 @@
     }
   },
   "pin": {
-    "commit": "a6303ff4ec4425bce7efda36fd940480b0f85d73",
+    "commit": "766c14225508417d53e78706ba5ad4271647bc70",
     "date": "2026-10-25"
   }
 }

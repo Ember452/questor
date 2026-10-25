@@ -93,6 +93,15 @@ STEPS: tuple[Step, ...] = (
         "vendor-pristine",
         (PYTHON, "-m", "pytest", "tests/ci/test_vendor_pristine.py", "-q"),
     ),
+    Step(
+        "web-guards",
+        (PYTHON, "-m", "pytest", "tests/ci/test_web_guards.py", "-q"),
+    ),
+    Step(
+        "wire-codegen-web",
+        ("node", "scripts/codegen/gen_wire_ts.mjs", "--out", "apps/web/src/generated/app-wire.ts", "--check"),
+    ),
+    Step("web-fixtures", ("node", "apps/web/scripts/gen-web-fixtures.mjs", "--check")),
     # apps/web 的前端 lane：lint / typecheck / unit / build（需先 npm ci --prefix apps/web）。
     Step("web-lint", (NPM, "--prefix", "apps/web", "run", "lint")),
     Step("web-typecheck", (NPM, "--prefix", "apps/web", "run", "typecheck")),

@@ -1,0 +1,133 @@
+/* 4a 临时外壳样式（throwaway；4b-6 随 token 迁移重写）。 */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #101418;
+  color: #d6dde6;
+  font: 14px/1.6 "Segoe UI", system-ui, sans-serif;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #1f2833;
+  font-weight: 600;
+}
+
+.status {
+  margin-left: auto;
+  font-weight: 400;
+  color: #8b9aab;
+  font-size: 12px;
+}
+
+.transcript {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+}
+
+.row {
+  padding: 6px 0;
+  border-bottom: 1px solid #161d25;
+}
+
+.badge {
+  display: inline-block;
+  min-width: 52px;
+  margin-right: 8px;
+  color: #6d7d8f;
+  font-size: 12px;
+}
+
+.tool {
+  color: #7dd3fc;
+}
+
+.error {
+  color: #f87171;
+}
+
+.notice {
+  color: #fbbf24;
+}
+
+.prompt {
+  border: 1px solid #334155;
+  padding: 10px;
+  margin: 8px 0;
+  border-radius: 6px;
+  background: #0f172a;
+}
+
+.prompt textarea,
+.prompt input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0b1220;
+  color: inherit;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: 6px;
+  font: inherit;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.composer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #1f2833;
+}
+
+.composer textarea {
+  flex: 1;
+  min-height: 44px;
+  resize: vertical;
+  background: #0b1220;
+  color: inherit;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 8px;
+  font: inherit;
+}
+
+button {
+  background: #1d4ed8;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #334155;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.banner {
+  margin: 8px 16px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.empty {
+  color: #64748b;
+  padding: 24px 0;
+}
