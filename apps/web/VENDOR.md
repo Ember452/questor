@@ -17,7 +17,7 @@
 - `src/pages/ChatPage.tsx` — 徽标文案走 `t()` + render 穷尽守卫
 - `src/shared/theme/**`（token 底座改名与别名注释；内容语义未动）
 - `.gitignore` — 新增（忽略 `.dev-server.json` 运行时产物）
-- `package.json` — scripts 改为 owned；新增 `@tanstack/react-virtual`
+- `package.json` — scripts 改为 owned；新增 `@tanstack/react-virtual`；移除未引用的 tauri 全家（ADR-0005/0007 判 Electron）
 - `package-lock.json` — 新增 owned 依赖后的锁文件
 - `vite.config.ts` — version 读取改为常量；web 输出目录改为 `dist`
 - `index.html` — 标题改 Questor；入口改 `webMain.tsx`
@@ -78,7 +78,7 @@
 - 未复制 `src-tauri/**`、`src/rpc/tauriRuntime.ts`、`src/rpc/tauriRuntime.test.ts`、
   `src/platform/confirmAction.test.ts`（Tauri/对话框绑定；Web 形态不使用）。
 - 未复制 `sidecar-requirements.*`（Python 侧由本仓 PyInstaller onedir 取代）。
-- `src-tauri` 依赖暂保留在 `package.json`（首刀零改动原则）；4a 剪枝后按需清理。
+- ~~`src-tauri` 依赖暂保留~~（已清理：零引用即移除，见 已改/package.json）。
 
 ## 归属
 
