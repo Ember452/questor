@@ -11,6 +11,7 @@
 
 ## 已改
 
+- `.gitignore` — 新增（忽略 `.dev-server.json` 运行时产物）
 - `package.json` — scripts 改为 owned；新增 `@tanstack/react-virtual`
 - `package-lock.json` — 新增 owned 依赖后的锁文件
 - `vite.config.ts` — version 读取改为常量；web 输出目录改为 `dist`

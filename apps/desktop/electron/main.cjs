@@ -6,7 +6,8 @@ const { app, BrowserWindow, Menu, Tray, nativeImage, session, shell } = require(
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 
-const ENGINE_ARGS = ["-m", "questorharness", "--studio-host"];
+const ENGINE_STUDIO_ARGS = ["--studio-host"];
+const PYTHON_ARGS = ["-m", "questorharness", ...ENGINE_STUDIO_ARGS];
 const MAX_RESTARTS = 3;
 
 let engine = null;
@@ -14,6 +15,13 @@ let window = null;
 let tray = null;
 let restarts = 0;
 let quitting = false;
+
+/** 引擎命令分派：QUESTOR_ENGINE 指向打包 exe 时参数直传；回退 python 时补 -m。 */
+function engineCommand() {
+  const target = process.env.QUESTOR_ENGINE;
+  if (target) return { command: target, args: ENGINE_STUDIO_ARGS };
+  return { command: "python", args: PYTHON_ARGS };
+}
 
 function validateHandshake(line) {
   let payload;
@@ -54,8 +62,9 @@ function readHandshake(child) {
 }
 
 function spawnEngine() {
-  const command = process.env.QUESTOR_ENGINE || "python";
-  const child = spawn(command, ENGINE_ARGS, {
+  const { command, args } = engineCommand();
+  process.stderr.write(`[engine] spawn ${command} ${args.join(" ")}\n`);
+  const child = spawn(command, args, {
     stdio: ["pipe", "pipe", "pipe"],
     env: process.env,
   });
@@ -63,10 +72,11 @@ function spawnEngine() {
   child.once("exit", (code) => {
     if (quitting) return;
     if (restarts >= MAX_RESTARTS) {
-      window?.webContents.send("engine-crashed", code);
+      showFatal(`引擎已崩溃且重启次数耗尽（exit ${code}）`);
       return;
     }
     restarts += 1;
+    showFatal(`引擎退出（exit ${code}），正在重启 ${restarts}/${MAX_RESTARTS}…`);
     setTimeout(() => void boot(), 500);
   });
   return child;
@@ -82,30 +92,47 @@ async function plantCookie(port, token) {
   });
 }
 
+/** 窗口内错误/加载页：data URL 即可，不依赖引擎在线。 */
+const LOADING_HTML = "data:text/html,<body style='font-family:system-ui;padding:2em'>Questor 启动中…</body>";
+function fatalHtml(message) {
+  const safe = String(message).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return `data:text/html,<body style='font-family:system-ui;padding:2em;color:#b91c1c'>${safe}</body>`;
+}
+function showFatal(message) {
+  window?.webContents.send("engine-crashed", message);
+  if (window && !window.isDestroyed()) window.loadURL(fatalHtml(message)).catch(() => {});
+}
+
+/** 窗口先于引擎创建：Playwright/用户在任何引擎状态下都有窗口可寻（Reasonix starting-window 模式）。 */
+function createWindow() {
+  if (window) return window;
+  window = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    frame: false,
+    show: false,
+    webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false },
+  });
+  window.once("ready-to-show", () => window.show());
+  window.on("close", (event) => {
+    if (!quitting) {
+      event.preventDefault();
+      window.hide();
+    }
+  });
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  window.loadURL(LOADING_HTML).catch(() => {});
+  return window;
+}
+
 async function boot() {
+  createWindow();
   engine = spawnEngine();
   const { port, token } = await readHandshake(engine);
   await plantCookie(port, token);
-  if (!window) {
-    window = new BrowserWindow({
-      width: 1280,
-      height: 800,
-      frame: false,
-      show: false,
-      webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false },
-    });
-    window.once("ready-to-show", () => window.show());
-    window.on("close", (event) => {
-      if (!quitting) {
-        event.preventDefault();
-        window.hide();
-      }
-    });
-    window.webContents.setWindowOpenHandler(({ url }) => {
-      void shell.openExternal(url);
-      return { action: "deny" };
-    });
-  }
   await window.loadURL(`http://127.0.0.1:${port}/`);
 }
 
@@ -146,11 +173,12 @@ function createTray() {
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   tray = createTray();
+  createWindow();
   try {
     await boot();
   } catch (error) {
     process.stderr.write(`[boot] failed: ${String(error)}\n`);
-    window?.webContents.send("engine-crashed", String(error));
+    showFatal(`引擎启动失败：${String(error)}`);
   }
 });
 

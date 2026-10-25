@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.mjs",
     "build": "npm run build:web",
     "build:web": "tsc --noEmit && vite build --mode web",
     "generate:protocol": "node ../../scripts/codegen/gen_wire_ts.mjs --schema ../../protocol/app-wire.schema.json --out src/generated/app-wire.ts",
@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev:vite": "vite"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

@@ -7,7 +7,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = resolve(HERE, "../..");
+const REPO = resolve(HERE, "../../..");
 const EXE = process.env.QUESTOR_ENGINE ?? resolve(REPO, "apps/desktop/dist/engine/questor-engine.exe");
 const SECONDS = Number(process.env.SOAK_SECONDS ?? 60);
 

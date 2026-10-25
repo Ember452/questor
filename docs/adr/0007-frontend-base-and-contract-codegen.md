@@ -95,3 +95,14 @@ ADR-0005 定了唯一 renderer 与 Electron 壳，ADR-0006 定了 serve 宿主�
 - 传输红线：`rg "new WebSocket" apps/web/src` = 0。
 - 可用闭环：真实引擎驱动 submit → 流式 → 工具 → 审批 → 快照 → 恢复，且 `apps/web`
   可单独在浏览器跑（`STRUCTURE.md` §7）。
+
+## Updated（2026-10-25）：基座实际形态 = 工程链 + token 底座，非整骨架
+
+4a 执行时（用户裁决 2026-10-24，`apps/web/VENDOR.md`"已裁"清单）将 §Decision-1 的范围收窄：
+DeepCode 的 `src/features/**`（15 切片）、`src/app/**`（workspaceState /
+useWorkspaceController / i18n）、`src/rpc/**` 与 `ui-kit/` **裁掉不搬**，实际落地为
+**wire-native 自写壳**（App / cardSlots / viewModel / wireRuntime / pages，全 owned）+
+DeepCode 工程链与 styles 底座。理由：所裁各域与 questor 契约形态的差异大于适配成本，
+自写壳总量 <2k 行且由 tsc 穷尽 + kind 覆盖守卫兜底；中文由自写层直出。
+§Decision-2/3/4（对话卡、传输、契约 codegen）不变。三层分区表以
+`docs/plan/02-studio-serve-host.md` §2 为准。

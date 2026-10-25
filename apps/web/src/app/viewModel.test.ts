@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import fixtures from "../generated/wire-fixtures.json";
 import type { ServerFrame } from "../shared/transport/wireTypes";
-import { applyFrame, historyItems, initialState, type ViewState } from "./viewModel";
+import { applyFrame, historyItems, initialState, mergeHistoryItems, type ViewState } from "./viewModel";
 
 const frames = fixtures as unknown as ServerFrame[];
 
@@ -74,5 +74,34 @@ describe("viewModel：13 帧都有字段落点", () => {
       { role: "assistant", blocks: [{ type: "text", text: "hello" }] },
     ]);
     expect(items.map((item) => item.kind)).toEqual(["user", "say"]);
+  });
+});
+
+describe("mergeHistoryItems：历史重载不吃掉本地未落盘的用户消息", () => {
+  const history = [
+    { role: "user", blocks: [{ type: "text", text: "已落盘的问题" }] },
+    { role: "assistant", blocks: [{ type: "text", text: "已落盘的回答" }] },
+  ] as Parameters<typeof mergeHistoryItems>[1];
+  const current: ViewState = {
+    items: [
+      { id: "u1", kind: "user", text: "已落盘的问题" },
+      { id: "u2", kind: "user", text: "回合失败后新发的消息" },
+      { id: "u3", kind: "user", text: "  回合失败后新发的消息  " },
+    ],
+    busy: false,
+    usage: null,
+    lastSeq: 0,
+  };
+
+  it("已落盘的用户消息以历史为准（不重复），未落盘的保留", () => {
+    const merged = mergeHistoryItems(current.items, history);
+    const texts = merged.filter((item) => item.kind === "user").map((item) => item.text);
+    expect(texts.filter((t) => t.includes("已落盘"))).toHaveLength(1);
+    expect(texts.filter((t) => t.trim() === "回合失败后新发的消息")).toHaveLength(2);
+  });
+
+  it("历史为空（新引擎/新会话）时本地用户消息全保留", () => {
+    const merged = mergeHistoryItems(current.items, []);
+    expect(merged.filter((item) => item.kind === "user")).toHaveLength(3);
   });
 });

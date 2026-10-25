@@ -89,7 +89,7 @@
 | B4 | 服务端依赖 | 无 aiohttp；`httpx` 仅客户端；`rich` 已在 | 读 `pyproject.toml` |
 | B5 | 旧 UI 链（阶段 2 删除对象） | frontend/terminal（阶段 2 已删除）（ink 5/react 18/tsx）；src/questorharness/bootstrap/hosts/backend_host.py（阶段 2 已删除）、`react_launcher.py`、`protocol.py`、`app.py` 的 `run_repl` | `ls` + 读文件 |
 | B6 | backend_host 消费者 | `src/questorharness/api.py:13,138`（re-export `run_backend_host`）；`src/questor/runtime.py:13,45` | `grep -rn "backend_host\|OHJSON" src` |
-| B7 | prompt_surface 基线 | 4 份：channel/cli/cron/desktop | `ls tests/fixtures/baseline/prompt_surface` |
+| B7 | prompt_surface 基线 | 3 份：channel/cli/cron（desktop 已随阶段 2 删除；studio 顺延——见 §8 已决） | `ls tests/fixtures/baseline/prompt_surface` |
 | B8 | apps/ 注册 | `docs/architecture/STRUCTURE.md:5,40,138,447,452,468`；:468 明文"apps/web 必须能单独在浏览器跑" | 读 STRUCTURE |
 | B9 | 一致性硬边界 | STRUCTURE §0.2+§11：快照真源；durable spine 未立项；at-least-once+幂等 | 同上 |
 | B10 | events.py 尾注 | `# questor: allow R7 -- until W8 adds the mirror test`（与计划 01 的 W8 交叉，见 §9） | 读文件 |
@@ -146,15 +146,18 @@ serve 宿主（bootstrap/hosts/serve/：wire + broadcaster + eventstream + route
   （五张对话卡 + TOKENS.md/LAYOUT.md/tokens.css）；**传输/安全 = ADR-0006**（SSE + POST +
   五件套 + 父租约）、**文件组织 = ADR-0006/Reasonix `internal/frontend/serve`**（broadcaster /
   eventstream / routes 分文件对齐，只译语义不搬代码）。
-- **前端三层分区（这张表就是 `apps/web/VENDOR.md` 的分类与守卫白名单）**：
+- **前端三层分区（这张表就是 `apps/web/VENDOR.md` 的分类与守卫白名单）**。
+  **基座实际形态（ADR-0007 Updated 2026-10-25）**：DeepCode 的 `features/`、`app/`、`rpc/`、
+  `ui-kit/` 已裁（VENDOR.md"已裁"清单，用户裁决 2026-10-24）——实际为 **wire-native 自写壳 +
+  DeepCode 工程链/styles 底座**，下表按此更新：
 
 | 层 | 内容 | 归属 | 允许改动 | 升级方式 |
 |---|---|---|---|---|
-| 骨架层 | **src/app**、**src/features/***、**src/shared/ui-kit**、**src/shared/transport**、`styles/`、`package.json`+lock、`scripts/` | vendored（DeepCode） | 仅限 VENDOR.md 禁区/已改清单内的条目 | 与首刀 commit 的 diff（不跟上游） |
+| 骨架层 | 工程链（vite/tsconfig、playwright 配置、`package.json` scripts）+ `styles/` 底座 | vendored（DeepCode） | 仅限 VENDOR.md 禁区/已改清单内的条目 | 与首刀 commit 的 diff（不跟上游） |
 | 契约层 | `protocol/app-wire.schema.json` → 两侧 `generated/` | owned（questor 真源） | schema 只加不改；生成物**禁手改** | 改 schema + 重新生成 |
 | **形态层** | `profile` bundle（人设/模型/技能/工具白名单）+ `profile.ui` 能力位 + 页面注册表 + `cardSlots` 门控 | owned | 自由；**不得在被依赖层里插形态判断** | 新增形态 = 新增 bundle + 注册项，不动已有页 |
 | 对话面 | 五张对话卡 + `shared/theme/tokens.css` | vendored（Reasonix） | 参数不改；类块搬迁需登记 | 与 4b 首刀 commit 的 diff（不跟上游） |
-| 自写层 | 导航 IA / 首屏 / 空态、渠道 / 任务 / 团队 / 记忆召回页、questor 专属 kind | owned | 自由，但视觉参数取自上一层 | 不涉及 |
+| 自写层 | **wire-native 壳（App / cardSlots / viewModel / wireRuntime / pages）**、导航 IA / 首屏 / 空态、渠道 / 任务 / 团队 / 记忆召回页、questor 专属 kind | owned | 自由，但视觉参数取自上一层 | 不涉及 |
 
 - **CONVENTIONS §4.5 作用域例外**（ADR-0007 §5）：vendored 代码**只允许存在于 `apps/`**；
   `src/` 内仍适用"合并代码不携带外部来源/许可标记"。归属义务：保留上游 LICENSE 原件 +
@@ -347,7 +350,9 @@ legacy 节点。
 
 **验收绿**：`apps/web` 单独在浏览器跑（STRUCTURE :468），真实引擎驱动完整对话 + 审批 +
 取消；frontend lane 全绿；pristine 守卫绿；`VENDOR.md` 覆盖全部 vendored 目录；
-**tests/fixtures/baseline/prompt_surface/studio.txt** 落地（脚本不支持 studio 宿主则记录、另开刀）；
+**tests/fixtures/baseline/prompt_surface/studio.txt** 落地（**已裁决顺延（2026-10-25）**：
+serve 宿主提示面与 cli 共用 `bootstrap/runtime.py` 同一装配，flavor 只会复制 cli 基线；
+宿主提示真正分叉时再立）；
 **错误隔离判绿**：手动 throw 一张卡 → 仅该卡显示降级位，其余可用；**虚拟化判绿**：10k 条
 消息滚动不掉帧，数值入基线；**形态判绿**：改 `/profile` 的 capabilities → 导航 / 命令面板 /
 卡片同步变化，且 `rg "mode ===|isPersonal" apps/web/src` = 0。
@@ -498,11 +503,19 @@ Agents）在五卡之后逐张评估。
 | 4a | feat/studio-web | a6303ff / dbb526a | 071851d | DeepCode 骨架 vendored + 接门 + 改名 + 剪枝到 wire 骨架 + SSE 传输 + 13 帧视图模型 + 页面注册表/能力位门控；卡片与临时壳拆分见 4b |
 | 4b-1…5 | feat/studio-web | 071851d | 071851d | 五卡（Say/Tool/Approval/Ask/Compaction）语义移植 + cardSlots 穷尽 + 旧渲染分支删除；CSS 类块抽自 Reasonix（视觉对齐待 4b-6 token 完成） |
 | 4b-6 | feat/studio-web | 6d7f612 | 0702921 | token 两套并存 + alias 全量登记（实测旧 68 / Reasonix 119 / 交集 1）+ `test_css_vars`；`THROWAWAY`/`mode ===`/`isPersonal` 探针清零；主题切换由 `data-theme` 驱动（亮/暗截图矩阵可比） |
-| 5 | feat/studio-web | 0702921 | — | Electron 主进程 + HttpOnly cookie + 父租约/重启/托盘 + updater 回滚矩阵 + **PyInstaller onedir 实打包**（握手 0.3s、stdin EOF 0.3s 退出）+ **Electron 真壳 e2e**（真引擎 + `apps/web/dist`，截图入库）+ **60s soak 通过**（RSS 149.8→149.7MB）；**8h soak 与 NSIS 签名仍待桌面环境实跑** |
-| 6 | feat/studio-web | 6d7f612 | — | 对比度测试 + data-action 审计进 `check.py`；亮/暗 × 1280×720/390×844 **四张矩阵截图入库**（`/?demo=1` 黄金帧回放，确定性）；narrow 真实视口断言；**Playwright 已接入 CI `web` job** |
+| 5 | feat/studio-web | 0702921 | 回滚矩阵=updater.test.mjs；握手拒绝=auth e2e；2026-10-25 CI 双事故即天然红证（已修复）| Electron 主进程 + HttpOnly cookie + 父租约/重启/托盘 + updater 回滚矩阵 + **PyInstaller onedir 实打包**（握手 0.3s、stdin EOF 0.3s 退出）+ **Electron 真壳 e2e**（真引擎 + `apps/web/dist`，截图入库）+ **60s soak 通过**（RSS 149.8→149.7MB）；**8h soak 与 NSIS 签名仍待桌面环境实跑** |
+| 6 | feat/studio-web | 6d7f612 | 对比度 token 判红（check.py 步骤自证）| 对比度测试 + data-action 审计进 `check.py`；亮/暗 × 1280×720/390×844 **四张矩阵截图入库**（`/?demo=1` 黄金帧回放，确定性）；narrow 真实视口断言；**Playwright 已接入 CI `web` job** |
 
 **填写规则**："绿验收 commit"只有在 §0.5-6 的三张对账表（条目 / 影响面 / 判红）齐备时才可填；
 任一表缺失，该阶段视为**未完成**（不是"稍后补"）。对照表本身随 PR 描述存档。
+
+**2026-10-25 分支二审查修复（一轮，均带验证）**：①soak `REPO` 少一级致 `apps\apps\` ENOENT；
+②Electron 对打包 exe 误带 `-m questorharness` 参数（窗口改先建〔Reasonix starting-window 模式〕、
+参数按 python/exe 分派、e2e 加产物预检与失败诊断）——CI 形态本地实跑通过；③测试会话强制
+`NO_PROXY=127.0.0.1,localhost` + 回环客户端 `trust_env=False`（Clash 注册表代理曾令 8 用例
+502、baseline 红；毒代理环境复现验证）；④TS `readFrames` 过滤无 id 心跳块（曾回卷游标并渲染
+unknown；wireRuntime.test.ts 判红）。另核实：M2（编辑审批 detail）、M1（幂等重放真实状态）、
+`via` 透传、重连循环均已在分支二先行修复。
 
 **阶段 2/3 同提交说明（2026-10-24）**：两阶段在同一工作区连续完成，生成物（TREE/GRAPH/NAMESPACES/基线）
 跨阶段互相耦合，强行拆分会产生不可构建的中间提交；因此以 `325bbfd` 一并交付，PR 描述内按阶段分表
@@ -553,7 +566,8 @@ Agents）在五卡之后逐张评估。
    CI 再现时必须抓该 step 的 stdout 存档（不归因、不掩盖）。
 2. `src/questor/runtime.py:45` 产品 REPL 入口去留——阶段 2 前置核查后裁决。
 3. `protocol.py` 若含 backend_host 之外内容，拆分方案——阶段 2 前置核查后定。
-4. studio 宿主 prompt_surface flavor 时机（4a 或顺延）。
+4. studio 宿主 prompt_surface flavor 时机：**已决（2026-10-25）顺延**——serve 宿主与 cli
+   共用同一提示装配，flavor 目前无信息量；宿主提示分叉时再立。
 5. ADR-0006 §5 "8 种"勘误提交时点（默认随阶段 1，用户可提前）。
 6. 4b 之后是否追加 RememberCard / MeterRail / Jobs / Agents 四卡（默认后置池）。
 7. 中文术语表（渠道 / 任务 / 团队 / 记忆召回 / 快照）定稿时点——建议 4a 之前。

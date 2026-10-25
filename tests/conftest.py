@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -10,6 +11,13 @@ import pytest_asyncio
 
 from questorharness.runtime.tasks.task_manager import shutdown_task_manager
 from scripts.guards.check_thread_leak import arm_exit_watchdog, detect, report, snapshot
+
+# 回环测试防代理：Windows 注册表代理（Clash 等）会被 httpx 默认客户端的
+# trust_env 捕获，把 127.0.0.1 请求送进代理变成 502（2026-10 CI 事故根因）。
+# 会话级强制回环直连；具体回环客户端另加 trust_env=False 双保险。
+for _name in ("NO_PROXY", "no_proxy"):
+    _parts = os.environ.get(_name, "").split(",") + ["127.0.0.1", "localhost"]
+    os.environ[_name] = ",".join(dict.fromkeys(p.strip() for p in _parts if p.strip()))
 
 
 # Tests whose assumptions are POSIX-only (bash syntax, fcntl, ps output,

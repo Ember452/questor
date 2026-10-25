@@ -121,9 +121,23 @@ class ServeHost:
             outcome = "cancelled"
         except Exception as exc:  # noqa: BLE001 - 失败必须落成 turn_done，不能吞掉
             outcome = "failed"
-            await self.broadcaster.publish(
-                {"kind": "notice", "level": "error", "text": f"{type(exc).__name__}: {exc}"}
-            )
+            text = f"{type(exc).__name__}: {exc}"
+            # 401/403 几乎总是"provider/key/base_url 组合不匹配"（如拿 A 家 key 打 B 家端点）。
+            # 裸错误串对用户毫无信息量——带上当前生效的连接配置。
+            lowered = text.lower()
+            if "401" in text or "403" in text or "forbidden" in lowered or "unauthorized" in lowered:
+                settings = self.runtime.current_settings()
+                text += (
+                    "（API 拒绝请求：当前 provider={provider}、api_format={fmt}、"
+                    "base_url={base}、model={model}。若与预期不符，检查"
+                    " ~/.questorharness/settings.json 或 QUESTORHARNESS_* 环境变量）"
+                ).format(
+                    provider=settings.provider,
+                    fmt=settings.api_format,
+                    base=settings.base_url or "官方默认",
+                    model=settings.model,
+                )
+            await self.broadcaster.publish({"kind": "notice", "level": "error", "text": text})
         finally:
             # 租约释放不得依赖 publish 是否被第二次取消打断：先起 publish 任务，再 shield 等待，
             # 无论结果如何都在 finally 里 finish/pop_queued，否则会永久 turn.busy。

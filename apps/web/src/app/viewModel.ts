@@ -65,6 +65,27 @@ export function historyItems(messages: HistoryMessage[]): ViewItem[] {
   });
 }
 
+/** 历史重载与本地视图合并：已落快照的用户消息以历史为准，
+ *  尚未落快照的本地用户消息（回合失败/引擎重启期间发出的）必须保留。 */
+export function mergeHistoryItems(currentItems: ViewItem[], messages: HistoryMessage[]): ViewItem[] {
+  const restored = historyItems(messages);
+  const restoredUserTexts = new Set(
+    messages
+      .filter((message) => message.role === "user")
+      .map((message) =>
+        message.blocks
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join(" ")
+          .trim(),
+      ),
+  );
+  const pending = currentItems.filter(
+    (item) => item.kind === "user" && !restoredUserTexts.has(item.text.trim()),
+  );
+  return [...restored, ...pending];
+}
+
 function replaceTool(state: ViewState, callId: string, update: Partial<Extract<ViewItem, { kind: "tool" }>>): ViewState {
   const index = state.items.findIndex((item) => item.kind === "tool" && item.callId === callId);
   if (index < 0) return state;

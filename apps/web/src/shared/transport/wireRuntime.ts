@@ -48,8 +48,8 @@ function post(path: string, body?: unknown): RequestInit {
   };
 }
 
-/** 增量解析 SSE 字节：只认 `id:` 与 `data:`，空行分帧。 */
-async function* readFrames(
+/** 增量解析 SSE 字节：只认带 `id:` 的帧块（心跳不带 id，跳过——见 wireRuntime.test.ts）。 */
+export async function* readFrames(
   response: Response,
 ): AsyncGenerator<{ seq: number; frame: ServerFrame }> {
   if (!response.body) return;
@@ -71,7 +71,8 @@ async function* readFrames(
           if (line.startsWith("id: ")) seq = Number(line.slice(4));
           else if (line.startsWith("data: ")) data += line.slice(6);
         }
-        if (data) yield { seq, frame: JSON.parse(data) as ServerFrame };
+        // 无 id 的块是心跳：watermark 只作活性信号，不是帧，也不得回卷游标。
+        if (seq > 0 && data) yield { seq, frame: JSON.parse(data) as ServerFrame };
         index = buffer.indexOf("\n\n");
       }
     }

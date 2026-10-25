@@ -19,6 +19,7 @@ from questorharness.commands import (
     lookup_skill_slash_command,
 )
 from questorharness.config import load_settings
+from questorharness.config.settings_models import Settings
 from questorharness.contracts.domain.events import StreamEvent
 from questorharness.contracts.domain.message import (
     ConversationMessage,
@@ -147,7 +148,7 @@ class RuntimeBundle:
     include_project_memory: bool = True
     autodream_context: dict[str, object] | None = None
 
-    def current_settings(self):
+    def current_settings(self) -> Settings:
         """Return the effective settings for this session.
 
         We persist most settings to disk (``~/.questorharness/settings.json``), but

@@ -7,10 +7,20 @@ import { DemoScreen } from "./DemoScreen";
 import { PAGES } from "../pages/registry";
 import { createWireRuntime, WireError } from "../shared/transport/wireRuntime";
 import type { ProfileResponse } from "../shared/transport/wireTypes";
-import { applyFrame, historyItems, initialState, type ViewState } from "./viewModel";
+import { applyFrame, mergeHistoryItems, initialState, type ViewState } from "./viewModel";
 import styles from "./App.module.css";
 
 const runtime = createWireRuntime();
+
+/** 把 fetch/Wire 错误翻译成人能行动的提示；其余原样透出。 */
+function friendlyError(exc: unknown): string {
+  if (exc instanceof WireError) return `${exc.code}: ${exc.message}`;
+  const text = exc instanceof Error ? exc.message : String(exc);
+  if (exc instanceof TypeError && text.includes("fetch")) {
+    return "连接引擎失败：dev 服务器或引擎已退出。重启 npm run dev 后刷新本页。";
+  }
+  return text;
+}
 
 export function App() {
   // 截图/回放样本：不进入 live 事件循环，也不违反 hooks 规则。
@@ -39,7 +49,7 @@ function LiveApp() {
 
   const reloadHistory = useCallback(async () => {
     const loaded = await runtime.history();
-    setView((current) => ({ ...current, items: historyItems(loaded.messages) }));
+    setView((current) => ({ ...current, items: mergeHistoryItems(current.items, loaded.messages) }));
   }, []);
 
   useEffect(() => {
@@ -70,7 +80,7 @@ function LiveApp() {
             setError("会话凭据失效：请通过宿主重新打开访问链接");
             return;
           }
-          setError(exc instanceof Error ? exc.message : String(exc));
+          setError(friendlyError(exc));
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
       }
@@ -94,7 +104,7 @@ function LiveApp() {
       .then((result) => setQueued(result.state === "queued"))
       .catch((exc: unknown) => {
         setView((current) => ({ ...current, busy: false }));
-        setError(exc instanceof WireError ? `${exc.code}: ${exc.message}` : String(exc));
+        setError(friendlyError(exc));
       });
   };
 
