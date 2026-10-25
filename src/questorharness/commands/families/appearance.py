@@ -145,25 +145,6 @@ def register_appearance_commands(registry: CommandRegistry) -> None:
         lines.extend(f"{key} -> {command}" for key, command in sorted(bindings.items()))
         return CommandResult(message="\n".join(lines))
 
-    async def _vim_handler(args: str, context: CommandContext) -> CommandResult:
-        settings = load_settings()
-        current = (
-            context.app_state.get().vim_enabled
-            if context.app_state is not None
-            else settings.vim_mode
-        )
-        action = args.strip() or "show"
-        if action == "show":
-            return CommandResult(message=f"Vim mode: {'on' if current else 'off'}")
-        enabled = {"on": True, "off": False, "toggle": not current}.get(action)
-        if enabled is None:
-            return CommandResult(message="Usage: /vim [show|on|off|toggle]")
-        settings.vim_mode = enabled
-        save_settings(settings)
-        if context.app_state is not None:
-            context.app_state.set(vim_enabled=enabled)
-        return CommandResult(message=f"Vim mode {'enabled' if enabled else 'disabled'}.")
-
     async def _voice_handler(args: str, context: CommandContext) -> CommandResult:
         from questorharness.providers.voice import extract_keyterms, inspect_voice_capabilities
 
@@ -205,8 +186,6 @@ def register_appearance_commands(registry: CommandRegistry) -> None:
     registry.register(SlashCommand("output-style", "Show or update output style", _output_style_handler))
 
     registry.register(SlashCommand("keybindings", "Show resolved keybindings", _keybindings_handler))
-
-    registry.register(SlashCommand("vim", "Show or update Vim mode", _vim_handler))
 
     registry.register(SlashCommand("voice", "Show or update voice mode", _voice_handler))
 

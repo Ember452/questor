@@ -21,6 +21,23 @@ def test_get_teammate_command_prefers_current_interpreter(monkeypatch):
     assert command == "/tmp/current-python"
 
 
+def test_build_inherited_cli_flags_forwards_tool_surface() -> None:
+    """子代理的工具白/黑名单必须下发给子进程（否则声明静默失效）。"""
+    flags = build_inherited_cli_flags(
+        allowed_tools=["read_file", "grep"],
+        disallowed_tools=["write_file", "edit_file"],
+    )
+    assert flags[flags.index("--allowed-tools") + 1] == "read_file,grep"
+    assert flags[flags.index("--disallowed-tools") + 1] == "write_file,edit_file"
+
+
+def test_build_inherited_cli_flags_omits_empty_tool_surface() -> None:
+    """未声明工具面时不得凭空造 flag（否则会把“继承全部”误降为“全部禁用”）。"""
+    flags = build_inherited_cli_flags()
+    assert "--allowed-tools" not in flags
+    assert "--disallowed-tools" not in flags
+
+
 def test_build_inherited_env_vars_disables_coordinator_mode(monkeypatch):
     monkeypatch.setenv("CLAUDE_CODE_COORDINATOR_MODE", "1")
 

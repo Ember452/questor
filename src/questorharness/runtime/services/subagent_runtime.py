@@ -27,6 +27,10 @@ class DefaultSubagentRuntime:
             model=definition.model,
             system_prompt=definition.system_prompt,
             permissions=list(definition.permissions),
+            tools=list(definition.tools) if definition.tools else None,
+            disallowed_tools=(
+                list(definition.disallowed_tools) if definition.disallowed_tools else None
+            ),
         )
 
     async def spawn(
@@ -40,6 +44,8 @@ class DefaultSubagentRuntime:
         command: str | None = None,
         system_prompt: str | None = None,
         permissions: list[str] | None = None,
+        allowed_tools: list[str] | None = None,
+        disallowed_tools: list[str] | None = None,
         task_type: str = "local_agent",
     ) -> SpawnResult:
         executor = get_backend_registry().get_executor(_SUBPROCESS_BACKEND)
@@ -53,6 +59,8 @@ class DefaultSubagentRuntime:
             command=command,
             system_prompt=system_prompt,
             permissions=list(permissions or []),
+            allowed_tools=list(allowed_tools) if allowed_tools else None,
+            disallowed_tools=list(disallowed_tools) if disallowed_tools else None,
             task_type=cast(_SpawnTaskType, task_type),
         )
         return await executor.spawn(config)

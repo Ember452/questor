@@ -526,8 +526,19 @@ Agents）在五卡之后逐张评估。
   1 个 pending 槽）；**容量 1 的排队行为已在阶段 1 落地**（started→queued→busy，
   `turn_done` 后自动推进），personal 的插话 UI 归 4a。
 - **appearance 四包保留**（2026-10-25 实测校正）：`themes` / `output_styles` / `keybindings`
-  仍被 `runtime.py:29` 与 `/theme`、`/output-style`、键位加载使用，不是删 UI 后的残留；
-  `vim` 包无包外引用，另立开放项。
+  仍被 `runtime.py:29` 与 `/theme`、`/output-style`、键位加载使用，不是删 UI 后的残留。
+  `vim/` 包与 `/vim` 命令、`vim_mode` 设置、`vim_enabled` 状态一并删除（声明了行为却无行为）；
+  将来的 vim 键位属于编辑器/前端实现，不回引擎设置层。
+- **子代理工具面四段断链已修（2026-10-25，分支 `fix/subagent-tool-surface`）**：
+  ① 内置定义改用注册表真名（`edit_file`/`write_file`，含 `tools` 白名单），并加
+  `agent-tool-names` 守卫（定义里的名字不在注册表 → 红，含守卫自证）；
+  ② `AgentProfile`/`TeammateSpawnConfig`/`build_inherited_cli_flags` 把白/黑名单下发给子进程
+  （`--allowed-tools` / `--disallowed-tools`）；③ CLI 真正消费这两个 flag，`--allowed-tools`
+  定义为**严格白名单**（其余工具补进 denied），未知名字 fail-closed。
+- **in-process 强制边界已裁**：`in_process_teammate` 当前是桩（不跑引擎），无法强制工具面；
+  因此定下不变量——真正的 QueryContext 构建器落地时必须把 `config.allowed_tools/denied_tools`
+  并进该队友的权限检查器。桩分支对“声明了但无法强制”打 warning（可见，不静默）。
+  在此之前，工具面**仅 subprocess 后端强制**。
 - **评审对质（2026-10-25，分支一复审）**：H1 Origin 仅限改状态方法；H2 SSE 先订阅再取重放快照
   并用 `seq <= replayed_to` 去重；H3 租约释放移入 `finally` + `shield` 广播 turn_done；
   M1 幂等重放回真实 `queued` 状态；M2 编辑审批不再丢 diff（`detail` 字段）；
@@ -538,15 +549,14 @@ Agents）在五卡之后逐张评估。
 
 **开放（执行 agent 不得代答）**：
 
-1. `vim` 包无包外引用（2026-10-25 实测）——删除或接入键位表，阶段 4a 前裁决。
-2. `baseline-check` 在 2026-10-25 首次全量跑中红过一次、随后两次绿，未能复现；
+1. `baseline-check` 在 2026-10-25 首次全量跑中红过一次、随后两次绿，未能复现；
    CI 再现时必须抓该 step 的 stdout 存档（不归因、不掩盖）。
-3. `src/questor/runtime.py:45` 产品 REPL 入口去留——阶段 2 前置核查后裁决。
-4. `protocol.py` 若含 backend_host 之外内容，拆分方案——阶段 2 前置核查后定。
-5. studio 宿主 prompt_surface flavor 时机（4a 或顺延）。
-6. ADR-0006 §5 "8 种"勘误提交时点（默认随阶段 1，用户可提前）。
-7. 4b 之后是否追加 RememberCard / MeterRail / Jobs / Agents 四卡（默认后置池）。
-8. 中文术语表（渠道 / 任务 / 团队 / 记忆召回 / 快照）定稿时点——建议 4a 之前。
+2. `src/questor/runtime.py:45` 产品 REPL 入口去留——阶段 2 前置核查后裁决。
+3. `protocol.py` 若含 backend_host 之外内容，拆分方案——阶段 2 前置核查后定。
+4. studio 宿主 prompt_surface flavor 时机（4a 或顺延）。
+5. ADR-0006 §5 "8 种"勘误提交时点（默认随阶段 1，用户可提前）。
+6. 4b 之后是否追加 RememberCard / MeterRail / Jobs / Agents 四卡（默认后置池）。
+7. 中文术语表（渠道 / 任务 / 团队 / 记忆召回 / 快照）定稿时点——建议 4a 之前。
 
 ## 9. 与计划 01 及引擎功能线的协调
 

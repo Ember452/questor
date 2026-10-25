@@ -56,8 +56,10 @@ ContextUsageDonut`；业界 Roo Code 的 custom modes 把“模式”定义为 r
    **docs/plan/mapping/questor-personal.md**；kind 覆盖守卫按当前 profile 选表校验。
 6. **禁止形态分支**：`apps/web` 内不得出现 `mode ===` / `isPersonal` 类判断（`rg` 探针守卫）；
    Python 引擎内不得写形态分支。
-7. `allowed_tools` / `denied_tools` 经 `build_runtime` 注入 policy（**阶段 1 已落**）；个人形态的
-   技能/插件目录走 `extra_skill_dirs / extra_plugin_roots`——**引擎零改动**。`profile.yaml`
+7. `allowed_tools` / `denied_tools` 经 `build_runtime` 注入 policy（**阶段 1 已落**）；子代理的工具面经
+   argv 下发（`--allowed-tools/--disallowed-tools`），**当前仅 subprocess 后端强制**——
+   `in_process_teammate` 仍是桩，其真正的 QueryContext 构建器落地时必须消费
+   `config.allowed_tools/denied_tools`（桩分支已打 warning）。个人形态的技能/插件目录走 `extra_skill_dirs / extra_plugin_roots`——**引擎零改动**。`profile.yaml`
    另设 `runtime` 段（`schedule / delivery / memory_consumption`，取值 `on/off`）：本阶段
    **只立位、值全 `off`、不接消费方**；缺段按写死口径视为全 `off`，键名/取值写错即报错。
    `/profile` 帧**不扩** runtime 键（守住 ADR-0006 只加不改的窗口）。

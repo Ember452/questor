@@ -40,7 +40,6 @@
 | `questorharness.state` | — |
 | `questorharness.surfaces` | `questorharness.config`, `questorharness.contracts`, `questorharness.platform` |
 | `questorharness.themes` | — |
-| `questorharness.vim` | — |
 
 ## 环
 
@@ -74,9 +73,9 @@
 
 | package | imported by |
 | --- | ---: |
-| `questorharness.contracts` | 117 |
+| `questorharness.contracts` | 118 |
 | `questorharness.platform` | 65 |
-| `questorharness.capabilities` | 61 |
+| `questorharness.capabilities` | 62 |
 | `questorharness.config` | 59 |
 | `questorharness.providers` | 59 |
 | `questorharness.runtime` | 34 |
@@ -97,7 +96,7 @@
 
 ## vacuous-contracts
 
-目标模块不存在、因而恒判 KEPT 的契约目标：**10**（共声明 86 个目标，实际生效 76 个）
+目标模块不存在、因而恒判 KEPT 的契约目标：**10**（共声明 85 个目标，实际生效 75 个）
 
 这 10 条来自 5 条契约的空条款：`Capabilities may import contracts only` / `Config must not import runtime, capabilities, engine, ui or plugins` / `Product imports the public engine face only` / `Providers must not import runtime, kernel or capabilities` / `Surfaces may import contracts, config and platform only`；涉及的顶层包：`questorharness.kernel`, `questorharness.personalization`, `questorharness.prompts`, `questorharness.skills`, `questorharness.ui`。它们读起来像约束，实际没有可约束对象（Phase 1 已迁走或从未存在）。
 

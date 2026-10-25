@@ -1052,11 +1052,6 @@ async def test_ui_mode_commands_persist_and_update_state(tmp_path: Path, monkeyp
     keybindings_result = await keybindings_command.handler(keybindings_args, context)
     assert "ctrl+l" in keybindings_result.message
 
-    vim_command, vim_args = registry.lookup("/vim toggle")
-    vim_result = await vim_command.handler(vim_args, context)
-    assert "enabled" in vim_result.message
-    assert context.app_state.get().vim_enabled is True
-
     voice_command, voice_args = registry.lookup("/voice keyterms Shipping pytest fixtures")
     voice_result = await voice_command.handler(voice_args, context)
     assert "pytest" in voice_result.message

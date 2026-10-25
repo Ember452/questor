@@ -169,7 +169,6 @@ def _dry_run_command_behavior(name: str) -> dict[str, str]:
         "model",
         "theme",
         "output-style",
-        "vim",
         "voice",
         "commit",
         "issue",

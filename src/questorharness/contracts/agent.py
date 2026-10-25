@@ -16,6 +16,8 @@ class AgentProfile:
     model: str | None = None
     system_prompt: str | None = None
     permissions: list[str] = field(default_factory=list)
+    tools: list[str] | None = None
+    disallowed_tools: list[str] | None = None
 
 
 class AgentDefinition(BaseModel):

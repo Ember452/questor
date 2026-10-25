@@ -116,6 +116,8 @@ def build_inherited_cli_flags(
     settings_path: str | None = None,
     teammate_mode: str | None = None,
     plugin_dirs: list[str] | None = None,
+    allowed_tools: list[str] | None = None,
+    disallowed_tools: list[str] | None = None,
     extra_flags: list[str] | None = None,
 ) -> list[str]:
     """Build CLI flags to propagate from the current session to spawned teammates.
@@ -188,6 +190,13 @@ def build_inherited_cli_flags(
     # 独立重新检测模式并可能选择不同模式。
     if teammate_mode:
         flags.extend(["--teammate-mode", shlex.quote(teammate_mode)])
+
+    # --- 工具面（agent 定义的 tools / disallowed_tools）-----------------
+    # 子进程 CLI 支持 --allowed-tools / --disallowed-tools；不下发就等于声明失效。
+    if allowed_tools:
+        flags.extend(["--allowed-tools", shlex.quote(",".join(allowed_tools))])
+    if disallowed_tools:
+        flags.extend(["--disallowed-tools", shlex.quote(",".join(disallowed_tools))])
 
     if extra_flags:
         flags.extend(extra_flags)

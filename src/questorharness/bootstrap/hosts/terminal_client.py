@@ -65,8 +65,8 @@ class TerminalRenderer:
                 frame = _frame_from_sse(block)
                 if frame is not None:
                     await self._render(frame)
-                if self.done.is_set():
-                    return
+                # 不能在 turn_done 后 return：交互模式要连续多轮；单次 prompt
+                # 由调用方 done.wait() 收尾，两种模式都靠 finally 的 cancel 退订。
 
     async def _render(self, frame: dict[str, Any]) -> None:
         """按 kind 渲染；审批/提问直接就地询问。"""
@@ -175,6 +175,18 @@ async def run_terminal_client(
         await asyncio.gather(consumer, return_exceptions=True)
 
 
+def merge_tool_overrides(
+    profile: Any, overrides: Mapping[str, object] | None
+) -> dict[str, Any]:
+    """合并工具面：覆盖只许收窄；None 或缺省 → 用 profile 值。"""
+    extra: dict[str, Any] = dict(overrides or {})
+    if extra.get("allowed_tools") is None:
+        extra["allowed_tools"] = list(profile.allowed_tools)
+    if extra.get("denied_tools") is None:
+        extra["denied_tools"] = list(profile.denied_tools)
+    return extra
+
+
 async def build_serve_host(
     *,
     cwd: str | None = None,
@@ -197,9 +209,7 @@ async def build_serve_host(
     authority = Authority()
     root = profile_root or default_profile_root()
     profile = load_profile(root, profile_id)
-    extra: dict[str, Any] = dict(overrides or {})
-    extra.setdefault("allowed_tools", list(profile.allowed_tools))
-    extra.setdefault("denied_tools", list(profile.denied_tools))
+    extra = merge_tool_overrides(profile, overrides)
     runtime = await build_runtime(
         cwd=cwd,
         model=model,

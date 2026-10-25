@@ -17,14 +17,14 @@ layers =
     questorharness.config
     questorharness.platform
     questorharness.contracts
-# ``capabilities``, ``plugins``, ``state``, ``keybindings``, ``themes``,
-# ``vim`` and ``output_styles`` are deliberately outside this ladder.
+# ``capabilities``, ``plugins``, ``state``, ``keybindings``, ``themes``
+# and ``output_styles`` are deliberately outside this ladder.
 #
 # - capabilities and plugins are cross-cutting: capabilities owns tools that
 #   execute commands (they need ``execution``) while runtime calls back into
 #   capability policy/schedule helpers. Their boundary is enforced by
 #   ``capabilities-are-leaf`` and ``plugins-stay-an-extension-layer`` instead.
-# - the appearance packages (state/keybindings/themes/vim/output_styles) are
+# - the appearance packages (state/keybindings/themes/output_styles) are
 #   leaves that any layer may read.
 #
 # The ladder therefore only claims what is actually true, and the contracts
@@ -120,7 +120,6 @@ forbidden_modules =
     questorharness.ui
     questorharness.themes
     questorharness.keybindings
-    questorharness.vim
     questorharness.output_styles
     questorharness.personalization
     questorharness.platform

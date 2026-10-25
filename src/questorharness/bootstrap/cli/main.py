@@ -294,6 +294,18 @@ def main(
 
     from questorharness.bootstrap.hosts.app import run_print_mode, run_repl, run_task_worker
     from questorharness.bootstrap.hosts.serve.studio import run_studio_host
+    from questorharness.bootstrap.hosts.tool_policy import ToolPolicyError, resolve_tool_policy
+
+    try:
+        tool_allowed, tool_denied = resolve_tool_policy(allowed_tools, disallowed_tools)
+    except ToolPolicyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise typer.Exit(2) from exc
+    tool_overrides: dict[str, object] | None = (
+        {"allowed_tools": tool_allowed, "denied_tools": tool_denied}
+        if tool_allowed is not None or tool_denied is not None
+        else None
+    )
 
     if dry_run and (continue_session or resume is not None):
         print("Error: --dry-run does not support --continue/--resume yet.", file=sys.stderr)
@@ -393,6 +405,7 @@ def main(
                 permission_mode=permission_mode,
                 api_format=api_format,
                 effort=effort,
+                overrides=tool_overrides,
             )
         )
         return
@@ -418,6 +431,8 @@ def main(
                 permission_mode=permission_mode,
                 max_turns=max_turns,
                 effort=effort,
+                allowed_tools=tool_allowed,
+                denied_tools=tool_denied,
             )
         )
         return
@@ -434,6 +449,8 @@ def main(
                 api_format=api_format,
                 permission_mode=permission_mode,
                 effort=effort,
+                allowed_tools=tool_allowed,
+                denied_tools=tool_denied,
             )
         )
         return
@@ -451,6 +468,7 @@ def main(
                 permission_mode=permission_mode,
                 effort=effort,
                 allow_no_auth=serve_no_auth,
+                overrides=tool_overrides,
             )
         )
         return
@@ -467,6 +485,7 @@ def main(
             api_format=api_format,
             permission_mode=permission_mode,
             effort=effort,
+            overrides=tool_overrides,
         )
     )
 

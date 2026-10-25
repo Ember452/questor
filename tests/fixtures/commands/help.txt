@@ -60,5 +60,4 @@ Available commands:
 /upgrade      Show upgrade instructions
 /usage        Show usage and token estimates
 /version      Show the installed QuestorHarness version
-/vim          Show or update Vim mode
 /voice        Show or update voice mode

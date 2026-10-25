@@ -588,7 +588,6 @@ class Settings(BaseModel):
     # 界面
     theme: str = "default"
     output_style: str = "default"
-    vim_mode: bool = False
     voice_mode: bool = False
     fast_mode: bool = False
     effort: str = "medium"

@@ -283,6 +283,12 @@ class TeammateSpawnConfig:
     permissions: list[str] = field(default_factory=list)
     """Tool permissions to grant this teammate."""
 
+    allowed_tools: list[str] | None = None
+    """Agent 定义的 tools（仅这些工具可用）；None 表示继承全部。"""
+
+    disallowed_tools: list[str] | None = None
+    """Agent 定义的 disallowed_tools（硬拒名单）。"""
+
     plan_mode_required: bool = False
     """Whether this teammate must enter plan mode before implementing."""
 

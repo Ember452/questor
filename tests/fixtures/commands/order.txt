@@ -44,7 +44,6 @@ model
 theme
 output-style
 keybindings
-vim
 voice
 doctor
 diff
