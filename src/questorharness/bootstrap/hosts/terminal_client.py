@@ -12,6 +12,7 @@ import json
 import os
 import sys
 from collections.abc import AsyncIterator, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -20,7 +21,7 @@ from rich.console import Console
 from questorharness.bootstrap.hosts.serve import terminal_theme as theme
 from questorharness.bootstrap.hosts.serve.authority import Authority
 from questorharness.bootstrap.hosts.serve.host import ServeHost
-from questorharness.bootstrap.hosts.terminal import cards, footer
+from questorharness.bootstrap.hosts.terminal import cards, footer, strings
 from questorharness.bootstrap.hosts.terminal import wire_view as view
 from questorharness.bootstrap.runtime import build_runtime
 from questorharness.profiles import load_profile
@@ -32,6 +33,15 @@ if TYPE_CHECKING:
 
 _PREFIX = "/rt/r1"
 _EOF = "__questor_eof__"
+_INTERRUPT = "__questor_interrupt__"
+
+
+@dataclass(frozen=True)
+class SubmitResult:
+    """提交裁决：started / queued / 被拒（turn_id 为 None）。"""
+
+    turn_id: str | None
+    state: str
 
 
 def default_profile_root() -> Path:
@@ -89,22 +99,24 @@ def _build_prompt_session(commands: list[dict[str, Any]]) -> "_PS | None":
 
 
 def _prompt_once(session: "_PS") -> str:
-    """同步读一行：Ctrl-C 只清行不退出，EOF 走哨兵。运行在 worker 线程。"""
+    """同步读一行：Ctrl-C 交回中断哨兵（回合中会变成 /cancel）。运行在 worker 线程。"""
     while True:
         try:
             text: str = session.prompt("> ")
             return text
         except KeyboardInterrupt:
-            continue
+            return _INTERRUPT
 
 
 async def _read_line(session: "_PS | None") -> str:
-    """读一行输入；EOF 返回哨兵。session 为空时回退裸 input。"""
+    """读一行输入；EOF / Ctrl-C 各走一个哨兵。session 为空时回退裸 input。"""
     if session is None:
         try:
             return await asyncio.to_thread(input, "> ")
         except EOFError:
             return _EOF
+        except KeyboardInterrupt:
+            return _INTERRUPT
     try:
         return await asyncio.to_thread(_prompt_once, session)
     except EOFError:
@@ -149,7 +161,38 @@ class TerminalRenderer:
         self._streaming = False
         self._streamed_text = False
         self._busy = False
+        self._queue_depth = 0
+        self._pending_turns = 0
         self.done = asyncio.Event()
+
+    @property
+    def busy(self) -> bool:
+        """当前是否有回合在跑（决定 Ctrl-C 是取消还是清行）。"""
+
+        return self._busy
+
+    @property
+    def pending_turns(self) -> int:
+        """已提交但未收到 turn_done 的回合数（退出前要收干净）。"""
+
+        return self._pending_turns
+
+    def expect_turn(self) -> None:
+        """记一个已受理的提交；turn_done 时清除。"""
+
+        self._pending_turns += 1
+
+    def note_queued(self) -> None:
+        """服务端排上了：立即给一行可见回执，用户才知道没丢。"""
+
+        self._queue_depth = 1
+        self._console.print(strings.QUEUED, style=theme.DIM)
+        self._console.print(self._footer())
+
+    def note_cancel_requested(self) -> None:
+        """已发 /cancel：回合结不结束由服务端决定，但用户要知道请求已送达。"""
+
+        self._console.print(strings.CANCEL_SENT, style=theme.WARN)
 
     async def consume(self, stream: AsyncIterator[bytes]) -> None:
         """持续消费 SSE 字节流。"""
@@ -192,17 +235,23 @@ class TerminalRenderer:
         if isinstance(item, view.TurnStartedItem):
             self._streamed_text = False
             self._busy = True
+            self._queue_depth = 0
         self._console.print(cards.render_item(item))
         if isinstance(item, view.TurnDoneItem):
             self._busy = False
+            self._pending_turns = max(0, self._pending_turns - 1)
             self._console.print()
             self._console.print(self._footer())
             self.done.set()
 
     def _footer(self) -> Any:
-        """状态栏：当前只有形态/忙闲是真值，其余字段在波 D 补齐前显式渲染 `—`。"""
+        """状态栏：形态/忙闲/队列是真值，其余字段在波 D 前显式渲染 `—`。"""
 
-        return footer.render(footer.FooterVM(profile=self._profile_name, busy=self._busy))
+        return footer.render(
+            footer.FooterVM(
+                profile=self._profile_name, busy=self._busy, queue_depth=self._queue_depth
+            )
+        )
 
     async def _ask_approval(self, item: view.ApprovalItem) -> None:
         """审批：y 通过，其余拒绝（fail-closed 由服务端兼底）。编辑类先给 diff 卡。"""
@@ -226,8 +275,8 @@ class TerminalRenderer:
         )
 
 
-async def _submit(host: ServeHost, line: str) -> str | None:
-    """提交一行；返回 turnId（busy/queued 时打印提示）。"""
+async def _submit(host: ServeHost, line: str) -> SubmitResult:
+    """提交一行；返回服务端裁决（started / queued / 被拒）。"""
     response = await host.transport.request(
         "POST",
         f"{_PREFIX}/submit",
@@ -236,10 +285,23 @@ async def _submit(host: ServeHost, line: str) -> str | None:
     payload = json.loads(response.body)
     if response.status >= 400:
         print(f"[拒绝] {payload.get('code')}: {payload.get('message')}", file=sys.stderr)
-        return None
-    if payload.get("state") == "queued":
-        print("[排队] 当前回合结束后自动开始", file=sys.stderr)
-    return str(payload.get("turnId"))
+        return SubmitResult(turn_id=None, state="refused")
+    return SubmitResult(
+        turn_id=str(payload.get("turnId") or "") or None,
+        state=str(payload.get("state", "started")),
+    )
+
+
+async def _drain_pending(renderer: TerminalRenderer, *, timeout: float = 300.0) -> None:
+    """EOF 前把已受理的回合收完（Ctrl-D 不应该把正在跑的回答吞掉）。"""
+
+    budget = timeout
+    while renderer.pending_turns > 0:
+        renderer.done.clear()
+        try:
+            await asyncio.wait_for(renderer.done.wait(), timeout=budget)
+        except TimeoutError:
+            return
 
 
 async def run_terminal_client(
@@ -261,20 +323,33 @@ async def run_terminal_client(
         session = _build_prompt_session(await _fetch_commands(host))
     try:
         if prompt:
-            await _submit(host, prompt)
+            result = await _submit(host, prompt)
+            if result.turn_id is None:
+                return 1
+            if result.state == "queued":
+                renderer.note_queued()
             await renderer.done.wait()
             return 0
         while True:
             line = await _read_line(session)
             if line == _EOF:
+                await _drain_pending(renderer)
                 return 0
+            if line == _INTERRUPT:
+                # 回合中 Ctrl-C = 取消；空闲时只是清掉当前行（什么都不做）。
+                if renderer.busy:
+                    await host.transport.request("POST", f"{_PREFIX}/cancel")
+                    renderer.note_cancel_requested()
+                continue
             if not line.strip():
                 continue
-            renderer.done.clear()
-            turn = await _submit(host, line)
-            if turn is None:
-                continue
-            await renderer.done.wait()
+            result = await _submit(host, line)
+            if result.turn_id is not None:
+                renderer.expect_turn()
+            if result.state == "queued":
+                renderer.note_queued()
+            # 不阻塞等本回合：读下一行，服务端的排队槽负责顺序与互斥。
+
     except KeyboardInterrupt:
         await host.transport.request("POST", f"{_PREFIX}/cancel")
         output.print("[dim]已请求取消[/dim]")
