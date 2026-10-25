@@ -21,7 +21,7 @@ from questor.gateway.gateway_process import (
     stop_gateway_process,
 )
 from questor.memory import add_memory_entry, list_memory_files, remove_memory_entry
-from questor.runtime import launch_questor_react_tui, run_questor_backend, run_questor_print_mode
+from questor.runtime import run_questor_backend, run_questor_print_mode
 from questor.session_storage import QuestorSessionBackend
 from questor.workspace import (
     get_gateway_config_path,
@@ -172,8 +172,12 @@ def _prompt_provider_profile(workspace: str | Path) -> str:
                 ]
                 if missing:
                     title.extend([("", "  "), ("fg:#d3869b", missing.strip())])
-            choices.append(questionary.Choice(title=title, value=name, checked=(name == default_value)))
-        result = questionary.select("Choose provider profile for questor:", choices=choices, default=default_value).ask()
+            choices.append(
+                questionary.Choice(title=title, value=name, checked=(name == default_value))
+            )
+        result = questionary.select(
+            "Choose provider profile for questor:", choices=choices, default=default_value
+        ).ask()
         if result is None:
             raise typer.Abort()
         return str(result)
@@ -261,7 +265,9 @@ def _prompt_channels(existing: GatewayConfig) -> tuple[list[str], dict[str, dict
                 "Feishu bot mention names (comma separated)",
                 default=prior_bot_names_default,
             )
-            config["bot_names"] = [item.strip() for item in bot_names_raw.split(",") if item.strip()]
+            config["bot_names"] = [
+                item.strip() for item in bot_names_raw.split(",") if item.strip()
+            ]
             config["bot_open_id"] = _text_prompt(
                 "Feishu bot open_id for exact mention detection (optional)",
                 default=str(prior.get("bot_open_id", "")),
@@ -308,9 +314,7 @@ def _run_gateway_config_wizard(workspace: str | Path) -> GatewayConfig:
             default=default_allowlist,
         )
         allowed_remote_admin_commands = [
-            item.strip().lstrip("/")
-            for item in allowlist_raw.split(",")
-            if item.strip()
+            item.strip().lstrip("/") for item in allowlist_raw.split(",") if item.strip()
         ]
     config = existing.model_copy(
         update={
@@ -335,7 +339,8 @@ def _print_gateway_config_summary(config: GatewayConfig) -> None:
             + f" | provider_profile={config.provider_profile}"
         )
         deny_all_channels = [
-            name for name in config.enabled_channels
+            name
+            for name in config.enabled_channels
             if not list(config.channel_configs.get(name, {}).get("allow_from", []))
         ]
         if deny_all_channels:
@@ -405,7 +410,9 @@ def _build_gateway_logging_handlers(
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    print_mode: str | None = typer.Option(None, "--print", "-p", help="Run a single prompt and exit"),
+    print_mode: str | None = typer.Option(
+        None, "--print", "-p", help="Run a single prompt and exit"
+    ),
     model: str | None = typer.Option(None, "--model", help="Model override for this session"),
     profile: str | None = typer.Option(None, "--profile", help="Provider profile to use"),
     workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP),
@@ -413,7 +420,9 @@ def main(
     cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Working directory"),
     backend_only: bool = typer.Option(False, "--backend-only", hidden=True),
     resume: str | None = typer.Option(None, "--resume", help="Resume an questor session by id"),
-    continue_session: bool = typer.Option(False, "--continue", help="Continue the latest questor session"),
+    continue_session: bool = typer.Option(
+        False, "--continue", help="Continue the latest questor session"
+    ),
 ) -> None:
     """Launch the questor app or invoke a subcommand."""
     if ctx.invoked_subcommand is not None:
@@ -481,7 +490,7 @@ def main(
 
     raise SystemExit(
         asyncio.run(
-            launch_questor_react_tui(
+            run_questor_backend(
                 cwd=cwd_path,
                 workspace=workspace_root,
                 model=model,
@@ -494,7 +503,11 @@ def main(
 
 @app.command("init")
 def init_cmd(
-    cwd: str = typer.Option(str(Path.cwd()), "--cwd", help="Project working directory (reserved for future project overrides)"),
+    cwd: str = typer.Option(
+        str(Path.cwd()),
+        "--cwd",
+        help="Project working directory (reserved for future project overrides)",
+    ),
     workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP),
     interactive: bool = typer.Option(
         True,
@@ -562,7 +575,9 @@ def doctor_cmd(
 
 
 @memory_app.command("list")
-def memory_list_cmd(workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP)) -> None:
+def memory_list_cmd(
+    workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP),
+) -> None:
     for path in list_memory_files(workspace):
         print(path.name)
 
@@ -602,7 +617,9 @@ def _show_or_edit(path: Path, set_text: str | None) -> None:
 
 
 @soul_app.command("show")
-def soul_show_cmd(workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP)) -> None:
+def soul_show_cmd(
+    workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP),
+) -> None:
     _show_or_edit(get_soul_path(workspace), None)
 
 
@@ -615,7 +632,9 @@ def soul_edit_cmd(
 
 
 @user_app.command("show")
-def user_show_cmd(workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP)) -> None:
+def user_show_cmd(
+    workspace: str | None = typer.Option(None, "--workspace", help=_WORKSPACE_HELP),
+) -> None:
     _show_or_edit(get_user_path(workspace), None)
 
 

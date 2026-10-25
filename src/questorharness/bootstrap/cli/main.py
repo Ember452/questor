@@ -66,6 +66,7 @@ app.command("setup")(setup_cmd)
 # 入口：交互式会话或 --print 单次运行
 # ---------------------------------------------------------------------------
 
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -241,10 +242,16 @@ def main(
         help="Working directory for the session",
         hidden=True,
     ),
-    backend_only: bool = typer.Option(
+    studio_host: bool = typer.Option(
         False,
-        "--backend-only",
-        help="Run the structured backend host for the React terminal UI",
+        "--studio-host",
+        help="Run the loopback studio host (handshake line on stdout)",
+        hidden=True,
+    ),
+    serve_no_auth: bool = typer.Option(
+        False,
+        "--serve-no-auth",
+        help="DEV ONLY: skip the launch credential checks on the loopback host",
         hidden=True,
     ),
     task_worker: bool = typer.Option(
@@ -270,7 +277,9 @@ def main(
         logging.getLogger("questorharness").setLevel(logging.DEBUG)
     elif os.environ.get("QUESTORHARNESS_LOG_LEVEL"):
         lvl = getattr(logging, os.environ["QUESTORHARNESS_LOG_LEVEL"].upper(), logging.WARNING)
-        logging.basicConfig(level=lvl, format="%(asctime)s [%(name)s] %(levelname)s %(message)s", stream=sys.stderr)
+        logging.basicConfig(
+            level=lvl, format="%(asctime)s [%(name)s] %(levelname)s %(message)s", stream=sys.stderr
+        )
 
     if dangerously_skip_permissions:
         permission_mode = "full_auto"
@@ -284,6 +293,7 @@ def main(
         save_settings(settings)
 
     from questorharness.bootstrap.hosts.app import run_print_mode, run_repl, run_task_worker
+    from questorharness.bootstrap.hosts.serve.studio import run_studio_host
 
     if dry_run and (continue_session or resume is not None):
         print("Error: --dry-run does not support --continue/--resume yet.", file=sys.stderr)
@@ -292,7 +302,9 @@ def main(
     if dry_run:
         prompt = print_mode.strip() if print_mode is not None else None
         if print_mode is not None and not prompt:
-            print("Error: -p/--print requires a prompt value, e.g. -p 'your prompt'", file=sys.stderr)
+            print(
+                "Error: -p/--print requires a prompt value, e.g. -p 'your prompt'", file=sys.stderr
+            )
             raise typer.Exit(1)
         preview = _build_dry_run_preview(
             prompt=prompt,
@@ -345,7 +357,9 @@ def main(
                 raise typer.Exit(1)
             print("Saved sessions:")
             for i, s in enumerate(sessions, 1):
-                print(f"  {i}. [{s['session_id']}] {s.get('summary', '?')[:50]} ({s['message_count']} msgs)")
+                print(
+                    f"  {i}. [{s['session_id']}] {s.get('summary', '?')[:50]} ({s['message_count']} msgs)"
+                )
             choice = typer.prompt("Enter session number or ID")
             try:
                 idx = int(choice) - 1
@@ -371,7 +385,6 @@ def main(
                 prompt=None,
                 cwd=cwd,
                 model=session_data.get("model") or model,
-                backend_only=backend_only,
                 base_url=base_url,
                 system_prompt=system_prompt,
                 api_key=api_key,
@@ -387,7 +400,9 @@ def main(
     if print_mode is not None:
         prompt = print_mode.strip()
         if not prompt:
-            print("Error: -p/--print requires a prompt value, e.g. -p 'your prompt'", file=sys.stderr)
+            print(
+                "Error: -p/--print requires a prompt value, e.g. -p 'your prompt'", file=sys.stderr
+            )
             raise typer.Exit(1)
         asyncio.run(
             run_print_mode(
@@ -423,13 +438,29 @@ def main(
         )
         return
 
+    if studio_host:
+        asyncio.run(
+            run_studio_host(
+                cwd=cwd,
+                model=model,
+                max_turns=max_turns,
+                base_url=base_url,
+                system_prompt=system_prompt,
+                api_key=api_key,
+                api_format=api_format,
+                permission_mode=permission_mode,
+                effort=effort,
+                allow_no_auth=serve_no_auth,
+            )
+        )
+        return
+
     asyncio.run(
         run_repl(
             prompt=None,
             cwd=cwd,
             model=model,
             max_turns=max_turns,
-            backend_only=backend_only,
             base_url=base_url,
             system_prompt=system_prompt,
             api_key=api_key,
@@ -438,5 +469,6 @@ def main(
             effort=effort,
         )
     )
+
 
 # questor: allow R8 -- refactor the offenders in W8

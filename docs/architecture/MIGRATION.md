@@ -126,7 +126,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `config/` | 已收敛为叶子：模型与加载同包，只依赖 `platform` + `contracts`；`resolve_auth` 已移到 `providers.auth.resolver` | `config → providers` 已归零 |
 | `bridge/` | `runtime/bridge/`（已完成） | 有策略时再拆 |
 | `questor/gateway/` | **Phase 1 不动**（W5） | 协议路由进 `surfaces/gateway/`，产品策略留在产品包 |
-| `frontend/terminal/` | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `apps/terminal/`；wheel force-include 同步删除 |
+| frontend/terminal/（阶段 2 已删除） | **Phase 1 冻结**；Phase 2 移除（ADR-0005） | 不迁 `apps/terminal/`；wheel force-include 同步删除 |
 
 > `mcp` 不能整体挂在 eager 的 `capabilities/tools/__init__.py` 之下：`config.settings` 需要 `McpServerConfig`，导入 `capabilities.tools.mcp.types` 会执行整个工具门面，形成 `config → tools → agent_tool → swarm → tasks → config` 循环。Phase 1 实测后改为 transport 落 `providers/mcp/`，工具适配器留 `capabilities/tools/mcp/`；Phase 2 再做瘦身与策略拆分。
 
@@ -138,7 +138,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 - 不改函数签名、不改协议、不改事件/快照类型；
 - 不引入新依赖；
 - 不建 `contracts/`、`kernel/`、`profiles/`；
-- 不动 `frontend/terminal/`、不建 `apps/desktop` / `apps/web`；
+- 不动 frontend/terminal/（阶段 2 已删除）、不建 `apps/desktop` / `apps/web`；
 - 不写 memory provider；ADR-0004 只记录契约，代码到 Phase 3。
 - **不做任何语义归位**（这些都不是 move-only，归 Phase 2）：config 注入、`state/` 拆分、`plugins/skills` 拆代码与数据、`prompts/` 重定位、`ui/` 移除、`utils/` 解散。
 
@@ -223,6 +223,21 @@ manager.py / service.py / utils 的存量命名（baseline 只挡新增）
 5. **wire schema**：只有当前端要按事件类型分支时才定稿并上 codegen `--check`。
 
 ---
+
+## 5.5 计划 02 交付记录（feat/studio-serve，阶段 1–3）
+
+按 `docs/plan/02-studio-serve-host.md` 交付，验收 commit 见该计划 §7。要点：
+
+- **契约**：`protocol/app-wire.schema.json` 为唯一真源，双侧 codegen（`serve/wire_types.py` /
+  `protocol/_gen/app-wire.ts`），两侧 `--check` 进 `scripts/check.py`；13 帧黄金样本在
+  `tests/fixtures/serve_wire/`（逐 kind 一例，构造器与样本逐字段比对）。
+- **宿主**：`bootstrap/hosts/serve/`（路由 / 广播 / SSE / 租约 / 提示桥），内存 transport 与
+  回环 TCP 共用同一组 handler；凭据五件套在 `serve/auth.py` + `serve/http_server.py`。
+- **形态**：`questorharness/profiles`（解析）+ `questor/profiles`（coding / personal 数据）+
+  `/rt/r1/profile`；工具面由 `allowed_tools / denied_tools` 经 `build_runtime` 进入 policy。
+- **删除**：frontend/terminal/（已删）、`backend_host.py` + OHJSON、`protocol.py`、`react_launcher.py`、
+  `--backend-only`；终端入口改为 `hosts/terminal_client.py`（瘦客户端）。
+- **门槛**：`scripts/check.py` 现有 37 步，其中 6 条是 serve 契约 / 删除刀守卫。
 
 ## 6. 触发条件（防止规划变成第二个项目）
 

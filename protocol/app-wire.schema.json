@@ -1,0 +1,354 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://questor.dev/protocol/app-wire.schema.json",
+  "title": "Questor app wire protocol",
+  "description": "Single source of truth for the studio wire protocol. One schema, two generators (Python serve/wire_types.py and TypeScript protocol/_gen/app-wire.ts). Adding a kind is additive; renaming or removing one is a breaking change.",
+  "$comment": "Frames are derived from contracts/domain/events.py (7 StreamEvent types). No frame may carry a field the engine does not produce.",
+  "oneOf": [
+    { "$ref": "#/$defs/ServerFrame" }
+  ],
+  "$defs": {
+    "Usage": {
+      "description": "Mirror of contracts/usage.py UsageSnapshot.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputTokens", "outputTokens"],
+      "properties": {
+        "inputTokens": { "type": "integer" },
+        "outputTokens": { "type": "integer" }
+      }
+    },
+    "TextBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "text" },
+        "text": { "type": "string" }
+      }
+    },
+    "ImageBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mediaType"],
+      "properties": {
+        "type": { "const": "image" },
+        "mediaType": { "type": "string" }
+      }
+    },
+    "ToolUseBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "name"],
+      "properties": {
+        "type": { "const": "tool_use" },
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "ToolResultBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "toolUseId", "content", "isError"],
+      "properties": {
+        "type": { "const": "tool_result" },
+        "toolUseId": { "type": "string" },
+        "content": { "type": "string" },
+        "isError": { "type": "boolean" }
+      }
+    },
+    "ContentBlock": {
+      "description": "Flattened ConversationMessage content block; input payloads stay on the engine side.",
+      "oneOf": [
+        { "$ref": "#/$defs/TextBlock" },
+        { "$ref": "#/$defs/ImageBlock" },
+        { "$ref": "#/$defs/ToolUseBlock" },
+        { "$ref": "#/$defs/ToolResultBlock" }
+      ]
+    },
+    "TurnStarted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "turnId", "index", "via"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "turn_started" },
+        "turnId": { "type": "string" },
+        "index": { "type": "integer" },
+        "via": { "enum": ["cli", "studio", "api"] }
+      }
+    },
+    "Text": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "text"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "text" },
+        "text": { "type": "string" }
+      }
+    },
+    "Message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "blocks"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "message" },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ContentBlock" }
+        },
+        "usage": { "$ref": "#/$defs/Usage" }
+      }
+    },
+    "ToolDispatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "toolCallId", "tool"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "tool_dispatch" },
+        "toolCallId": { "type": "string" },
+        "tool": { "type": "string" }
+      }
+    },
+    "ToolResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "toolCallId", "tool", "output", "isError"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "tool_result" },
+        "toolCallId": { "type": "string" },
+        "tool": { "type": "string" },
+        "output": { "type": "string" },
+        "isError": { "type": "boolean" }
+      }
+    },
+    "ApprovalRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "id", "tool", "subject"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "approval_request" },
+        "id": { "type": "string" },
+        "tool": { "type": "string" },
+        "subject": { "type": "string" },
+        "detail": { "type": "string" }
+      }
+    },
+    "AskRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "id", "question"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "ask_request" },
+        "id": { "type": "string" },
+        "question": { "type": "string" }
+      }
+    },
+    "Notice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "level", "text"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "notice" },
+        "level": { "enum": ["info", "warning", "error"] },
+        "text": { "type": "string" }
+      }
+    },
+    "CompactionStarted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "trigger"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "compaction_started" },
+        "trigger": { "enum": ["auto", "manual", "reactive"] }
+      }
+    },
+    "CompactionProgress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "phase"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "compaction_progress" },
+        "phase": {
+          "enum": [
+            "hooks_start",
+            "context_collapse_start",
+            "context_collapse_end",
+            "session_memory_start",
+            "session_memory_end",
+            "compact_start",
+            "compact_retry",
+            "compact_end",
+            "compact_failed"
+          ]
+        },
+        "attempt": { "type": "integer" },
+        "message": { "type": "string" }
+      }
+    },
+    "CompactionDone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "trigger", "ok"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "compaction_done" },
+        "trigger": { "enum": ["auto", "manual", "reactive"] },
+        "ok": { "type": "boolean" }
+      }
+    },
+    "TurnDone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "turnId", "cancelled", "outcome", "durationMs", "checkpointTurn"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "turn_done" },
+        "turnId": { "type": "string" },
+        "cancelled": { "type": "boolean" },
+        "outcome": { "enum": ["completed", "cancelled", "failed"] },
+        "durationMs": { "type": "integer" },
+        "checkpointTurn": { "type": "boolean" },
+        "usage": { "$ref": "#/$defs/Usage" }
+      }
+    },
+    "StreamReset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "reason"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "stream_reset" },
+        "reason": { "enum": ["replay_gap", "server_restart"] }
+      }
+    },
+    "ServerFrame": {
+      "description": "Downstream SSE frame union.",
+      "oneOf": [
+        { "$ref": "#/$defs/TurnStarted" },
+        { "$ref": "#/$defs/Text" },
+        { "$ref": "#/$defs/Message" },
+        { "$ref": "#/$defs/ToolDispatch" },
+        { "$ref": "#/$defs/ToolResult" },
+        { "$ref": "#/$defs/ApprovalRequest" },
+        { "$ref": "#/$defs/AskRequest" },
+        { "$ref": "#/$defs/Notice" },
+        { "$ref": "#/$defs/CompactionStarted" },
+        { "$ref": "#/$defs/CompactionProgress" },
+        { "$ref": "#/$defs/CompactionDone" },
+        { "$ref": "#/$defs/TurnDone" },
+        { "$ref": "#/$defs/StreamReset" }
+      ]
+    },
+    "SubmitRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["line", "clientRequestId"],
+      "properties": {
+        "line": { "type": "string" },
+        "clientRequestId": { "type": "string" }
+      }
+    },
+    "SubmitResponse": {
+      "description": "state=queued is reserved: the wire accepts it before the behaviour exists.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["turnId", "state"],
+      "properties": {
+        "turnId": { "type": "string" },
+        "state": { "enum": ["started", "queued"] },
+        "position": { "type": "integer" }
+      }
+    },
+    "CancelRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "ApproveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "decision"],
+      "properties": {
+        "id": { "type": "string" },
+        "decision": { "enum": ["approve", "deny"] }
+      }
+    },
+    "AskAnswerRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "answer"],
+      "properties": {
+        "id": { "type": "string" },
+        "answer": { "type": "string" }
+      }
+    },
+    "ProfileUi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capabilities"],
+      "properties": {
+        "capabilities": { "$ref": "#/$defs/CapabilityMap" }
+      }
+    },
+    "CapabilityMap": {
+      "description": "page id -> ready | declared | absent (STRUCTURE.md section 7 boundary 5).",
+      "type": "object",
+      "additionalProperties": { "enum": ["ready", "declared", "absent"] }
+    },
+    "ProfileResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description", "ui"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "ui": { "$ref": "#/$defs/ProfileUi" }
+      }
+    },
+    "HistoryMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "blocks"],
+      "properties": {
+        "role": { "enum": ["user", "assistant"] },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ContentBlock" }
+        }
+      }
+    },
+    "HistoryResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionId", "messages"],
+      "properties": {
+        "sessionId": { "type": "string" },
+        "messages": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/HistoryMessage" }
+        }
+      }
+    },
+    "ErrorBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

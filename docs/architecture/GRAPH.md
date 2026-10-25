@@ -15,14 +15,15 @@
 | `questor.gateway` | `questor.group_registry`, `questor.memory`, `questor.prompts`, `questor.session_storage`, `questor.workspace`, `questorharness.api` |
 | `questor.group_registry` | `questor.workspace` |
 | `questor.memory` | `questor.workspace`, `questorharness.api` |
+| `questor.profiles` | — |
 | `questor.prompts` | `questor.memory`, `questor.workspace`, `questorharness.api` |
 | `questor.runtime` | `questor.memory`, `questor.prompts`, `questor.session_storage`, `questor.workspace`, `questorharness.api` |
 | `questor.session_storage` | `questor.workspace`, `questorharness.api` |
 | `questor.workspace` | — |
 | `questorharness` | — |
 | `questorharness.__main__` | `questorharness.bootstrap` |
-| `questorharness.api` | `questorharness.bootstrap`, `questorharness.capabilities`, `questorharness.commands`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.platform`, `questorharness.providers`, `questorharness.runtime`, `questorharness.surfaces` |
-| `questorharness.bootstrap` | `questorharness.capabilities`, `questorharness.commands`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.keybindings`, `questorharness.output_styles`, `questorharness.platform`, `questorharness.plugins`, `questorharness.providers`, `questorharness.runtime`, `questorharness.state`, `questorharness.themes` |
+| `questorharness.api` | `questorharness.bootstrap`, `questorharness.capabilities`, `questorharness.commands`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.platform`, `questorharness.profiles`, `questorharness.providers`, `questorharness.runtime`, `questorharness.surfaces` |
+| `questorharness.bootstrap` | `questorharness.capabilities`, `questorharness.commands`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.keybindings`, `questorharness.platform`, `questorharness.plugins`, `questorharness.profiles`, `questorharness.providers`, `questorharness.runtime`, `questorharness.state` |
 | `questorharness.capabilities` | `questorharness.config`, `questorharness.contracts`, `questorharness.execution`, `questorharness.platform` |
 | `questorharness.commands` | `questorharness.capabilities`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.keybindings`, `questorharness.output_styles`, `questorharness.platform`, `questorharness.plugins`, `questorharness.providers`, `questorharness.runtime`, `questorharness.state`, `questorharness.themes` |
 | `questorharness.config` | `questorharness.contracts`, `questorharness.platform` |
@@ -33,6 +34,7 @@
 | `questorharness.output_styles` | `questorharness.platform` |
 | `questorharness.platform` | `questorharness.contracts` |
 | `questorharness.plugins` | `questorharness.capabilities`, `questorharness.contracts`, `questorharness.platform` |
+| `questorharness.profiles` | — |
 | `questorharness.providers` | `questorharness.config`, `questorharness.contracts`, `questorharness.platform` |
 | `questorharness.runtime` | `questorharness.capabilities`, `questorharness.config`, `questorharness.contracts`, `questorharness.engine`, `questorharness.execution`, `questorharness.platform`, `questorharness.plugins`, `questorharness.providers` |
 | `questorharness.state` | — |
@@ -54,16 +56,16 @@
 
 | module | imported by | 类型 |
 | --- | ---: | --- |
-| `questorharness.config.settings` | 41 | 实现 |
+| `questorharness.config.settings` | 39 | 实现 |
 | `questorharness.platform.paths` | 30 | 原语 |
-| `questorharness.api` | 29 | 门面 |
-| `questorharness.contracts.domain.message` | 28 | 契约 |
-| `questorharness.providers.auth.auth_manager` | 18 | 实现 |
+| `questorharness.contracts.domain.message` | 27 | 契约 |
+| `questorharness.api` | 25 | 门面 |
+| `questorharness.providers.auth.auth_manager` | 17 | 实现 |
+| `questorharness.contracts.domain.events` | 16 | 契约 |
 | `questorharness.config` | 15 | 门面 |
-| `questorharness.contracts.domain.events` | 15 | 契约 |
 | `questorharness.contracts.hooks` | 14 | 契约 |
 | `questorharness.platform.io` | 14 | 原语 |
-| `questorharness.contracts.mcp` | 11 | 契约 |
+| `questorharness.contracts.usage` | 11 | 契约 |
 
 ## 包级扇入（Top10）
 
@@ -72,13 +74,13 @@
 
 | package | imported by |
 | --- | ---: |
-| `questorharness.contracts` | 118 |
-| `questorharness.platform` | 64 |
+| `questorharness.contracts` | 117 |
+| `questorharness.platform` | 65 |
 | `questorharness.capabilities` | 61 |
-| `questorharness.config` | 61 |
-| `questorharness.providers` | 61 |
-| `questorharness.runtime` | 39 |
-| `questorharness.api` | 29 |
+| `questorharness.config` | 59 |
+| `questorharness.providers` | 59 |
+| `questorharness.runtime` | 34 |
+| `questorharness.api` | 25 |
 | `questorharness.plugins` | 14 |
 | `questor.workspace` | 9 |
 | `questorharness.execution` | 8 |
@@ -95,9 +97,9 @@
 
 ## vacuous-contracts
 
-目标模块不存在、因而恒判 KEPT 的契约目标：**11**（共声明 86 个目标，实际生效 75 个）
+目标模块不存在、因而恒判 KEPT 的契约目标：**10**（共声明 86 个目标，实际生效 76 个）
 
-这 11 条来自 5 条契约的空条款：`Capabilities may import contracts only` / `Config must not import runtime, capabilities, engine, ui or plugins` / `Product imports the public engine face only` / `Providers must not import runtime, kernel or capabilities` / `Surfaces may import contracts, config and platform only`；涉及的顶层包：`questorharness.kernel`, `questorharness.personalization`, `questorharness.profiles`, `questorharness.prompts`, `questorharness.skills`, `questorharness.ui`。它们读起来像约束，实际没有可约束对象（Phase 1 已迁走或从未存在）。
+这 10 条来自 5 条契约的空条款：`Capabilities may import contracts only` / `Config must not import runtime, capabilities, engine, ui or plugins` / `Product imports the public engine face only` / `Providers must not import runtime, kernel or capabilities` / `Surfaces may import contracts, config and platform only`；涉及的顶层包：`questorharness.kernel`, `questorharness.personalization`, `questorharness.prompts`, `questorharness.skills`, `questorharness.ui`。它们读起来像约束，实际没有可约束对象（Phase 1 已迁走或从未存在）。
 
 目标不存在时契约**保持被跳过而不是失败**，所以这个数量靠本文逐字比对锁住：`--check` 对整篇文档做相等比较，多一条空条款就会红。
 
@@ -107,7 +109,6 @@
 - `questorharness.kernel` (declared by Providers must not import runtime, kernel or capabilities)
 - `questorharness.kernel` (declared by Surfaces may import contracts, config and platform only)
 - `questorharness.personalization` (declared by Product imports the public engine face only)
-- `questorharness.profiles` (declared by Product imports the public engine face only)
 - `questorharness.prompts` (declared by Product imports the public engine face only)
 - `questorharness.skills` (declared by Product imports the public engine face only)
 - `questorharness.ui` (declared by Config must not import runtime, capabilities, engine, ui or plugins)

@@ -13,15 +13,14 @@ from __future__ import annotations
 
 import asyncio
 
+from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
+from questorharness.engine.query import MaxTurnsExceeded
 from questorharness.runtime.coordinator.coordinator_mode import (
     TaskNotification,
     format_task_notification,
 )
-from questorharness.engine.query import MaxTurnsExceeded
-from questorharness.capabilities.context.prompts.context import build_runtime_system_prompt
-from questorharness.runtime.tasks.task_manager import get_task_manager
 from questorharness.runtime.output import format_pending_tool_results
-
+from questorharness.runtime.tasks.task_manager import get_task_manager
 
 _TERMINAL_TASK_STATUSES = frozenset({"completed", "failed", "killed"})
 
@@ -50,7 +49,9 @@ def pending_async_agent_entries(tool_metadata: dict[str, object] | None) -> list
 def _build_async_task_summary(
     entry: dict[str, object], *, task_status: str, return_code: int | None
 ) -> str:
-    description = str(entry.get("description") or entry.get("agent_id") or "background task").strip()
+    description = str(
+        entry.get("description") or entry.get("agent_id") or "background task"
+    ).strip()
     if task_status == "completed":
         return f'Agent "{description}" completed'
     if task_status == "killed":
@@ -179,9 +180,7 @@ async def drain_coordinator_async_agents(
         if not pending:
             return
         if announce_waiting:
-            await print_system(
-                f"Waiting for {len(pending)} background agent task(s) to finish..."
-            )
+            await print_system(f"Waiting for {len(pending)} background agent task(s) to finish...")
         completed = await wait_for_completed_async_agent_entries(
             getattr(engine, "tool_metadata", None)
         )

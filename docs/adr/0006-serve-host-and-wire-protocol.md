@@ -25,13 +25,20 @@ Electron（`apps/desktop`）与浏览器（`apps/web`）。现状却是每个客
    - **Studio / Web**：同一组路由挂**回环 TCP + 凭据五件套**（Reasonix
      `main.go:300-348`、`host.js:151-167` 先例）：① 仅监听 127.0.0.1 的随机
      端口；② 一次性 launch credential（≥32 字节随机，**永不出自配置、永不
-     落盘**）；③ 凭据经 HttpOnly cookie 种植；④ Host + Origin 校验且 hostname
-     必须是 127.0.0.1；⑤ 父进程租约——宿主父进程退出即服务失效。
+     落盘**）；③ 凭据经 HttpOnly cookie 种植；④ Host 校验 + **仅改状态方法
+     （POST/PUT/PATCH/DELETE）的 Origin 校验**，hostname 必须是 127.0.0.1——
+     浏览器同源 GET（fetch/EventSource）往往不发 Origin，对所有方法强校验会把
+     `/events`、`/history` 全拦成 403；GET 靠 Host + SameSite=Strict cookie 防护；
+     ⑤ 父进程租约——宿主父进程退出即服务失效。
 2. **帧模型**。事件下行 = SSE：单调 `seq` + `Last-Event-ID` 双通道恢复
    （`eventstream.go:66,89`）+ watermark 心跳帧（`:361`）+ droppable 可丢
    分类——进度类可丢、事实类不可丢（`broadcaster.go:39-43`）+ `/events/mux`
    复用单连接（`hub_mux.go:267-269`）。命令上行 = POST + **refusal code**
    （客户端按码分支，不解析自由文本错误）。
+
+   > **帧集口径（2026-10-24）**：36 是参照仓的帧数，**不是本仓目标**。本仓契约以
+   > **protocol/app-wire.schema.json** 的实际帧集为准（阶段 1 为 13 帧，全部有引擎来源），
+   > 新增帧只加不改。
 3. **对齐声明（不是新的一致性决定）**。传输层 `seq` 是传输的，不是会话事实
    流的；SSE 重放是**有界尾巴**，不是事件溯源；durable spine 仍未立项
    （STRUCTURE §11）。交付语义 = **at-least-once + seq 去重幂等**——恰是
@@ -40,8 +47,14 @@ Electron（`apps/desktop`）与浏览器（`apps/web`）。现状却是每个客
    "this file is the contract, not a convenience shape"（Reasonix
    `port/wire.ts` 原则），并配 `frontend_contract_test` 同款守卫进
    `tests/ci`——镜像与引擎侧定义漂移即红。
+
+   > **更新（2026-10-24，由 ADR-0007 §4 取代本节实现）**：意图不变，**实现方式作废**。
+   > 手写镜像 + 正则守卫已证为弱守卫（Reasonix 的 `frontend_contract_test` 实测为单向、
+   > 文件缺失即 `Skipf`、靠 `compared >= 10` 兜底）。现行实现为**单 schema + 双侧
+   > codegen**：**protocol/app-wire.schema.json** 为唯一真源，TS 与 Python 两侧生成、
+   > 两侧 `--check` 进 `scripts/check.py`。
 5. **实现口径**。Python / aiohttp 表达；`contracts/domain/events.py` 的
-   StreamEvent（8 种）到 wire 帧的映射由本仓自定；**aiohttp 是本 ADR 唯一
+   StreamEvent（7 种，2026-10-24 实测勘误：原误记 8 种）到 wire 帧的映射由本仓自定；**aiohttp 是本 ADR 唯一
    新增依赖**，进入依赖树须过 layout/structure 基线。
 6. **设计法典随契约走**。`TOKENS.md` / `LAYOUT.md` / `tokens.css`（Reasonix
    `styles/` 先例，329 / 1591 / 279 行实物）移植进仓作为设计真源；关键交互
@@ -64,7 +77,7 @@ Electron（`apps/desktop`）与浏览器（`apps/web`）。现状却是每个客
 
 ## Consequences
 
-- 判死清单（`frontend/terminal`、`backend_host` + OHJSON、`react_launcher`、
+- 判死清单（frontend/terminal（阶段 2 已删除）、`backend_host` + OHJSON、`react_launcher`、
   `--backend-only`）与删除红线归 ADR-0005 Updated 2026-10-24；阶段推进与
   验收标准归 `docs/plan/02-studio-serve-host.md`。
 - `bootstrap/hosts` 收缩后，宿主面只剩 serve 装配与进程内入口；`surfaces`

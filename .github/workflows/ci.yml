@@ -40,6 +40,15 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra dev --frozen
 
+      # 契约 TS 侧 codegen 守卫需要 node 与生成器依赖（scripts/codegen）。
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install wire codegen deps
+        run: npm ci --prefix scripts/codegen --no-fund --no-audit --loglevel=error
+
       - name: Pre-commit
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
@@ -83,6 +92,15 @@ jobs:
 
       - name: Sync dependencies
         run: uv sync --extra dev --frozen
+
+      # tests 里含 tests/ci/test_wire_codegen.py（TS 侧 codegen 守卫），同样需要生成器依赖。
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install wire codegen deps
+        run: npm ci --prefix scripts/codegen --no-fund --no-audit --loglevel=error
 
       - name: Unit and integration tests
         run: uv run pytest -m "unit or integration" -ra --tb=long --durations=20

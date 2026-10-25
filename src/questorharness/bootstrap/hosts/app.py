@@ -6,14 +6,17 @@ import asyncio
 import json
 import sys
 
-from questorharness.runtime.coordinator.coordinator_mode import is_coordinator_mode
-
-from questorharness.providers.llm.client import SupportsStreamingMessages
-from questorharness.contracts.domain.events import StreamEvent
-from questorharness.bootstrap.hosts.backend_host import run_backend_host
 from questorharness.bootstrap.hosts.coordinator_drain import drain_coordinator_async_agents
-from questorharness.bootstrap.hosts.react_launcher import launch_react_tui
-from questorharness.bootstrap.runtime import build_runtime, close_runtime, handle_line, start_runtime
+from questorharness.bootstrap.hosts.terminal_client import run_terminal_repl
+from questorharness.bootstrap.runtime import (
+    build_runtime,
+    close_runtime,
+    handle_line,
+    start_runtime,
+)
+from questorharness.contracts.domain.events import StreamEvent
+from questorharness.providers.llm.client import SupportsStreamingMessages
+from questorharness.runtime.coordinator.coordinator_mode import is_coordinator_mode
 
 
 def _decode_task_worker_line(raw: str) -> str:
@@ -49,31 +52,12 @@ async def run_repl(
     api_key: str | None = None,
     api_format: str | None = None,
     api_client: SupportsStreamingMessages | None = None,
-    backend_only: bool = False,
     restore_messages: list[dict] | None = None,
     restore_tool_metadata: dict[str, object] | None = None,
     permission_mode: str | None = None,
 ) -> None:
-    """Run the default QuestorHarness interactive application (React TUI)."""
-    if backend_only:
-        await run_backend_host(
-            cwd=cwd,
-            model=model,
-            max_turns=max_turns,
-            effort=effort,
-            base_url=base_url,
-            system_prompt=system_prompt,
-            api_key=api_key,
-            api_format=api_format,
-            api_client=api_client,
-            restore_messages=restore_messages,
-            restore_tool_metadata=restore_tool_metadata,
-            enforce_max_turns=max_turns is not None,
-            permission_mode=permission_mode,
-        )
-        return
-
-    exit_code = await launch_react_tui(
+    """Run the interactive application: the terminal thin client over serve routes."""
+    await run_terminal_repl(
         prompt=prompt,
         cwd=cwd,
         model=model,
@@ -83,10 +67,11 @@ async def run_repl(
         system_prompt=system_prompt,
         api_key=api_key,
         api_format=api_format,
+        api_client=api_client,
+        restore_messages=restore_messages,
+        restore_tool_metadata=restore_tool_metadata,
         permission_mode=permission_mode,
     )
-    if exit_code != 0:
-        raise SystemExit(exit_code)
 
 
 async def run_task_worker(
@@ -119,7 +104,12 @@ async def run_task_worker(
         print(message, flush=True)
 
     async def _render_event(event: StreamEvent) -> None:
-        from questorharness.contracts.domain.events import AssistantTextDelta, AssistantTurnComplete, ErrorEvent, StatusEvent
+        from questorharness.contracts.domain.events import (
+            AssistantTextDelta,
+            AssistantTurnComplete,
+            ErrorEvent,
+            StatusEvent,
+        )
 
         if isinstance(event, AssistantTextDelta):
             sys.stdout.write(event.text)
@@ -127,9 +117,7 @@ async def run_task_worker(
         elif isinstance(event, AssistantTurnComplete):
             sys.stdout.write("\n")
             sys.stdout.flush()
-        elif isinstance(event, ErrorEvent):
-            print(event.message, flush=True)
-        elif isinstance(event, StatusEvent) and event.message:
+        elif isinstance(event, ErrorEvent) or isinstance(event, StatusEvent) and event.message:
             print(event.message, flush=True)
 
     async def _clear_output() -> None:
@@ -228,6 +216,7 @@ async def run_print_mode(
     events_list: list[dict] = []
 
     try:
+
         async def _print_system(message: str) -> None:
             nonlocal collected_text
             if output_format == "text":
@@ -258,19 +247,32 @@ async def run_print_mode(
                     events_list.append(obj)
             elif isinstance(event, ToolExecutionStarted):
                 if output_format == "stream-json":
-                    obj = {"type": "tool_started", "tool_name": event.tool_name, "tool_input": event.tool_input}
+                    obj = {
+                        "type": "tool_started",
+                        "tool_name": event.tool_name,
+                        "tool_input": event.tool_input,
+                    }
                     print(json.dumps(obj), flush=True)
                     events_list.append(obj)
             elif isinstance(event, ToolExecutionCompleted):
                 if output_format == "stream-json":
-                    obj = {"type": "tool_completed", "tool_name": event.tool_name, "output": event.output, "is_error": event.is_error}
+                    obj = {
+                        "type": "tool_completed",
+                        "tool_name": event.tool_name,
+                        "output": event.output,
+                        "is_error": event.is_error,
+                    }
                     print(json.dumps(obj), flush=True)
                     events_list.append(obj)
             elif isinstance(event, ErrorEvent):
                 if output_format == "text":
                     print(event.message, file=sys.stderr)
                 elif output_format == "stream-json":
-                    obj = {"type": "error", "message": event.message, "recoverable": event.recoverable}
+                    obj = {
+                        "type": "error",
+                        "message": event.message,
+                        "recoverable": event.recoverable,
+                    }
                     print(json.dumps(obj), flush=True)
                     events_list.append(obj)
             elif isinstance(event, CompactProgressEvent):
@@ -318,6 +320,7 @@ async def run_print_mode(
             print(json.dumps(result))
     finally:
         await close_runtime(bundle)
+
 
 # questor: allow R7 -- until W8 adds the mirror test
 # questor: allow R8 -- refactor the offenders in W8

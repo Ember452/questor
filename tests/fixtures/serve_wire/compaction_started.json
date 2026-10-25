@@ -1,0 +1,5 @@
+{
+  "kind": "compaction_started",
+  "seq": 5,
+  "trigger": "auto"
+}

@@ -132,18 +132,21 @@ def test_run_questor_backend_passes_private_skill_and_plugin_roots(tmp_path, mon
     initialize_workspace(workspace)
     captured: dict[str, object] = {}
 
-    async def fake_run_backend_host(**kwargs):
+    async def fake_run_terminal_repl(**kwargs):
         captured.update(kwargs)
         return 0
 
-    monkeypatch.setattr("questor.runtime.run_backend_host", fake_run_backend_host)
+    monkeypatch.setattr("questor.runtime.run_terminal_repl", fake_run_terminal_repl)
 
     result = asyncio.run(
         run_questor_backend(cwd=tmp_path, workspace=workspace, provider_profile="codex")
     )
     assert result == 0
-    assert captured["extra_skill_dirs"] == (str(get_skills_dir(workspace)),)
-    assert captured["extra_plugin_roots"] == (str(get_plugins_dir(workspace)),)
+    overrides = captured["overrides"]
+    assert overrides["extra_skill_dirs"] == (str(get_skills_dir(workspace)),)
+    assert overrides["extra_plugin_roots"] == (str(get_plugins_dir(workspace)),)
+    assert overrides["include_project_memory"] is False
+    assert overrides["active_profile"] == "codex"
 
 
 def test_plugin_loader_supports_directory_skill_layout(tmp_path, monkeypatch):

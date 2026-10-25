@@ -1,0 +1,6 @@
+{
+  "kind": "compaction_done",
+  "ok": true,
+  "seq": 3,
+  "trigger": "auto"
+}

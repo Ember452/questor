@@ -4,9 +4,9 @@ import logging
 
 import pytest
 
-from questorharness.config.settings import PathRuleConfig, PermissionSettings
 from questorharness.capabilities.policy import PermissionChecker, PermissionMode
 from questorharness.capabilities.policy.checker import SENSITIVE_PATH_PATTERNS
+from questorharness.config.settings import PathRuleConfig, PermissionSettings
 
 
 def test_default_mode_allows_read_only():
@@ -66,11 +66,11 @@ def _settings_with_rules(*rules) -> PermissionSettings:
 @pytest.mark.parametrize(
     "bad_rule",
     [
-        PathRuleConfig.model_construct(allow=False),                  # pattern attribute missing
-        PathRuleConfig.model_construct(pattern="", allow=False),      # pattern empty string
-        PathRuleConfig.model_construct(pattern="   ", allow=False),   # pattern whitespace-only
-        PathRuleConfig.model_construct(pattern=42, allow=False),      # pattern non-string
-        PathRuleConfig.model_construct(pattern=None, allow=False),    # pattern None
+        PathRuleConfig.model_construct(allow=False),  # pattern attribute missing
+        PathRuleConfig.model_construct(pattern="", allow=False),  # pattern empty string
+        PathRuleConfig.model_construct(pattern="   ", allow=False),  # pattern whitespace-only
+        PathRuleConfig.model_construct(pattern=42, allow=False),  # pattern non-string
+        PathRuleConfig.model_construct(pattern=None, allow=False),  # pattern None
     ],
     ids=["missing", "empty", "whitespace-only", "non-string", "none"],
 )

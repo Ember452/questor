@@ -10,8 +10,7 @@ modules are reshaped.
 
 from __future__ import annotations
 
-from questorharness.bootstrap.hosts.backend_host import run_backend_host
-from questorharness.bootstrap.hosts.react_launcher import get_frontend_dir, resolve_npm, resolve_tsx
+from questorharness.bootstrap.hosts.terminal_client import run_terminal_repl
 from questorharness.bootstrap.runtime import (
     RuntimeBundle,
     build_runtime,
@@ -74,6 +73,7 @@ from questorharness.platform.session_storage import (
     persistable_tool_metadata,
     sanitize_snapshot_payload,
 )
+from questorharness.profiles import ProfileError, ProfileInfo, list_profiles, load_profile
 from questorharness.providers.auth.auth_manager import AuthManager
 from questorharness.providers.llm.client import SupportsStreamingMessages
 from questorharness.runtime.session.backend import SessionBackend
@@ -100,22 +100,19 @@ __all__ = [
     "MemoryCommandBackend",
     "MessageBus",
     "OutboundMessage",
+    "ProfileError",
+    "ProfileInfo",
     "RuntimeBundle",
     "SessionBackend",
     "StatusEvent",
     "SupportsStreamingMessages",
     "TextBlock",
-    "ToolExecutionContext",
-    "ToolExecutionCompleted",
-    "ToolExecutionStarted",
     "ToolCapabilities",
+    "ToolExecutionCompleted",
+    "ToolExecutionContext",
+    "ToolExecutionStarted",
     "ToolResult",
     "UsageSnapshot",
-    "last_user_text",
-    "persistable_tool_metadata",
-    "resolve_npm",
-    "resolve_tsx",
-    "sanitize_snapshot_payload",
     "atomic_write_text",
     "build_runtime",
     "build_runtime_system_prompt",
@@ -127,16 +124,20 @@ __all__ = [
     "format_datetime",
     "generate_memory_id",
     "get_base_system_prompt",
-    "get_frontend_dir",
     "handle_line",
+    "last_user_text",
+    "list_profiles",
     "load_memory_prompt",
+    "load_profile",
     "load_settings",
     "lookup_skill_slash_command",
     "memory_metadata_from_path",
+    "persistable_tool_metadata",
     "register_notification_handler",
     "render_memory_file",
-    "run_backend_host",
+    "run_terminal_repl",
     "sanitize_conversation_messages",
+    "sanitize_snapshot_payload",
     "scan_memory_files",
     "split_memory_file",
     "start_runtime",

@@ -1,0 +1,24 @@
+# 编码形态：线程 / 工作台 / 检查器 / 设置。
+# allowed_tools 为空 = 不做 profile 级显式放行；denied_tools 为空 = 不额外拒绝。
+name: coding
+description: 编码形态：对话线程、工作台、检查器与设置。
+is_default: true
+model: null
+provider: null
+skill_dirs: []
+plugin_roots: []
+allowed_tools: []
+denied_tools: []
+ui:
+  capabilities:
+    chat: ready
+    thread: ready
+    inspector: ready
+    settings: ready
+    workbench: ready
+# runtime 能力位：编码形态不开定时/投递/记忆归因；与 personal 同一份契约。
+# YAML 1.1 把未加引号的 off 读成 false，loader 会归一成 on/off 词表。
+runtime:
+  schedule: off
+  delivery: off
+  memory_consumption: off

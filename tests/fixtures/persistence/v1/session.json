@@ -1,0 +1,17 @@
+{
+  "session_id": "legacy-v1",
+  "cwd": ".",
+  "model": "legacy-model",
+  "system_prompt": "legacy-prompt",
+  "messages": [
+    {
+      "role": "user",
+      "content": [{ "type": "text", "text": "hello from v1" }]
+    }
+  ],
+  "usage": { "input_tokens": 1, "output_tokens": 1 },
+  "tool_metadata": {},
+  "created_at": 0.0,
+  "summary": "hello from v1",
+  "message_count": 1
+}

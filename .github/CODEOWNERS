@@ -14,8 +14,11 @@
 # Fallback: everything not claimed below.
 * @Ember452
 
+/src/questor/profiles/ @Ember452
+
 # Engine domains (src/questorharness)
 /src/questorharness/bootstrap/ @Ember452
+/src/questorharness/profiles/ @Ember452
 /src/questorharness/capabilities/ @Ember452
 /src/questorharness/commands/ @Ember452
 /src/questorharness/config/ @Ember452

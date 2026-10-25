@@ -2814,6 +2814,7 @@ name = "questorharness-ai"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "anthropic" },
     { name = "croniter" },
     { name = "httpx" },
@@ -2848,6 +2849,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.14.5" },
     { name = "anthropic", specifier = ">=0.40.0" },
     { name = "croniter", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.27.0" },

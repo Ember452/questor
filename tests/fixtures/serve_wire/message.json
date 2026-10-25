@@ -1,0 +1,14 @@
+{
+  "blocks": [
+    {
+      "text": "done",
+      "type": "text"
+    }
+  ],
+  "kind": "message",
+  "seq": 6,
+  "usage": {
+    "inputTokens": 3,
+    "outputTokens": 4
+  }
+}

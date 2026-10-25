@@ -1,0 +1,13 @@
+{
+  "name": "questor-wire-codegen",
+  "private": true,
+  "type": "module",
+  "description": "TS side of the app-wire contract codegen (stage 1 keeps only the generated file; apps/web consumes it in 4a).",
+  "scripts": {
+    "generate": "node gen_wire_ts.mjs",
+    "check": "node gen_wire_ts.mjs --check"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "^15.0.4"
+  }
+}

@@ -71,6 +71,18 @@ STEPS: tuple[Step, ...] = (
     Step("mypy-scope", (PYTHON, "scripts/guards/check_mypy_scope.py", "--fail-on-empty")),
     Step("prompt-surface", (PYTHON, "scripts/ci/prompt_surface.py", "--check")),
     Step("import-contracts", ("uv", "run", "lint-imports")),
+    # serve 契约三守卫：codegen 漂移 / kind 覆盖 / 持久化版本（各自带自证用例）。
+    Step("wire-codegen", (PYTHON, "-m", "pytest", "tests/ci/test_wire_codegen.py", "-q")),
+    # TS 侧的同一份契约：schema → protocol/_gen/app-wire.ts，漂移即红。
+    Step("wire-codegen-ts", ("node", "scripts/codegen/gen_wire_ts.mjs", "--check")),
+    # 黄金帧：13 kind 各一例，构造器与冻结样本逐字段一致。
+    Step("serve-wire-fixtures", (PYTHON, "-m", "pytest", "tests/ci/test_serve_wire_fixtures.py", "-q")),
+    Step("kind-coverage", (PYTHON, "-m", "pytest", "tests/ci/test_kind_coverage.py", "-q")),
+    Step(
+        "persistence-version",
+        (PYTHON, "-m", "pytest", "tests/ci/test_persistence_version.py", "-q"),
+    ),
+    Step("legacy-host-removed", (PYTHON, "-m", "pytest", "tests/ci/test_legacy_host_removed.py", "-q")),
     Step(
         "baseline-check",
         # 不传 --fast:pytest 收集计数与 node-id 集是这份基线存在的意义,

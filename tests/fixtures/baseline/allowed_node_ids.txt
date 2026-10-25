@@ -1,5 +1,3 @@
-tests/unit/test_ui/test_react_backend.py::test_run_backend_host_accepts_autodream_context
-tests/unit/test_ui/test_react_backend.py::test_backend_host_forwards_autodream_context_to_runtime
 tests/unit/test_tools/test_tool_ports.py::test_file_read_uses_injected_sandbox
 tests/unit/test_tools/test_tool_ports.py::test_image_to_text_uses_injected_llm_runtime
 tests/unit/test_tools/test_tool_ports.py::test_task_list_uses_injected_task_runtime
@@ -11,3 +9,19 @@ tests/unit/test_commands/test_registry_snapshot.py::test_command_order_snapshot
 tests/unit/test_commands/test_registry_snapshot.py::test_alias_shares_the_canonical_command
 tests/unit/test_services/test_autopilot.py::test_run_agent_prompt_fails_closed_without_runner
 tests/unit/test_services/test_autopilot.py::test_run_agent_prompt_uses_configured_runner
+tests/unit/bootstrap/hosts/serve/test_authority.py::test_edit_approval_carries_patch_detail
+tests/unit/bootstrap/hosts/serve/test_authority.py::test_edit_approval_truncates_huge_diff
+tests/unit/bootstrap/hosts/serve/test_host.py::test_lease_released_even_when_turn_done_publish_is_cancelled
+tests/unit/bootstrap/hosts/serve/test_http_server.py::test_client_identity_cookie_keeps_approvals_same_owner
+tests/unit/bootstrap/hosts/serve/test_http_server.py::test_get_without_origin_is_allowed
+tests/unit/bootstrap/hosts/serve/test_http_server.py::test_post_without_origin_is_rejected
+tests/unit/bootstrap/hosts/serve/test_routes.py::test_events_dedupe_live_frames_already_replayed
+tests/unit/bootstrap/hosts/serve/test_routes.py::test_events_keep_frames_published_before_first_read
+tests/unit/bootstrap/hosts/serve/test_routes.py::test_history_unknown_block_degrades_to_text
+tests/unit/bootstrap/hosts/serve/test_routes.py::test_replay_of_queued_request_reports_queued
+tests/unit/bootstrap/hosts/serve/test_routes.py::test_submit_records_transport_via
+tests/unit/bootstrap/hosts/serve/test_wire_encode.py::test_unknown_content_block_degrades_visibly
+tests/unit/profiles/test_profile_loader.py::test_runtime_capabilities_declared_all_off
+tests/unit/profiles/test_profile_loader.py::test_missing_runtime_section_defaults_to_all_off
+tests/unit/profiles/test_profile_loader.py::test_runtime_unknown_key_and_value_are_rejected
+tests/unit/test_permissions/test_profile_tool_surface.py::test_personal_denies_write_tools_and_coding_allows_them
