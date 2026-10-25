@@ -207,7 +207,10 @@ def test_static_root_serves_spa_without_auth(tmp_path) -> None:  # type: ignore[
                 missing = await client.get(f"http://127.0.0.1:{port}/nope")
                 guarded = await client.get(f"http://127.0.0.1:{port}/rt/r1/profile")
             assert root.status_code == 200 and "questor" in root.text
-            assert asset.status_code == 200 and asset.headers["content-type"].startswith("text/javascript")
+            assert asset.status_code == 200 and asset.headers["content-type"] in {
+                "text/javascript",
+                "application/javascript",
+            }
             assert missing.status_code == 404
             assert guarded.status_code == 401
         finally:
