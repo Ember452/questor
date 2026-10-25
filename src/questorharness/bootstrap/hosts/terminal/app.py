@@ -185,7 +185,10 @@ async def history_rows(host: ServeHost) -> list[dict[str, Any]]:
 
 
 async def command_rows(host: ServeHost) -> list[dict[str, Any]]:
-    """`/commands` → 面板行（`:help` 的数据源，与补全菜单同源）。"""
+    """`/commands` → 面板行（`:help` 的数据源，与补全菜单同源）。
+
+    行带 `group`（命令族），由面板渲染成族标题（plan03 T18/C2）。
+    """
 
     rows: list[dict[str, Any]] = []
     for command in await fetch_commands(host):
@@ -194,7 +197,14 @@ async def command_rows(host: ServeHost) -> list[dict[str, Any]]:
             continue
         aliases = [str(alias) for alias in command.get("aliases", []) or []]
         label = f"/{name}" + (f"  ({', '.join('/' + a for a in aliases)})" if aliases else "")
-        rows.append({"id": f"/{name}", "label": label, "detail": str(command.get("description", ""))})
+        rows.append(
+            {
+                "id": f"/{name}",
+                "label": label,
+                "detail": str(command.get("description", "")),
+                "group": str(command.get("family", "")),
+            }
+        )
     return rows
 
 

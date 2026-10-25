@@ -75,7 +75,13 @@ def render_lines(state: PanelState, *, limit: int = VISIBLE_ROWS) -> list[str]:
         lines.append("  （空）")
         return lines
     start = max(0, min(state.index - limit // 2, max(0, len(rows) - limit)))
+    last_group = None
     for offset, item in enumerate(rows[start : start + limit]):
+        group = item.get("group")
+        if group and group != last_group:
+            # 命令族标题（plan03 C2/T18）：族变了就插一行，不硬编码清单。
+            lines.append(strings.PANEL_GROUP.format(group=group))
+            last_group = group
         position = start + offset
         marker = ">" if position == state.index else " "
         current = "*" if item.get("current") else " "

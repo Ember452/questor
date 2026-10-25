@@ -503,8 +503,10 @@ tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_non_tty_falls_back_to_
 tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_non_tty_out_of_range_cancels
 tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_query_filters_and_resets_the_cursor
 tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_query_matches_detail_text
+tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_render_inserts_a_header_when_the_group_changes
 tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_render_marks_the_cursor_and_the_current_row
 tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_render_window_follows_the_cursor
+tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_rows_without_group_render_flat
 tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_selected_defaults_to_the_first_row
 tests/unit/bootstrap/hosts/terminal/test_package_contract.py::test_interactive_writes_go_through_one_patched_channel
 tests/unit/bootstrap/hosts/terminal/test_package_contract.py::test_package_is_cold_importable_and_declares_all
@@ -585,6 +587,10 @@ tests/unit/bootstrap/hosts/test_terminal_panels.py::test_model_panel_selection_b
 tests/unit/bootstrap/hosts/test_terminal_panels.py::test_transcript_panel_lists_history_rows_without_submitting
 tests/unit/bootstrap/hosts/test_terminal_panels.py::test_unavailable_catalog_does_not_open_a_panel
 tests/unit/bootstrap/hosts/test_terminal_panels.py::test_unknown_alias_shows_the_available_panels_without_requesting
+tests/unit/commands/test_command_family.py::test_every_builtin_command_carries_a_family
+tests/unit/commands/test_command_family.py::test_family_survives_aliases
+tests/unit/commands/test_command_family.py::test_known_families_are_present
+tests/unit/commands/test_command_family.py::test_set_family_stamps_unknown_commands
 tests/unit/profiles/test_model.py::test_defaults_are_empty
 tests/unit/profiles/test_model.py::test_profile_is_frozen
 tests/unit/profiles/test_profile_loader.py::test_invalid_capability_state_is_rejected

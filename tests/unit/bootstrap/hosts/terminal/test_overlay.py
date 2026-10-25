@@ -63,6 +63,28 @@ def test_render_window_follows_the_cursor() -> None:
     assert any("行 30" in line for line in lines)
 
 
+def test_render_inserts_a_header_when_the_group_changes() -> None:
+    """命令面板按族分组（plan03 C2/T18）：族变了插一行标题，不硬编码清单。"""
+
+    rows = [
+        {"id": "/a", "label": "/a", "group": "session"},
+        {"id": "/b", "label": "/b", "group": "session"},
+        {"id": "/c", "label": "/c", "group": "model"},
+    ]
+    state = overlay.PanelState(title="命令", items=rows)
+    lines = overlay.render_lines(state)
+    headers = [line for line in lines if "──" in line]
+    assert len(headers) == 2, lines
+    assert "session" in headers[0] and "model" in headers[1]
+
+
+def test_rows_without_group_render_flat() -> None:
+    """catalog 面板没有族概念：不得凭空插标题行。"""
+
+    lines = overlay.render_lines(_state())
+    assert not any("──" in line for line in lines)
+
+
 def test_non_tty_falls_back_to_numbered_choice(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """CI/管道里没有 alt-screen：必须还能选（编号），否则面板等于不可用。"""
 

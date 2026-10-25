@@ -142,11 +142,16 @@ def test_command_rows_come_from_the_registry_catalog() -> None:
     """:help 面板的行来自 /commands（与补全同源，禁硬编码清单）。"""
 
     transport = _CommandTransport(
-        [{"name": "compact", "description": "压缩历史", "aliases": ["cmp"]}]
+        [{"name": "compact", "description": "压缩历史", "aliases": ["cmp"], "family": "session"}]
     )
     rows = asyncio.run(app_module.command_rows(_host(transport)))  # type: ignore[arg-type]
     assert rows == [
-        {"id": "/compact", "label": "/compact  (/cmp)", "detail": "压缩历史"}
+        {
+            "id": "/compact",
+            "label": "/compact  (/cmp)",
+            "detail": "压缩历史",
+            "group": "session",
+        }
     ]
     assert transport.calls == [("GET", "/rt/r1/commands")]
 

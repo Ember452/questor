@@ -282,6 +282,7 @@ class Router:
                         "name": command.name,
                         "description": command.description,
                         "aliases": list(command.aliases),
+                        "family": getattr(command, "family", ""),
                     }
                     for command in registry.list_commands()
                 ]

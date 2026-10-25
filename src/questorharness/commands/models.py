@@ -75,6 +75,9 @@ class SlashCommand:
     remote_invocable: bool = True
     remote_admin_opt_in: bool = False
     aliases: tuple[str, ...] = ()
+    # 命令族（plan03 T18）：由 registry 在注册时按 `register_*_commands` 打标，
+    # 供 `/commands` 与终端 `:help` 按族分组；不属于命令语义。
+    family: str = ""
 
 
 class CommandRegistry:
@@ -86,9 +89,17 @@ class CommandRegistry:
         # 名称，避免帮助/列表输出重复显示别名条目。
         self._commands: dict[str, SlashCommand] = {}
         self._canonical_names: list[str] = []
+        self._current_family: str = ""
+
+    def set_family(self, family: str) -> None:
+        """标记接下来注册的命令属于哪个族（`register_builtin_commands` 逐族调用）。"""
+
+        self._current_family = family
 
     def register(self, command: SlashCommand) -> None:
         """Register a command, plus any aliases pointing at the same handler."""
+        if not command.family:
+            command.family = self._current_family
         if command.name not in self._commands:
             self._canonical_names.append(command.name)
         self._commands[command.name] = command
