@@ -90,6 +90,11 @@ class Authority:
         """当前持有租约的回合。"""
         return self._running
 
+    @property
+    def prompt_timeout(self) -> float:
+        """提示（审批/提问）的超时秒数；客户端要把同一个数字展示给用户。"""
+        return self._prompt_timeout
+
     def is_owner(self, turn_id: str, client_id: str) -> bool:
         """判断客户端是否为该回合的持有者。"""
         running = self._running

@@ -21,7 +21,8 @@ from rich.console import Console
 from questorharness.bootstrap.hosts.serve import terminal_theme as theme
 from questorharness.bootstrap.hosts.serve.authority import Authority
 from questorharness.bootstrap.hosts.serve.host import ServeHost
-from questorharness.bootstrap.hosts.terminal import cards, footer, strings
+from questorharness.bootstrap.hosts.terminal import approval as limits
+from questorharness.bootstrap.hosts.terminal import cards, footer, paste, strings
 from questorharness.bootstrap.hosts.terminal import wire_view as view
 from questorharness.bootstrap.runtime import build_runtime
 from questorharness.profiles import load_profile
@@ -76,26 +77,12 @@ def completion_catalog(commands: list[dict[str, Any]]) -> dict[str, str]:
 
 def _build_prompt_session(commands: list[dict[str, Any]]) -> "_PS | None":
     """有 prompt_toolkit 且在 TTY 上时建交互会话；否则返回 None（回退裸 input）。"""
-    if not sys.stdin.isatty():
-        return None
-    try:
-        from prompt_toolkit import PromptSession
-        from prompt_toolkit.completion import WordCompleter
-        from prompt_toolkit.history import FileHistory
-    except ImportError:
-        return None
+    # 惰性导入：prompt_toolkit 是输入层的可选依赖，不能拖进包根的冷导入路径。
+    from questorharness.bootstrap.hosts.terminal import input_session
+
     catalog = completion_catalog(commands)
     history_path = Path.home() / ".questorharness" / "terminal_history"
-    history_path.parent.mkdir(parents=True, exist_ok=True)
-    return PromptSession(
-        history=FileHistory(str(history_path)),
-        completer=WordCompleter(
-            list(catalog.keys()),
-            sentence=True,
-            meta_dict=catalog,
-        ),
-        complete_while_typing=True,
-    )
+    return input_session.build(catalog, history_path=history_path)
 
 
 def _prompt_once(session: "_PS") -> str:
@@ -236,13 +223,21 @@ class TerminalRenderer:
             self._streamed_text = False
             self._busy = True
             self._queue_depth = 0
-        self._console.print(cards.render_item(item))
+        self._console.print(self._safe_render(item))
         if isinstance(item, view.TurnDoneItem):
             self._busy = False
             self._pending_turns = max(0, self._pending_turns - 1)
             self._console.print()
             self._console.print(self._footer())
             self.done.set()
+
+    def _safe_render(self, item: view.Item) -> Any:
+        """单帧渲染不得杀死消费循环：异常降级成一行可见提示，继续消费。"""
+
+        try:
+            return cards.render_item(item)
+        except Exception as exc:  # noqa: BLE001 - 渲染层绝不能拖垮事件消费
+            return strings.render_failed(item.__class__.__name__, str(exc))
 
     def _footer(self) -> Any:
         """状态栏：形态/忙闲/队列是真值，其余字段在波 D 前显式渲染 `—`。"""
@@ -256,8 +251,11 @@ class TerminalRenderer:
     async def _ask_approval(self, item: view.ApprovalItem) -> None:
         """审批：y 通过，其余拒绝（fail-closed 由服务端兼底）。编辑类先给 diff 卡。"""
         self._console.print(cards.render_item(item))
-        answer = await asyncio.to_thread(input, "  [y/N] 允许执行? ")
-        decision = "approve" if answer.strip().lower() in {"y", "yes"} else "deny"
+        self._console.print(limits.deadline_hint(self._prompt_timeout()), style=theme.DIM)
+        answer = await self._read_answer("  [y/N] 允许执行? ")
+        if answer is None:
+            self._console.print(strings.APPROVAL_TIMEOUT, style=theme.WARN)
+        decision = "approve" if (answer or "").strip().lower() in {"y", "yes"} else "deny"
         await self._host.transport.request(
             "POST",
             f"{_PREFIX}/approve",
@@ -265,14 +263,34 @@ class TerminalRenderer:
         )
 
     async def _answer_question(self, item: view.AskItem) -> None:
-        """工具提问：空输入即视为未回答。"""
+        """工具提问：空输入即视为未回答；客户端与同一个超时对齐。"""
         self._console.print(cards.render_item(item))
-        answer = await asyncio.to_thread(input, "  → ")
+        self._console.print(
+            limits.deadline_hint(self._prompt_timeout(), kind="提问"), style=theme.DIM
+        )
+        answer = await self._read_answer("  → ")
+        if answer is None:
+            self._console.print(strings.ASK_TIMEOUT, style=theme.WARN)
         await self._host.transport.request(
             "POST",
             f"{_PREFIX}/ask",
-            body=json.dumps({"id": item.prompt_id, "answer": answer}).encode(),
+            body=json.dumps({"id": item.prompt_id, "answer": answer or ""}).encode(),
         )
+
+    def _prompt_timeout(self) -> float:
+        """服务端的提示超时（authority 默认 300s）；拿不到就用契约默认值。"""
+
+        return float(getattr(self._host.authority, "prompt_timeout", limits.DEFAULT_TIMEOUT_SECONDS))
+
+    async def _read_answer(self, prompt: str) -> str | None:
+        """读一个回答；超时返回 None，让调用方按 fail-closed 结算。"""
+
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(input, prompt), timeout=self._prompt_timeout()
+            )
+        except TimeoutError:
+            return None
 
 
 async def _submit(host: ServeHost, line: str) -> SubmitResult:
@@ -343,6 +361,7 @@ async def run_terminal_client(
                 continue
             if not line.strip():
                 continue
+            line = paste.normalize(line)
             result = await _submit(host, line)
             if result.turn_id is not None:
                 renderer.expect_turn()

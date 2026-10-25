@@ -35,3 +35,14 @@ DIFF_TRUNCATED = "补丁过长，已截断（完整内容见编辑工具输出�
 # ---- 回合控制 -----------------------------------------------------------
 QUEUED = "  … 已排队（回合结束后自动开始）"
 CANCEL_SENT = "  已请求取消（Ctrl-C）"
+
+# ---- 时限与降级 ---------------------------------------------------------
+APPROVAL_TIMEOUT = "  已超时，按拒绝处理"
+ASK_TIMEOUT = "  已超时，按未回答处理"
+RENDER_FAILED = "  降级 {item} · 渲染失败：{detail}"
+
+
+def render_failed(item: str, detail: str) -> str:
+    """单帧渲染异常时的降级行（可见、不静默、不拖垮事件消费）。"""
+
+    return RENDER_FAILED.format(item=item, detail=detail)
