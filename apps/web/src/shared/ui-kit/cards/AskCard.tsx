@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 
+import { t } from "../../i18n";
 import styles from "./cards.module.css";
 
 export function AskCard({ question, onAnswer }: { question: string; onAnswer: (answer: string) => void }) {
   const [answer, setAnswer] = useState("");
   return (
     <article className={styles.card} data-card="ask">
-      <div className={styles.header}>提问</div>
+      <div className={styles.header}>{t("提问")}</div>
       <div>{question}</div>
       <input
         className={styles.input}
@@ -21,7 +22,7 @@ export function AskCard({ question, onAnswer }: { question: string; onAnswer: (a
       />
       <div className={styles.actions}>
         <button data-action="ask-submit" onClick={() => onAnswer(answer)}>
-          回答
+          {t("回答")}
         </button>
       </div>
     </article>

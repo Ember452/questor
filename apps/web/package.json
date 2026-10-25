@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "dev:vite": "vite"
+    "dev:vite": "vite",
+    "test:web": "npm run build:web && playwright test"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

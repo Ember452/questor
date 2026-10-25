@@ -12,6 +12,9 @@
 
 ## 已改
 
+- `e2e/global-setup.ts` / `e2e/global-teardown.ts` — 接入 stub llm 装配
+- `src/shared/ui-kit/cards/*.tsx` — 文案走 `t()`
+- `src/pages/ChatPage.tsx` — 徽标文案走 `t()` + render 穷尽守卫
 - `src/shared/theme/**`（token 底座改名与别名注释；内容语义未动）
 - `.gitignore` — 新增（忽略 `.dev-server.json` 运行时产物）
 - `package.json` — scripts 改为 owned；新增 `@tanstack/react-virtual`
@@ -26,6 +29,7 @@
 ## 已裁
 
 - `LICENSE*`（上游许可文件不入本仓）
+- `e2e/web.spec.ts`（上游 e2e，被本仓 spec 取代）
 - `src/features/**`
 - `src/shared/ui-kit/**`
 - `src/shared/transport/**`
@@ -42,11 +46,9 @@
 - `src/App.test.tsx`
 - `src/styles/tokens.test.ts`
 
-## 已裁
-
-- e2e/web.spec.ts
-
 ## 新增
+
+（owned 文件；对基线而言是新增而非裁剪）
 
 - `VENDOR.md`
 - `src/generated/app-wire.ts`
@@ -62,6 +64,8 @@
 - `scripts/gen-web-fixtures.mjs`
 - `scripts/**`
 - `src/pages/**`
+- `src/shared/i18n.ts`
+- `src/shared/i18n.test.ts`
 - `src/shared/theme/**`
 - `docs/**`
 - `e2e/**`

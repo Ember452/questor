@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { t } from "../../i18n";
 import styles from "./cards.module.css";
 
 export function SayCard({ text, streaming }: { text: string; streaming: boolean }) {
@@ -14,7 +15,7 @@ export function SayCard({ text, streaming }: { text: string; streaming: boolean 
   return (
     <article className={styles.card} data-card="say">
       <div className={styles.header}>
-        <span>助手</span>
+        <span>{t("助手")}</span>
         {text ? (
           <button
             className={styles.header}
@@ -25,7 +26,7 @@ export function SayCard({ text, streaming }: { text: string; streaming: boolean 
               setCopied(true);
             }}
           >
-            {copied ? "已复制" : "复制"}
+            {copied ? t("已复制") : t("复制")}
           </button>
         ) : null}
       </div>

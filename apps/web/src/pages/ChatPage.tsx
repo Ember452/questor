@@ -5,6 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { CARD_SLOTS } from "../app/cardSlots";
 import type { ViewItem } from "../app/viewModel";
+import { t } from "../shared/i18n";
 import { ErrorBoundary } from "../shared/ui-kit/ErrorBoundary";
 import { ApprovalCard } from "../shared/ui-kit/cards/ApprovalCard";
 import { AskCard } from "../shared/ui-kit/cards/AskCard";
@@ -19,7 +20,7 @@ function renderItem(item: ViewItem, props: PageProps) {
     case "user":
       return (
         <div className={styles.row}>
-          <span className={styles.badge}>你</span>
+          <span className={styles.badge}>{t("你")}</span>
           {item.text}
         </div>
       );
@@ -43,17 +44,22 @@ function renderItem(item: ViewItem, props: PageProps) {
     case "notice":
       return (
         <div className={`${styles.row} ${styles.notice}`}>
-          <span className={styles.badge}>提示</span>
+          <span className={styles.badge}>{t("提示")}</span>
           {item.text}
         </div>
       );
     case "turn":
       return (
         <div className={styles.row}>
-          <span className={styles.badge}>回合</span>
+          <span className={styles.badge}>{t("回合")}</span>
           <span className={styles.tool}>{item.label}</span>
         </div>
       );
+    default: {
+      // 穷尽守卫：viewModel 新增 item kind 而这里漏写 = tsc 编译红（不再静默落空）。
+      const exhaustive: never = item;
+      return <div className={styles.row}>{String(exhaustive)}</div>;
+    }
   }
 }
 
@@ -84,7 +90,7 @@ export function ChatPage(props: PageProps) {
   return (
     <>
       <div className={styles.transcript} ref={scrollRef} data-page="chat">
-        {rows.length === 0 ? <div className={styles.empty}>输入一句话开始。</div> : null}
+        {rows.length === 0 ? <div className={styles.empty}>{t("输入一句话开始。")}</div> : null}
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const item = rows[virtualRow.index];
@@ -116,11 +122,11 @@ export function ChatPage(props: PageProps) {
         />
         {props.view.busy ? (
           <button className={styles.secondary} data-action="stop" onClick={props.onCancel}>
-            停止
+            {t("停止")}
           </button>
         ) : (
           <button data-action="send" onClick={send} disabled={!draft.trim()}>
-            发送
+            {t("发送")}
           </button>
         )}
       </div>

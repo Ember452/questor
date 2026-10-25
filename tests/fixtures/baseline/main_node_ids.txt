@@ -40,6 +40,12 @@ tests/ci/test_legacy_host_removed.py::test_selftest_probe_can_go_red
 tests/ci/test_persistence_version.py::test_new_snapshot_carries_schema_version
 tests/ci/test_persistence_version.py::test_selftest_version_guard_can_go_red
 tests/ci/test_persistence_version.py::test_v1_snapshot_without_version_still_loads
+tests/ci/test_scope.py::test_all_faces_covered
+tests/ci/test_scope.py::test_classify_cross_cutting_forces_all
+tests/ci/test_scope.py::test_classify_faces
+tests/ci/test_scope.py::test_fail_open_on_git_error
+tests/ci/test_scope.py::test_missing_base_runs_all
+tests/ci/test_scope.py::test_self_test_passes
 tests/ci/test_serve_wire_fixtures.py::test_builders_round_trip_against_fixtures
 tests/ci/test_serve_wire_fixtures.py::test_fixtures_match_schema_shape
 tests/ci/test_serve_wire_fixtures.py::test_one_fixture_per_kind

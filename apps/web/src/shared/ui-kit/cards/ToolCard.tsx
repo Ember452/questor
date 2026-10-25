@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 
+import { t } from "../../i18n";
 import styles from "./cards.module.css";
 
-const STATUS: Record<string, string> = { running: "执行中", done: "完成", error: "错误" };
+const STATUS: Record<string, string> = { running: t("执行中"), done: t("完成"), error: t("错误") };
 
 export function ToolCard({
   tool,
@@ -27,7 +28,7 @@ export function ToolCard({
             data-action="toggle-tool"
             onClick={() => setOpen((value) => !value)}
           >
-            {open ? "收起" : "展开"}
+            {open ? t("收起") : t("展开")}
           </button>
         ) : null}
       </div>

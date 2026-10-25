@@ -1,1 +1,7 @@
 .dev-server.json
+.e2e-pids.json
+.e2e-host.log
+.e2e-preview.log
+.e2e-stub.log
+test-results/
+playwright-report/

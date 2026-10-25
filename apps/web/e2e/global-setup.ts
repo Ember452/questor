@@ -51,6 +51,25 @@ async function waitFor(url: string, timeoutMs = 30000): Promise<void> {
 }
 
 export default async function globalSetup(): Promise<void> {
+  // Stub LLM（OpenAI 兼容 SSE）：真回合 e2e 的模型替身，先于引擎启动。
+  const stub = spawn(process.execPath, [resolve(WEB, "e2e/stub-llm.mjs")], {
+    cwd: WEB,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const stubLog: Buffer[] = [];
+  stub.stderr?.on("data", (chunk: Buffer) => {
+    stubLog.push(chunk);
+    writeFileSync(resolve(WEB, ".e2e-stub.log"), Buffer.concat(stubLog));
+  });
+  let stubPort: number;
+  try {
+    stubPort = await readHandshake(stub);
+  } catch (error) {
+    const tail = Buffer.concat(stubLog).toString("utf-8").slice(-2000);
+    throw new Error(`stub llm failed: ${String(error)}
+${tail}`, { cause: error });
+  }
+
   const engine = spawn(
     python(),
     ["-m", "questorharness", "--studio-host", "--serve-no-auth"],
@@ -68,7 +87,7 @@ export default async function globalSetup(): Promise<void> {
         QUESTORHARNESS_PROVIDER: process.env.QUESTORHARNESS_PROVIDER ?? "openai",
         QUESTORHARNESS_API_FORMAT: process.env.QUESTORHARNESS_API_FORMAT ?? "openai",
         QUESTORHARNESS_MODEL: process.env.QUESTORHARNESS_MODEL ?? "e2e-model",
-        QUESTORHARNESS_BASE_URL: process.env.QUESTORHARNESS_BASE_URL ?? "http://127.0.0.1:9/v1",
+        QUESTORHARNESS_BASE_URL: process.env.QUESTORHARNESS_BASE_URL ?? `http://127.0.0.1:${stubPort}/v1`,
       },
       stdio: ["pipe", "pipe", "pipe"],
     },
@@ -110,5 +129,9 @@ export default async function globalSetup(): Promise<void> {
   preview.stdout?.on("data", (chunk: Buffer) => log(resolve(WEB, ".e2e-preview.log"), chunk));
   preview.stderr?.on("data", (chunk: Buffer) => log(resolve(WEB, ".e2e-preview.log"), chunk));
   await waitFor("http://127.0.0.1:4173/");
-  writeFileSync(PIDS, JSON.stringify({ engine: engine.pid, preview: preview.pid }), "utf8");
+  writeFileSync(
+    PIDS,
+    JSON.stringify({ engine: engine.pid, preview: preview.pid, stub: stub.pid }),
+    "utf8",
+  );
 }
