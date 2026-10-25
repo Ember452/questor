@@ -43,7 +43,7 @@
 | T15 | transcript 浏览与搜索 | ready | `:transcript`（等价 `:t` / `:history`）读 `/history`，面板内 `/` 过滤 + j/k 游标；只读不发命令 | Claude Code transcript mode |
 | T16 | 清单卡（todos 帧） | ready | 终端 `theme.todo_card`（路径 + n/m + ✓/○）；web `TodoCard`；同回合只保留最新清单 | Reasonix `todos.go` |
 | T17 | 命令面板 | ready | `:help`（等价 `:?` / `:cmd`）读 `/commands`，与补全菜单同源，禁硬编码清单 | Reasonix `help.go` |
-| T18 | 命令按 16 族分组 | declared | 需要引擎侧给 `SlashCommand` 加 `family` 字段（跨层改动）；现在按注册顺序平铺 | Reasonix `help.go` 分组 |
+| T18 | 命令按族分组 | ready | `SlashCommand.family` 由 `registry.set_family` 在注册时打标，`/commands` 透出，`:help` 族变即插标题行（默认 15 族；`plugin` 族仅在装了插件时有成员） | Reasonix `help.go` 分组 |
 
 > `id` 一入表即不重新编号、不删除；下线只改 `status`。`absent` 行集合必须与
 > `terminal/unsupported.py` 的 key 集合相等（`tests/ci/test_unsupported_badges.py`）；
