@@ -22,3 +22,12 @@ EMPTY_STATE_LINES = (
     "输入一句话开始，或 / 查看全部指令。",
     "↑↓ 翻历史 · Ctrl-C 中止回合 · Ctrl-D 退出",
 )
+
+# ---- 卡片内的补充文案（主题里的固定文案仍归 terminal_theme）-------------
+STREAM_RESET = "数据流已重置，正在重取历史"
+UNSUPPORTED_LEAD = "降级"
+IMAGE_BLOCK = "[图片 {media_type}]"
+TOOL_USE_BLOCK = "工具 call {tool_use_id} · {name}"
+APPROVAL_CHOICES = "  y 允许 · N 拒绝（回车默认拒绝）"
+ASK_HINT = "  输入回答后回车（空输入视为未回答）"
+DIFF_TRUNCATED = "补丁过长，已截断（完整内容见编辑工具输出）"
