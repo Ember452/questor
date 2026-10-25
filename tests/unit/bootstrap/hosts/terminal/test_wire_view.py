@@ -148,3 +148,67 @@ def test_items_are_frozen() -> None:
     item = view.view_of(_frame("text", text="hi"))
     with pytest.raises(dataclasses.FrozenInstanceError):
         item.text = "changed"  # type: ignore[misc] # 冻结数据类：运行期赋值必须失败
+
+
+def test_usage_extras_project_when_present() -> None:
+    """波 D1：窗口/费用/缓存命中能拿到就带出来，拿不到就是 None（不伪造 0）。"""
+    with_extras = view.view_of(
+        _frame(
+            "turn_done",
+            turnId="t",
+            cancelled=False,
+            outcome="completed",
+            durationMs=1,
+            checkpointTurn=False,
+            usage={
+                "inputTokens": 1,
+                "outputTokens": 2,
+                "costUsd": 0.5,
+                "contextWindow": 200000,
+                "contextUsed": 1200,
+                "cachedTokens": 300,
+            },
+        )
+    )
+    assert isinstance(with_extras, view.TurnDoneItem)
+    assert with_extras.usage is not None
+    assert with_extras.usage.cost_usd == 0.5
+    assert with_extras.usage.context_window == 200000
+    assert with_extras.usage.context_used == 1200
+    assert with_extras.usage.cached_tokens == 300
+
+    bare = view.view_of(
+        _frame(
+            "turn_done",
+            turnId="t",
+            cancelled=False,
+            outcome="completed",
+            durationMs=1,
+            checkpointTurn=False,
+            usage={"inputTokens": 1, "outputTokens": 2},
+        )
+    )
+    assert isinstance(bare, view.TurnDoneItem)
+    assert bare.usage is not None
+    assert bare.usage.cost_usd is None
+    assert bare.usage.context_window is None
+
+
+def test_approval_patch_projects_structured_fields() -> None:
+    """波 D2：结构化 diff 字段走独立字段，不靠拆 detail 字符串。"""
+    item = view.view_of(
+        _frame(
+            "approval_request",
+            id="p1",
+            tool="edit_file",
+            subject="a.py",
+            detail="+1/-2",
+            patch="@@ -1 +1 @@\n-a\n+b",
+            added=1,
+            removed=1,
+        )
+    )
+    assert isinstance(item, view.ApprovalItem)
+    assert item.added == 1
+    assert item.removed == 1
+    assert item.patch is not None and "@@" in item.patch

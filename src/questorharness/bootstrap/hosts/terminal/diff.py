@@ -35,6 +35,13 @@ def _line_style(line: str) -> str:
     return ""
 
 
+def render_patch(patch: str, *, added: int, removed: int) -> RenderableType:
+    """结构化字段（plan03 波 D2）：统计行自己拼，补丁正文照旧进块状态机。"""
+
+    header = f"+{added}/-{removed}"
+    return render_detail(f"{header}\n{patch}" if patch else header)
+
+
 def render_detail(detail: str) -> RenderableType:
     """把 detail 字符串渲染成 (摘要行, 补丁行...) 的分组。"""
 

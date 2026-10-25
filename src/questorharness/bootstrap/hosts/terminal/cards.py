@@ -61,7 +61,14 @@ def _tool_card(item: view.ToolResultItem) -> RenderableType:
 
 def _approval_card(item: view.ApprovalItem) -> RenderableType:
     parts: list[RenderableType] = [theme.approval_header(item.tool, item.subject)]
-    if item.detail:
+    if item.patch is not None:
+        # 结构化 diff（波 D2）：优先于旧 detail 字符串。
+        parts.append(
+            diff_card.render_patch(
+                item.patch, added=item.added or 0, removed=item.removed or 0
+            )
+        )
+    elif item.detail:
         parts.append(diff_card.render_detail(item.detail))
     parts.append(Text(strings.APPROVAL_CHOICES, style=theme.DIM))
     parts.append(_badge_line("A1"))

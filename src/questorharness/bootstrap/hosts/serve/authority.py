@@ -56,6 +56,9 @@ class PendingPrompt:
     tool: str
     future: asyncio.Future[Any]
     detail: str = ""
+    patch: str | None = None
+    added: int | None = None
+    removed: int | None = None
 
 
 class Authority:
@@ -169,9 +172,20 @@ class Authority:
         """注入提示广播回调（宿主在构造时接线）。"""
         self._on_prompt = notifier
 
-    async def permission_prompt(self, tool: str, subject: str, *, detail: str = "") -> bool:
+    async def permission_prompt(
+        self,
+        tool: str,
+        subject: str,
+        *,
+        detail: str = "",
+        patch: str | None = None,
+        added: int | None = None,
+        removed: int | None = None,
+    ) -> bool:
         """权限审批：超时或无人作答时 fail-closed。"""
-        prompt = self._open("approval", subject, tool=tool, detail=detail)
+        prompt = self._open(
+            "approval", subject, tool=tool, detail=detail, patch=patch, added=added, removed=removed
+        )
         try:
             return bool(await asyncio.wait_for(prompt.future, timeout=self._prompt_timeout))
         except TimeoutError:
@@ -194,15 +208,27 @@ class Authority:
         """编辑审批：复用 approval 槽位，返回 approve / deny。
 
         diff 不能丢：旧 UI 能看到改了什么，新协议至少给出 +added/-removed 与
-        截断后的补丁正文（上限 4000 字符），供 ApprovalCard 展示。
+        截断后的补丁正文（上限 4000 字符），供 ApprovalCard 展示。结构化字段
+        （patch/added/removed）与旧的 detail 同时存在：前者给新客户端画 diff 卡，
+        后者保证旧消费者行为不变。
         """
         patch = diff[:4000]
         detail = f"+{added}/-{removed}" + (f"\n{patch}" if patch else "")
-        approved = await self.permission_prompt("edit", path, detail=detail)
+        approved = await self.permission_prompt(
+            "edit", path, detail=detail, patch=patch, added=added, removed=removed
+        )
         return "approve" if approved else "deny"
 
     def _open(
-        self, kind: PromptKind, subject: str, *, tool: str = "", detail: str = ""
+        self,
+        kind: PromptKind,
+        subject: str,
+        *,
+        tool: str = "",
+        detail: str = "",
+        patch: str | None = None,
+        added: int | None = None,
+        removed: int | None = None,
     ) -> PendingPrompt:
         """登记一个待答提示，并通过回调交给宿主广播。"""
         loop = asyncio.get_running_loop()
@@ -214,6 +240,9 @@ class Authority:
             subject=subject,
             tool=tool,
             detail=detail,
+            patch=patch,
+            added=added,
+            removed=removed,
             future=loop.create_future(),
         )
         self._prompts[prompt.prompt_id] = prompt

@@ -15,6 +15,9 @@ class ApprovalRequest(TypedDict):
     tool: str
     subject: str
     detail: NotRequired[str]
+    patch: NotRequired[str]
+    added: NotRequired[int]
+    removed: NotRequired[int]
 
 
 class ApproveRequest(TypedDict):
@@ -183,10 +186,14 @@ class TurnStarted(TypedDict):
 
 
 class Usage(TypedDict):
-    """Mirror of contracts/usage.py UsageSnapshot."""
+    """Mirror of contracts/usage.py UsageSnapshot. The four extension fields are optional: the engine only produces input/output tokens today, the host fills what it can know (plan03 wave D)."""
 
     inputTokens: int
     outputTokens: int
+    costUsd: NotRequired[float]
+    contextWindow: NotRequired[int]
+    contextUsed: NotRequired[int]
+    cachedTokens: NotRequired[int]
 
 
 CapabilityMap = dict[str, Literal["ready", "declared", "absent"]]

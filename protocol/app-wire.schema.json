@@ -9,13 +9,17 @@
   ],
   "$defs": {
     "Usage": {
-      "description": "Mirror of contracts/usage.py UsageSnapshot.",
+      "description": "Mirror of contracts/usage.py UsageSnapshot. The four extension fields are optional: the engine only produces input/output tokens today, the host fills what it can know (plan03 wave D).",
       "type": "object",
       "additionalProperties": false,
       "required": ["inputTokens", "outputTokens"],
       "properties": {
         "inputTokens": { "type": "integer" },
-        "outputTokens": { "type": "integer" }
+        "outputTokens": { "type": "integer" },
+        "costUsd": { "type": "number" },
+        "contextWindow": { "type": "integer" },
+        "contextUsed": { "type": "integer" },
+        "cachedTokens": { "type": "integer" }
       }
     },
     "TextBlock": {
@@ -136,7 +140,10 @@
         "id": { "type": "string" },
         "tool": { "type": "string" },
         "subject": { "type": "string" },
-        "detail": { "type": "string" }
+        "detail": { "type": "string" },
+        "patch": { "type": "string" },
+        "added": { "type": "integer" },
+        "removed": { "type": "integer" }
       }
     },
     "AskRequest": {

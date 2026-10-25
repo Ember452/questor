@@ -69,11 +69,15 @@ export interface ToolResultBlock {
   isError: boolean;
 }
 /**
- * Mirror of contracts/usage.py UsageSnapshot.
+ * Mirror of contracts/usage.py UsageSnapshot. The four extension fields are optional: the engine only produces input/output tokens today, the host fills what it can know (plan03 wave D).
  */
 export interface Usage {
   inputTokens: number;
   outputTokens: number;
+  costUsd?: number;
+  contextWindow?: number;
+  contextUsed?: number;
+  cachedTokens?: number;
 }
 export interface ToolDispatch {
   seq: number;
@@ -96,6 +100,9 @@ export interface ApprovalRequest {
   tool: string;
   subject: string;
   detail?: string;
+  patch?: string;
+  added?: number;
+  removed?: number;
 }
 export interface AskRequest {
   seq: number;

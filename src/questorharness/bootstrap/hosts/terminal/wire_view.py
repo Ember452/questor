@@ -45,6 +45,10 @@ class _Malformed(ValueError):
 class UsageVM:
     input_tokens: int
     output_tokens: int
+    cost_usd: float | None = None
+    context_window: int | None = None
+    context_used: int | None = None
+    cached_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -120,6 +124,9 @@ class ApprovalItem:
     tool: str
     subject: str
     detail: str
+    patch: str | None = None
+    added: int | None = None
+    removed: int | None = None
 
 
 @dataclass(frozen=True)
@@ -225,9 +232,14 @@ def _usage(frame: Mapping[str, Any]) -> UsageVM | None:
         return None
     if not isinstance(raw, Mapping):
         raise _Malformed("usage 不是对象")
+    cost = raw.get("costUsd")
     return UsageVM(
         input_tokens=_int(raw, "inputTokens", default=0),
         output_tokens=_int(raw, "outputTokens", default=0),
+        cost_usd=float(cost) if isinstance(cost, (int, float)) else None,
+        context_window=_int(raw, "contextWindow", default=0) or None,
+        context_used=_int(raw, "contextUsed", default=0) or None,
+        cached_tokens=_int(raw, "cachedTokens", default=0) or None,
     )
 
 
@@ -306,6 +318,9 @@ def _approval(frame: Mapping[str, Any]) -> Item:
         tool=_str(frame, "tool"),
         subject=_str(frame, "subject"),
         detail=_str(frame, "detail", default=""),
+        patch=_str(frame, "patch", default="") or None,
+        added=_int(frame, "added", default=-1) if "added" in frame else None,
+        removed=_int(frame, "removed", default=-1) if "removed" in frame else None,
     )
 
 

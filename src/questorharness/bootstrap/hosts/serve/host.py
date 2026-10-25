@@ -44,7 +44,7 @@ class ServeHost:
         self.profile_root = Path(profile_root)
         self.profile_id = profile_id
         self.broadcaster = Broadcaster()
-        self.encoder = WireEncoder()
+        self.encoder = WireEncoder(context_window=self._context_window)
         self.router = Router(self)
         self.transport = MemoryTransport(self.router)
         self._tasks: dict[str, asyncio.Task[None]] = {}
@@ -188,10 +188,23 @@ class ServeHost:
                 tool=prompt.tool or "unknown",
                 subject=subject,
                 detail=prompt.detail,
+                patch=prompt.patch,
+                added=prompt.added,
+                removed=prompt.removed,
             )
         else:
             frame = ask_request_frame(prompt_id=prompt.prompt_id, question=subject)
         await self.broadcaster.publish(frame)
+
+    def _context_window(self) -> int | None:
+        """当前模型的上下文窗口（拿不到就返回 None，客户端渲染 `—`）。"""
+
+        try:
+            settings = self.runtime.current_settings()
+        except Exception:  # noqa: BLE001 - 元数据缺席不得影响回合
+            return None
+        window = getattr(settings, "context_window_tokens", None)
+        return int(window) if isinstance(window, int) and window > 0 else None
 
     def _spawn(self, coro: Any) -> None:
         """把协程挂成后台任务，避免被 GC 提前回收。"""

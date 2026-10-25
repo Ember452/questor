@@ -150,6 +150,7 @@ class TerminalRenderer:
         self._busy = False
         self._queue_depth = 0
         self._pending_turns = 0
+        self._usage: view.UsageVM | None = None
         self.done = asyncio.Event()
 
     @property
@@ -227,6 +228,8 @@ class TerminalRenderer:
         if isinstance(item, view.TurnDoneItem):
             self._busy = False
             self._pending_turns = max(0, self._pending_turns - 1)
+            if item.usage is not None:
+                self._usage = item.usage
             self._console.print()
             self._console.print(self._footer())
             self.done.set()
@@ -244,7 +247,12 @@ class TerminalRenderer:
 
         return footer.render(
             footer.FooterVM(
-                profile=self._profile_name, busy=self._busy, queue_depth=self._queue_depth
+                profile=self._profile_name,
+                busy=self._busy,
+                queue_depth=self._queue_depth,
+                context_used=None if self._usage is None else self._usage.context_used,
+                context_window=None if self._usage is None else self._usage.context_window,
+                cost_usd=None if self._usage is None else self._usage.cost_usd,
             )
         )
 
