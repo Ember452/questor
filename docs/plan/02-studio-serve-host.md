@@ -415,7 +415,7 @@ tokens 与 Reasonix 原值不一致且未登记 → 红。
 ### 后置池（不排期，按需立项）
 
 mux 多 pane、手机配对、扩展 structured UI、CUA、主题包 Python 注入端、品牌与文案替换（中文
-已是一等公民，剩余为品牌词）、REPL 渲染增强、额外卡片（RememberCard / MeterRail / Jobs /
+已是一等公民，剩余为品牌词）、~~REPL 渲染增强~~（已提前执行 2026-10-26：/commands 端点 + prompt-toolkit 补全/历史 + 横幅，ADR-0005 Updated 同日）、额外卡片（RememberCard / MeterRail / Jobs /
 Agents）在五卡之后逐张评估。
 **已从中移除**："vendored 巨石 CSS 拆分"——上游骨架 是 CSS Module，本身已分文件。
 

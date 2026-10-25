@@ -91,6 +91,9 @@ ALLOWED_SURFACES = {"channels"}
 FILE_BUDGETS = {"src/questorharness/commands/registry.py": 250}
 DIR_BUDGETS = {"src/questorharness/commands/families": 600}
 DROPPED_UI_IMPORTS = ("textual", "prompt_toolkit")
+# prompt-toolkit 以终端瘦客户端的输入层身份回归（ADR-0005 Updated 2026-10-26）；
+# 仅限 terminal_client.py 的输入编辑（补全/历史），其他文件仍然判红。
+DROPPED_UI_EXCEPTIONS = {"src/questorharness/bootstrap/hosts/terminal_client.py": {"prompt_toolkit"}}
 
 
 def _rel(path: Path, root: Path) -> str:
@@ -131,6 +134,10 @@ def find_dropped_ui_imports(root: Path) -> list[str]:
                 if marker in text:
                     hits.append(f"{_rel(path, root)}: {marker}")
                     break
+        # 登记的例外文件可以 import 特定的"已删 UI"包（如 prompt_toolkit 作为输入层）。
+        rel = _rel(path, root)
+        for module in DROPPED_UI_EXCEPTIONS.get(rel, set()):
+            hits = [h for h in hits if not (h.startswith(rel) and module in h)]
     return hits
 
 

@@ -1,7 +1,8 @@
 """终端瘦客户端：复用 serve 路由与 wire 帧，不复制业务与状态投影。
 
-REPL 与 Studio 走同一套端点（submit / cancel / approve / ask / events），
+REPL 与 Studio 走同一套端点（submit / cancel / approve / ask / events / commands），
 只是 transport 换成进程内实现、渲染器换成 rich。
+输入层用 prompt_toolkit（斜杠补全菜单 + ↑↓ 历史），缺失或非 TTY 时回退裸 input。
 """
 
 from __future__ import annotations
@@ -12,16 +13,23 @@ import os
 import sys
 from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 
+from questorharness.bootstrap.hosts.serve import terminal_theme as theme
 from questorharness.bootstrap.hosts.serve.authority import Authority
 from questorharness.bootstrap.hosts.serve.host import ServeHost
 from questorharness.bootstrap.runtime import build_runtime
 from questorharness.profiles import load_profile
 
+if TYPE_CHECKING:
+    from prompt_toolkit import PromptSession
+
+    _PS = PromptSession[Any]
+
 _PREFIX = "/rt/r1"
+_EOF = "__questor_eof__"
 
 
 def default_profile_root() -> Path:
@@ -42,6 +50,88 @@ def _frame_from_sse(block: bytes) -> dict[str, Any] | None:
                 return None
             return parsed if isinstance(parsed, dict) else None
     return None
+
+
+def completion_catalog(commands: list[dict[str, Any]]) -> dict[str, str]:
+    """指令目录 → 补全元数据（主名 + 别名 → 描述）。纯函数，供单测。"""
+    catalog: dict[str, str] = {}
+    for command in commands:
+        catalog[f"/{command['name']}"] = str(command.get("description", ""))
+        for alias in command.get("aliases", []) or []:
+            catalog.setdefault(f"/{alias}", str(command.get("description", "")))
+    return catalog
+
+
+def _build_prompt_session(commands: list[dict[str, Any]]) -> "_PS | None":
+    """有 prompt_toolkit 且在 TTY 上时建交互会话；否则返回 None（回退裸 input）。"""
+    if not sys.stdin.isatty():
+        return None
+    try:
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.completion import WordCompleter
+        from prompt_toolkit.history import FileHistory
+    except ImportError:
+        return None
+    catalog = completion_catalog(commands)
+    history_path = Path.home() / ".questorharness" / "terminal_history"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    return PromptSession(
+        history=FileHistory(str(history_path)),
+        completer=WordCompleter(
+            list(catalog.keys()),
+            sentence=True,
+            meta_dict=catalog,
+        ),
+        complete_while_typing=True,
+    )
+
+
+def _prompt_once(session: "_PS") -> str:
+    """同步读一行：Ctrl-C 只清行不退出，EOF 走哨兵。运行在 worker 线程。"""
+    while True:
+        try:
+            text: str = session.prompt("> ")
+            return text
+        except KeyboardInterrupt:
+            continue
+
+
+async def _read_line(session: "_PS | None") -> str:
+    """读一行输入；EOF 返回哨兵。session 为空时回退裸 input。"""
+    if session is None:
+        try:
+            return await asyncio.to_thread(input, "> ")
+        except EOFError:
+            return _EOF
+    try:
+        return await asyncio.to_thread(_prompt_once, session)
+    except EOFError:
+        return _EOF
+
+
+async def _fetch_commands(host: ServeHost) -> list[dict[str, Any]]:
+    """指令目录（补全菜单数据源）；失败回空列表，不阻断 REPL。"""
+    try:
+        response = await host.transport.request("GET", f"{_PREFIX}/commands")
+        payload = json.loads(response.body)
+        return list(payload.get("commands", []))
+    except Exception:  # noqa: BLE001 - 补全是增强体验，缺席可用
+        return []
+
+
+async def _print_banner(host: ServeHost, output: Console) -> None:
+    """交互模式横幅：Reasonix ASCII art + 形态 + 用法提示。"""
+    output.print(theme.BANNER, style=theme.NET)
+    try:
+        response = await host.transport.request("GET", f"{_PREFIX}/profile")
+        profile = json.loads(response.body)
+        output.print(
+            f"[bold]{profile.get('name', '?')}[/bold] · {profile.get('description', '')}",
+            style=theme.DIM,
+        )
+    except Exception:  # noqa: BLE001 - 横幅失败不阻断
+        pass
+    output.print(theme.empty_state())
 
 
 class TerminalRenderer:
@@ -69,10 +159,10 @@ class TerminalRenderer:
                 # 由调用方 done.wait() 收尾，两种模式都靠 finally 的 cancel 退订。
 
     async def _render(self, frame: dict[str, Any]) -> None:
-        """按 kind 渲染；审批/提问直接就地询问。"""
+        """按 kind 渲染；审批/提问直接就地询问。全部走 terminal_theme。"""
         kind = frame.get("kind")
         if kind == "turn_started":
-            self._console.print(f"[dim]── turn {frame.get('turnId', '')[:8]} ──[/dim]")
+            self._console.print(theme.turn_header(str(frame.get("turnId", ""))))
         elif kind == "text":
             self._console.print(str(frame.get("text", "")), end="", soft_wrap=True)
             self._streaming = True
@@ -81,33 +171,48 @@ class TerminalRenderer:
                 self._console.print()
                 self._streaming = False
         elif kind == "tool_dispatch":
-            self._console.print(f"[cyan]▸ {frame.get('tool')}[/cyan]")
+            self._console.print(theme.tool_line(str(frame.get("tool", "")), "running"))
         elif kind == "tool_result":
-            state = "[red]错误[/red]" if frame.get("isError") else "[green]完成[/green]"
-            preview = str(frame.get("output", "")).strip().splitlines()
-            head = preview[0][:120] if preview else ""
-            self._console.print(f"  {state} {frame.get('tool')}: {head}")
+            status = "error" if frame.get("isError") else "done"
+            output_text = str(frame.get("output", ""))
+            self._console.print(
+                theme.tool_line(str(frame.get("tool", "")), status, output_text)
+            )
         elif kind == "notice":
-            self._console.print(f"[yellow]{frame.get('text', '')}[/yellow]")
+            self._console.print(
+                theme.notice_bar(str(frame.get("text", "")), str(frame.get("level", "info")))
+            )
         elif kind in {"compaction_started", "compaction_progress", "compaction_done"}:
-            self._console.print(f"[dim]{kind} {frame.get('phase', '')}[/dim]")
+            phase = kind.replace("compaction_", "")
+            self._console.print(
+                theme.compaction_line(phase, str(frame.get("trigger", "")))
+            )
         elif kind == "approval_request":
             await self._ask_approval(frame)
         elif kind == "ask_request":
             await self._answer_question(frame)
         elif kind == "turn_done":
-            outcome = frame.get("outcome")
-            self._console.print(f"[dim]── {outcome} ({frame.get('durationMs')}ms) ──[/dim]")
+            usage = frame.get("usage") if isinstance(frame.get("usage"), dict) else None
+            self._console.print(
+                theme.turn_footer(
+                    str(frame.get("outcome", "")),
+                    int(frame.get("durationMs", 0)),
+                    usage,
+                )
+            )
+            self._console.print()  # 空行分隔（对齐 spacing scale 的 --sp-8）
             self.done.set()
 
     async def _ask_approval(self, frame: dict[str, Any]) -> None:
         """审批：y 通过，其余拒绝（fail-closed 由服务端兜底）。编辑类先给 diff 摘要。"""
+        self._console.print(
+            theme.approval_header(str(frame.get("tool", "?")), str(frame.get("subject", "")))
+        )
         detail = str(frame.get("detail") or "").strip()
         if detail:
-            preview = "\n".join(detail.splitlines()[:6])
-            self._console.print(f"[dim]{preview}[/dim]")
-        prompt = f"允许 {frame.get('tool')} 执行 {frame.get('subject')}? [y/N] "
-        answer = await asyncio.to_thread(input, prompt)
+            for line in detail.splitlines()[:8]:
+                self._console.print(f"  {line}", style=theme.DIM)
+        answer = await asyncio.to_thread(input, "  [y/N] 允许执行? ")
         decision = "approve" if answer.strip().lower() in {"y", "yes"} else "deny"
         await self._host.transport.request(
             "POST",
@@ -117,7 +222,8 @@ class TerminalRenderer:
 
     async def _answer_question(self, frame: dict[str, Any]) -> None:
         """工具提问：空输入即视为未回答。"""
-        answer = await asyncio.to_thread(input, f"? {frame.get('question')} ")
+        self._console.print(f"  ? {frame.get('question')}", style=theme.ACCENT)
+        answer = await asyncio.to_thread(input, "  → ")
         await self._host.transport.request(
             "POST",
             f"{_PREFIX}/ask",
@@ -153,15 +259,19 @@ async def run_terminal_client(
     assert events.stream is not None
     renderer = TerminalRenderer(host, output)
     consumer = asyncio.create_task(renderer.consume(events.stream))
+    interactive = prompt is None and sys.stdin.isatty()
+    session = None
+    if interactive:
+        await _print_banner(host, output)
+        session = _build_prompt_session(await _fetch_commands(host))
     try:
         if prompt:
             await _submit(host, prompt)
             await renderer.done.wait()
             return 0
         while True:
-            try:
-                line = await asyncio.to_thread(input, "> ")
-            except EOFError:
+            line = await _read_line(session)
+            if line == _EOF:
                 return 0
             if not line.strip():
                 continue
@@ -202,7 +312,7 @@ async def build_serve_host(
     api_key: str | None = None,
     api_format: str | None = None,
     api_client: Any = None,
-    restore_messages: list[dict] | None = None,
+    restore_messages: list[dict[str, Any]] | None = None,
     restore_tool_metadata: dict[str, object] | None = None,
     permission_mode: str | None = None,
     profile_root: Path | None = None,
@@ -253,7 +363,7 @@ async def run_terminal_repl(
     api_key: str | None = None,
     api_format: str | None = None,
     api_client: Any = None,
-    restore_messages: list[dict] | None = None,
+    restore_messages: list[dict[str, Any]] | None = None,
     restore_tool_metadata: dict[str, object] | None = None,
     permission_mode: str | None = None,
     profile_root: Path | None = None,

@@ -64,3 +64,22 @@ def test_build_serve_host_forwards_profile_tool_surface(tmp_path, monkeypatch) -
     asyncio.run(terminal_client.build_serve_host(profile_root=tmp_path, profile_id="personal"))
     assert captured["allowed_tools"] == ["ask_user_question"]
     assert captured["denied_tools"] == ["bash", "edit_file"]
+
+
+def test_completion_catalog_maps_names_and_aliases() -> None:
+    """补全目录：主名与别名都指向描述，主名优先不被别名覆盖。"""
+    commands = [
+        {"name": "help", "description": "列出指令", "aliases": ["h"]},
+        {"name": "exit", "description": "退出", "aliases": []},
+    ]
+    catalog = terminal_client.completion_catalog(commands)
+    assert catalog["/help"] == "列出指令"
+    assert catalog["/h"] == "列出指令"
+    assert catalog["/exit"] == "退出"
+    assert len(catalog) == 3
+
+
+def test_build_prompt_session_returns_none_off_tty(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """非 TTY（管道/CI）一律回退裸 input，不建交互会话。"""
+    monkeypatch.setattr(terminal_client.sys.stdin, "isatty", lambda: False)
+    assert terminal_client._build_prompt_session([]) is None

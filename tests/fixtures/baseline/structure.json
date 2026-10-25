@@ -19,7 +19,7 @@
     "capabilities_size": {
       "caliber": "git ls-files src | non-__init__ under capabilities/",
       "gate": true,
-      "ratio": 31.0,
+      "ratio": 30.9,
       "subdirs_ge2": 18,
       "tool_files": 44,
       "value": 87
@@ -124,22 +124,22 @@
     "src_files": {
       "caliber": "git ls-files src | *.py",
       "gate": true,
-      "modules": 281,
-      "value": 347
+      "modules": 282,
+      "value": 348
     },
     "test_files": {
       "caliber": "git ls-files tests | *.py",
       "e2e": 15,
       "gate": true,
       "integration": 32,
-      "unit": 155,
-      "value": 219
+      "unit": 156,
+      "value": 220
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
       "gate": true,
-      "percent": 47.7,
-      "value": "134/281"
+      "percent": 47.9,
+      "value": "135/282"
     },
     "tool_radius": {
       "caliber": "shared files a new tool must touch: registration point + consumers with hard-coded names",
@@ -152,7 +152,7 @@
     }
   },
   "pin": {
-    "commit": "656de15417c01894a202568fe58ab27fe627f43a",
+    "commit": "857c2976c8f5a8520b41fa116059e958284437a5",
     "date": "2026-10-25"
   }
 }

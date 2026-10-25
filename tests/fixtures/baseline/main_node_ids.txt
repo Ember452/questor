@@ -372,6 +372,7 @@ tests/unit/bootstrap/hosts/serve/test_refusals.py::test_status_defaults_to_confl
 tests/unit/bootstrap/hosts/serve/test_refusals.py::test_unknown_code_is_rejected_at_construction
 tests/unit/bootstrap/hosts/serve/test_refusals.py::test_whitelist_covers_every_constant
 tests/unit/bootstrap/hosts/serve/test_routes.py::test_cancel_requires_owner
+tests/unit/bootstrap/hosts/serve/test_routes.py::test_commands_endpoint_lists_registry_in_order
 tests/unit/bootstrap/hosts/serve/test_routes.py::test_events_first_frame_is_replay_gap_when_window_lost
 tests/unit/bootstrap/hosts/serve/test_routes.py::test_history_without_snapshot_is_empty
 tests/unit/bootstrap/hosts/serve/test_routes.py::test_profile_reports_capabilities_and_unknown_is_404
@@ -381,6 +382,12 @@ tests/unit/bootstrap/hosts/serve/test_routes.py::test_submit_validation_is_400
 tests/unit/bootstrap/hosts/serve/test_routes.py::test_unknown_route_is_404
 tests/unit/bootstrap/hosts/serve/test_studio.py::test_handshake_round_trips_through_json
 tests/unit/bootstrap/hosts/serve/test_studio.py::test_studio_module_exposes_runner
+tests/unit/bootstrap/hosts/serve/test_terminal_theme.py::test_approval_header_contains_tool_and_subject
+tests/unit/bootstrap/hosts/serve/test_terminal_theme.py::test_notice_bar_error_vs_info
+tests/unit/bootstrap/hosts/serve/test_terminal_theme.py::test_status_bar_busy_vs_idle
+tests/unit/bootstrap/hosts/serve/test_terminal_theme.py::test_tool_status_icons
+tests/unit/bootstrap/hosts/serve/test_terminal_theme.py::test_turn_footer_completed_with_usage
+tests/unit/bootstrap/hosts/serve/test_terminal_theme.py::test_turn_footer_failed
 tests/unit/bootstrap/hosts/serve/test_transport.py::test_drain_collects_stream_chunks
 tests/unit/bootstrap/hosts/serve/test_transport.py::test_memory_transport_passes_request_through
 tests/unit/bootstrap/hosts/serve/test_wire.py::test_mapping_values_are_declared_kinds
@@ -393,7 +400,9 @@ tests/unit/bootstrap/hosts/serve/test_wire_encode.py::test_turn_complete_flatten
 tests/unit/bootstrap/hosts/serve/test_wire_encode.py::test_unknown_event_fails_loudly
 tests/unit/bootstrap/hosts/serve/test_wire_types.py::test_generated_kind_by_def_is_consistent
 tests/unit/bootstrap/hosts/serve/test_wire_types.py::test_generated_kinds_match_schema_union
+tests/unit/bootstrap/hosts/test_terminal_client.py::test_build_prompt_session_returns_none_off_tty
 tests/unit/bootstrap/hosts/test_terminal_client.py::test_build_serve_host_forwards_profile_tool_surface
+tests/unit/bootstrap/hosts/test_terminal_client.py::test_completion_catalog_maps_names_and_aliases
 tests/unit/bootstrap/hosts/test_terminal_client.py::test_default_profile_root_honours_env
 tests/unit/bootstrap/hosts/test_terminal_client.py::test_sse_frame_parsing
 tests/unit/profiles/test_model.py::test_defaults_are_empty

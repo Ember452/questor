@@ -58,6 +58,13 @@
   - wheel 内不再有 `questorharness/_frontend`；
   - 基线五项（MIGRATION §3.1）逐项不变。
 
+## Updated（2026-10-26）：prompt-toolkit 以"输入层"身份回归终端瘦客户端
+
+历史记录曾把 textual / prompt-toolkit 从依赖里删除（那是"引擎自带第二套 UI"的时代）。
+如今终端 REPL 是 serve 契约的合法客户端，prompt-toolkit 仅作为它的**输入层**
+（斜杠补全菜单 + ↑↓ 历史），带裸 input 回退；业务、状态、协议零沾染——
+与"引擎 wheel 不含表现层 UI"的原始裁决不冲突。textual 仍不引入。
+
 ## Updated（2026-10-24）：交互式 CLI 定为瘦客户端，旧宿主判死
 
 经对照参照仓库 Reasonix 逐条核验（维护者本轮亲验，行号在手），本 ADR 的

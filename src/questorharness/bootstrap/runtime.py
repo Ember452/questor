@@ -14,6 +14,7 @@ from questorharness.capabilities.tools import ToolRegistry, create_default_tool_
 from questorharness.commands import (
     CommandContext,
     CommandResult,
+    CommandRegistry,
     MemoryCommandBackend,
     create_default_command_registry,
     lookup_skill_slash_command,
@@ -136,7 +137,7 @@ class RuntimeBundle:
     app_state: AppStateStore
     hook_executor: HookExecutor
     engine: QueryEngine
-    commands: object
+    commands: CommandRegistry
     external_api_client: bool
     enforce_max_turns: bool = True
     session_id: str = ""

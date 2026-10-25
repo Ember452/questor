@@ -138,6 +138,8 @@ class Router:
                 return self._history()
             if request.method == "GET" and path == "/profile":
                 return self._profile(request)
+            if request.method == "GET" and path == "/commands":
+                return self._commands()
         except refusals.Refusal as exc:
             return _refusal(exc)
         return _error(404, refusals.NOT_FOUND, f"no route for {request.method} {path}")
@@ -259,6 +261,22 @@ class Router:
             if isinstance(message, dict)
         ]
         return _ok({"sessionId": str(snapshot.get("session_id", "")), "messages": messages})
+
+    def _commands(self) -> Response:
+        """指令目录（终端补全菜单与远端列表共用；顺序即 /help 顺序）。"""
+        registry = self._host.runtime.commands
+        return _ok(
+            {
+                "commands": [
+                    {
+                        "name": command.name,
+                        "description": command.description,
+                        "aliases": list(command.aliases),
+                    }
+                    for command in registry.list_commands()
+                ]
+            }
+        )
 
     def _profile(self, request: Request) -> Response:
         """当前形态的能力位（页面 id → ready / declared / absent）。"""
