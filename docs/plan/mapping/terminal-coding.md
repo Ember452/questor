@@ -38,9 +38,12 @@
 | T10 | MCP 面板 | ready | `:mcp` → `/catalog/mcp` → `/mcp` | Reasonix `mcppanel.go` |
 | T11 | 任务与 cron 面板 | ready | `:task` / `:job` 分别读 `catalog/tasks` 与 `catalog/jobs`，确认后 `/tasks` | Reasonix `todos.go` |
 | T12 | git 面板 | ready | `:git` → `/catalog/git` → `/branch` | Claude Code `branch` |
-| T13 | 插件面板 | declared | catalog 暂无 `plugins` kind（无公开枚举 API），故不开放 `:plugin` | — |
+| T13 | 插件面板 | ready | `:plugin` → `/catalog/plugins` → `/plugin`（读 `plugins.loader.load_plugins`） | — |
 | T14 | 费用 / 上下文占比 | declared | 窗口已知则显比例；`costUsd`/`cachedTokens` 引擎无数据 → 显 `—` | Reasonix `footer.go` |
 | T15 | transcript 浏览与搜索 | ready | `:transcript`（等价 `:t` / `:history`）读 `/history`，面板内 `/` 过滤 + j/k 游标；只读不发命令 | Claude Code transcript mode |
+| T16 | 清单卡（todos 帧） | ready | 终端 `theme.todo_card`（路径 + n/m + ✓/○）；web `TodoCard`；同回合只保留最新清单 | Reasonix `todos.go` |
+| T17 | 命令面板 | ready | `:help`（等价 `:?` / `:cmd`）读 `/commands`，与补全菜单同源，禁硬编码清单 | Reasonix `help.go` |
+| T18 | 命令按 16 族分组 | declared | 需要引擎侧给 `SlashCommand` 加 `family` 字段（跨层改动）；现在按注册顺序平铺 | Reasonix `help.go` 分组 |
 
 > `id` 一入表即不重新编号、不删除；下线只改 `status`。`absent` 行集合必须与
 > `terminal/unsupported.py` 的 key 集合相等（`tests/ci/test_unsupported_badges.py`）；

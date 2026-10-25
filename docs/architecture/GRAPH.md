@@ -80,7 +80,7 @@
 | `questorharness.providers` | 60 |
 | `questorharness.runtime` | 35 |
 | `questorharness.api` | 25 |
-| `questorharness.plugins` | 14 |
+| `questorharness.plugins` | 15 |
 | `questor.workspace` | 9 |
 | `questorharness.execution` | 8 |
 

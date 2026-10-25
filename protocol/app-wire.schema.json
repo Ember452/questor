@@ -262,6 +262,7 @@
             "models",
             "skills",
             "mcp",
+            "plugins",
             "jobs",
             "tasks",
             "git"

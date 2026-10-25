@@ -87,6 +87,8 @@
 | B10 | 分支 / worktree 状态 | Claude Code `branch` | `Enter/ExitWorktreeTool` + `/diff` `/branch` | 无 catalog kind `git` |
 | B11 | 编辑审批的结构化 diff | Reasonix `diffview.go`(410) `diffformatter.go`(334) | `detail` 字符串：`+{added}/-{removed}` + 补丁正文 ≤4000 字符（`authority.py:194-195`、`wire.py:76-83`） | 无 `patch`/`added`/`removed` 结构字段 |
 
+**表 B 落地状态（W-D1…W-D4）**：B1（usage 扩展）、B11（结构化 diff）、B2–B7、B9、B10（catalog kind）、B8（`todos` kind + 终端/web 清单卡）**均已落地**；仅 B12（缓存命中）仍为 nullable（引擎无统计）。
+
 ### 表 C：后端够用、纯终端没做——19 项（本计划主战场）
 
 | 组 | 项 | 参照实现 |
@@ -412,8 +414,9 @@ UNSUPPORTED: dict[str, str] = {
 | A 渲染内核 | `feat/terminal-repl` | 5b635d6 / 9f0e436 / 210b482 / c4b926e / 21b8f87 / 80d9dcc | 同一批（每条先跑失败再实现） | `wire_view` 13 kind 穷尽；width 与 `rich.cells` 一致性判红；markdown 块状态机；七图元 + diff 卡 + FooterVM；F1 接活并上探针守卫 |
 | B 交互骨架 | `feat/terminal-repl` | 9eca9bb / 07ef8ba / 本刀 | 队列、未知 kind、回退、fail-closed、绕过出口各一条 | §2.4 改为“可测的守卫”而非 TTY spike：`_output_channel()` 必须带 `raw=True` 进入 `patch_stdout`，非 TTY 不包裹（无头环境跑不了真 TTY，记为偏离） |
 | C 覆盖层 | `feat/terminal-repl` | bdd89e8 | 游标越界/空表/只读面板误发命令均判红 | 面板状态机 + alt-screen owner（`Application(full_screen=True)`）+ 非 TTY 编号回退；`:transcript` 走 `/history` |
-| D 契约扩张 | `feat/terminal-repl`（**偏离**：未切 `feat/terminal-contract`） | be5ee5e（W-D1/2）/ 11112d8（W-D3 catalog） | `test_catalog_coverage` 双向 + `CatalogResponse` 不得进 `ServerFrame` | **W-D4（`todos` kind）未做**：它在 §9-8 仍标待裁决；catalog 也无 `plugins` kind（无公开枚举 API，已登记 `declared`） |
-| E 面板接线 | `feat/terminal-repl` | 11112d8 / bdd89e8 | stub 数据 / 绕过端点直读引擎 → 红 | 7 个 catalog kind + transcript 全部接真数据；`:plugin` 未开放（同上登记） |
+| D 契约扩张 | `feat/terminal-repl`（**偏离**：未切 `feat/terminal-contract`） | be5ee5e（W-D1/2）/ 11112d8（W-D3 catalog）/ ad0b5bb（W-D4 todos） | `test_catalog_coverage` 双向 + `CatalogResponse` 不得进 `ServerFrame` | 8 个 catalog kind（含 `plugins`）与 `todos` kind 全部落地；`cachedTokens` 仍 nullable（引擎无统计，已登记 `declared`） |
+| E 面板接线 | `feat/terminal-repl` | 11112d8 / bdd89e8 / 7f93ff2 | stub 数据 / 绕过端点直读引擎 → 红 | 8 个 catalog kind + transcript + 命令面板全部接真数据；`:help` 按族分组因 `SlashCommand` 无 `family` 字段登记为 `declared` |
+| （结构）入包 | `feat/terminal-repl` | 3c77fbd | 入包后旧导入方仍绿（门面保留全部公开名） | `app.py` / `renderer.py` / `keymap.py` 入包，门面降为 170 行装配 |
 
 **填写规则**：三张对账表齐备才可填；任一表缺失视为该波未完成。
 

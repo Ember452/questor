@@ -26,11 +26,14 @@ PANELS: Final[dict[str, Panel]] = {
     "sessions": Panel("sessions", "历史会话", "/resume"),
     "skills": Panel("skills", "技能", "/{id}", uses_id=True),
     "mcp": Panel("mcp", "MCP 服务器", "/mcp"),
+    "plugins": Panel("plugins", "插件", "/plugin"),
     "jobs": Panel("jobs", "定时任务", "/tasks"),
     "tasks": Panel("tasks", "后台任务", "/tasks"),
     "git": Panel("git", "分支与工作区", "/branch"),
     # transcript 不走 catalog：数据源是 `/history`（已在会话里的内容）。
     "transcript": Panel("transcript", "会话记录（只读）", ""),
+    # help 不走 catalog：数据源是 `/commands`（与补全菜单同源，禁硬编码清单）。
+    "help": Panel("help", "命令（只读）", ""),
 }
 
 ALIASES: Final[dict[str, str]] = {
@@ -41,6 +44,8 @@ ALIASES: Final[dict[str, str]] = {
     ":skill": "skills",
     ":skills": "skills",
     ":mcp": "mcp",
+    ":plugin": "plugins",
+    ":plugins": "plugins",
     ":job": "jobs",
     ":jobs": "jobs",
     ":task": "tasks",
@@ -49,6 +54,9 @@ ALIASES: Final[dict[str, str]] = {
     ":t": "transcript",
     ":transcript": "transcript",
     ":history": "transcript",
+    ":?": "help",
+    ":help": "help",
+    ":cmd": "help",
 }
 
 

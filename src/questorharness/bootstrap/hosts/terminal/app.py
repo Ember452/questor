@@ -181,6 +181,20 @@ async def history_rows(host: ServeHost) -> list[dict[str, Any]]:
     return rows
 
 
+async def command_rows(host: ServeHost) -> list[dict[str, Any]]:
+    """`/commands` → 面板行（`:help` 的数据源，与补全菜单同源）。"""
+
+    rows: list[dict[str, Any]] = []
+    for command in await fetch_commands(host):
+        name = str(command.get("name", ""))
+        if not name:
+            continue
+        aliases = [str(alias) for alias in command.get("aliases", []) or []]
+        label = f"/{name}" + (f"  ({', '.join('/' + a for a in aliases)})" if aliases else "")
+        rows.append({"id": f"/{name}", "label": label, "detail": str(command.get("description", ""))})
+    return rows
+
+
 async def open_panel(host: ServeHost, renderer: TerminalRenderer, line: str) -> str | None:
     """`:` 开头的本地面板入口：拉数据 → 打开面板 → 返回要提交的命令。"""
 
@@ -192,6 +206,9 @@ async def open_panel(host: ServeHost, renderer: TerminalRenderer, line: str) -> 
         if panel.kind == "transcript":
             # 只读 transcript：数据已在会话里，走 `/history`，不动 catalog。
             items = await history_rows(host)
+        elif panel.kind == "help":
+            # 只读命令面板：与补全菜单同源（禁硬编码清单）。
+            items = await command_rows(host)
         else:
             response = await host.transport.request("GET", f"{PREFIX}/catalog/{panel.kind}")
             payload = json.loads(response.body)

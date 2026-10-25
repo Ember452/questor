@@ -106,3 +106,47 @@ def test_eof_exits_without_submitting(monkeypatch) -> None:  # type: ignore[no-u
 
 async def _eof(_session: object) -> str:
     return app_module.EOF
+
+
+class _CommandTransport:
+    def __init__(self, commands: list[dict[str, object]]) -> None:
+        import json
+
+        self.body = json.dumps({"commands": commands}).encode("utf-8")
+        self.calls: list[tuple[str, str]] = []
+
+    async def request(self, method: str, path: str, **_kwargs: object) -> SimpleNamespace:
+        self.calls.append((method, path))
+        return SimpleNamespace(status=200, body=self.body, headers={}, stream=None)
+
+
+def test_command_rows_come_from_the_registry_catalog() -> None:
+    """:help 面板的行来自 /commands（与补全同源，禁硬编码清单）。"""
+
+    transport = _CommandTransport(
+        [{"name": "compact", "description": "压缩历史", "aliases": ["cmp"]}]
+    )
+    rows = asyncio.run(app_module.command_rows(_host(transport)))  # type: ignore[arg-type]
+    assert rows == [
+        {"id": "/compact", "label": "/compact  (/cmp)", "detail": "压缩历史"}
+    ]
+    assert transport.calls == [("GET", "/rt/r1/commands")]
+
+
+def test_help_panel_is_read_only(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from questorharness.bootstrap.hosts.terminal import pickers
+
+    transport = _CommandTransport([{"name": "help", "description": "列指令"}])
+    renderer = SimpleNamespace(show=lambda _text: None)
+    seen: list[list[dict[str, object]]] = []
+    monkeypatch.setattr(
+        pickers, "open_panel", lambda panel, items, **_kw: seen.append(list(items)) or "2"
+    )
+
+    assert (
+        asyncio.run(
+            app_module.open_panel(_host(transport), renderer, ":help")  # type: ignore[arg-type]
+        )
+        is None
+    )
+    assert seen and seen[0][0]["id"] == "/help"

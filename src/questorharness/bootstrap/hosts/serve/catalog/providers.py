@@ -19,10 +19,20 @@ from questorharness.capabilities.schedule.cron import load_cron_jobs
 from questorharness.capabilities.skills.bundled import get_bundled_skills
 from questorharness.config.settings import load_settings
 from questorharness.platform.session_storage import list_session_snapshots
+from questorharness.plugins.loader import load_plugins
 from questorharness.providers.auth.auth_manager import AuthManager
 from questorharness.runtime.tasks.task_manager import get_task_manager
 
-KINDS: tuple[str, ...] = ("sessions", "models", "skills", "mcp", "jobs", "tasks", "git")
+KINDS: tuple[str, ...] = (
+    "sessions",
+    "models",
+    "skills",
+    "mcp",
+    "plugins",
+    "jobs",
+    "tasks",
+    "git",
+)
 
 CatalogItem = dict[str, Any]
 
@@ -107,6 +117,26 @@ def mcp(ctx: CatalogContext) -> list[CatalogItem]:
     return [_item(str(name), str(name)) for name in servers]
 
 
+def plugins(ctx: CatalogContext) -> list[CatalogItem]:
+    """已发现的插件（用户 / 项目两级）；启停状态一并带出。"""
+
+    items: list[CatalogItem] = []
+    try:
+        loaded = load_plugins(load_settings(), ctx.cwd)
+    except Exception:  # noqa: BLE001 - 插件目录坏掉不能拖垮面板
+        return []
+    for plugin in loaded:
+        manifest = getattr(plugin, "manifest", None)
+        name = str(getattr(manifest, "name", "") or getattr(plugin, "path", ""))
+        if not name:
+            continue
+        description = str(getattr(manifest, "description", "") or "")
+        enabled = bool(getattr(plugin, "enabled", False))
+        detail = " · ".join(part for part in ("on" if enabled else "off", description) if part)
+        items.append(_item(name, name, detail, current=enabled))
+    return items
+
+
 def jobs(ctx: CatalogContext) -> list[CatalogItem]:
     """cron 任务（enabled / 表达式 / 下次运行）。"""
 
@@ -167,6 +197,7 @@ PROVIDERS: dict[str, Callable[[CatalogContext], list[CatalogItem]]] = {
     "models": models,
     "skills": skills,
     "mcp": mcp,
+    "plugins": plugins,
     "jobs": jobs,
     "tasks": tasks,
     "git": git,
