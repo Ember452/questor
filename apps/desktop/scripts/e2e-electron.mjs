@@ -1,24 +1,53 @@
 /** Electron 真壳冒烟：启动 → 握手 → cookie → 加载 apps/web/dist → 看到导航。 */
-import { existsSync } from "node:fs";
-import { writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 import { _electron as electron } from "playwright";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "../../..");
+const nodeRequire = createRequire(import.meta.url);
 
 const engine = process.env.QUESTOR_ENGINE ?? resolve(REPO, "apps/desktop/dist/engine/questor-engine.exe");
-const electronExe = resolve(REPO, "apps/desktop/node_modules/electron/dist/electron.exe");
+const electronDir = resolve(REPO, "apps/desktop/node_modules/electron");
 const webDist = resolve(REPO, "apps/web/dist");
+
+/** electron 真实二进制：优先 require('electron')（它自己知道装在哪）；缺失则
+ *  主动重跑 install.js 强制下载——CI 上 postinstall 偶发被跳过时自愈。
+ */
+function resolveElectron() {
+  const fromModule = () => {
+    try {
+      const path = nodeRequire("electron");
+      return typeof path === "string" && existsSync(path) ? path : null;
+    } catch {
+      return null;
+    }
+  };
+  let exe = fromModule();
+  if (exe) return exe;
+  console.error("[electron] binary missing; re-running install.js to force download…");
+  if (existsSync(electronDir)) {
+    console.error("[electron] dir listing:", readdirSync(electronDir).join(", "));
+  }
+  const install = spawnSync(process.execPath, [resolve(electronDir, "install.js")], { stdio: "inherit" });
+  if (install.status !== 0) console.error(`[electron] install.js exited ${install.status}`);
+  exe = fromModule();
+  if (exe) return exe;
+  console.error("electron binary unavailable after forced install");
+  process.exit(1);
+}
+
+const electronExe = resolveElectron();
 const screenshot = resolve(REPO, "apps/web/e2e/__screenshots__/electron-shell.png");
 
 /** 产物预检：缺什么直接说清楚，不留给 Playwright 一个"failed to launch"。 */
 function preflight() {
   const missing = [
     ["engine exe", engine],
-    ["electron exe", electronExe],
     ["web dist", webDist],
   ].filter(([, target]) => !existsSync(target));
   if (missing.length > 0) {
