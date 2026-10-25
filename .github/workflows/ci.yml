@@ -189,7 +189,13 @@ jobs:
   desktop:
     name: desktop
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    env:
+      QUESTORHARNESS_OPENAI_API_KEY: sk-ci-dummy
+      QUESTORHARNESS_PROVIDER: openai
+      QUESTORHARNESS_API_FORMAT: openai
+      QUESTORHARNESS_MODEL: ci-model
+      QUESTORHARNESS_BASE_URL: http://127.0.0.1:9/v1
 
     defaults:
       run:

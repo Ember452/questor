@@ -63,6 +63,12 @@ export default async function globalSetup(): Promise<void> {
         PYTHONUTF8: "1",
         // 显式钉住 profile bundle：CI 的 editable 安装路径不一定能推出仓内目录。
         QUESTOR_PROFILE_ROOT: resolve(REPO, "src/questor/profiles"),
+        // e2e 不触模模型：只用最小可用配置让宿主起得来（握手/profile/history）。
+        QUESTORHARNESS_OPENAI_API_KEY: process.env.QUESTORHARNESS_OPENAI_API_KEY ?? "sk-e2e-dummy",
+        QUESTORHARNESS_PROVIDER: process.env.QUESTORHARNESS_PROVIDER ?? "openai",
+        QUESTORHARNESS_API_FORMAT: process.env.QUESTORHARNESS_API_FORMAT ?? "openai",
+        QUESTORHARNESS_MODEL: process.env.QUESTORHARNESS_MODEL ?? "e2e-model",
+        QUESTORHARNESS_BASE_URL: process.env.QUESTORHARNESS_BASE_URL ?? "http://127.0.0.1:9/v1",
       },
       stdio: ["pipe", "pipe", "pipe"],
     },

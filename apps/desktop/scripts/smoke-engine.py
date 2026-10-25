@@ -27,6 +27,10 @@ def main() -> int:
     )
     assert proc.stdout is not None and proc.stdin is not None
     line = proc.stdout.readline().strip()
+    if not line:
+        detail = proc.stderr.read().strip() if proc.stderr is not None else ""
+        print(f"engine exited before handshake; stderr:\n{detail}", file=sys.stderr)
+        return 1
     print("handshake:", line)
     payload = json.loads(line)
     assert isinstance(payload.get("port"), int) and 1 <= payload["port"] <= 65535
