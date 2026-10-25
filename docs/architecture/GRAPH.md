@@ -40,7 +40,6 @@
 | `questorharness.state` | — |
 | `questorharness.surfaces` | `questorharness.config`, `questorharness.contracts`, `questorharness.platform` |
 | `questorharness.themes` | — |
-| `questorharness.vim` | — |
 
 ## 环
 

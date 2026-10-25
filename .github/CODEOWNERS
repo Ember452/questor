@@ -34,7 +34,6 @@
 /src/questorharness/state/ @Ember452
 /src/questorharness/surfaces/ @Ember452
 /src/questorharness/themes/ @Ember452
-/src/questorharness/vim/ @Ember452
 
 # Engine root files (api facade, CLI entry points, package markers)
 /src/questorharness/*.py @Ember452

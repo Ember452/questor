@@ -330,8 +330,6 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/themes/builtin.py` | 91 |
 | `src/questorharness/themes/loader.py` | 55 |
 | `src/questorharness/themes/schema.py` | 54 |
-| `src/questorharness/vim/__init__.py` | 5 |
-| `src/questorharness/vim/transitions.py` | 10 |
 
 ## src/questor
 

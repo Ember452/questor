@@ -138,7 +138,7 @@ EXEMPTION_BUDGET: dict[str, int] = {
     "R3": 0,
     "R4": 1,
     "R5": 1,
-    "R7": 152,
+    "R7": 151,
     "R8": 30,
 }
 

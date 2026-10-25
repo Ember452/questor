@@ -81,9 +81,10 @@
    Node 侧生态（DevTools、崩溃采集、自动更新链）与本仓 React renderer 的
    现状更契合；Tauri 的 Rust 壳对当前团队是纯增量学习成本，收益（二进制
    体积）不落在关键路径上。
-4. **appearance 叶子包去留挂起**：`state` / `keybindings` / `themes` /
-   `vim` / `output_styles` 五包的存废跟随 REPL 瘦客户端落地后的实际键盘/
-   主题需求再裁，不在删除刀内。
+4. **appearance 叶子包去留**：`state` / `keybindings` / `themes` /
+   `output_styles` 四包保留（均有真实消费方）；`vim/` 包已删除（仓内零引用，
+   2026-10-25）——`/vim` 开关保留为设置项以兼容已持久化配置，但 REPL 是行式输入，
+   当前无行编辑器，接入或删命令需单独立项。
 5. **删除刀红线**（进 Verification）：
    - `rg "OHJSON|backend_host" src` = 0；
    - `rg "react_launcher|--backend-only" src pyproject.toml` = 0；
