@@ -13,9 +13,11 @@ const screenshot = resolve(REPO, "apps/web/e2e/__screenshots__/electron-shell.pn
 
 const app = await electron.launch({
   executablePath: resolve(REPO, "apps/desktop/node_modules/electron/dist/electron.exe"),
-  args: [resolve(REPO, "apps/desktop")],
+  // CI Windows runner 无 GPU/交互桌面：禁用 GPU/沙箱，参数必须在 app 路径之前。
+  args: ["--disable-gpu", "--no-sandbox", resolve(REPO, "apps/desktop")],
   env: {
     ...process.env,
+    ELECTRON_DISABLE_GPU: "1",
     QUESTOR_ENGINE: engine,
     QUESTOR_WEB_DIST: resolve(REPO, "apps/web/dist"),
   },
