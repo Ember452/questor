@@ -26,10 +26,13 @@ _ALLOWED_KEYS = frozenset(
         "plugin_roots",
         "allowed_tools",
         "denied_tools",
+        "runtime",
         "ui",
     }
 )
 _CAPABILITY_STATES = frozenset({"ready", "declared", "absent"})
+_RUNTIME_KEYS: tuple[str, ...] = ("schedule", "delivery", "memory_consumption")
+_RUNTIME_STATES = frozenset({"on", "off"})
 
 
 class ProfileError(Exception):
@@ -76,6 +79,31 @@ def _capabilities(raw: Any, path: Path) -> dict[str, str]:
     return parsed
 
 
+def _runtime(raw: Any, path: Path) -> dict[str, str]:
+    """解析 runtime 能力位（schedule / delivery / memory_consumption）。
+
+    缺段默认为全 ``off``（向前兼容手写 profile）——这是**写死口径**，不是“看情况”；
+    但键名/取值写错一律 fail-closed，避免“写了但不生效”。
+    """
+    parsed = {key: "off" for key in _RUNTIME_KEYS}
+    if raw is None:
+        return parsed
+    if not isinstance(raw, dict):
+        raise ProfileError(f"{path}: runtime must be a mapping")
+    unknown = sorted(set(raw) - set(_RUNTIME_KEYS))
+    if unknown:
+        raise ProfileError(f"{path}: runtime has unsupported keys: {', '.join(unknown)}")
+    for key, state in raw.items():
+        if isinstance(state, bool):
+            # YAML 1.1 会把未加引号的 off/on 读成 bool；归一成契约词表。
+            parsed[key] = "on" if state else "off"
+            continue
+        if not isinstance(state, str) or state not in _RUNTIME_STATES:
+            raise ProfileError(f"{path}: runtime.{key} must be one of on/off")
+        parsed[key] = state
+    return parsed
+
+
 def _parse(raw: Any, path: Path) -> ProfileInfo:
     """把一份 YAML 文档解析成 ProfileInfo。"""
     if not isinstance(raw, dict):
@@ -100,6 +128,7 @@ def _parse(raw: Any, path: Path) -> ProfileInfo:
         allowed_tools=_string_tuple(raw.get("allowed_tools"), "allowed_tools", path),
         denied_tools=_string_tuple(raw.get("denied_tools"), "denied_tools", path),
         ui_capabilities=_capabilities(raw.get("ui"), path),
+        runtime_capabilities=_runtime(raw.get("runtime"), path),
         is_default=is_default,
     )
 

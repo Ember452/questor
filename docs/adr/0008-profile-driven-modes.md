@@ -7,9 +7,12 @@
 ## Context
 
 ADR-0005 §3 已经写了"personal / coding 两种模式共用同一套 run/session"，`STRUCTURE.md` §7
-边界 5 也已写"`profile.ui` 驱动界面能力位，沿用 ready / declared / absent 三态"。**但这两条
-目前只有文档，没有实现**——实测 `src/` 下没有 profiles 包（只有 `providers/auth/profile_naming.py`，
-那是 provider 别名），Python 侧对 `profile.ui` / 能力位 **0 命中**。
+边界 5 也已写"`profile.ui` 驱动界面能力位，沿用 ready / declared / absent 三态" 。**立项时
+这两条只有文档、没有实现**（当时 `src/` 下没有 profiles 包，Python 侧对 `profile.ui` / 能力位
+0 命中）。**截至阶段 1（`feat/studio-serve`，f05ac1c…e8122b8）已落地**：`profiles/` bundle +
+loader（fail-closed）+ 两份产品 yaml + `/rt/r1/profile` 路由 + `allowed_tools/denied_tools`
+经 `build_runtime` 进 policy；**仍缺的只有两件**：能力位门控在前端落地（阶段 4a-8）、
+`runtime` 段的消费方（personal 开工）。
 
 计划 02 的阶段 4 以 DeepCode 骨架落地**单一编码形态**（thread / workbench / inspector /
 files / tests / browser）。如果不在骨架落地时留下形态扩展点，第二个形态（个人 agent：人设 /
@@ -20,7 +23,8 @@ files / tests / browser）。如果不在骨架落地时留下形态扩展点，
 
 - `build_runtime(active_profile, system_prompt, session_backend, memory_backend,
   include_project_memory, extra_skill_dirs, extra_plugin_roots, permission_mode,
-  ask_user_prompt, edit_approval_prompt)`（`bootstrap/runtime.py:275-300`）；
+  allowed_tools, denied_tools, ask_user_prompt, edit_approval_prompt)`
+  （`bootstrap/runtime.py:305-328`）；
 - 工具过滤已有机制：`capabilities/policy/checker.py:102`（显式拒绝）与 `:105`
   （`allowed_tools`），`capabilities/tools/registry.py` 的 `read_only_tools`。
 
@@ -52,13 +56,17 @@ ContextUsageDonut`；业界 Roo Code 的 custom modes 把“模式”定义为 r
    **docs/plan/mapping/questor-personal.md**；kind 覆盖守卫按当前 profile 选表校验。
 6. **禁止形态分支**：`apps/web` 内不得出现 `mode ===` / `isPersonal` 类判断（`rg` 探针守卫）；
    Python 引擎内不得写形态分支。
-7. `allowed_tools` 经 `build_runtime` 注入 policy；个人形态的技能/插件目录走
-   `extra_skill_dirs / extra_plugin_roots`——**引擎零改动**。
+7. `allowed_tools` / `denied_tools` 经 `build_runtime` 注入 policy（**阶段 1 已落**）；个人形态的
+   技能/插件目录走 `extra_skill_dirs / extra_plugin_roots`——**引擎零改动**。`profile.yaml`
+   另设 `runtime` 段（`schedule / delivery / memory_consumption`，取值 `on/off`）：本阶段
+   **只立位、值全 `off`、不接消费方**；缺段按写死口径视为全 `off`，键名/取值写错即报错。
+   `/profile` 帧**不扩** runtime 键（守住 ADR-0006 只加不改的窗口）。
 8. **页面 id 是契约，页面集可增量增长**：首批为 `chat` / `persona` / `memory` / `schedule` /
    `channels`（**首批注册集，不是上限**）。`registry` 的 id 一旦提交即**只增不改名、不删除**；
    下线/替换改用 `absent` 并在映射表登记，别名期至少一个 minor 版本。新增页面不改本 ADR——
-   注册表 + `ui.capabilities` +（必要时的）schema kind + 形态映射表四步即可。一级导航固定
-   ≤7 项，超出归入“更多 / 设置”，不得为单页新开一级入口。
+   注册表 + `ui.capabilities` +（必要时的）schema kind + 形态映射表四步即可。一级导航按
+   **当前 profile** 固定 ≤7 项（两 profile 的并集可 >7），超出归入“更多 / 设置”，不得为单页
+   新开一级入口。
 
 ## Alternatives considered
 

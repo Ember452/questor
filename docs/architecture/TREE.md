@@ -222,8 +222,8 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/plugins/schemas.py` | 26 |
 | `src/questorharness/plugins/source.py` | 55 |
 | `src/questorharness/profiles/__init__.py` | 6 |
-| `src/questorharness/profiles/loader.py` | 129 |
-| `src/questorharness/profiles/model.py` | 24 |
+| `src/questorharness/profiles/loader.py` | 158 |
+| `src/questorharness/profiles/model.py` | 25 |
 | `src/questorharness/providers/__init__.py` | 7 |
 | `src/questorharness/providers/auth/__init__.py` | 30 |
 | `src/questorharness/providers/auth/auth_manager.py` | 484 |

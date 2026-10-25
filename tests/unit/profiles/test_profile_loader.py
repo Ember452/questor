@@ -54,6 +54,39 @@ def test_invalid_capability_state_is_rejected(tmp_path: Path) -> None:
         load_profile(tmp_path, "bad")
 
 
+def test_runtime_capabilities_declared_all_off() -> None:
+    """runtime 段立位：三键必须齐全，本阶段全 off。"""
+    for name in ("coding", "personal"):
+        profile = load_profile(BUNDLES, name)
+        assert set(profile.runtime_capabilities) == {"schedule", "delivery", "memory_consumption"}
+        assert set(profile.runtime_capabilities.values()) == {"off"}
+
+
+def test_missing_runtime_section_defaults_to_all_off(tmp_path: Path) -> None:
+    """缺段按写死口径默认全 off（向前兼容手写 profile）。"""
+    (tmp_path / "min.yaml").write_text("name: min\n", encoding="utf-8")
+    profile = load_profile(tmp_path, "min")
+    assert profile.runtime_capabilities == {
+        "schedule": "off",
+        "delivery": "off",
+        "memory_consumption": "off",
+    }
+
+
+def test_runtime_unknown_key_and_value_are_rejected(tmp_path: Path) -> None:
+    """runtime 键名/取值写错一律 fail-closed，不静默吞。"""
+    (tmp_path / "extra.yaml").write_text(
+        "name: extra\nruntime:\n  schedule: off\n  teleport: on\n", encoding="utf-8"
+    )
+    with pytest.raises(ProfileError):
+        load_profile(tmp_path, "extra")
+    (tmp_path / "value.yaml").write_text(
+        "name: value\nruntime:\n  schedule: maybe\n", encoding="utf-8"
+    )
+    with pytest.raises(ProfileError):
+        load_profile(tmp_path, "value")
+
+
 def test_missing_profile_does_not_fallback(tmp_path: Path) -> None:
     """缺失形态必须报错，不得偷偷回退到默认。"""
     with pytest.raises(ProfileError):

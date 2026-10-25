@@ -16,3 +16,9 @@ ui:
     inspector: ready
     settings: ready
     workbench: ready
+# runtime 能力位：编码形态不开定时/投递/记忆归因；与 personal 同一份契约。
+# YAML 1.1 把未加引号的 off 读成 false，loader 会归一成 on/off 词表。
+runtime:
+  schedule: off
+  delivery: off
+  memory_consumption: off

@@ -21,4 +21,5 @@ class ProfileInfo:
     allowed_tools: tuple[str, ...] = ()
     denied_tools: tuple[str, ...] = ()
     ui_capabilities: Mapping[str, str] = field(default_factory=dict)
+    runtime_capabilities: Mapping[str, str] = field(default_factory=dict)
     is_default: bool = False

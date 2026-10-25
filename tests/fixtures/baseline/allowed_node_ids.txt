@@ -21,3 +21,7 @@ tests/unit/bootstrap/hosts/serve/test_routes.py::test_history_unknown_block_degr
 tests/unit/bootstrap/hosts/serve/test_routes.py::test_replay_of_queued_request_reports_queued
 tests/unit/bootstrap/hosts/serve/test_routes.py::test_submit_records_transport_via
 tests/unit/bootstrap/hosts/serve/test_wire_encode.py::test_unknown_content_block_degrades_visibly
+tests/unit/profiles/test_profile_loader.py::test_runtime_capabilities_declared_all_off
+tests/unit/profiles/test_profile_loader.py::test_missing_runtime_section_defaults_to_all_off
+tests/unit/profiles/test_profile_loader.py::test_runtime_unknown_key_and_value_are_rejected
+tests/unit/test_permissions/test_profile_tool_surface.py::test_personal_denies_write_tools_and_coding_allows_them

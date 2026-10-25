@@ -37,6 +37,30 @@ def test_personal_denies_bash_and_coding_does_not() -> None:
     assert "explicitly denied" not in coding_decision.reason
 
 
+def test_personal_denies_write_tools_and_coding_allows_them() -> None:
+    """阶段 1 关门判红：personal 下 write_file/edit_file 被硬拒，coding 不额外拒。"""
+    personal = load_profile(BUNDLES, "personal")
+    coding = load_profile(BUNDLES, "coding")
+    personal_checker = PermissionChecker(
+        PermissionSettings(
+            allowed_tools=list(personal.allowed_tools),
+            denied_tools=list(personal.denied_tools),
+        )
+    )
+    coding_checker = PermissionChecker(
+        PermissionSettings(
+            allowed_tools=list(coding.allowed_tools),
+            denied_tools=list(coding.denied_tools),
+        )
+    )
+    for tool in ("write_file", "edit_file", "notebook_edit"):
+        denied = personal_checker.evaluate(tool, is_read_only=False)
+        assert denied.allowed is False
+        assert "explicitly denied" in denied.reason
+        allowed = coding_checker.evaluate(tool, is_read_only=False)
+        assert "explicitly denied" not in allowed.reason
+
+
 def test_personal_allows_question_tool_without_prompt() -> None:
     """personal 显式放行提问工具（无副作用的交互）。"""
     personal = load_profile(BUNDLES, "personal")

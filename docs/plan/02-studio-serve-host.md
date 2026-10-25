@@ -122,7 +122,7 @@ Reasonix 只保留"对话卡 + 设计法典"两项复用价值。
 | B26 | CowAgent 进程管理片段 | `CowAgent-master/desktop/`：111 文件 / 32,931 行、**0 个前端测试**；`python-manager` 类模块含 Windows 端口保留区逻辑 | 阶段 5 只借端口保留 / 进程监护片段，不借骨架 |
 | B27 | **hermes 的 profile 体系（形态参照）** | `hermes_cli/profiles.py:1048 list_profiles` / `:1377 create_profile`；`ProfileInfo{name,path,is_default,gateway_running,model,provider,has_env,skill_count,alias,distribution_*,description}`；前端 `/api/profiles` + `$activeGatewayProfile` 驱动设置/技能/工具/模型作用域 | 阶段 1 建 `profiles/` bundle 的同构参照（**只译语义**） |
 | B28 | **CowAgent 个人形态 UI** | renderer 组件：`AgentSelector` / `AgentScopeSelect` / `ChannelTeamSelect` / `ContextUsageDonut` | personal 形态首批页面/控件的来源（页面注册表） |
-| B29 | 工具按 profile 过滤（**策略层已有、接线在阶段 1 做**） | `capabilities/policy/checker.py:102`（显式拒绝）与 `:105`（`allowed_tools`）；`capabilities/tools/registry.py` 的 `read_only_tools` | **已落**：`ProfileInfo.allowed_tools/denied_tools` → `build_runtime(settings_overrides)` → policy；不改引擎语义 |
+| B29 | 工具按 profile 过滤（**已有 = settings 层 `allowed_tools/denied_tools`；新建 = profile 透传，阶段 1 已落**） | `capabilities/policy/checker.py:102`（显式拒绝）与 `:105`（`allowed_tools`）；`capabilities/tools/registry.py` 的 `read_only_tools` | **已落**：`ProfileInfo.allowed_tools/denied_tools` → `build_runtime(settings_overrides)` → policy；不改引擎语义 |
 
 ## 2. 终态、三参照与复用红线
 
@@ -492,7 +492,7 @@ Agents）在五卡之后逐张评估。
 
 | 阶段 | 分支 | 绿验收 commit | 红验收 commit | 备注 |
 |---|---|---|---|---|
-| 1 | feat/studio-serve | f05ac1c | f05ac1c | 契约 schema + 双侧（当前 Python）codegen + 并发/幂等判红 + kind 覆盖 + 持久化版本 + **profile 底座（bundle + `/profile`）**；含 ADR-0006 勘误 |
+| 1 | feat/studio-serve | f05ac1c | f05ac1c | 契约 schema + 双侧（当前 Python）codegen + 并发/幂等判红 + kind 覆盖 + 持久化版本 + **profile 底座（bundle + `/profile` + `runtime` 占位段）**；含 ADR-0006 勘误 |
 | 2 | feat/studio-serve | 325bbfd | 325bbfd | 删除刀 + `/cancel`（与阶段 3 同一提交：单工作区开发，见备注） |
 | 3 | feat/studio-serve | 325bbfd | 325bbfd | 五件套 + 多客户端语义 + 握手行 |
 | 4a | feat/studio-web | | | 基座 + 接门 + 换契约 + 字段预检 + 可用闭环 + ErrorBoundary/虚拟化 + **页面注册表/capability 门控** |

@@ -150,6 +150,8 @@ def test_profile_reports_capabilities_and_unknown_is_404(tmp_path: Path) -> None
         ok = await transport.request("GET", "/rt/r1/profile")
         assert ok.status == 200
         assert _json(ok)["ui"]["capabilities"] == {"chat": "ready", "inspector": "absent"}
+        # runtime 段属于 profile.yaml 契约，但 /profile 帧不扩（ADR-0008 Decision 7）。
+        assert "runtime" not in _json(ok)
         missing = await transport.request("GET", "/rt/r1/profile", query={"id": "nope"})
         assert missing.status == 404
         assert _json(missing)["code"] == "profile.unknown"

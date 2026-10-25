@@ -26,3 +26,8 @@ ui:
     memory: declared
     schedule: declared
     channels: declared
+# runtime 能力位：本阶段只立位、不接消费方；三个键必须显式声明（缺失视为全 off）。
+runtime:
+  schedule: off
+  delivery: off
+  memory_consumption: off
