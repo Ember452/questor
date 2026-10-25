@@ -55,6 +55,7 @@ async def run_repl(
     restore_messages: list[dict] | None = None,
     restore_tool_metadata: dict[str, object] | None = None,
     permission_mode: str | None = None,
+    overrides: dict[str, object] | None = None,
 ) -> None:
     """Run the interactive application: the terminal thin client over serve routes."""
     await run_terminal_repl(
@@ -71,6 +72,7 @@ async def run_repl(
         restore_messages=restore_messages,
         restore_tool_metadata=restore_tool_metadata,
         permission_mode=permission_mode,
+        overrides=overrides,
     )
 
 
@@ -86,6 +88,8 @@ async def run_task_worker(
     api_format: str | None = None,
     api_client: SupportsStreamingMessages | None = None,
     permission_mode: str | None = None,
+    allowed_tools: list[str] | None = None,
+    denied_tools: list[str] | None = None,
 ) -> None:
     """Run a stdin-driven headless worker for background agent tasks.
 
@@ -137,6 +141,8 @@ async def run_task_worker(
         ask_user_prompt=_noop_ask,
         enforce_max_turns=max_turns is not None,
         permission_mode=permission_mode,
+        allowed_tools=allowed_tools,
+        denied_tools=denied_tools,
     )
     await start_runtime(bundle)
     try:
@@ -177,6 +183,8 @@ async def run_print_mode(
     api_client: SupportsStreamingMessages | None = None,
     permission_mode: str | None = None,
     max_turns: int | None = None,
+    allowed_tools: list[str] | None = None,
+    denied_tools: list[str] | None = None,
 ) -> None:
     """Non-interactive mode: submit prompt, stream output, exit."""
     from questorharness.contracts.domain.events import (
@@ -209,6 +217,8 @@ async def run_print_mode(
         api_client=api_client,
         permission_prompt=_noop_permission,
         ask_user_prompt=_noop_ask,
+        allowed_tools=allowed_tools,
+        denied_tools=denied_tools,
     )
     await start_runtime(bundle)
 

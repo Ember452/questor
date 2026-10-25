@@ -17,14 +17,14 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/cli/cli_prompts.py` | 139 |
 | `src/questorharness/bootstrap/cli/config_commands.py` | 74 |
 | `src/questorharness/bootstrap/cli/cron_commands.py` | 133 |
-| `src/questorharness/bootstrap/cli/main.py` | 474 |
+| `src/questorharness/bootstrap/cli/main.py` | 493 |
 | `src/questorharness/bootstrap/cli/mcp_commands.py` | 68 |
 | `src/questorharness/bootstrap/cli/plugin_commands.py` | 52 |
 | `src/questorharness/bootstrap/cli/preview.py` | 747 |
 | `src/questorharness/bootstrap/cli/provider_commands.py` | 148 |
 | `src/questorharness/bootstrap/cli/setup.py` | 367 |
 | `src/questorharness/bootstrap/hosts/__init__.py` | 5 |
-| `src/questorharness/bootstrap/hosts/app.py` | 326 |
+| `src/questorharness/bootstrap/hosts/app.py` | 336 |
 | `src/questorharness/bootstrap/hosts/coordinator_drain.py` | 196 |
 | `src/questorharness/bootstrap/hosts/serve/__init__.py` | 23 |
 | `src/questorharness/bootstrap/hosts/serve/auth.py` | 129 |
@@ -39,7 +39,8 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/serve/transport.py` | 90 |
 | `src/questorharness/bootstrap/hosts/serve/wire.py` | 229 |
 | `src/questorharness/bootstrap/hosts/serve/wire_types.py` | 249 |
-| `src/questorharness/bootstrap/hosts/terminal_client.py` | 269 |
+| `src/questorharness/bootstrap/hosts/terminal_client.py` | 279 |
+| `src/questorharness/bootstrap/hosts/tool_policy.py` | 65 |
 | `src/questorharness/bootstrap/runtime.py` | 831 |
 | `src/questorharness/capabilities/__init__.py` | 7 |
 | `src/questorharness/capabilities/context/__init__.py` | 1 |

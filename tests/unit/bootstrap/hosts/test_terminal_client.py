@@ -16,6 +16,20 @@ def test_sse_frame_parsing() -> None:
     assert terminal_client._frame_from_sse(b"id: 1\nevent: frame\ndata: not-json\n") is None
 
 
+def test_merge_tool_overrides_keeps_profile_baseline() -> None:
+    """CLI 只给黑名单时，profile 的白名单仍要保留（覆盖只许收窄）。"""
+    profile = SimpleNamespace(allowed_tools=("ask_user_question",), denied_tools=("bash",))
+    merged = terminal_client.merge_tool_overrides(
+        profile, {"allowed_tools": None, "denied_tools": ["write_file"]}
+    )
+    assert merged["allowed_tools"] == ["ask_user_question"]
+    assert merged["denied_tools"] == ["write_file"]
+    assert terminal_client.merge_tool_overrides(profile, None) == {
+        "allowed_tools": ["ask_user_question"],
+        "denied_tools": ["bash"],
+    }
+
+
 def test_default_profile_root_honours_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """环境变量优先，便于产品切换形态目录。"""
     monkeypatch.setenv("QUESTOR_PROFILE_ROOT", "D:/profiles")
