@@ -12,6 +12,7 @@
 
 ## 已改
 
+- `eslint.config.js` — 新增叶子互不引用红线（pages/cards 横向 import 即红，registry 豁免）
 - `e2e/global-setup.ts` / `e2e/global-teardown.ts` — 接入 stub llm 装配
 - `src/shared/ui-kit/cards/*.tsx` — 文案走 `t()`
 - `src/pages/ChatPage.tsx` — 徽标文案走 `t()` + render 穷尽守卫
