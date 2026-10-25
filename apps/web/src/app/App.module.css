@@ -25,6 +25,27 @@
   font-size: 12px;
 }
 
+.nav {
+  display: flex;
+  gap: 4px;
+}
+
+.tab,
+.tabActive {
+  background: transparent;
+  color: inherit;
+  border: 1px solid transparent;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.tabActive {
+  border-color: #334155;
+  background: #1e293b;
+}
+
 .transcript {
   flex: 1;
   overflow: auto;

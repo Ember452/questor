@@ -1,0 +1,77 @@
+/* DeepCode(69) → Reasonix(128) 变量别名：旧名全部登记，无对应语义保留原值。 */
+/* 迁移完成后才可删旧名；本表由 apps/web/docs/TOKENS.md 的迁移规则约束。 */
+
+:root {
+  --imported-color-scheme: light; /* 运行期由 importedTheme 注入，默认 light */
+  --attention: #7a4000; /* 无对应 */
+  --attention-soft: #f2e4d2; /* 无对应 */
+  --border-emphasis: #000000; /* 无对应 */
+  --border-strong: #4a4a4a; /* 无对应 */
+  --border-subtle: #767676; /* 无对应 */
+  --border-terminal: #333b36; /* 无对应 */
+  --conversation-width: min(820px, 100%); /* 无对应 */
+  --danger: #a30012; /* 无对应 */
+  --danger-soft: #f7dcdf; /* 无对应 */
+  --font-display: ui-rounded, "SF Pro Rounded", "Avenir Next", "Segoe UI Variable Display",
+    -apple-system, BlinkMacSystemFont, sans-serif; /* 无对应 */
+  --font-mono: "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, monospace; /* 无对应 */
+  --font-size-base: 14px; /* 无对应 */
+  --font-ui-preferred: ; /* 无对应 */
+  --radius-2xs: 4px; /* 无对应 */
+  --radius-lg: 18px; /* 无对应 */
+  --radius-md: 14px; /* 无对应 */
+  --radius-pill: 999px; /* 无对应 */
+  --radius-sm: 10px; /* 无对应 */
+  --radius-xl: 24px; /* 无对应 */
+  --radius-xs: 7px; /* 无对应 */
+  --shadow-float: 0 0 0 2px #000000; /* -> --shadow-float（Reasonix 同名） */
+  --shadow-menu: 0 0 0 2px #000000; /* 无对应 */
+  --shadow-soft: 0 0 0 1px #4a4a4a; /* 无对应 */
+  --signal: #0033cc; /* 无对应 */
+  --signal-faint: rgb(0 51 204 / 9%); /* 无对应 */
+  --signal-soft: rgb(0 51 204 / 18%); /* 无对应 */
+  --signal-strong: #002499; /* 无对应 */
+  --success: #005c33; /* 无对应 */
+  --success-soft: #d6ebe0; /* 无对应 */
+  --surface-canvas: #ffffff; /* 无对应 */
+  --surface-code: #f2f2f2; /* 无对应 */
+  --surface-hover: #ebebeb; /* 无对应 */
+  --surface-inset: #ebebeb; /* 无对应 */
+  --surface-overlay: rgb(255 255 255 / 96%); /* 无对应 */
+  --surface-raised: #ffffff; /* 无对应 */
+  --surface-selected: #dcdcdc; /* 无对应 */
+  --surface-shell: #ffffff; /* 无对应 */
+  --surface-sidebar: #ffffff; /* 无对应 */
+  --surface-sidebar-strong: #f2f2f2; /* 无对应 */
+  --surface-terminal: #151816; /* 无对应 */
+  --surface-terminal-raised: #1f2421; /* 无对应 */
+  --surface-user: #f2f2f2; /* 无对应 */
+  --text-2xl: 2rem; /* 无对应 */
+  --text-2xs: 0.786rem; /* 无对应 */
+  --text-3xl: 2.286rem; /* 无对应 */
+  --text-base: 1rem; /* 无对应 */
+  --text-inverse: #ffffff; /* 无对应 */
+  --text-lg: 1.143rem; /* 无对应 */
+  --text-micro: 0.715rem; /* 无对应 */
+  --text-on-accent: #ffffff; /* 无对应 */
+  --text-primary: #000000; /* 无对应 */
+  --text-secondary: #1a1a1a; /* 无对应 */
+  --text-sm: 0.929rem; /* 无对应 */
+  --text-terminal: #e6eae7; /* 无对应 */
+  --text-terminal-dim: #9aa39c; /* 无对应 */
+  --text-tertiary: #3a3a3a; /* 无对应 */
+  --text-xl: 1.429rem; /* 无对应 */
+  --text-xs: 0.857rem; /* 无对应 */
+  --tracking-caps: 0.08em; /* 无对应 */
+  --tracking-display: -0.03em; /* 无对应 */
+  --tracking-normal: 0; /* 无对应 */
+  --tracking-tight: -0.015em; /* 无对应 */
+  --tracking-wide: 0.04em; /* 无对应 */
+  --weight-bold: 650; /* 无对应 */
+  --weight-display: 680; /* 无对应 */
+  --weight-medium: 520; /* 无对应 */
+  --weight-regular: 400; /* 无对应 */
+  --weight-semibold: 590; /* 无对应 */
+}
+
+/* 交集（1）：--shadow-float */

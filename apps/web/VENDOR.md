@@ -54,8 +54,8 @@
 - `scripts/gen-web-fixtures.mjs`
 - `src/pages/**`
 - `src/shared/theme/**`
-- `apps/web/docs/**`
-- `apps/web/e2e/**`
+- `docs/**`
+- `e2e/**`
 
 ---
 

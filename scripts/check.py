@@ -102,6 +102,10 @@ STEPS: tuple[Step, ...] = (
         ("node", "scripts/codegen/gen_wire_ts.mjs", "--out", "apps/web/src/generated/app-wire.ts", "--check"),
     ),
     Step("web-fixtures", ("node", "apps/web/scripts/gen-web-fixtures.mjs", "--check")),
+    Step("web-css-vars", (PYTHON, "-m", "pytest", "tests/ci/test_css_vars.py", "-q")),
+    Step("web-data-action", ("node", "scripts/ci/check_data_action.mjs")),
+    Step("desktop-check", ("node", "--check", "apps/desktop/electron/main.cjs")),
+    Step("desktop-test", ("node", "--test", "apps/desktop/electron/updater.test.mjs")),
     # apps/web 的前端 lane：lint / typecheck / unit / build（需先 npm ci --prefix apps/web）。
     Step("web-lint", (NPM, "--prefix", "apps/web", "run", "lint")),
     Step("web-typecheck", (NPM, "--prefix", "apps/web", "run", "typecheck")),
