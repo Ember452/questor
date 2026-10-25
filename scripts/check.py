@@ -84,6 +84,10 @@ STEPS: tuple[Step, ...] = (
     ),
     Step("legacy-host-removed", (PYTHON, "-m", "pytest", "tests/ci/test_legacy_host_removed.py", "-q")),
     Step(
+        "agent-tool-names",
+        (PYTHON, "-m", "pytest", "tests/ci/test_agent_tool_names.py", "-q"),
+    ),
+    Step(
         "baseline-check",
         # 不传 --fast:pytest 收集计数与 node-id 集是这份基线存在的意义,
         # 传了 --fast 它们在 CI 里永远不生效,"删测试静默通过"就会回来。
