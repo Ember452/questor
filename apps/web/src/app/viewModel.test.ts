@@ -105,3 +105,21 @@ describe("mergeHistoryItems：历史重载不吃掉本地未落盘的用户消�
     expect(merged.filter((item) => item.kind === "user")).toHaveLength(3);
   });
 });
+
+describe("viewModel：清单帧（W-D4）", () => {
+  it("todos 帧投影为清单项（路径 + 逐项勾选态）", () => {
+    const frame = byKind("todos");
+    const state = fold([frame]);
+    expect(state.items.at(-1)).toMatchObject({ kind: "todos" });
+    expect(state.items).toHaveLength(1);
+  });
+
+  it("同一回合多次写入只保留最新清单（不堆叠旧清单）", () => {
+    const first = { seq: 1, kind: "todos", path: "TODO.md", items: [{ text: "一", checked: false }] } as ServerFrame;
+    const second = { seq: 2, kind: "todos", path: "TODO.md", items: [{ text: "一", checked: true }] } as ServerFrame;
+    const state = fold([first, second]);
+    const todos = state.items.filter((item) => item.kind === "todos");
+    expect(todos).toHaveLength(1);
+    expect(todos[0]).toMatchObject({ rows: [{ text: "一", checked: true }] });
+  });
+});

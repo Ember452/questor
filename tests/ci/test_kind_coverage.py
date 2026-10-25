@@ -16,6 +16,7 @@ HOST_PRODUCED: dict[str, str] = {
     "approval_request": "authority 打开审批时经 notifier 发布",
     "ask_request": "authority 打开提问时经 notifier 发布",
     "stream_reset": "eventstream/route 在重放窗口越界时发布",
+    "todos": "host._publish_todos 在 todo_write 成功后读清单发布（plan03 W-D4）",
 }
 
 

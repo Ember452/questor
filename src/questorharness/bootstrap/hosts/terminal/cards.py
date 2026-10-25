@@ -103,6 +103,12 @@ def _stream_reset(item: view.StreamResetItem) -> RenderableType:
     return theme.notice_bar(f"{strings.STREAM_RESET}（{item.reason}）", "warning")
 
 
+def _todos(item: view.TodosItem) -> RenderableType:
+    """清单卡（W-D4）：标题用路径，逐项勾选态。"""
+
+    return theme.todo_card(item.path, [(row.text, row.checked) for row in item.rows])
+
+
 def _unsupported(item: view.UnsupportedItem) -> RenderableType:
     text = Text()
     text.append(f"  {strings.UNSUPPORTED_LEAD} ", style=theme.WARN)
@@ -168,4 +174,6 @@ def render_item(item: view.Item) -> RenderableType:
         return theme.turn_footer(item.outcome, item.duration_ms, _usage_dict(item.usage))
     if isinstance(item, view.StreamResetItem):
         return _stream_reset(item)
+    if isinstance(item, view.TodosItem):
+        return _todos(item)
     return _unsupported(item)

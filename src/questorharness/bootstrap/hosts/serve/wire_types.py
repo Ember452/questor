@@ -153,6 +153,15 @@ class TextBlock(TypedDict):
     text: str
 
 
+class Todos(TypedDict):
+    """Checklist snapshot after a todo_write tool call (plan03 W-D4). Derived by the host from the checklist file the tool just wrote; the engine events are unchanged."""
+
+    seq: int
+    kind: Literal["todos"]
+    path: str
+    items: list[dict[str, object]]
+
+
 class ToolDispatch(TypedDict):
     seq: int
     kind: Literal["tool_dispatch"]
@@ -218,7 +227,7 @@ CapabilityMap = dict[str, Literal["ready", "declared", "absent"]]
 ContentBlock = Union[TextBlock, ImageBlock, ToolUseBlock, ToolResultBlock]
 
 
-ServerFrame = Union[TurnStarted, Text, Message, ToolDispatch, ToolResult, ApprovalRequest, AskRequest, Notice, CompactionStarted, CompactionProgress, CompactionDone, TurnDone, StreamReset]
+ServerFrame = Union[TurnStarted, Text, Message, ToolDispatch, ToolResult, ApprovalRequest, AskRequest, Notice, CompactionStarted, CompactionProgress, CompactionDone, TurnDone, StreamReset, Todos]
 
 
 KIND_APPROVAL_REQUEST: Final[str] = "approval_request"
@@ -230,6 +239,7 @@ KIND_MESSAGE: Final[str] = "message"
 KIND_NOTICE: Final[str] = "notice"
 KIND_STREAM_RESET: Final[str] = "stream_reset"
 KIND_TEXT: Final[str] = "text"
+KIND_TODOS: Final[str] = "todos"
 KIND_TOOL_DISPATCH: Final[str] = "tool_dispatch"
 KIND_TOOL_RESULT: Final[str] = "tool_result"
 KIND_TURN_DONE: Final[str] = "turn_done"
@@ -247,6 +257,7 @@ SERVER_FRAME_KINDS: Final[frozenset[str]] = frozenset(
         "notice",
         "stream_reset",
         "text",
+        "todos",
         "tool_dispatch",
         "tool_result",
         "turn_done",
@@ -265,6 +276,7 @@ SERVER_FRAME_KIND_BY_DEF: Final[dict[str, str]] = {
     "Notice": "notice",
     "StreamReset": "stream_reset",
     "Text": "text",
+    "Todos": "todos",
     "ToolDispatch": "tool_dispatch",
     "ToolResult": "tool_result",
     "TurnDone": "turn_done",

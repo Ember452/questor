@@ -119,6 +119,11 @@ def compaction_line(phase: str, trigger: str) -> Text:
     return text
 
 
+# ---- 清单卡（对齐 Reasonix todos.go 的勾选行）-----------------------------
+TODO_CHECKED = "✓"
+TODO_OPEN = "○"
+
+
 def status_bar(profile_name: str, model: str | None = None, busy: bool = False) -> Text:
     """底部状态条（对齐 Reasonix Chrome 的右侧 status span）。"""
     text = Text()
@@ -126,4 +131,24 @@ def status_bar(profile_name: str, model: str | None = None, busy: bool = False) 
     if model:
         text.append(f" · {model}", style=DIM)
     text.append(" · " + ("回合进行中" if busy else "空闲"), style=WARN if busy else OK)
+    return text
+
+
+def todo_card(title: str, rows: list[tuple[str, bool]]) -> Text:
+    """清单卡：标题行 + 逐项勾选态（终端的 todo 面板就是这个图元）。"""
+    text = Text()
+    text.append(f"  {title}", style=f"{BOLD}")
+    if not rows:
+        text.append("  （空）", style=DIM)
+        return text
+    done = sum(1 for _, checked in rows if checked)
+    text.append(f"  {done}/{len(rows)}", style=DIM)
+    for label, checked in rows:
+        text.append("\n")
+        if checked:
+            text.append(f"  {TODO_CHECKED} ", style=OK)
+            text.append(label, style=DIM)
+        else:
+            text.append(f"  {TODO_OPEN} ", style=ACCENT)
+            text.append(label)
     return text

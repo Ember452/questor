@@ -61,8 +61,23 @@
     "text": "hello"
   },
   {
+    "items": [
+      {
+        "checked": true,
+        "text": "写文档"
+      },
+      {
+        "checked": false,
+        "text": "补测试"
+      }
+    ],
+    "kind": "todos",
+    "path": "TODO.md",
+    "seq": 10
+  },
+  {
     "kind": "tool_dispatch",
-    "seq": 10,
+    "seq": 11,
     "tool": "bash",
     "toolCallId": "bash-1-1"
   },
@@ -70,7 +85,7 @@
     "isError": false,
     "kind": "tool_result",
     "output": "ok",
-    "seq": 11,
+    "seq": 12,
     "tool": "bash",
     "toolCallId": "bash-1-1"
   },
@@ -80,13 +95,13 @@
     "durationMs": 42,
     "kind": "turn_done",
     "outcome": "completed",
-    "seq": 12,
+    "seq": 13,
     "turnId": "turn-0001"
   },
   {
     "index": 1,
     "kind": "turn_started",
-    "seq": 13,
+    "seq": 14,
     "turnId": "turn-0001",
     "via": "studio"
   }

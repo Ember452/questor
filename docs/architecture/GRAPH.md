@@ -60,7 +60,7 @@
 | `questorharness.contracts.domain.message` | 27 | 契约 |
 | `questorharness.api` | 25 | 门面 |
 | `questorharness.providers.auth.auth_manager` | 18 | 实现 |
-| `questorharness.contracts.domain.events` | 16 | 契约 |
+| `questorharness.contracts.domain.events` | 17 | 契约 |
 | `questorharness.config` | 15 | 门面 |
 | `questorharness.contracts.hooks` | 14 | 契约 |
 | `questorharness.platform.io` | 14 | 原语 |
@@ -73,7 +73,7 @@
 
 | package | imported by |
 | --- | ---: |
-| `questorharness.contracts` | 118 |
+| `questorharness.contracts` | 119 |
 | `questorharness.platform` | 66 |
 | `questorharness.capabilities` | 64 |
 | `questorharness.config` | 61 |

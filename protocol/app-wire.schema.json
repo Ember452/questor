@@ -270,6 +270,29 @@
         "items": { "type": "array", "items": { "$ref": "#/$defs/CatalogItem" } }
       }
     },
+    "Todos": {
+      "description": "Checklist snapshot after a todo_write tool call (plan03 W-D4). Derived by the host from the checklist file the tool just wrote; the engine events are unchanged.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "path", "items"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "todos" },
+        "path": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text", "checked"],
+            "properties": {
+              "text": { "type": "string" },
+              "checked": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
     "ServerFrame": {
       "description": "Downstream SSE frame union.",
       "oneOf": [
@@ -285,7 +308,8 @@
         { "$ref": "#/$defs/CompactionProgress" },
         { "$ref": "#/$defs/CompactionDone" },
         { "$ref": "#/$defs/TurnDone" },
-        { "$ref": "#/$defs/StreamReset" }
+        { "$ref": "#/$defs/StreamReset" },
+        { "$ref": "#/$defs/Todos" }
       ]
     },
     "SubmitRequest": {

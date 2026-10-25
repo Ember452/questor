@@ -194,6 +194,34 @@ def test_usage_extras_project_when_present() -> None:
     assert bare.usage.context_window is None
 
 
+def test_todos_projects_rows_and_path() -> None:
+    """W-D4：清单快照按行投影，勾选态进布尔字段（渲染层不做二次解析）。"""
+    item = view.view_of(
+        _frame(
+            "todos",
+            path="TODO.md",
+            items=[
+                {"text": "写文档", "checked": True},
+                {"text": "补测试", "checked": False},
+            ],
+        )
+    )
+    assert item == view.TodosItem(
+        path="TODO.md",
+        rows=(
+            view.TodoRow(text="写文档", checked=True),
+            view.TodoRow(text="补测试", checked=False),
+        ),
+    )
+
+
+def test_todos_with_broken_rows_degrades() -> None:
+    """清单行坏掉时整帧降级，而不是渲染半张清单。"""
+    item = view.view_of(_frame("todos", path="TODO.md", items=["不是对象"]))
+    assert isinstance(item, view.UnsupportedItem)
+    assert item.kind == "todos"
+
+
 def test_approval_patch_projects_structured_fields() -> None:
     """波 D2：结构化 diff 字段走独立字段，不靠拆 detail 字符串。"""
     item = view.view_of(

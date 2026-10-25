@@ -25,7 +25,8 @@ export type ServerFrame =
   | CompactionProgress
   | CompactionDone
   | TurnDone
-  | StreamReset;
+  | StreamReset
+  | Todos;
 /**
  * Flattened ConversationMessage content block; input payloads stay on the engine side.
  */
@@ -157,4 +158,16 @@ export interface StreamReset {
   seq: number;
   kind: "stream_reset";
   reason: "replay_gap" | "server_restart";
+}
+/**
+ * Checklist snapshot after a todo_write tool call (plan03 W-D4). Derived by the host from the checklist file the tool just wrote; the engine events are unchanged.
+ */
+export interface Todos {
+  seq: number;
+  kind: "todos";
+  path: string;
+  items: {
+    text: string;
+    checked: boolean;
+  }[];
 }

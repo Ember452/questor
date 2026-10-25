@@ -127,6 +127,19 @@ def test_say_stream_renders_markdown_without_a_card_wrapper() -> None:
     assert "x = 1" in text
 
 
+def test_todos_card_shows_path_progress_and_marks() -> None:
+    """W-D4：清单卡要有路径、完成计数与逐项勾选态。"""
+    item = view.TodosItem(
+        path="TODO.md",
+        rows=(view.TodoRow(text="写文档", checked=True), view.TodoRow(text="补测试", checked=False)),
+    )
+    text = _plain(cards.render_item(item))
+    assert "TODO.md" in text
+    assert "1/2" in text
+    assert theme.TODO_CHECKED in text and theme.TODO_OPEN in text
+    assert "写文档" in text and "补测试" in text
+
+
 def test_names_used_by_the_renderer_are_exported() -> None:
     for name in ("render_item", "say_stream", "empty_state", "banner"):
         assert hasattr(cards, name), name

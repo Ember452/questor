@@ -132,6 +132,25 @@ def stream_reset_frame(*, reason: str, watermark: int) -> Frame:
     return {"kind": "stream_reset", "reason": reason, "seq": watermark}
 
 
+def parse_checklist(text: str) -> list[dict[str, object]]:
+    """markdown 清单 → [{text, checked}]（只认 `- [ ]` / `- [x]` 行）。"""
+
+    items: list[dict[str, object]] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        lowered = stripped.lower()
+        if lowered.startswith("- [x]") or lowered.startswith("* [x]"):
+            items.append({"text": stripped[5:].strip(), "checked": True})
+        elif lowered.startswith("- [ ]") or lowered.startswith("* [ ]"):
+            items.append({"text": stripped[5:].strip(), "checked": False})
+    return items
+
+
+def todos_frame(*, path: str, items: list[dict[str, object]]) -> Frame:
+    """清单快照（plan03 W-D4）：宿主读完刚写的清单文件后发布。"""
+    return {"kind": "todos", "path": path, "items": items}
+
+
 def _blocks(message: Any) -> tuple[list[Frame], list[str]]:
     """把 ConversationMessage 的内容块展平。
 

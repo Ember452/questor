@@ -30,6 +30,7 @@ KNOWN_KINDS: Final[frozenset[str]] = frozenset(
         "compaction_done",
         "turn_done",
         "stream_reset",
+        "todos",
     }
 )
 
@@ -169,6 +170,20 @@ class StreamResetItem:
 
 
 @dataclass(frozen=True)
+class TodoRow:
+    text: str
+    checked: bool
+
+
+@dataclass(frozen=True)
+class TodosItem:
+    """清单快照（W-D4）：serve 在 todo_write 成功后从清单文件读出。"""
+
+    path: str
+    rows: tuple[TodoRow, ...]
+
+
+@dataclass(frozen=True)
 class UnsupportedItem:
     """未登记 kind 或坏帧：渲染成一行可见的降级提示，不丢、不崩。"""
 
@@ -190,6 +205,7 @@ Item: TypeAlias = (
     | CompactionDoneItem
     | TurnDoneItem
     | StreamResetItem
+    | TodosItem
     | UnsupportedItem
 )
 
@@ -361,6 +377,22 @@ def _stream_reset(frame: Mapping[str, Any]) -> Item:
     return StreamResetItem(reason=_str(frame, "reason", default="unknown"))
 
 
+def _todos(frame: Mapping[str, Any]) -> Item:
+    raw = frame.get("items")
+    if raw is None:
+        raw = []
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, Sequence):
+        raise _Malformed("items 不是数组")
+    rows: list[TodoRow] = []
+    for entry in raw:
+        if not isinstance(entry, Mapping):
+            raise _Malformed("清单行不是对象")
+        rows.append(
+            TodoRow(text=_str(entry, "text", default=""), checked=_bool(entry, "checked"))
+        )
+    return TodosItem(path=_str(frame, "path", default="TODO.md"), rows=tuple(rows))
+
+
 _PROJECTIONS: Final[dict[str, Callable[[Mapping[str, Any]], Item]]] = {
     "turn_started": _turn_started,
     "text": _text,
@@ -375,6 +407,7 @@ _PROJECTIONS: Final[dict[str, Callable[[Mapping[str, Any]], Item]]] = {
     "compaction_done": _compaction_done,
     "turn_done": _turn_done,
     "stream_reset": _stream_reset,
+    "todos": _todos,
 }
 
 

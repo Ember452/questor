@@ -25,6 +25,7 @@ export const CARD_SLOTS: Record<ServerFrame["kind"], Slot> = {
   compaction_done: { item: "compaction", capability: "chat" },
   turn_done: { item: "turn" },
   stream_reset: { item: null },
+  todos: { item: "todos", capability: "chat" },
 };
 
 export const ALLOWLIST_KINDS = (Object.entries(CARD_SLOTS) as Array<[ServerFrame["kind"], Slot]>)
