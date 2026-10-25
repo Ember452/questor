@@ -38,7 +38,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/serve/refusals.py` | 52 |
 | `src/questorharness/bootstrap/hosts/serve/routes.py` | 315 |
 | `src/questorharness/bootstrap/hosts/serve/studio.py` | 90 |
-| `src/questorharness/bootstrap/hosts/serve/terminal_theme.py` | 137 |
+| `src/questorharness/bootstrap/hosts/serve/terminal_theme.py` | 129 |
 | `src/questorharness/bootstrap/hosts/serve/transport.py` | 90 |
 | `src/questorharness/bootstrap/hosts/serve/wire.py` | 276 |
 | `src/questorharness/bootstrap/hosts/serve/wire_types.py` | 272 |
@@ -57,7 +57,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/terminal/unsupported.py` | 37 |
 | `src/questorharness/bootstrap/hosts/terminal/width.py` | 104 |
 | `src/questorharness/bootstrap/hosts/terminal/wire_view.py` | 393 |
-| `src/questorharness/bootstrap/hosts/terminal_client.py` | 554 |
+| `src/questorharness/bootstrap/hosts/terminal_client.py` | 582 |
 | `src/questorharness/bootstrap/hosts/tool_policy.py` | 65 |
 | `src/questorharness/bootstrap/runtime.py` | 831 |
 | `src/questorharness/capabilities/__init__.py` | 7 |

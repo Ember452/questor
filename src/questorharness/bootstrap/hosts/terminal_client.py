@@ -12,6 +12,7 @@ import json
 import os
 import sys
 from collections.abc import AsyncIterator, Mapping
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -388,6 +389,66 @@ async def _open_panel(
     return pickers.action_line(panel, chosen)
 
 
+def _output_channel(session: "_PS | None") -> AbstractContextManager[object]:
+    """唯一的写终端通道包装。
+
+    交互模式下 prompt 处于活跃状态而后台帧还在持续输出，不用
+    `patch_stdout` 包裹就会互相撕屏（plan03 §2.4 的第一条）。非 TTY（单次
+    prompt / 管道）没有 prompt 在跑，直接直写。惰性导入：prompt_toolkit 仍是输入层可选依赖。
+    """
+
+    if session is None:
+        return nullcontext()
+    from prompt_toolkit.patch_stdout import patch_stdout
+
+    return patch_stdout(raw=True)
+
+
+async def _drive_turns(
+    host: ServeHost,
+    renderer: TerminalRenderer,
+    session: "_PS | None",
+    prompt: str | None,
+    output: Console,
+) -> int:
+    """提交循环：单次 prompt 等回合结束；交互模式不阻塞等 done，排队交给服务端。"""
+
+    if prompt:
+        result = await _submit(host, prompt)
+        if result.turn_id is None:
+            return 1
+        if result.state == "queued":
+            renderer.note_queued()
+        await renderer.done.wait()
+        return 0
+    while True:
+        line = await _read_line(session)
+        if line == _EOF:
+            await _drain_pending(renderer)
+            return 0
+        if line == _INTERRUPT:
+            # 回合中 Ctrl-C = 取消；空闲时只是清掉当前行（什么都不做）。
+            if renderer.busy:
+                await host.transport.request("POST", f"{_PREFIX}/cancel")
+                renderer.note_cancel_requested()
+            continue
+        if not line.strip():
+            continue
+        line = paste.normalize(line)
+        if line.startswith(":"):
+            # 面板是终端本地能力（只读 catalog / history），选中后回到正常提交链。
+            action = await _open_panel(host, renderer, line)
+            if action is None:
+                continue
+            line = action
+        result = await _submit(host, line)
+        if result.turn_id is not None:
+            renderer.expect_turn()
+        if result.state == "queued":
+            renderer.note_queued()
+        # 不阻塞等本回合：读下一行，服务端的排队槽负责顺序与互斥。
+
+
 async def run_terminal_client(
     host: ServeHost,
     *,
@@ -406,41 +467,8 @@ async def run_terminal_client(
     if interactive:
         session = _build_prompt_session(await _fetch_commands(host))
     try:
-        if prompt:
-            result = await _submit(host, prompt)
-            if result.turn_id is None:
-                return 1
-            if result.state == "queued":
-                renderer.note_queued()
-            await renderer.done.wait()
-            return 0
-        while True:
-            line = await _read_line(session)
-            if line == _EOF:
-                await _drain_pending(renderer)
-                return 0
-            if line == _INTERRUPT:
-                # 回合中 Ctrl-C = 取消；空闲时只是清掉当前行（什么都不做）。
-                if renderer.busy:
-                    await host.transport.request("POST", f"{_PREFIX}/cancel")
-                    renderer.note_cancel_requested()
-                continue
-            if not line.strip():
-                continue
-            line = paste.normalize(line)
-            if line.startswith(":"):
-                # 面板是终端本地能力（只读 catalog），选中后回到正常提交链。
-                action = await _open_panel(host, renderer, line)
-                if action is None:
-                    continue
-                line = action
-            result = await _submit(host, line)
-            if result.turn_id is not None:
-                renderer.expect_turn()
-            if result.state == "queued":
-                renderer.note_queued()
-            # 不阻塞等本回合：读下一行，服务端的排队槽负责顺序与互斥。
-
+        with _output_channel(session):  # type: ignore[arg-type]
+            return await _drive_turns(host, renderer, session, prompt, output)
     except KeyboardInterrupt:
         await host.transport.request("POST", f"{_PREFIX}/cancel")
         output.print("[dim]已请求取消[/dim]")

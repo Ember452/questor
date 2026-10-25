@@ -127,11 +127,3 @@ def status_bar(profile_name: str, model: str | None = None, busy: bool = False) 
         text.append(f" · {model}", style=DIM)
     text.append(" · " + ("回合进行中" if busy else "空闲"), style=WARN if busy else OK)
     return text
-
-
-def empty_state() -> Text:
-    """空态提示（对齐 Hero 的「描述任务，其余交给 Reasonix」）。"""
-    text = Text()
-    text.append("输入一句话开始，或 / 查看全部指令。\n", style=DIM)
-    text.append("↑↓ 翻历史 · Ctrl-C 中止回合 · Ctrl-D 退出", style=DIM)
-    return text

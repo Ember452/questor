@@ -1,8 +1,5 @@
 # 计划 03：终端版（REPL + 覆盖层）
 
-<!-- known-stale-refs: tests/ci/test_terminal_theme_usage.py -->
-<!-- 上方是**前向引用**（反向棘轮）：该守卫在波 A5 创建，创建它的那一刀必须同时删掉此条目。 -->
-
 - Status: Draft Rev2（2026-10-25 立项；同日经评审 10 条修订后重写，见附录 A）
 - 基线：分支 `feat/terminal-repl`，HEAD `57fb980`
 - 修订要点（Rev2）：契约扩张由 8 个同构端点合并为 1 个 `/catalog/{kind}`（§4 波 D）；新增 §2.4 并发契约（唯一写终端通道 / alt-screen 归属 / 审批时序）并把并发列为最高风险；`wire_view` 与 `FooterVM` 前置到波 A；映射表加 `id`/`status` 两列使占位守卫可机器执行；修正 §10 与新增 kind 的矛盾。
@@ -115,6 +112,10 @@
 |---|---|---|---|
 | F1 | `status_bar()` **零调用点**（声明了行为却不产生行为，同 ADR-0005 §4 的 vim 判例） | 定义于 `serve/terminal_theme.py:122-129`；全 `src/` 无调用 | 波 A 接进 `FooterVM`，并加守卫 `tests/ci/test_terminal_theme_usage.py` |
 | F2 | 映射表与计划漂移："提交队列暂不暴露（引擎无队列）" | `docs/plan/mapping/questor-coding.md:37,72` vs 计划 02 §8「容量 1 排队已落地」 | 波 B 同刀订正该行 |
+
+**F1 已修**（波 A）：`status_bar()` 现在由 `terminal/footer.py` 调用，并由
+`tests/ci/test_terminal_theme_usage.py` 守住“任何公开图元零调用即红”；该守卫当场又发现并删除了
+同样零调用的 `terminal_theme.empty_state()`（空态文案已迁到 `terminal/strings.py`，单真源）。
 
 ---
 
@@ -408,11 +409,11 @@ UNSUPPORTED: dict[str, str] = {
 
 | 波 | 分支 | 绿验收 commit | 红验收 commit | 备注 |
 |---|---|---|---|---|
-| A 渲染内核 | `feat/terminal-repl` | 待填 | 待填 | 宽度/markdown/diff/七图元/status_bar 接活 |
-| B 交互骨架 | `feat/terminal-repl` | 待填 | 待填 | 队列判绿 + 未实现徽标 + 补全 + 回退 |
-| C 覆盖层 | `feat/terminal-repl` | 待填 | 待填 | 进/出 scrollback 完好 + 搜索 + help 分组 |
-| D 契约扩张 | `feat/terminal-contract` | 待填 | 待填 | W-D1…；catalog 一弧 8 provider；每刀五步 |
-| E 面板接线 | `feat/terminal-contract` | 待填 | 待填 | E0 = 模型 + 会话 picker；其余后置池（§9-7） |
+| A 渲染内核 | `feat/terminal-repl` | 5b635d6 / 9f0e436 / 210b482 / c4b926e / 21b8f87 / 80d9dcc | 同一批（每条先跑失败再实现） | `wire_view` 13 kind 穷尽；width 与 `rich.cells` 一致性判红；markdown 块状态机；七图元 + diff 卡 + FooterVM；F1 接活并上探针守卫 |
+| B 交互骨架 | `feat/terminal-repl` | 9eca9bb / 07ef8ba / 本刀 | 队列、未知 kind、回退、fail-closed、绕过出口各一条 | §2.4 改为“可测的守卫”而非 TTY spike：`_output_channel()` 必须带 `raw=True` 进入 `patch_stdout`，非 TTY 不包裹（无头环境跑不了真 TTY，记为偏离） |
+| C 覆盖层 | `feat/terminal-repl` | bdd89e8 | 游标越界/空表/只读面板误发命令均判红 | 面板状态机 + alt-screen owner（`Application(full_screen=True)`）+ 非 TTY 编号回退；`:transcript` 走 `/history` |
+| D 契约扩张 | `feat/terminal-repl`（**偏离**：未切 `feat/terminal-contract`） | be5ee5e（W-D1/2）/ 11112d8（W-D3 catalog） | `test_catalog_coverage` 双向 + `CatalogResponse` 不得进 `ServerFrame` | **W-D4（`todos` kind）未做**：它在 §9-8 仍标待裁决；catalog 也无 `plugins` kind（无公开枚举 API，已登记 `declared`） |
+| E 面板接线 | `feat/terminal-repl` | 11112d8 / bdd89e8 | stub 数据 / 绕过端点直读引擎 → 红 | 7 个 catalog kind + transcript 全部接真数据；`:plugin` 未开放（同上登记） |
 
 **填写规则**：三张对账表齐备才可填；任一表缺失视为该波未完成。
 
