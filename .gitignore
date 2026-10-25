@@ -166,3 +166,7 @@ test-results/
 playwright-report/
 .e2e-preview.log
 .e2e-electron-url.txt
+
+# PyInstaller spec (desktop packaging must be tracked)
+!apps/desktop/packaging/questor-engine.spec
+.e2e-host.log

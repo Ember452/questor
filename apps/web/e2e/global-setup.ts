@@ -57,11 +57,28 @@ export default async function globalSetup(): Promise<void> {
     {
       // 临时 cwd：避免把开发机的真实会话快照带进截图矩阵。
       cwd: mkdtempSync(resolve(tmpdir(), "questor-e2e-")),
-      env: { ...process.env, PYTHONPATH: resolve(REPO, "src"), PYTHONUTF8: "1" },
+      env: {
+        ...process.env,
+        PYTHONPATH: resolve(REPO, "src"),
+        PYTHONUTF8: "1",
+        // 显式钉住 profile bundle：CI 的 editable 安装路径不一定能推出仓内目录。
+        QUESTOR_PROFILE_ROOT: resolve(REPO, "src/questor/profiles"),
+      },
       stdio: ["pipe", "pipe", "pipe"],
     },
   );
-  const port = await readHandshake(engine);
+  const hostLog: Buffer[] = [];
+  engine.stderr?.on("data", (chunk: Buffer) => {
+    hostLog.push(chunk);
+    writeFileSync(resolve(WEB, ".e2e-host.log"), Buffer.concat(hostLog));
+  });
+  let port: number;
+  try {
+    port = await readHandshake(engine);
+  } catch (error) {
+    const tail = Buffer.concat(hostLog).toString("utf8").slice(-2000);
+    throw new Error(`${String(error)}\n--- studio host stderr ---\n${tail}`, { cause: error });
+  }
 
   const preview = spawn(
     process.execPath,
