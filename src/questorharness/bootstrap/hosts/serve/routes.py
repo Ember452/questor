@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 from questorharness.bootstrap.hosts.serve import eventstream, refusals
 from questorharness.bootstrap.hosts.serve.authority import Authority, TurnRecord
 from questorharness.bootstrap.hosts.serve.broadcaster import Broadcaster
+from questorharness.bootstrap.hosts.serve.catalog import CatalogContext
+from questorharness.bootstrap.hosts.serve.catalog import build as build_catalog
 from questorharness.bootstrap.hosts.serve.transport import Request, Response
 from questorharness.bootstrap.hosts.serve.wire import WireEncoder, stream_reset_frame
 from questorharness.platform.session_storage import load_session_snapshot
@@ -124,25 +126,33 @@ class Router:
         if path.startswith(PREFIX):
             path = path[len(PREFIX) :] or "/"
         try:
-            if request.method == "POST" and path == "/submit":
-                return self._submit(request)
-            if request.method == "POST" and path == "/cancel":
-                return self._cancel(request)
-            if request.method == "POST" and path == "/approve":
-                return self._approve(request)
-            if request.method == "POST" and path == "/ask":
-                return self._ask(request)
-            if request.method == "GET" and path == "/events":
-                return self._events(request)
-            if request.method == "GET" and path == "/history":
-                return self._history()
-            if request.method == "GET" and path == "/profile":
-                return self._profile(request)
-            if request.method == "GET" and path == "/commands":
-                return self._commands()
+            handler = self._resolve(request.method, path)
+            if handler is None:
+                return _error(404, refusals.NOT_FOUND, f"no route for {request.method} {path}")
+            return handler(request)
         except refusals.Refusal as exc:
             return _refusal(exc)
-        return _error(404, refusals.NOT_FOUND, f"no route for {request.method} {path}")
+
+    def _resolve(self, method: str, path: str) -> Callable[[Request], Response] | None:
+        """路由表（分支数受 R8 限制，所以用表而不是长长一串 if）。"""
+
+        routes: dict[tuple[str, str], Callable[[Request], Response]] = {
+            ("POST", "/submit"): self._submit,
+            ("POST", "/cancel"): self._cancel,
+            ("POST", "/approve"): self._approve,
+            ("POST", "/ask"): self._ask,
+            ("GET", "/events"): self._events,
+            ("GET", "/history"): lambda _request: self._history(),
+            ("GET", "/profile"): self._profile,
+            ("GET", "/commands"): lambda _request: self._commands(),
+        }
+        handler = routes.get((method, path))
+        if handler is not None:
+            return handler
+        if method == "GET" and path.startswith("/catalog/"):
+            kind = path[len("/catalog/") :]
+            return lambda _request: self._catalog(kind)
+        return None
 
     # ---- handlers -------------------------------------------------------
     def _submit(self, request: Request) -> Response:
@@ -277,6 +287,16 @@ class Router:
                 ]
             }
         )
+
+    def _catalog(self, kind: str) -> Response:
+        """只读内省目录（plan03 波 D）：未知 kind 必须 404，不得回空表装成功。"""
+
+        items = build_catalog(kind, CatalogContext(cwd=Path(self._host.runtime.cwd)))
+        if items is None:
+            raise refusals.Refusal(
+                refusals.NOT_FOUND, f"unknown catalog kind: {kind}", status=404
+            )
+        return _ok({"kind": kind, "items": items})
 
     def _profile(self, request: Request) -> Response:
         """当前形态的能力位（页面 id → ready / declared / absent）。"""

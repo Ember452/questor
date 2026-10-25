@@ -41,6 +41,22 @@ class CancelRequest(TypedDict):
     pass
 
 
+class CatalogItem(TypedDict):
+    """One row of a read-only catalog panel. Deliberately generic so every picker renders the same way (plan03 wave D)."""
+
+    id: str
+    label: str
+    detail: NotRequired[str]
+    current: NotRequired[bool]
+
+
+class CatalogResponse(TypedDict):
+    """HTTP response of GET /catalog/{kind}. Not a wire frame: it must stay out of ServerFrame or the web cardSlots equality guard would demand a card slot."""
+
+    kind: Literal["sessions", "models", "skills", "mcp", "jobs", "tasks", "git"]
+    items: list[CatalogItem]
+
+
 class CompactionDone(TypedDict):
     seq: int
     kind: Literal["compaction_done"]

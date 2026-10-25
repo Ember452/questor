@@ -22,7 +22,7 @@ from questorharness.bootstrap.hosts.serve import terminal_theme as theme
 from questorharness.bootstrap.hosts.serve.authority import Authority
 from questorharness.bootstrap.hosts.serve.host import ServeHost
 from questorharness.bootstrap.hosts.terminal import approval as limits
-from questorharness.bootstrap.hosts.terminal import cards, footer, paste, strings
+from questorharness.bootstrap.hosts.terminal import cards, footer, paste, pickers, strings
 from questorharness.bootstrap.hosts.terminal import wire_view as view
 from questorharness.bootstrap.runtime import build_runtime
 from questorharness.profiles import load_profile
@@ -182,6 +182,11 @@ class TerminalRenderer:
 
         self._console.print(strings.CANCEL_SENT, style=theme.WARN)
 
+    def show(self, text: str) -> None:
+        """终端本地提示（面板清单/空态/取数据失败）。"""
+
+        self._console.print(text, style=theme.DIM)
+
     async def consume(self, stream: AsyncIterator[bytes]) -> None:
         """持续消费 SSE 字节流。"""
         buffer = b""
@@ -330,6 +335,33 @@ async def _drain_pending(renderer: TerminalRenderer, *, timeout: float = 300.0) 
             return
 
 
+async def _open_panel(
+    host: ServeHost, renderer: TerminalRenderer, line: str
+) -> str | None:
+    """`:` 开头的本地面板入口：拉 catalog → 打开面板 → 返回要提交的命令。"""
+
+    panel = pickers.resolve(line)
+    if panel is None:
+        renderer.show(pickers.list_hint())
+        return None
+    try:
+        response = await host.transport.request("GET", f"{_PREFIX}/catalog/{panel.kind}")
+        payload = json.loads(response.body)
+        status = response.status
+    except Exception as exc:  # noqa: BLE001 - 面板取数失败不得影响 REPL
+        renderer.show(strings.PANEL_UNAVAILABLE.format(reason=exc))
+        return None
+    if status >= 400:
+        renderer.show(strings.PANEL_UNAVAILABLE.format(reason=payload.get("code", "error")))
+        return None
+    items = [dict(item) for item in payload.get("items", [])]
+    if not items:
+        renderer.show(strings.PANEL_EMPTY)
+        return None
+    chosen = await asyncio.to_thread(pickers.open_panel, panel, items)
+    return pickers.action_line(panel, chosen)
+
+
 async def run_terminal_client(
     host: ServeHost,
     *,
@@ -370,6 +402,12 @@ async def run_terminal_client(
             if not line.strip():
                 continue
             line = paste.normalize(line)
+            if line.startswith(":"):
+                # 面板是终端本地能力（只读 catalog），选中后回到正常提交链。
+                action = await _open_panel(host, renderer, line)
+                if action is None:
+                    continue
+                line = action
             result = await _submit(host, line)
             if result.turn_id is not None:
                 renderer.expect_turn()

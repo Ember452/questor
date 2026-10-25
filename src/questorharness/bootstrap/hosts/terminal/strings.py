@@ -46,3 +46,10 @@ def render_failed(item: str, detail: str) -> str:
     """单帧渲染异常时的降级行（可见、不静默、不拖垮事件消费）。"""
 
     return RENDER_FAILED.format(item=item, detail=detail)
+
+
+# ---- 面板（alt-screen 与编号回退共用）------------------------------------
+PANEL_HINT = "  j/k ↑↓ 选择 · Enter 确认 · / 搜索 · Esc 退出"
+PANEL_CHOICE_PROMPT = "  选择序号（空=取消）："
+PANEL_EMPTY = "  这个面板现在是空的"
+PANEL_UNAVAILABLE = "  面板取不到数据（{reason}）"

@@ -238,6 +238,38 @@
         "reason": { "enum": ["replay_gap", "server_restart"] }
       }
     },
+    "CatalogItem": {
+      "description": "One row of a read-only catalog panel. Deliberately generic so every picker renders the same way (plan03 wave D).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "detail": { "type": "string" },
+        "current": { "type": "boolean" }
+      }
+    },
+    "CatalogResponse": {
+      "description": "HTTP response of GET /catalog/{kind}. Not a wire frame: it must stay out of ServerFrame or the web cardSlots equality guard would demand a card slot.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "items"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "sessions",
+            "models",
+            "skills",
+            "mcp",
+            "jobs",
+            "tasks",
+            "git"
+          ]
+        },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/CatalogItem" } }
+      }
+    },
     "ServerFrame": {
       "description": "Downstream SSE frame union.",
       "oneOf": [

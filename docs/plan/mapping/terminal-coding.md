@@ -26,7 +26,22 @@
 | A4 | 任意检查点回滚 | declared | `/rewind` 一步 + help 注明"部分可用" | Reasonix `tui/rewind.go` |
 | A5 | 图片 / 附件提交 | absent | 粘贴图片时徽标 | Reasonix `tui/clippaste.go` |
 | A6 | 语音采集（录音→转写） | absent | `/voice` 开关保留 + 徽标 | Claude Code `voice` |
+| T1 | 回合中继续输入并排队 | ready | pending 行 + 状态栏“队列 1”；Ctrl-D 前收完已受理回合 | Reasonix `queue_slash.go` |
+| T2 | 斜杠命令补全（前缀 + 子序列 + 描述） | ready | prompt_toolkit 补全菜单，数据取 `GET /commands` | Reasonix `complete.go` |
+| T3 | `@` 与路径补全 | ready | FileCompleter | Reasonix `complete.go` |
+| T4 | 多行粘贴保护与图片粘贴识别 | ready | `paste.normalize/needs_confirmation/is_image_paste`；图片走 A5 | Reasonix `pastekeep.go` |
+| T5 | 审批/提问截止提示与本地超时 | ready | 卡的倒数说明行 + 超时按 deny/未回答 | Reasonix `ask_countdown` |
+| T6 | 单帧渲染降级 | ready | `降级 <类型> · <原因>` 一行，事件消费不中断 | DeepCode `test_tui_resilience.py` 口径 |
+| T7 | 模型面板 | ready | `:model` → `GET /catalog/models` → `/model <id>` | Reasonix `modelpick.go` |
+| T8 | 会话面板 | ready | `:session` → `/catalog/sessions` → `/resume` | Reasonix `sessions.go` |
+| T9 | 技能面板 | ready | `:skill` → `/catalog/skills` → `/<skill>` | Reasonix `skillpick.go` |
+| T10 | MCP 面板 | ready | `:mcp` → `/catalog/mcp` → `/mcp` | Reasonix `mcppanel.go` |
+| T11 | 任务与 cron 面板 | ready | `:task` / `:job` 分别读 `catalog/tasks` 与 `catalog/jobs`，确认后 `/tasks` | Reasonix `todos.go` |
+| T12 | git 面板 | ready | `:git` → `/catalog/git` → `/branch` | Claude Code `branch` |
+| T13 | 插件面板 | declared | catalog 暂无 `plugins` kind（无公开枚举 API），故不开放 `:plugin` | — |
+| T14 | 费用 / 上下文占比 | declared | 窗口已知则显比例；`costUsd`/`cachedTokens` 引擎无数据 → 显 `—` | Reasonix `footer.go` |
+| T15 | transcript 浏览与搜索 | declared | 面板状态机已支持搜索；REPL 专用覆盖层入口待接 | Claude Code transcript mode |
 
-> 波 B–E 落地时逐行追加：队列（A3 的排队部分转 `ready`）、覆盖层、面板六行、
-> `todos` 面板、`cachedTokens`（`declared`）。每次追加同刀更新 `unsupported.py` 与
-> plan03 §8 总验收表。
+> `id` 一入表即不重新编号、不删除；下线只改 `status`。`absent` 行集合必须与
+> `terminal/unsupported.py` 的 key 集合相等（`tests/ci/test_unsupported_badges.py`）；
+> `todos` 面板、`plugins` kind、transcript 覆盖层入口落地时把对应行改 `ready`。
