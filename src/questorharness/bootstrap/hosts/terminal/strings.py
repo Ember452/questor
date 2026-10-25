@@ -9,6 +9,7 @@ from __future__ import annotations
 # ---- 未实现徽标（plan03 §5）--------------------------------------------
 BADGE_MARK = "⊘"
 BADGE_FORMAT = "{mark} 未实现 · {gap_id} {name}"
+GAPS_LEAD = "  未实现的入口："
 
 # ---- 输入框（形态取自 Reasonix `tui/chrome.go` 的提示符）------------------
 PROMPT = "❯ "

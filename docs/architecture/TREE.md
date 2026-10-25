@@ -43,9 +43,9 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/serve/wire.py` | 295 |
 | `src/questorharness/bootstrap/hosts/serve/wire_types.py` | 284 |
 | `src/questorharness/bootstrap/hosts/terminal/__init__.py` | 15 |
-| `src/questorharness/bootstrap/hosts/terminal/app.py` | 283 |
+| `src/questorharness/bootstrap/hosts/terminal/app.py` | 284 |
 | `src/questorharness/bootstrap/hosts/terminal/approval.py` | 33 |
-| `src/questorharness/bootstrap/hosts/terminal/cards.py` | 179 |
+| `src/questorharness/bootstrap/hosts/terminal/cards.py` | 195 |
 | `src/questorharness/bootstrap/hosts/terminal/completer.py` | 92 |
 | `src/questorharness/bootstrap/hosts/terminal/diff.py` | 60 |
 | `src/questorharness/bootstrap/hosts/terminal/footer.py` | 58 |
@@ -56,7 +56,7 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/terminal/paste.py` | 43 |
 | `src/questorharness/bootstrap/hosts/terminal/pickers.py` | 87 |
 | `src/questorharness/bootstrap/hosts/terminal/renderer.py` | 203 |
-| `src/questorharness/bootstrap/hosts/terminal/strings.py` | 55 |
+| `src/questorharness/bootstrap/hosts/terminal/strings.py` | 56 |
 | `src/questorharness/bootstrap/hosts/terminal/unsupported.py` | 37 |
 | `src/questorharness/bootstrap/hosts/terminal/width.py` | 104 |
 | `src/questorharness/bootstrap/hosts/terminal/wire_view.py` | 426 |

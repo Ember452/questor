@@ -48,6 +48,22 @@ def empty_state() -> RenderableType:
     return text
 
 
+def gaps() -> RenderableType:
+    """启动时列出每一个已登记的缺口（只登记不显示等于把限制藏起来）。
+
+    文案与徽标文本都取 `strings` / `unsupported`，本函数只负责拼成一行；
+    `tests/ci/test_unsupported_badges.py` 反向禁止包内其他位置裸写徽标。
+    """
+
+    text = Text()
+    text.append(strings.GAPS_LEAD, style=theme.DIM)
+    for index, gap_id in enumerate(unsupported.UNSUPPORTED):
+        if index:
+            text.append(" · ", style=theme.DIM)
+        text.append(unsupported.badge_text(gap_id), style=theme.DIM)
+    return text
+
+
 def say_stream(text: str) -> RenderableType:
     """流式正文：markdown 渲染，不加标题行、不加边框。"""
 

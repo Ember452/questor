@@ -1,7 +1,7 @@
-"""粘贴保护：多行粘贴不当命令执行；图片粘贴明确告知未实现。
+"""粘贴保护：多行粘贴不当命令执行；图片粘贴交给 A5 徽标告知。
 
 终端里最伤人的一类事故：用户粘贴一段日志，第二行恰好是命令，回车即执行。
-这里给出判定函数，由输入层决定"直接回车"还是"再确认一次"。
+这里给出判定函数，由输入层决定“直接回车”还是“再确认一次”。
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ def strip_markers(text: str) -> str:
 
 
 def is_image_paste(text: str) -> bool:
-    """粘贴内容是不是图片（A5 未实现：要显式告诉用户，而不是丢进 prompt）。"""
+    """粘贴内容是不是图片（是则走 A5 徽标告知，而不是丢进 prompt）。"""
 
     return any(marker in text for marker in IMAGE_MARKERS)
 

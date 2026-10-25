@@ -50,3 +50,33 @@ def test_badge_ids_are_sorted_and_stable() -> None:
     """id 是跨文档契约：顺序稳定，便于 diff 审计。"""
     ids = list(unsupported.UNSUPPORTED)
     assert ids == sorted(ids)
+
+
+TERMINAL_PKG = REPO_ROOT / "src/questorharness/bootstrap/hosts/terminal"
+BADGE_OWNERS = {"strings.py", "unsupported.py"}
+
+
+def test_badges_are_only_built_by_the_registry() -> None:
+    """守卫 #2：包内只能经 `badge_text()` 生产徽标，不得裸写“未实现”字样。"""
+
+    offenders: list[str] = []
+    for path in sorted(TERMINAL_PKG.glob("*.py")):
+        if path.name in BADGE_OWNERS:
+            continue
+        if "未实现" in path.read_text(encoding="utf-8"):
+            offenders.append(path.name)
+    assert offenders == [], f"裸写徽标的文件：{offenders}（请用 unsupported.badge_text）"
+
+
+def test_every_registered_gap_is_visible_at_startup() -> None:
+    """守卫 #3：登记了就必须有可见载体（启动横幅铺一行），不能只躺在表里。"""
+
+    from rich.console import Console
+
+    from questorharness.bootstrap.hosts.terminal import cards
+
+    console = Console(width=200, color_system=None, legacy_windows=False, record=True)
+    console.print(cards.gaps())
+    text = console.export_text()
+    for gap_id in unsupported.UNSUPPORTED:
+        assert unsupported.badge_text(gap_id) in text, gap_id

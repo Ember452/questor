@@ -112,6 +112,7 @@ async def print_banner(host: ServeHost, output: Console) -> str:
     except Exception:  # noqa: BLE001 - 横幅失败不阻断
         pass
     output.print(cards.empty_state())
+    output.print(cards.gaps())
     return name
 
 
