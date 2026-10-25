@@ -5,10 +5,10 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
-const WEB = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// Playwright 以 apps/web 为 cwd 运行；不要用 import.meta（转译后路径会漂移）。
+const WEB = process.cwd();
 const REPO = resolve(WEB, "../..");
 const PIDS = resolve(WEB, ".e2e-pids.json");
 

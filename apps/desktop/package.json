@@ -16,7 +16,8 @@
   },
   "devDependencies": {
     "electron": "^44.9.2",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "playwright": "^1.58.2"
   },
   "build": {
     "appId": "dev.questor.studio",
