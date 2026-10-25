@@ -1,14 +1,12 @@
 ﻿/** Electron 鐪熷３鍐掔儫锛氬惎鍔?鈫?鎻℃墜 鈫?cookie 鈫?鍔犺浇 apps/web/dist 鈫?鐪嬪埌瀵艰埅銆?*/
 import { writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { _electron as electron } from "playwright";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "../../..");
-const require = createRequire(import.meta.url);
-const playwright = require(resolve(REPO, "apps/web/node_modules/playwright"));
-const electron = playwright._electron;
 
 const engine = resolve(REPO, "apps/desktop/dist/engine/questor-engine.exe");
 const screenshot = resolve(REPO, "apps/web/e2e/__screenshots__/electron-shell.png");

@@ -38,6 +38,10 @@
 - `src/App.test.tsx`
 - `src/styles/tokens.test.ts`
 
+## 已裁
+
+- e2e/web.spec.ts
+
 ## 新增
 
 - `VENDOR.md`
