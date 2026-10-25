@@ -7,6 +7,12 @@ import { join } from "node:path";
 
 const host = process.env.TAURI_DEV_HOST;
 
+/** /rt 代理目标：由 e2e/开发脚本注入 studio 宿主的回环 origin。 */
+function studioProxy() {
+  const target = process.env.QUESTOR_STUDIO_ORIGIN;
+  return target ? { "/rt": { target, changeOrigin: true } } : undefined;
+}
+
 function fingerprint(directory: string): string {
   const hash = createHash("sha256");
   const visit = (path: string) => {
@@ -60,6 +66,8 @@ export default defineConfig(({ mode }) => {
       port: 1420,
       strictPort: true,
       host: host || false,
+      // 浏览器开发：把 /rt 转发到 --studio-host 的回环端口。
+      proxy: studioProxy(),
       hmr: host
         ? {
             protocol: "ws",
@@ -75,5 +83,6 @@ export default defineConfig(({ mode }) => {
       environment: "jsdom",
       exclude: [...configDefaults.exclude, "e2e/**"],
     },
+    preview: { port: 4173, strictPort: true, proxy: studioProxy() },
   };
 });

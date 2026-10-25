@@ -18,6 +18,7 @@
 - `src/App.module.css` — 重写为 4a 临时外壳样式
 - `src/App.tsx` — 重写为 wire-native 壳
 - `src/webMain.tsx` — 改指向新 App
+- `playwright.config.ts` — 改为 globalSetup（真宿主 + preview）与截图基线目录
 
 ## 已裁
 

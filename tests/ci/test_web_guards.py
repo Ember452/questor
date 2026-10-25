@@ -27,6 +27,13 @@ def test_no_websocket_transport() -> None:
     assert scan_forbidden(WEB_SRC, "new WebSocket") == []
 
 
+def test_no_throwaway_or_mode_branches() -> None:
+    """4b-6 红线：临时渲染器清零；前端不得写形态分支。"""
+    assert scan_forbidden(WEB_SRC, "THROWAWAY") == []
+    assert scan_forbidden(WEB_SRC, "mode ===") == []
+    assert scan_forbidden(WEB_SRC, "isPersonal") == []
+
+
 def test_no_app_server_contract() -> None:
     """旧 DeepCode 契约（生成物与类型）不得被引用。"""
     hits = [p for p in scan_forbidden(WEB_SRC, "generated/app-server") if "generated/" not in p]

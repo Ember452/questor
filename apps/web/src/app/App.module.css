@@ -1,11 +1,11 @@
-/* 4a 临时外壳样式（throwaway；4b-6 随 token 迁移重写）。 */
+﻿/* 搴旂敤澶栧３锛氶鑹插叏閮ㄦ潵鑷璁?token锛坱okens.reasonix.css锛夛紝甯冨眬鏄?owned 浠ｇ爜銆?*/
 
 .root {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #101418;
-  color: #d6dde6;
+  background: var(--app-bg, #101418);
+  color: var(--app-text, #d6dde6);
   font: 14px/1.6 "Segoe UI", system-ui, sans-serif;
 }
 
@@ -14,14 +14,14 @@
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  border-bottom: 1px solid #1f2833;
+  border-bottom: 1px solid var(--app-border, #1f2833);
   font-weight: 600;
 }
 
 .status {
   margin-left: auto;
   font-weight: 400;
-  color: #8b9aab;
+  color: var(--app-muted, #8b9aab);
   font-size: 12px;
 }
 
@@ -42,8 +42,8 @@
 }
 
 .tabActive {
-  border-color: #334155;
-  background: #1e293b;
+  border-color: var(--app-border, #334155);
+  background: var(--app-hair, #1e293b);
 }
 
 .transcript {
@@ -54,44 +54,44 @@
 
 .row {
   padding: 6px 0;
-  border-bottom: 1px solid #161d25;
+  border-bottom: 1px solid var(--app-hair, #161d25);
 }
 
 .badge {
   display: inline-block;
   min-width: 52px;
   margin-right: 8px;
-  color: #6d7d8f;
+  color: var(--app-muted, #6d7d8f);
   font-size: 12px;
 }
 
 .tool {
-  color: #7dd3fc;
+  color: var(--app-accent, #7dd3fc);
 }
 
 .error {
-  color: #f87171;
+  color: var(--app-danger, #f87171);
 }
 
 .notice {
-  color: #fbbf24;
+  color: var(--app-warn, #fbbf24);
 }
 
 .prompt {
-  border: 1px solid #334155;
+  border: 1px solid var(--app-border, #334155);
   padding: 10px;
   margin: 8px 0;
   border-radius: 6px;
-  background: #0f172a;
+  background: var(--app-hair, #0f172a);
 }
 
 .prompt textarea,
 .prompt input {
   width: 100%;
   box-sizing: border-box;
-  background: #0b1220;
+  background: var(--app-bg, #0b1220);
   color: inherit;
-  border: 1px solid #334155;
+  border: 1px solid var(--app-border, #334155);
   border-radius: 4px;
   padding: 6px;
   font: inherit;
@@ -107,23 +107,23 @@
   display: flex;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid #1f2833;
+  border-top: 1px solid var(--app-border, #1f2833);
 }
 
 .composer textarea {
   flex: 1;
   min-height: 44px;
   resize: vertical;
-  background: #0b1220;
+  background: var(--app-bg, #0b1220);
   color: inherit;
-  border: 1px solid #334155;
+  border: 1px solid var(--app-border, #334155);
   border-radius: 6px;
   padding: 8px;
   font: inherit;
 }
 
 button {
-  background: #1d4ed8;
+  background: var(--app-accent, #1d4ed8);
   color: #fff;
   border: 0;
   border-radius: 6px;
@@ -132,7 +132,7 @@ button {
 }
 
 button.secondary {
-  background: #334155;
+  background: var(--app-border, #334155);
 }
 
 button:disabled {
@@ -145,10 +145,10 @@ button:disabled {
   padding: 8px 12px;
   border-radius: 6px;
   background: #7f1d1d;
-  color: #fecaca;
+  color: var(--app-text, #fecaca);
 }
 
 .empty {
-  color: #64748b;
+  color: var(--app-muted, #64748b);
   padding: 24px 0;
 }

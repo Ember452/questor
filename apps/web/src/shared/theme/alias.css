@@ -75,3 +75,29 @@
 }
 
 /* 交集（1）：--shadow-float */
+
+/* 应用壳主题变量：浅/深两套，由 data-theme 切换（design-qa 矩阵依赖）。 */
+:root {
+  --app-bg: #f7f7f5;
+  --app-panel: #ffffff;
+  --app-text: #292b29;
+  --app-muted: #5f625c;
+  --app-border: #d8d8d2;
+  --app-hair: #ecece7;
+  --app-accent: #1d4ed8;
+  --app-danger: #b91c1c;
+  --app-success: #15803d;
+  --app-warn: #a16207;
+}
+[data-theme="dark"] {
+  --app-bg: #101418;
+  --app-panel: #131a22;
+  --app-text: #d6dde6;
+  --app-muted: #8b9aab;
+  --app-border: #1f2833;
+  --app-hair: #161d25;
+  --app-accent: #7dd3fc;
+  --app-danger: #f87171;
+  --app-success: #34d399;
+  --app-warn: #fbbf24;
+}

@@ -1,5 +1,5 @@
 .card {
-  border: 1px solid var(--border-subtle, #1f2833);
+  border: 1px solid var(--app-border, #1f2833);
   border-radius: 8px;
   padding: 10px 12px;
   margin: 6px 0;
@@ -13,7 +13,7 @@
 
 .streaming::after {
   content: "▌";
-  color: var(--accent, #60a5fa);
+  color: var(--app-accent, #60a5fa);
   animation: blink 1s steps(2) infinite;
 }
 
@@ -28,21 +28,21 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  color: var(--text-muted, #8b9aab);
+  color: var(--app-muted, var(--muted, #8b9aab));
   font-size: 12px;
 }
 
 .tool {
-  color: var(--accent, #7dd3fc);
+  color: var(--app-accent, var(--app-accent, #7dd3fc));
   font-weight: 600;
 }
 
 .ok {
-  color: var(--success, #34d399);
+  color: var(--app-success, #34d399);
 }
 
 .error {
-  color: var(--danger, #f87171);
+  color: var(--app-danger, var(--app-danger, #f87171));
 }
 
 .output {
@@ -65,7 +65,7 @@
   overflow: auto;
   white-space: pre-wrap;
   font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
-  color: var(--text-muted, #8b9aab);
+  color: var(--app-muted, var(--muted, #8b9aab));
 }
 
 .input {
@@ -74,13 +74,13 @@
   margin-top: 8px;
   padding: 6px 8px;
   border-radius: 6px;
-  border: 1px solid var(--border-subtle, #334155);
-  background: var(--surface-sunken, #0b1220);
+  border: 1px solid var(--border-subtle, var(--app-border, #334155));
+  background: var(--surface-sunken, var(--app-bg, #0b1220));
   color: inherit;
   font: inherit;
 }
 
 .phase {
   font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
-  color: var(--text-muted, #8b9aab);
+  color: var(--app-muted, var(--muted, #8b9aab));
 }

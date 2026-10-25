@@ -11,8 +11,8 @@ for (const entry of MATRIX) {
   test(`design matrix ${entry.name}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: entry.scheme });
     await page.setViewportSize({ width: entry.width, height: entry.height });
-    await page.goto("/");
-    await expect(page.getByRole("navigation")).toBeVisible();
+    await page.goto("/?demo=1");
+    await expect(page.getByText("Questor")).toBeVisible();
     await expect(page).toHaveScreenshot(`matrix-${entry.name}.png`, { maxDiffPixels: 200 });
   });
 }

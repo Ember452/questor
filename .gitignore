@@ -163,3 +163,8 @@ scripts/_*
 # 本地 CLI 运行时数据：event-log store（state.db）+ 记忆库（memory.db / memory_store/），均不入库
 .questor/
 .questorharness/
+
+# web e2e artifacts
+test-results/
+playwright-report/.e2e-pids.json
+.e2e-preview.log

@@ -39,8 +39,19 @@ function nextId(prefix: string): string {
 export function historyItems(messages: HistoryMessage[]): ViewItem[] {
   return messages.flatMap((message) => {
     const text = message.blocks
-      .map((block) => (block.type === "text" ? block.text : `[${block.type}]`))
-      .join("")
+      .map((block) => {
+        switch (block.type) {
+          case "text":
+            return block.text;
+          case "tool_use":
+            return `▸ ${block.name}`;
+          case "tool_result":
+            return "[工具结果]";
+          case "image":
+            return "[图片]";
+        }
+      })
+      .join(" ")
       .trim();
     if (!text) return [];
     return [

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { isVisible } from "./capabilityGate";
+import { DemoScreen } from "./DemoScreen";
 import { PAGES } from "../pages/registry";
 import { createWireRuntime, WireError } from "../shared/transport/wireRuntime";
 import type { ProfileResponse } from "../shared/transport/wireTypes";
@@ -12,11 +13,29 @@ import styles from "./App.module.css";
 const runtime = createWireRuntime();
 
 export function App() {
+  // 截图/回放样本：不进入 live 事件循环，也不违反 hooks 规则。
+  if (new URLSearchParams(window.location.search).has("demo")) {
+    return <DemoScreen />;
+  }
+  return <LiveApp />;
+}
+
+function LiveApp() {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [view, setView] = useState<ViewState>(initialState);
   const [error, setError] = useState<string | null>(null);
   const [queued, setQueued] = useState(false);
   const [activeId, setActiveId] = useState<string>("chat");
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      document.documentElement.dataset.theme = media.matches ? "dark" : "light";
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
 
   const reloadHistory = useCallback(async () => {
     const loaded = await runtime.history();
