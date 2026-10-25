@@ -20,6 +20,8 @@ from rich.console import Console
 from questorharness.bootstrap.hosts.serve import terminal_theme as theme
 from questorharness.bootstrap.hosts.serve.authority import Authority
 from questorharness.bootstrap.hosts.serve.host import ServeHost
+from questorharness.bootstrap.hosts.terminal import cards, footer
+from questorharness.bootstrap.hosts.terminal import wire_view as view
 from questorharness.bootstrap.runtime import build_runtime
 from questorharness.profiles import load_profile
 
@@ -119,28 +121,34 @@ async def _fetch_commands(host: ServeHost) -> list[dict[str, Any]]:
         return []
 
 
-async def _print_banner(host: ServeHost, output: Console) -> None:
-    """交互模式横幅：Reasonix ASCII art + 形态 + 用法提示。"""
-    output.print(theme.BANNER, style=theme.NET)
+async def _print_banner(host: ServeHost, output: Console) -> str:
+    """交互模式横幅：Reasonix ASCII art + 形态 + 用法提示；返回形态名供状态栏用。"""
+    output.print(cards.banner())
+    name = "?"
     try:
         response = await host.transport.request("GET", f"{_PREFIX}/profile")
         profile = json.loads(response.body)
+        name = str(profile.get("name", "?"))
         output.print(
-            f"[bold]{profile.get('name', '?')}[/bold] · {profile.get('description', '')}",
+            f"[bold]{name}[/bold] · {profile.get('description', '')}",
             style=theme.DIM,
         )
     except Exception:  # noqa: BLE001 - 横幅失败不阻断
         pass
-    output.print(theme.empty_state())
+    output.print(cards.empty_state())
+    return name
 
 
 class TerminalRenderer:
     """把 wire 帧渲染到终端，并把审批/提问回灌成 HTTP 调用。"""
 
-    def __init__(self, host: ServeHost, console: Console) -> None:
+    def __init__(self, host: ServeHost, console: Console, *, profile_name: str = "?") -> None:
         self._host = host
         self._console = console
+        self._profile_name = profile_name
         self._streaming = False
+        self._streamed_text = False
+        self._busy = False
         self.done = asyncio.Event()
 
     async def consume(self, stream: AsyncIterator[bytes]) -> None:
@@ -159,75 +167,62 @@ class TerminalRenderer:
                 # 由调用方 done.wait() 收尾，两种模式都靠 finally 的 cancel 退订。
 
     async def _render(self, frame: dict[str, Any]) -> None:
-        """按 kind 渲染；审批/提问直接就地询问。全部走 terminal_theme。"""
-        kind = frame.get("kind")
-        if kind == "turn_started":
-            self._console.print(theme.turn_header(str(frame.get("turnId", ""))))
-        elif kind == "text":
-            self._console.print(str(frame.get("text", "")), end="", soft_wrap=True)
+        """帧 → 视图模型 → 图元；审批/提问就地询问。渲染细节全在 `terminal/`。"""
+        item = view.view_of(frame)
+        if isinstance(item, view.TextItem):
+            # 流式正文按原样输出（逐字 markdown 重排会把屏幕抖成碎行）。
+            self._console.print(item.text, end="", soft_wrap=True)
             self._streaming = True
-        elif kind == "message":
+            self._streamed_text = True
+            return
+        if isinstance(item, view.MessageItem):
             if self._streaming:
                 self._console.print()
                 self._streaming = False
-        elif kind == "tool_dispatch":
-            self._console.print(theme.tool_line(str(frame.get("tool", "")), "running"))
-        elif kind == "tool_result":
-            status = "error" if frame.get("isError") else "done"
-            output_text = str(frame.get("output", ""))
-            self._console.print(
-                theme.tool_line(str(frame.get("tool", "")), status, output_text)
-            )
-        elif kind == "notice":
-            self._console.print(
-                theme.notice_bar(str(frame.get("text", "")), str(frame.get("level", "info")))
-            )
-        elif kind in {"compaction_started", "compaction_progress", "compaction_done"}:
-            phase = kind.replace("compaction_", "")
-            self._console.print(
-                theme.compaction_line(phase, str(frame.get("trigger", "")))
-            )
-        elif kind == "approval_request":
-            await self._ask_approval(frame)
-        elif kind == "ask_request":
-            await self._answer_question(frame)
-        elif kind == "turn_done":
-            usage = frame.get("usage") if isinstance(frame.get("usage"), dict) else None
-            self._console.print(
-                theme.turn_footer(
-                    str(frame.get("outcome", "")),
-                    int(frame.get("durationMs", 0)),
-                    usage,
-                )
-            )
-            self._console.print()  # 空行分隔（对齐 spacing scale 的 --sp-8）
+            if not self._streamed_text:
+                # 没有流式正文（如历史回放）：拿最终块补一次 markdown。
+                self._console.print(cards.render_item(item))
+            return
+        if isinstance(item, view.ApprovalItem):
+            await self._ask_approval(item)
+            return
+        if isinstance(item, view.AskItem):
+            await self._answer_question(item)
+            return
+        if isinstance(item, view.TurnStartedItem):
+            self._streamed_text = False
+            self._busy = True
+        self._console.print(cards.render_item(item))
+        if isinstance(item, view.TurnDoneItem):
+            self._busy = False
+            self._console.print()
+            self._console.print(self._footer())
             self.done.set()
 
-    async def _ask_approval(self, frame: dict[str, Any]) -> None:
-        """审批：y 通过，其余拒绝（fail-closed 由服务端兜底）。编辑类先给 diff 摘要。"""
-        self._console.print(
-            theme.approval_header(str(frame.get("tool", "?")), str(frame.get("subject", "")))
-        )
-        detail = str(frame.get("detail") or "").strip()
-        if detail:
-            for line in detail.splitlines()[:8]:
-                self._console.print(f"  {line}", style=theme.DIM)
+    def _footer(self) -> Any:
+        """状态栏：当前只有形态/忙闲是真值，其余字段在波 D 补齐前显式渲染 `—`。"""
+
+        return footer.render(footer.FooterVM(profile=self._profile_name, busy=self._busy))
+
+    async def _ask_approval(self, item: view.ApprovalItem) -> None:
+        """审批：y 通过，其余拒绝（fail-closed 由服务端兼底）。编辑类先给 diff 卡。"""
+        self._console.print(cards.render_item(item))
         answer = await asyncio.to_thread(input, "  [y/N] 允许执行? ")
         decision = "approve" if answer.strip().lower() in {"y", "yes"} else "deny"
         await self._host.transport.request(
             "POST",
             f"{_PREFIX}/approve",
-            body=json.dumps({"id": frame.get("id"), "decision": decision}).encode(),
+            body=json.dumps({"id": item.prompt_id, "decision": decision}).encode(),
         )
 
-    async def _answer_question(self, frame: dict[str, Any]) -> None:
+    async def _answer_question(self, item: view.AskItem) -> None:
         """工具提问：空输入即视为未回答。"""
-        self._console.print(f"  ? {frame.get('question')}", style=theme.ACCENT)
+        self._console.print(cards.render_item(item))
         answer = await asyncio.to_thread(input, "  → ")
         await self._host.transport.request(
             "POST",
             f"{_PREFIX}/ask",
-            body=json.dumps({"id": frame.get("id"), "answer": answer}).encode(),
+            body=json.dumps({"id": item.prompt_id, "answer": answer}).encode(),
         )
 
 
@@ -257,12 +252,12 @@ async def run_terminal_client(
     output = console or Console()
     events = await host.transport.request("GET", f"{_PREFIX}/events")
     assert events.stream is not None
-    renderer = TerminalRenderer(host, output)
-    consumer = asyncio.create_task(renderer.consume(events.stream))
     interactive = prompt is None and sys.stdin.isatty()
+    profile_name = await _print_banner(host, output) if interactive else "?"
+    renderer = TerminalRenderer(host, output, profile_name=profile_name)
+    consumer = asyncio.create_task(renderer.consume(events.stream))
     session = None
     if interactive:
-        await _print_banner(host, output)
         session = _build_prompt_session(await _fetch_commands(host))
     try:
         if prompt:

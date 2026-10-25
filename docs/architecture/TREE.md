@@ -43,12 +43,13 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/terminal/__init__.py` | 15 |
 | `src/questorharness/bootstrap/hosts/terminal/cards.py` | 164 |
 | `src/questorharness/bootstrap/hosts/terminal/diff.py` | 53 |
+| `src/questorharness/bootstrap/hosts/terminal/footer.py` | 58 |
 | `src/questorharness/bootstrap/hosts/terminal/markdown.py` | 76 |
 | `src/questorharness/bootstrap/hosts/terminal/strings.py` | 33 |
 | `src/questorharness/bootstrap/hosts/terminal/unsupported.py` | 37 |
 | `src/questorharness/bootstrap/hosts/terminal/width.py` | 104 |
 | `src/questorharness/bootstrap/hosts/terminal/wire_view.py` | 378 |
-| `src/questorharness/bootstrap/hosts/terminal_client.py` | 393 |
+| `src/questorharness/bootstrap/hosts/terminal_client.py` | 388 |
 | `src/questorharness/bootstrap/hosts/tool_policy.py` | 65 |
 | `src/questorharness/bootstrap/runtime.py` | 831 |
 | `src/questorharness/capabilities/__init__.py` | 7 |
