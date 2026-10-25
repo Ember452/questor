@@ -34,7 +34,7 @@ Validation
 Discovery
 - plugins: 0
 - skills: 8
-- slash commands: 69
+- slash commands: 68
 - built-in tools: 39
 - configured mcp servers: 0
 

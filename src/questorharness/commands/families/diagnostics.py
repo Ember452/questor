@@ -36,7 +36,6 @@ def register_diagnostics_commands(registry: CommandRegistry) -> None:
             f"- permission_mode: {state.permission_mode if state is not None else settings.permission.mode}",
             f"- theme: {state.theme if state is not None else settings.theme}",
             f"- output_style: {state.output_style if state is not None else settings.output_style}",
-            f"- vim_mode: {'on' if (state.vim_enabled if state is not None else settings.vim_mode) else 'off'}",
             f"- voice_mode: {'on' if (state.voice_enabled if state is not None else settings.voice_mode) else 'off'}",
             f"- effort: {state.effort if state is not None else settings.effort}",
             f"- passes: {state.passes if state is not None else settings.passes}",

@@ -253,8 +253,16 @@ async def start_in_process_teammate(
             await _run_query_loop(query_context, config, ctx, mailbox)
         else:
             # 最小桩实现：记录收到提示词并响应取消。
-            # 待以下条件满足后，将此分支替换为真正的 QueryContext 构建器：
+            # 待以下条件满足后，将此分支替换为真正的 QueryContext  构建器：
             # 运行时为进程内队友接入完整引擎。
+            # 不变量：真正的构建器必须把 config.allowed_tools / disallowed_tools
+            # 合并进该队友的权限检查器（目前只有 subprocess 后端经 argv 强制）。
+            if config.allowed_tools or config.disallowed_tools:
+                logger.warning(
+                    "[in_process] %s: tool allow/deny declared but the in-process "
+                    "backend runs a stub and cannot enforce it",
+                    agent_id,
+                )
             logger.info(
                 "[in_process] %s: no query_context supplied — stub run for prompt: %.80s",
                 agent_id,

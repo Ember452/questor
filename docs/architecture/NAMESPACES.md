@@ -61,7 +61,7 @@
 
 ## command
 
-共 69 条。
+共 68 条。
 
 | name | producer | consumers |
 | --- | --- | --- |
@@ -132,7 +132,6 @@
 | upgrade | `src/questorharness/commands/families/diagnostics.py` | `src/questorharness/bootstrap/cli/preview.py` |
 | usage | `src/questorharness/commands/families/session.py` | `src/questor/gateway/runtime.py` / `src/questor/session_storage.py` |
 | version | `src/questorharness/commands/families/session.py` | `src/questorharness/capabilities/context/prompts/environment.py` / `src/questorharness/capabilities/memory/personalization/extractor.py` |
-| vim | `src/questorharness/commands/families/appearance.py` | `src/questorharness/bootstrap/cli/preview.py` |
 | voice | `src/questorharness/commands/families/appearance.py` | `src/questorharness/bootstrap/cli/preview.py` |
 
 ## event
@@ -153,7 +152,7 @@
 
 ## config-key
 
-共 33 条。
+共 32 条。
 
 | name | producer | consumers |
 | --- | --- | --- |
@@ -186,7 +185,6 @@
 | theme | `src/questorharness/config/settings_models.py` | `src/questor/runtime.py` |
 | timeout | `src/questorharness/config/settings_models.py` | `src/questor/gateway/bridge.py` |
 | verbose | `src/questorharness/config/settings_models.py` | `src/questorharness/bootstrap/cli/main.py` / `src/questorharness/runtime/bridge/models.py` |
-| vim_mode | `src/questorharness/config/settings_models.py` | `src/questorharness/bootstrap/runtime.py` / `src/questorharness/commands/families/appearance.py` |
 | vision | `src/questorharness/config/settings_models.py` | `src/questor/gateway/runtime.py` / `src/questorharness/bootstrap/runtime.py` |
 | voice_mode | `src/questorharness/config/settings_models.py` | `src/questorharness/bootstrap/runtime.py` / `src/questorharness/commands/families/appearance.py` |
 | web | `src/questorharness/config/settings_models.py` | `src/questorharness/capabilities/tools/registry.py` / `src/questorharness/capabilities/tools/web/web_fetch_tool.py` |

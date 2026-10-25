@@ -16,7 +16,6 @@ class AppState:
     provider: str = "unknown"
     auth_status: str = "missing"
     base_url: str = ""
-    vim_enabled: bool = False
     voice_enabled: bool = False
     voice_available: bool = False
     voice_reason: str = ""

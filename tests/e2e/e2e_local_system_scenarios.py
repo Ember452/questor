@@ -186,7 +186,6 @@ async def _run_command_flow(temp_root: Path) -> None:
     for raw in [
         "/memory add Notes :: local command note",
         "/output-style set minimal",
-        "/vim on",
         "/voice on",
         "/plan on",
         "/effort high",

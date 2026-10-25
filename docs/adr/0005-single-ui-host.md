@@ -82,9 +82,9 @@
    现状更契合；Tauri 的 Rust 壳对当前团队是纯增量学习成本，收益（二进制
    体积）不落在关键路径上。
 4. **appearance 叶子包去留**：`state` / `keybindings` / `themes` /
-   `output_styles` 四包保留（均有真实消费方）；`vim/` 包已删除（仓内零引用，
-   2026-10-25）——`/vim` 开关保留为设置项以兼容已持久化配置，但 REPL 是行式输入，
-   当前无行编辑器，接入或删命令需单独立项。
+   `output_styles` 四包保留（均有真实消费方）；`vim/` 包、`/vim` 命令、`vim_mode` 设置与
+   `vim_enabled` 状态已一并删除（2026-10-25）——声明了 vim 模式却不产生行为，按缺陷处理。
+   将来的 vim 键位属于编辑器/前端实现，不回引擎设置层。
 5. **删除刀红线**（进 Verification）：
    - `rg "OHJSON|backend_host" src` = 0；
    - `rg "react_launcher|--backend-only" src pyproject.toml` = 0；

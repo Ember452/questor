@@ -120,7 +120,7 @@ patch 目标数 = 该模块在测试里被 `monkeypatch.setattr("...")` 或 `moc
 | `autopilot/` | `runtime/autopilot/`（已完成，文件未拆） | 拆 `{policy,loop,triggers,state}`（service.py 2089） |
 | `hooks/` | `runtime/hooks/`（已完成） | 按 hook 类型拆 |
 | `ui/` | 已完成并删除：组合根 → `bootstrap/runtime.py`，进程宿主 → `bootstrap/hosts/`；textual 与 prompt-toolkit 已移除 | `keybindings/`、`themes/`、`output_styles/` 保留（`vim/` 已于 2026-10-25 删除，见下） |
-| `keybindings/`、`themes/`、`output_styles/` | **保留**（ADR-0005 已更新：不随 UI 删除）；`vim/` 包零引用已删除，`settings.vim_mode` 开关保留兼容 | 不迁 `surfaces/terminal/` |
+| `keybindings/`、`themes/`、`output_styles/` | **保留**（ADR-0005 已更新：不随 UI 删除）；`vim/` 包与 `/vim` 命令/`vim_mode` 设置已于 2026-10-25 删除 | 不迁 `surfaces/terminal/` |
 | `voice/` | `providers/voice/`（Phase 2） | 有策略时升 capabilities |
 | `utils/` | 已达成：工具按职责分居 `platform/`（纯 stdlib）与 `execution/`（需要 config/sandbox） | 顶层无 `utils/` |
 | `config/` | 已收敛为叶子：模型与加载同包，只依赖 `platform` + `contracts`；`resolve_auth` 已移到 `providers.auth.resolver` | `config → providers` 已归零 |
