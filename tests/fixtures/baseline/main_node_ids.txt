@@ -47,6 +47,7 @@ tests/ci/test_serve_wire_fixtures.py::test_selftest_mutation_is_detected
 tests/ci/test_tool_schemas.py::test_every_tool_property_is_enumerable
 tests/ci/test_tool_schemas.py::test_predicate_can_go_red
 tests/ci/test_tool_schemas.py::test_registry_is_not_empty
+tests/ci/test_web_guards.py::test_no_throwaway_or_mode_branches
 tests/ci/test_wire_codegen.py::test_generated_edit_without_schema_is_red
 tests/ci/test_wire_codegen.py::test_missing_definition_is_red
 tests/ci/test_wire_codegen.py::test_repository_generated_file_is_current

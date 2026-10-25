@@ -5,8 +5,10 @@
 
 from __future__ import annotations
 
+import mimetypes
 import uuid
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Final
 
 from aiohttp import web
@@ -27,12 +29,14 @@ class HttpServer:
         credential: auth.LaunchCredential,
         *,
         allow_no_auth: bool = False,
+        static_root: Path | None = None,
     ) -> None:
         if not credential.token or len(credential.token) < auth.TOKEN_MIN_BYTES:
             raise ValueError("launch credential is too short")
         self._handler = handler
         self._credential = credential
         self._allow_no_auth = allow_no_auth
+        self._static_root = static_root.resolve() if static_root is not None else None
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
         self.port: int = 0
@@ -65,6 +69,17 @@ class HttpServer:
 
     async def _handle(self, request: web.Request) -> web.StreamResponse:
         """鉴权 → 转换 → 交给 handler → 写回（含 SSE 流）。"""
+        # 静态资源（仅回环、仅 GET）不进鉴权：Electron 需要在种 cookie 前先加载 index。
+        if self._static_root is not None and request.method == "GET":
+            if not request.path.startswith("/rt/"):
+                static = self._serve_static(request.path)
+                if static is not None:
+                    return static
+                # 静态根存在但文件缺失：直接 404，不要回落到鉴权层（会误报 401）。
+                return web.json_response(
+                    {"code": refusals.NOT_FOUND, "message": f"no static file for GET {request.path}"},
+                    status=404,
+                )
         try:
             self._authorize(request)
             client_id, minted = self._client_identity(request)
@@ -80,6 +95,22 @@ class HttpServer:
         if response.stream is None:
             return web.Response(status=response.status, body=response.body, headers=headers)
         return await self._stream(request, response, headers)
+
+    def _serve_static(self, path: str) -> web.Response | None:
+        """从 `apps/web/dist` 回放 SPA：`/` → index.html；未知路径 → None（交给路由）。"""
+        assert self._static_root is not None
+        relative = "index.html" if path in {"/", ""} else path.lstrip("/")
+        candidate = (self._static_root / relative).resolve()
+        if self._static_root not in candidate.parents and candidate != self._static_root:
+            return None
+        if not candidate.is_file():
+            return None
+        content_type = mimetypes.guess_type(candidate.name)[0] or "application/octet-stream"
+        return web.Response(
+            status=200,
+            body=candidate.read_bytes(),
+            headers={"content-type": content_type, "cache-control": "no-cache"},
+        )
 
     def _authorize(self, request: web.Request) -> None:
         """五件套里的 ②③④：Host、Origin（仅改状态方法）、token cookie。

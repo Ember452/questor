@@ -1,5 +1,5 @@
 {
-  "allowed_node_id_count": 55,
+  "allowed_node_id_count": 56,
   "cold_import": {
     "exit": 0,
     "output": ""
@@ -8,11 +8,11 @@
     "broken": 0,
     "kept": 10
   },
-  "main_node_id_count": 1968,
-  "node_id_count": 2023,
+  "main_node_id_count": 1969,
+  "node_id_count": 2025,
   "pytest": {
     "deselected": 19,
-    "total": 2023
+    "total": 2025
   },
   "snapshot_messages": 4
 }

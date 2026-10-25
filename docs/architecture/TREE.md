@@ -32,10 +32,10 @@ Run `uv run python scripts/guards/gen_tree.py --write` instead of editing this f
 | `src/questorharness/bootstrap/hosts/serve/broadcaster.py` | 131 |
 | `src/questorharness/bootstrap/hosts/serve/eventstream.py` | 46 |
 | `src/questorharness/bootstrap/hosts/serve/host.py` | 192 |
-| `src/questorharness/bootstrap/hosts/serve/http_server.py` | 132 |
+| `src/questorharness/bootstrap/hosts/serve/http_server.py` | 163 |
 | `src/questorharness/bootstrap/hosts/serve/refusals.py` | 52 |
 | `src/questorharness/bootstrap/hosts/serve/routes.py` | 277 |
-| `src/questorharness/bootstrap/hosts/serve/studio.py` | 76 |
+| `src/questorharness/bootstrap/hosts/serve/studio.py` | 90 |
 | `src/questorharness/bootstrap/hosts/serve/transport.py` | 90 |
 | `src/questorharness/bootstrap/hosts/serve/wire.py` | 229 |
 | `src/questorharness/bootstrap/hosts/serve/wire_types.py` | 249 |

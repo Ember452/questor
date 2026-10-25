@@ -53,6 +53,7 @@
 - `src/app/viewModel.test.ts`
 - `src/app/cardSlots.ts`
 - `scripts/gen-web-fixtures.mjs`
+- `scripts/**`
 - `src/pages/**`
 - `src/shared/theme/**`
 - `docs/**`

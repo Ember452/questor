@@ -44,7 +44,7 @@ dev = [
 ]
 
 [[tool.uv.index]]
-url = "https://mirrors.aliyun.com/pypi/simple/"
+url = "https://mirrors.aliyun.com/pypi/simple"
 default = true
 
 [project.scripts]
@@ -147,3 +147,8 @@ plugins = ["pydantic.mypy"]
 # PyYAML ships no stubs; remove this override once types-PyYAML is a dependency.
 module = ["yaml"]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.22.3",
+]

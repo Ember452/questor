@@ -7,6 +7,7 @@ cookie 种植凭据；stdin 关闭或父进程退出即服务失效。
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,17 @@ from questorharness.bootstrap.hosts.terminal_client import (
     build_serve_host,
     default_profile_root,
 )
+
+
+def _web_dist() -> Path | None:
+    """Electron 要加载的 web 构建产物：环境变量优先，其次仓内 apps/web/dist。"""
+    override = os.environ.get("QUESTOR_WEB_DIST")
+    if override:
+        candidate = Path(override)
+        return candidate if candidate.is_dir() else None
+    repo = Path(__file__).resolve().parents[5]
+    candidate = repo / "apps/web/dist"
+    return candidate if candidate.is_dir() else None
 
 
 async def run_studio_host(
@@ -55,7 +67,9 @@ async def run_studio_host(
     )
     await host.start()
     credential = auth.LaunchCredential.issue()
-    server = HttpServer(host.router, credential, allow_no_auth=allow_no_auth)
+    server = HttpServer(
+        host.router, credential, allow_no_auth=allow_no_auth, static_root=_web_dist()
+    )
     stop = asyncio.Event()
     lease = auth.ParentLease(stop.set)
     try:

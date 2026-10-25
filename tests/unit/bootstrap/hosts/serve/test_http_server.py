@@ -190,6 +190,32 @@ def test_allow_no_auth_is_dev_only_and_explicit() -> None:
     asyncio.run(scenario())
 
 
+def test_static_root_serves_spa_without_auth(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Electron 在种 cookie 前就要能加载 index；/rt 仍走鉴权。"""
+    (tmp_path / "index.html").write_text("<html>questor</html>", encoding="utf-8")
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "assets/app.js").write_text("console.log(1)", encoding="utf-8")
+
+    async def scenario() -> None:
+        server, _ = _server()
+        server._static_root = tmp_path.resolve()  # noqa: SLF001 - 直接注入静态根
+        port = await server.start()
+        try:
+            async with httpx.AsyncClient() as client:
+                root = await client.get(f"http://127.0.0.1:{port}/")
+                asset = await client.get(f"http://127.0.0.1:{port}/assets/app.js")
+                missing = await client.get(f"http://127.0.0.1:{port}/nope")
+                guarded = await client.get(f"http://127.0.0.1:{port}/rt/r1/profile")
+            assert root.status_code == 200 and "questor" in root.text
+            assert asset.status_code == 200 and asset.headers["content-type"].startswith("text/javascript")
+            assert missing.status_code == 404
+            assert guarded.status_code == 401
+        finally:
+            await server.close()
+
+    asyncio.run(scenario())
+
+
 def test_short_token_is_rejected_at_construction() -> None:
     """短 token 不允许构造，防误配。"""
     with pytest.raises(ValueError):

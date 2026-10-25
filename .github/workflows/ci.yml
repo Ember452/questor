@@ -150,6 +150,19 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (studio host for e2e)
+        run: uv sync --extra dev --frozen
+
       - name: Install dependencies
         run: npm ci --no-fund --no-audit --loglevel=error
 
@@ -164,6 +177,14 @@ jobs:
 
       - name: Build (web)
         run: npm run build:web
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Design matrix + narrow e2e (real studio host)
+        run: npx playwright test
+        env:
+          QUESTOR_PYTHON: ${{ github.workspace }}/.venv/bin/python
 
   desktop:
     name: desktop
@@ -185,8 +206,38 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (pyinstaller)
+        run: uv sync --extra dev --frozen
+
+      - name: Install Node deps (electron)
+        run: npm ci --no-fund --no-audit --loglevel=error
+
       - name: Syntax check
         run: npm run check
 
       - name: Updater rollback matrix
         run: npm test
+
+      - name: Build engine (PyInstaller onedir)
+        run: node scripts/build-engine.mjs
+
+      - name: Packaged engine handshake smoke
+        run: uv run python scripts/smoke-engine.py
+
+      - name: Electron shell e2e (real engine + web dist)
+        run: node scripts/e2e-electron.mjs
+
+      - name: Soak smoke (60s)
+        run: node scripts/soak.mjs
+        env:
+          SOAK_SECONDS: "60"

@@ -497,9 +497,9 @@ Agents）在五卡之后逐张评估。
 | 3 | feat/studio-serve | 325bbfd | 325bbfd | 五件套 + 多客户端语义 + 握手行 |
 | 4a | feat/studio-web | a6303ff / dbb526a | 071851d | DeepCode 骨架 vendored + 接门 + 改名 + 剪枝到 wire 骨架 + SSE 传输 + 13 帧视图模型 + 页面注册表/能力位门控；卡片与临时壳拆分见 4b |
 | 4b-1…5 | feat/studio-web | 071851d | 071851d | 五卡（Say/Tool/Approval/Ask/Compaction）语义移植 + cardSlots 穷尽 + 旧渲染分支删除；CSS 类块抽自 Reasonix（视觉对齐待 4b-6 token 完成） |
-| 4b-6 | feat/studio-web | 071851d | 071851d | token 两套并存 + alias 全量登记 + `test_css_vars`（实测旧变量 68 个、Reasonix 119 个、交集 1）；`THROWAWAY` 清单未清零（临时壳仍在，4a 遗留） |
-| 5 | feat/studio-web | 071851d | 071851d | Electron 主进程（握手校验/cookie/父租约/重启）+ updater 回滚矩阵 + PyInstaller onedir spec；**打包产物与 8h soak 未实跑**（需 Windows 桌面环境） |
-| 6 | feat/studio-web | 071851d | 071851d | 对比度测试 + data-action 审计 + 明暗×尺寸截图矩阵脚本；**矩阵截图未入库/未在浏览器实跑** |
+| 4b-6 | feat/studio-web | 6d7f612 | 0702921 | token 两套并存 + alias 全量登记（实测旧 68 / Reasonix 119 / 交集 1）+ `test_css_vars`；`THROWAWAY`/`mode ===`/`isPersonal` 探针清零；主题切换由 `data-theme` 驱动（亮/暗截图矩阵可比） |
+| 5 | feat/studio-web | 0702921 | — | Electron 主进程 + HttpOnly cookie + 父租约/重启/托盘 + updater 回滚矩阵 + **PyInstaller onedir 实打包**（握手 0.3s、stdin EOF 0.3s 退出）+ **Electron 真壳 e2e**（真引擎 + `apps/web/dist`，截图入库）+ **60s soak 通过**（RSS 149.8→149.7MB）；**8h soak 与 NSIS 签名仍待桌面环境实跑** |
+| 6 | feat/studio-web | 6d7f612 | — | 对比度测试 + data-action 审计进 `check.py`；亮/暗 × 1280×720/390×844 **四张矩阵截图入库**（`/?demo=1` 黄金帧回放，确定性）；narrow 真实视口断言；**Playwright 已接入 CI `web` job** |
 
 **填写规则**："绿验收 commit"只有在 §0.5-6 的三张对账表（条目 / 影响面 / 判红）齐备时才可填；
 任一表缺失，该阶段视为**未完成**（不是"稍后补"）。对照表本身随 PR 描述存档。

@@ -9,17 +9,30 @@
     "test": "node --test electron/updater.test.mjs",
     "check": "node --check electron/main.cjs && node --check electron/preload.cjs",
     "build:engine": "node scripts/build-engine.mjs",
-    "dist": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis",
+    "smoke": "python scripts/smoke-engine.py",
+    "e2e": "node scripts/e2e-electron.mjs",
+    "soak": "node scripts/soak.mjs"
   },
   "devDependencies": {
-    "electron": "^33.4.11",
+    "electron": "^44.9.2",
     "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "dev.questor.studio",
     "productName": "Questor",
-    "files": ["electron/**", "package.json"],
-    "win": { "target": "nsis" },
-    "extraResources": [{ "from": "dist/engine", "to": "engine" }]
+    "files": [
+      "electron/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "extraResources": [
+      {
+        "from": "dist/engine",
+        "to": "engine"
+      }
+    ]
   }
 }
