@@ -31,3 +31,38 @@ def deadline_from(timeout: float, *, now: float | None = None) -> float:
     """由超时秒数算出单调时钟截止点。"""
 
     return (now if now is not None else time.monotonic()) + timeout
+
+
+def toolbar_text(deadline: float, *, kind: str = "审批", now: float | None = None) -> str:
+    """底部工具条的倒计时行（每秒重算一次）。"""
+
+    return deadline_hint(remaining(deadline, now=now), kind=kind) + "\n  " + (
+        f"倒计时 {remaining(deadline, now=now)}s"
+    )
+
+
+def build_session(timeout: float, *, kind: str = "审批") -> object | None:
+    """带倒计时工具条的 PromptSession；非 TTY/缺依赖时返回 None（调用方回退 input）。
+
+    这是 plan03 波 B “审批卡 + 300 秒倒计时”的落地形态：不重绘卡片，只在底部
+    工具条每秒刷一次剩余秒数，超时后由调用方按 fail-closed 结算。
+    """
+
+    import sys
+
+    if not sys.stdin.isatty():
+        return None
+    try:
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.formatted_text import ANSI
+    except ImportError:  # pragma: no cover - 输入层可选依赖
+        return None
+
+    deadline = deadline_from(timeout)
+    try:
+        return PromptSession(
+            bottom_toolbar=lambda: ANSI(toolbar_text(deadline, kind=kind)),
+            refresh_interval=1.0,
+        )
+    except Exception:  # noqa: BLE001 - 无控制台宿主（CI/无头）构造会抛，必须回退裸 input
+        return None

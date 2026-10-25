@@ -160,7 +160,7 @@ class TerminalRenderer:
         """审批：y 通过，其余拒绝（fail-closed 由服务端兜底）。编辑类先给 diff 卡。"""
         self._console.print(cards.render_item(item))
         self._console.print(limits.deadline_hint(self._prompt_timeout()), style=theme.DIM)
-        answer = await self._read_answer("  [y/N] 允许执行? ")
+        answer = await self._read_answer("  [y/N] 允许执行? ", kind="审批")
         if answer is None:
             self._console.print(strings.APPROVAL_TIMEOUT, style=theme.WARN)
         decision = "approve" if (answer or "").strip().lower() in {"y", "yes"} else "deny"
@@ -176,7 +176,7 @@ class TerminalRenderer:
         self._console.print(
             limits.deadline_hint(self._prompt_timeout(), kind="提问"), style=theme.DIM
         )
-        answer = await self._read_answer("  → ")
+        answer = await self._read_answer("  → ", kind="提问")
         if answer is None:
             self._console.print(strings.ASK_TIMEOUT, style=theme.WARN)
         await self._host.transport.request(
@@ -192,12 +192,25 @@ class TerminalRenderer:
             getattr(self._host.authority, "prompt_timeout", limits.DEFAULT_TIMEOUT_SECONDS)
         )
 
-    async def _read_answer(self, prompt: str) -> str | None:
-        """读一个回答；超时返回 None，让调用方按 fail-closed 结算。"""
+    async def _read_answer(
+        self, prompt: str, *, kind: str = "审批"
+    ) -> str | None:
+        """读一个回答；超时返回 None，让调用方按 fail-closed 结算。
 
+        TTY 上走带倒计时工具条的 PromptSession（每秒刷新剩余秒数，plan03 波 B）；
+        非 TTY 回退裸 `input`，超时语义不变。
+        """
+
+        timeout = self._prompt_timeout()
+        session = limits.build_session(timeout, kind=kind)
         try:
+            if session is None:
+                return await asyncio.wait_for(
+                    asyncio.to_thread(input, prompt), timeout=timeout
+                )
             return await asyncio.wait_for(
-                asyncio.to_thread(input, prompt), timeout=self._prompt_timeout()
+                asyncio.to_thread(session.prompt, prompt),  # type: ignore[attr-defined] # 可选依赖的会话对象
+                timeout=timeout,
             )
         except TimeoutError:
             return None

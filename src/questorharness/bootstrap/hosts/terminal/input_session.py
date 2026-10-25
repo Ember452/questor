@@ -40,14 +40,17 @@ def build(
         history_path.parent.mkdir(parents=True, exist_ok=True)
         history = FileHistory(str(history_path))
 
-    return PromptSession(
-        history=history,
-        completer=merge_completers([SlashCompleter(catalog), FileCompleter(base)]),
-        complete_while_typing=True,
-        enable_history_search=True,
-        reserve_space_for_menu=6,
-        key_bindings=key_bindings,
-    )
+    try:
+        return PromptSession(
+            history=history,
+            completer=merge_completers([SlashCompleter(catalog), FileCompleter(base)]),
+            complete_while_typing=True,
+            enable_history_search=True,
+            reserve_space_for_menu=6,
+            key_bindings=key_bindings,
+        )
+    except Exception:  # noqa: BLE001 - 无控制台宿主（CI/无头 isatty 撒谎）构造会抛
+        return None
 
 
 def prepare_line(raw: str) -> str:
