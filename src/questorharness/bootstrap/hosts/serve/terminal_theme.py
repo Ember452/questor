@@ -37,39 +37,60 @@ TOOL_STATUS = {
 
 # ---- 回合分隔线（对齐 turn 卡片的 label 形态）-----------------------------
 TURN_SEP = "─" * 48
-TURN_END_SEP = "·" + "─" * 46 + "·"
 
-# ---- 横幅 ----------------------------------------------------------------
-BANNER = r"""
- ██████  ███████ ███████ ██████   █████   ██████ ██   ██
- ██   ██ ██      ██      ██   ██ ██   ██ ██      ██   ██
- ██████  █████   █████   ██████  ███████ ██      ███████
- ██   ██ ██      ██      ██   ██ ██   ██ ██      ██   ██
- ██████  ███████ ██      ██   ██ ██   ██  ██████ ██   ██
-"""
+# ---- 横向 ----------------------------------------------------------------
+# 首屏只留一行品牌：此前那段 ASCII art 拼不出产品名（逐列解析只得
+# "R E F P A C H"），而且在窄屏/双宽字形下会断裂。品牌靠字形 + 颜色，不靠方块。
+BANNER = "✳ QuestorHarness"
 
 
-def turn_header(turn_id: str) -> Text:
-    """回合开始的分隔行。"""
+def turn_header(turn_id: str = "") -> Text:
+    """回合开始的分隔行。
+
+    `turn_id` 不再上屏：UUID 前 8 位对用户零信息，而每回合多两行噪声会
+    把 24 行终端的可用高度吃掉。参数保留只为兼容调用方与既有快照。
+    """
+
     text = Text()
     text.append(TURN_SEP, style=DIM)
-    text.append(f" turn {turn_id[:8]} ", style=f"{DIM} reverse")
     return text
 
 
-def turn_footer(outcome: str, duration_ms: int, usage: dict[str, int] | None = None) -> Text:
-    """回合收尾：结果 + 耗时 + token 用量（对齐 MeterRail 的摘要行）。"""
+def turn_footer(label: str, duration_ms: int, usage: dict[str, int] | None = None) -> Text:
+    """回合收尾：结果 + 耗时（秒）+ token 用量。"""
+
     text = Text()
-    style = {"completed": OK, "failed": ERR, "cancelled": WARN}.get(outcome, DIM)
-    icon = {"completed": "✓", "failed": "✗", "cancelled": "⊘"}.get(outcome, "·")
-    text.append(f"{icon} {outcome}", style=f"{style} bold")
-    text.append(f" · {duration_ms}ms", style=DIM)
+    style = {"完成": OK, "失败": ERR, "已取消": WARN}.get(label, DIM)
+    icon = {"完成": "✓", "失败": "✗", "已取消": "⊘"}.get(label, "·")
+    text.append(f"{icon} {label}", style=f"{style} bold")
+    text.append(f" · {duration_ms / 1000:.1f}s", style=DIM)
     if usage:
         text.append(
             f" · {usage.get('inputTokens', '?')}→{usage.get('outputTokens', '?')} tok",
             style=DIM,
         )
     return text
+
+
+def tool_card(tool: str, output: str | None, *, is_error: bool) -> Text:
+    """工具卡（两行节奏）：标题行 `● tool`，收口行 `⎿ 结果摘要`。
+
+    与 Reasonix `termrender/toolcard.go` / DeepCode `● Read + ⎿` 同一语法：
+    状态色点在行首，结果用 `dim` 退后——结构靠缩进与颜色，不靠边框
+    （边框会把 80 列吃掉 4 列，并且折行时断开）。
+    """
+
+    icon, color = TOOL_STATUS.get("error" if is_error else "done", ("·", DIM))
+    head = Text()
+    head.append(f"  {icon} ", style=color)
+    head.append(tool, style=BOLD)
+    first = ""
+    if output and output.strip():
+        first = output.strip().splitlines()[0][:120]
+    if first:
+        head.append("\n  ⎿ ", style=DIM)
+        head.append(first, style=DIM)
+    return head
 
 
 def tool_line(tool: str, status: str, output: str | None = None, max_output: int = 120) -> Text:

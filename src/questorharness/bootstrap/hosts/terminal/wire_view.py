@@ -103,6 +103,7 @@ class MessageItem:
 class ToolDispatchItem:
     tool_call_id: str
     tool: str
+    detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -312,7 +313,9 @@ def _message(frame: Mapping[str, Any]) -> Item:
 
 def _tool_dispatch(frame: Mapping[str, Any]) -> Item:
     return ToolDispatchItem(
-        tool_call_id=_str(frame, "toolCallId"), tool=_str(frame, "tool")
+        tool_call_id=_str(frame, "toolCallId"),
+        tool=_str(frame, "tool"),
+        detail=_str(frame, "detail", default=""),
     )
 
 

@@ -29,6 +29,79 @@ def _renderer() -> tuple[renderer_module.TerminalRenderer, io.StringIO]:
     return instance, buffer
 
 
+def test_model_text_is_not_eaten_by_rich_markup() -> None:
+    """模型输出里的 `[index]` / `[docs](url)` 不得被当成 rich 标记吞掉。
+
+    旧行为：流式正文 `console.print(item.text)` 把 str 当 markup 解析，
+    `[index]` 整段消失、`[docs](src/app.py)` 只剩 `(src/app.py)`。
+    """
+
+    instance, buffer = _renderer()
+
+    async def scenario() -> None:
+        await instance._render({"kind": "text", "text": "数组 arr[index] 与 [docs](src/app.py)\n"})
+        await instance._render(
+            {"kind": "message", "blocks": [{"type": "text", "text": "ok"}], "usage": None}
+        )
+
+    asyncio.run(scenario())
+    text = buffer.getvalue()
+    for expected in ("arr", "index", "docs"):
+        assert expected in text, (expected, text)
+
+
+def test_usage_from_the_message_frame_reaches_the_footer() -> None:
+    """`turn_done` 不带 usage；状态栏的 ctx/$ 必须从 message 帧取值。"""
+
+    instance, _buffer = _renderer()
+
+    async def scenario() -> None:
+        await instance._render(
+            {
+                "kind": "message",
+                "blocks": [{"type": "text", "text": "hi"}],
+                "usage": {
+                    "inputTokens": 10,
+                    "outputTokens": 2,
+                    "contextUsed": 1540,
+                    "contextWindow": 128000,
+                    "costUsd": 0.01,
+                },
+            }
+        )
+
+    asyncio.run(scenario())
+    vm = instance.footer_vm()
+    assert (vm.context_used, vm.context_window) == (1540, 128000)
+    assert vm.cost_usd == 0.01
+
+
+def test_approval_is_a_modal_of_the_main_input_in_loop_mode() -> None:
+    """loop 模式下审批不另起 PromptSession：它是一个待答模态，由主循环代答。"""
+
+    instance, _buffer = _renderer()
+    posted: list[tuple[str, bytes]] = []
+
+    async def request(method: str, path: str, body: bytes = b"", **_kw: object) -> SimpleNamespace:
+        posted.append((path, body))
+        return SimpleNamespace(status=200, body=b"{}", headers={}, stream=None)
+
+    instance._host.transport.request = request  # type: ignore[attr-defined]
+    instance.set_mode("loop")
+
+    async def scenario() -> bool:
+        await instance._render(
+            {"kind": "approval_request", "id": "p-1", "tool": "bash", "subject": "ls"}
+        )
+        pending = instance.has_pending_prompt
+        await instance.answer_pending("y")
+        return pending
+
+    assert asyncio.run(scenario()) is True
+    assert instance.has_pending_prompt is False
+    assert posted == [("/rt/r1/approve", b'{"id": "p-1", "decision": "approve"}')]
+
+
 def test_frame_from_sse_reads_the_data_line() -> None:
     assert renderer_module.frame_from_sse(b'id: 1\nevent: frame\ndata: {"kind":"text"}\n') == {
         "kind": "text"

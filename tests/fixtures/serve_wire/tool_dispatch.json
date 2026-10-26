@@ -1,4 +1,5 @@
 {
+  "detail": "",
   "kind": "tool_dispatch",
   "seq": 11,
   "tool": "bash",

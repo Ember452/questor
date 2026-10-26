@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import locale
 from pathlib import Path
 from typing import Iterable
 
@@ -138,8 +139,24 @@ async def _drain_available_output(
         output_buffer.extend(chunk)
 
 
+def _decode_output(raw: bytes) -> str:
+    """按“先 UTF-8、再宿主代码页”解码子进程输出。
+
+    Windows 上 PowerShell / cmd 的内建命令按 OEM 代码页（中文机器是 cp936）
+    输出字节；一律按 UTF-8 解会把“目录”变成 `Ŀ¼`（0xC4BF / 0xC2BC 恰好是
+    合法的两字节 UTF-8 序列），终端里看到的就是乱码。
+    """
+
+    for encoding in ("utf-8", locale.getpreferredencoding(False) or "utf-8"):
+        try:
+            return raw.decode(encoding)
+        except (LookupError, UnicodeDecodeError):
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 def _format_output(output_buffer: bytearray) -> str:
-    text = output_buffer.decode("utf-8", errors="replace").replace("\r\n", "\n").strip()
+    text = _decode_output(bytes(output_buffer)).replace("\r\n", "\n").strip()
     if not text:
         return "(no output)"
     if len(text) > 12000:

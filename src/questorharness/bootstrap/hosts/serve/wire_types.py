@@ -168,6 +168,7 @@ class ToolDispatch(TypedDict):
     kind: Literal["tool_dispatch"]
     toolCallId: str
     tool: str
+    detail: str
 
 
 class ToolResult(TypedDict):

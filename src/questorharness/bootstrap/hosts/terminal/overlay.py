@@ -7,6 +7,7 @@ prompt_toolkit `Application(full_screen=True)`——它是 alt-screen 的**唯�
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -131,7 +132,7 @@ def _read_search(state: PanelState) -> None:
     set_query(state, query.strip())
 
 
-def run(
+async def run_async(
     state: PanelState, *, console: Any | None = None, full_screen: bool = True
 ) -> str | None:
     """打开面板并返回被选中项的 id（Esc/q/空输入 → None）。
@@ -139,22 +140,24 @@ def run(
     `/` 请求搜索时先退出面板读一个搜索词，再带着过滤重开；搜索哨兵只在
     本循环流转，绝不当成选中 id 返回（否则会被拼进斜杠命令提交出去）。
     TTY + prompt_toolkit 时进 alt-screen；否则退化为编号选择。
+    走 `run_async` 而不是 `run`：后者在工作线程里会另建一个 event loop，
+    prompt_toolkit 的 win32 句柄回调会在 loop 关闭后报 "Executor shutdown"。
     """
 
     while True:
-        result = _open_once(state, full_screen=full_screen)
+        result = await _open_once(state, full_screen=full_screen)
         if result != SEARCH:
             return result if isinstance(result, str) else None
-        _read_search(state)
+        await asyncio.to_thread(_read_search, state)
 
 
-def _open_once(state: PanelState, *, full_screen: bool) -> str | None:
+async def _open_once(state: PanelState, *, full_screen: bool) -> str | None:
     """打开一次面板（不处理搜索往返）。"""
 
     import sys
 
     if not full_screen or not sys.stdin.isatty():
-        return _numbered_choice(state)
+        return await asyncio.to_thread(_numbered_choice, state)
 
     try:
         from prompt_toolkit import Application
@@ -162,7 +165,7 @@ def _open_once(state: PanelState, *, full_screen: bool) -> str | None:
         from prompt_toolkit.layout import Layout, Window
         from prompt_toolkit.layout.controls import FormattedTextControl
     except ImportError:  # 没有 prompt_toolkit 就退回编号选择
-        return _numbered_choice(state)
+        return await asyncio.to_thread(_numbered_choice, state)
 
     bindings = KeyBindings()
 
@@ -200,5 +203,5 @@ def _open_once(state: PanelState, *, full_screen: bool) -> str | None:
         key_bindings=bindings,
         full_screen=True,
     )
-    result = app.run()
+    result = await app.run_async()
     return result if isinstance(result, str) else None

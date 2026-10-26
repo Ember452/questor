@@ -92,13 +92,13 @@ def action_line(panel: Panel, selected_id: str | None) -> str | None:
     return panel.action.format(id=selected_id)
 
 
-def open_panel(
+async def open_panel(
     panel: Panel, items: list[dict[str, object]], *, full_screen: bool = True
 ) -> str | None:
-    """打开面板，返回选中的 id（取消返回 None）。"""
+    """打开面板（异步：与 REPL 共用一个 event loop，不另建线程/loop）。"""
 
     state = overlay.PanelState(title=panel.title, items=[dict(item) for item in items], kind=panel.kind)
-    return overlay.run(state, full_screen=full_screen)
+    return await overlay.run_async(state, full_screen=full_screen)
 
 
 def list_hint() -> str:

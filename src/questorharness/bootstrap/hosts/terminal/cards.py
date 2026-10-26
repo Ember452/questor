@@ -15,7 +15,9 @@ from rich.text import Text
 
 from questorharness.bootstrap.hosts.serve import terminal_theme as theme
 from questorharness.bootstrap.hosts.terminal import diff as diff_card
-from questorharness.bootstrap.hosts.terminal import strings, unsupported, wire_view as view
+from questorharness.bootstrap.hosts.terminal import strings, unsupported
+from questorharness.bootstrap.hosts.terminal import width
+from questorharness.bootstrap.hosts.terminal import wire_view as view
 
 
 def _usage_dict(usage: view.UsageVM | None) -> dict[str, int] | None:
@@ -24,15 +26,8 @@ def _usage_dict(usage: view.UsageVM | None) -> dict[str, int] | None:
     return {"inputTokens": usage.input_tokens, "outputTokens": usage.output_tokens}
 
 
-def _badge_line(gap_id: str) -> Text:
-    text = Text()
-    text.append("  ")
-    text.append(unsupported.badge_text(gap_id), style=theme.DIM)
-    return text
-
-
 def banner() -> RenderableType:
-    """启动横幅：Reasonix ASCII art（形态行由调用方补）。"""
+    """启动横幅：一行品牌（形态行由调用方补）。"""
 
     return Text(theme.BANNER, style=theme.NET)
 
@@ -71,8 +66,14 @@ def say_stream(text: str) -> RenderableType:
 
 
 def _tool_card(item: view.ToolResultItem) -> RenderableType:
-    status = "error" if item.is_error else "done"
-    return theme.tool_line(item.tool, status, item.output)
+    """工具卡：`✓ tool` + `⎿ 结果首行`（两行节奏，结果按列宽截断）。"""
+
+    first = ""
+    if item.output and item.output.strip():
+        first = item.output.strip().splitlines()[0]
+    return theme.tool_card(
+        item.tool, width.truncate(first, 120) if first else None, is_error=item.is_error
+    )
 
 
 def _approval_card(item: view.ApprovalItem) -> RenderableType:
@@ -148,15 +149,9 @@ def _block_lines(blocks: Iterable[view.BlockVM]) -> RenderableType:
         if isinstance(block, view.TextBlockVM):
             parts.append(say_stream(block.text))
         elif isinstance(block, view.ToolUseBlockVM):
-            parts.append(
-                Text(
-                    "  "
-                    + strings.TOOL_USE_BLOCK.format(
-                        tool_use_id=block.tool_use_id, name=block.name
-                    ),
-                    style=theme.DIM,
-                )
-            )
+            # 块展开时不再逐条报 `工具 call <id> · name`：同一件事已经在
+            # tool_dispatch/tool_result 卡里出现过一次，重复一次只是噪音。
+            continue
         elif isinstance(block, view.ImageBlockVM):
             parts.append(
                 Text(
@@ -180,7 +175,8 @@ def render_item(item: view.Item) -> RenderableType:
     if isinstance(item, view.MessageItem):
         return _block_lines(item.blocks)
     if isinstance(item, view.ToolDispatchItem):
-        return theme.tool_line(item.tool, "running")
+        # `▸ bash  npm test`：工具行必须回答“它在干什么”。
+        return theme.tool_line(item.tool, "running", item.detail or None)
     if isinstance(item, view.ToolResultItem):
         return _tool_card(item)
     if isinstance(item, view.NoticeItem):
@@ -196,7 +192,11 @@ def render_item(item: view.Item) -> RenderableType:
     if isinstance(item, view.CompactionDoneItem):
         return _compaction_done(item)
     if isinstance(item, view.TurnDoneItem):
-        return theme.turn_footer(item.outcome, item.duration_ms, _usage_dict(item.usage))
+        return theme.turn_footer(
+            strings.OUTCOME_LABELS.get(item.outcome, item.outcome),
+            item.duration_ms,
+            _usage_dict(item.usage),
+        )
     if isinstance(item, view.StreamResetItem):
         return _stream_reset(item)
     if isinstance(item, view.TodosItem):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from questorharness.bootstrap.hosts.terminal import overlay, strings
 
 ITEMS = [
@@ -90,7 +92,7 @@ def test_non_tty_falls_back_to_numbered_choice(monkeypatch) -> None:  # type: ig
 
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     monkeypatch.setattr("builtins.input", lambda _prompt="": "2")
-    assert overlay.run(_state()) == "beta"
+    assert asyncio.run(overlay.run_async(_state())) == "beta"
 
 
 def test_slash_opens_search_and_refines_the_choice(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -103,7 +105,7 @@ def test_slash_opens_search_and_refines_the_choice(monkeypatch) -> None:  # type
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     answers = iter(["/", "bet", "1"])
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
-    assert overlay.run(_state()) == "beta"
+    assert asyncio.run(overlay.run_async(_state())) == "beta"
 
 
 def test_search_matches_detail_text_in_the_numbered_fallback(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -112,7 +114,7 @@ def test_search_matches_detail_text_in_the_numbered_fallback(monkeypatch) -> Non
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     answers = iter(["/", "第二", "1"])
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
-    assert overlay.run(_state()) == "beta"
+    assert asyncio.run(overlay.run_async(_state())) == "beta"
 
 
 def test_empty_search_query_clears_the_filter(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -121,7 +123,7 @@ def test_empty_search_query_clears_the_filter(monkeypatch) -> None:  # type: ign
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     answers = iter(["/", "第二", "/", "", "3"])
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
-    assert overlay.run(_state()) == "gamma"
+    assert asyncio.run(overlay.run_async(_state())) == "gamma"
 
 
 def test_search_eof_keeps_the_previous_filter(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -137,16 +139,16 @@ def test_search_eof_keeps_the_previous_filter(monkeypatch) -> None:  # type: ign
         return "1"
 
     monkeypatch.setattr("builtins.input", _input)
-    assert overlay.run(state) == "beta"
+    assert asyncio.run(overlay.run_async(state)) == "beta"
 
 
 def test_non_tty_empty_input_cancels(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     monkeypatch.setattr("builtins.input", lambda _prompt="": "")
-    assert overlay.run(_state()) is None
+    assert asyncio.run(overlay.run_async(_state())) is None
 
 
 def test_non_tty_out_of_range_cancels(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     monkeypatch.setattr("builtins.input", lambda _prompt="": "9")
-    assert overlay.run(_state()) is None
+    assert asyncio.run(overlay.run_async(_state())) is None

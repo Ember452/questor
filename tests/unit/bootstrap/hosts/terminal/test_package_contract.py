@@ -60,30 +60,19 @@ def test_prompt_toolkit_exemption_is_scoped_to_the_terminal_package() -> None:
     ) == set()
 
 
-def test_interactive_writes_go_through_one_patched_channel(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """plan03 §2.4：prompt 活跃时输出必须经 patch_stdout，否则与流式输出互相撕屏。"""
+def test_output_channel_does_not_wrap_the_loop_in_patch_stdout() -> None:
+    """`patch_stdout` 包住整个循环会把流式输出与 prompt 重绘碾成一行（实跑）。
+
+    取代旧契约（必须 `patch_stdout(raw=True)`）：现在改为回合内不读行，
+    prompt 只在空闲时存在，两者不会同时写屏。
+    """
 
     import contextlib
 
-    from prompt_toolkit import patch_stdout as patch_module
-
     from questorharness.bootstrap.hosts import terminal_client
 
-    entered: list[bool] = []
-
-    @contextlib.contextmanager
-    def spy(*, raw: bool = False) -> Any:
-        entered.append(raw)
-        yield None
-
-    monkeypatch.setattr(patch_module, "patch_stdout", spy)
-
-    with terminal_client._output_channel(object()):
-        pass
-    assert entered == [True], "交互模式必须带 raw=True 进入 patch_stdout"
-
+    assert isinstance(terminal_client._output_channel(object()), contextlib.nullcontext)
     assert isinstance(terminal_client._output_channel(None), contextlib.nullcontext)
-    assert entered == [True], "非 TTY/单次 prompt 不得包裹（没有 prompt 在跑）"
 
 
 def test_terminal_package_does_not_eagerly_import_prompt_toolkit() -> None:

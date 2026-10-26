@@ -85,6 +85,7 @@ export interface ToolDispatch {
   kind: "tool_dispatch";
   toolCallId: string;
   tool: string;
+  detail: string;
 }
 export interface ToolResult {
   seq: number;

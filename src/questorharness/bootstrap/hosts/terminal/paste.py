@@ -1,7 +1,8 @@
-"""粘贴保护：多行粘贴不当命令执行；图片粘贴交给 A5 徽标告知。
+"""粘贴归一化：去掉终端包裹的括号粘贴标记、统一换行，其余内容一字不改。
 
-终端里最伤人的一类事故：用户粘贴一段日志，第二行恰好是命令，回车即执行。
-这里给出判定函数，由输入层决定“直接回车”还是“再确认一次”。
+只做"归一化"这一件事。多行粘贴的二次确认、图片粘贴的拦截都**没有接线**，
+所以这里也不再声明这些能力——留着没有调用方的判定函数等于向用户承诺
+一个不存在的行为（同 ADR-0005 §4 的判例）。
 """
 
 from __future__ import annotations
@@ -10,31 +11,12 @@ from typing import Final
 
 BRACKETED_PASTE_START: Final[str] = "\x1b[200~"
 BRACKETED_PASTE_END: Final[str] = "\x1b[201~"
-IMAGE_MARKERS: Final[tuple[str, ...]] = (
-    "\x1b]1337;File=",  # iTerm2 inline image
-    "data:image/png;base64,",
-    "data:image/jpeg;base64,",
-)
-MULTILINE_CONFIRM_THRESHOLD: Final[int] = 2
 
 
 def strip_markers(text: str) -> str:
     """去掉终端包裹的括号粘贴标记（它们不是用户输入的内容）。"""
 
     return text.replace(BRACKETED_PASTE_START, "").replace(BRACKETED_PASTE_END, "")
-
-
-def is_image_paste(text: str) -> bool:
-    """粘贴内容是不是图片（是则走 A5 徽标告知，而不是丢进 prompt）。"""
-
-    return any(marker in text for marker in IMAGE_MARKERS)
-
-
-def needs_confirmation(text: str) -> bool:
-    """多行粘贴需要二次确认（回车不直接提交）。"""
-
-    lines = [line for line in strip_markers(text).splitlines() if line.strip()]
-    return len(lines) >= MULTILINE_CONFIRM_THRESHOLD
 
 
 def normalize(text: str) -> str:

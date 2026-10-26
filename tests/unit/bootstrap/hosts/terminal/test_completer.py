@@ -29,6 +29,32 @@ def test_subsequence_matches_a_shorter_typing() -> None:
     assert "/compact" in _texts(SlashCompleter(CATALOG), "/cmp")
 
 
+# 目录顺序 = 注册顺序 = /help 顺序；`/` 是零前缀，菜单前几行必须是“人先要用的”，
+# 不是字母序前几个（旧行为：agents/autopilot/brainstorming）。
+ORDERED = {
+    "/help": "Show available commands",
+    "/exit": "Exit QuestorHarness",
+    "/model": "Show, switch, or manage profile models",
+    "/compact": "Compact older conversation history",
+    "/lark-mail": "Invoke the lark-mail skill",
+}
+
+
+def test_bare_slash_keeps_the_catalog_order() -> None:
+    """只打 `/`：按目录顺序给出，而不是重新按字母序排。"""
+    assert _texts(SlashCompleter(ORDERED), "/")[:3] == ["/help", "/exit", "/model"]
+
+
+def test_prefix_hit_suppresses_fuzzy_noise() -> None:
+    """有前缀命中时，子序列噪音不得挤进菜单（`/m` 只该看见 /model）。"""
+    assert _texts(SlashCompleter(ORDERED), "/m") == ["/model"]
+
+
+def test_fuzzy_only_when_no_prefix_hit() -> None:
+    """没有前缀命中时才轮到子序列，且顺序仍取目录顺序。"""
+    assert _texts(SlashCompleter(ORDERED), "/lml") == ["/lark-mail"]
+
+
 def test_command_with_arguments_stops_completing() -> None:
     assert _texts(SlashCompleter(CATALOG), "/model gpt") == []
 

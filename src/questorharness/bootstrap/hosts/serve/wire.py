@@ -156,6 +156,21 @@ def todos_frame(*, path: str, items: list[dict[str, object]]) -> Frame:
     return {"kind": "todos", "path": path, "items": items}
 
 
+_DETAIL_KEYS: tuple[str, ...] = ("command", "path", "pattern", "query", "url", "prompt")
+
+
+def _tool_detail(tool_input: object) -> str:
+    """工具入参的一行摘要（终端工具行专用；拿不到就空串）。"""
+
+    if not isinstance(tool_input, dict):
+        return ""
+    for key in _DETAIL_KEYS:
+        value = tool_input.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip().splitlines()[0][:160]
+    return ""
+
+
 def _blocks(message: Any) -> tuple[list[Frame], list[str]]:
     """把 ConversationMessage 的内容块展平。
 
@@ -262,6 +277,8 @@ class WireEncoder:
                     "kind": "tool_dispatch",
                     "toolCallId": self._mint_tool_call(event.tool_name),
                     "tool": event.tool_name,
+                    # 工具行要能回答“它在干什么”：命令看 command，文件看 path，搜索看 pattern。
+                    "detail": _tool_detail(event.tool_input),
                 }
             ]
         if isinstance(event, ToolExecutionCompleted):

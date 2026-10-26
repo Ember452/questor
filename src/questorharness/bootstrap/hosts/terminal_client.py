@@ -156,8 +156,9 @@ async def run_terminal_repl(
     permission_mode: str | None = None,
     profile_root: Path | None = None,
     overrides: Mapping[str, object] | None = None,
+    tui: bool = False,
 ) -> int:
-    """装配 runtime + serve 宿主，然后进入终端循环。"""
+    """装配 runtime + serve 宿主，然后进入终端（默认全屏 TUI，`tui=False` 回退行式 REPL）。"""
     host = await build_serve_host(
         cwd=cwd,
         model=model,
@@ -176,6 +177,10 @@ async def run_terminal_repl(
     )
     await host.start()
     try:
+        if tui:
+            from questorharness.bootstrap.hosts.tui import run_tui
+
+            return await run_tui(host)
         return await run_terminal_client(host, prompt=prompt)
     finally:
         await host.close()

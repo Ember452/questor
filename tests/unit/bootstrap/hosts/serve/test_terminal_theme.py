@@ -13,17 +13,17 @@ def test_tool_status_icons() -> None:
 
 
 def test_turn_footer_completed_with_usage() -> None:
-    """完成回合：绿 ✓ + 耗时 + token。"""
-    text = theme.turn_footer("completed", 1200, {"inputTokens": 100, "outputTokens": 50})
-    assert "✓ completed" in text.plain
-    assert "1200ms" in text.plain
+    """完成回合：绿 ✓ + 耗时（秒）+ token（文案由 strings.OUTCOME_LABELS 提供）。"""
+    text = theme.turn_footer("完成", 1200, {"inputTokens": 100, "outputTokens": 50})
+    assert "✓ 完成" in text.plain
+    assert "1.2s" in text.plain
     assert "100→50 tok" in text.plain
 
 
 def test_turn_footer_failed() -> None:
-    text = theme.turn_footer("failed", 500)
-    assert "✗ failed" in text.plain
-    assert "500ms" in text.plain
+    text = theme.turn_footer("失败", 500)
+    assert "✗ 失败" in text.plain
+    assert "0.5s" in text.plain
 
 
 def test_approval_header_contains_tool_and_subject() -> None:

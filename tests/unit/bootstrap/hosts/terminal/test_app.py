@@ -34,6 +34,8 @@ def _renderer() -> SimpleNamespace:
         note_cancel_requested=lambda: None,
         busy=False,
         pending_turns=0,
+        # 新增的模态契约：drive_turns 先问有没有待答审批，再决定这一行是不是新消息。
+        has_pending_prompt=False,
         done=asyncio.Event(),
     )
 
@@ -190,9 +192,12 @@ def test_help_panel_is_read_only(monkeypatch) -> None:  # type: ignore[no-untype
     transport = _CommandTransport([{"name": "help", "description": "列指令"}])
     renderer = SimpleNamespace(show=lambda _text: None)
     seen: list[list[dict[str, object]]] = []
-    monkeypatch.setattr(
-        pickers, "open_panel", lambda panel, items, **_kw: seen.append(list(items)) or "2"
-    )
+
+    async def _fake_open(panel: object, items: list[dict[str, object]], **_kw: object) -> str:
+        seen.append(list(items))
+        return "2"
+
+    monkeypatch.setattr(pickers, "open_panel", _fake_open)
 
     assert (
         asyncio.run(
@@ -201,6 +206,42 @@ def test_help_panel_is_read_only(monkeypatch) -> None:  # type: ignore[no-untype
         is None
     )
     assert seen and seen[0][0]["id"] == "/help"
+
+
+def test_unknown_command_name_only_flags_unregistered_slash_input() -> None:
+    catalog = {"/help": "", "/model": ""}
+    assert app_module.unknown_command_name("/nope", catalog) == "/nope"
+    assert app_module.unknown_command_name("/model gpt", catalog) is None
+    assert app_module.unknown_command_name("hello", catalog) is None
+    # 目录取数失败（空）时不得把所有斜杠命令都判死。
+    assert app_module.unknown_command_name("/nope", {}) is None
+
+
+def test_unknown_slash_command_is_never_sent_to_the_model(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """实跑事故：打 `/` 想找指令，整句被当 prompt 发给模型，模型开始跑 bash。"""
+
+    async def _line(_session: object) -> str:
+        if not getattr(_line, "called", False):
+            _line.called = True  # type: ignore[attr-defined]
+            return "/nope"
+        return app_module.EOF
+
+    async def _no_panel(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    transport = _Transport()
+    renderer = _renderer()
+    shown: list[str] = []
+    renderer.show = shown.append  # type: ignore[method-assign]
+    monkeypatch.setattr(app_module, "read_line", _line)
+    monkeypatch.setattr(app_module, "open_panel", _no_panel)
+
+    result = asyncio.run(
+        app_module.drive_turns(_host(transport), renderer, None, None, {"/help": ""})  # type: ignore[arg-type]
+    )
+    assert result == 0
+    assert transport.calls == []  # 没有 POST /submit
+    assert shown and "未知指令" in shown[0]
 
 
 def test_prompt_marker_has_a_single_source() -> None:

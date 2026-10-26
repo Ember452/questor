@@ -109,12 +109,13 @@
     "ToolDispatch": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["seq", "kind", "toolCallId", "tool"],
+      "required": ["seq", "kind", "toolCallId", "tool", "detail"],
       "properties": {
         "seq": { "type": "integer" },
         "kind": { "const": "tool_dispatch" },
         "toolCallId": { "type": "string" },
-        "tool": { "type": "string" }
+        "tool": { "type": "string" },
+        "detail": { "type": "string" }
       }
     },
     "ToolResult": {

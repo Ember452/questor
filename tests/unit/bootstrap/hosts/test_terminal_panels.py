@@ -54,8 +54,11 @@ def _renderer(
 def test_model_panel_selection_becomes_a_slash_command(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     buffer = io.StringIO()
     renderer, host = _renderer(buffer)
+    async def _first(panel: object, items: list[dict[str, object]], **_kw: object) -> str:
+        return str(items[0]["id"])
+
     monkeypatch.setattr(
-        pickers, "open_panel", lambda panel, items, **_kw: str(items[0]["id"])
+        pickers, "open_panel", _first
     )
 
     line = asyncio.run(terminal_client._open_panel(host, renderer, ":model"))
@@ -79,7 +82,7 @@ def test_empty_catalog_renders_an_empty_state(monkeypatch) -> None:  # type: ign
     renderer, host = _renderer(buffer, [])
     called = {"pick": False}
 
-    def _never(*_args: object, **_kwargs: object) -> None:
+    async def _never(*_args: object, **_kwargs: object) -> None:
         called["pick"] = True
         return None
 
@@ -115,7 +118,7 @@ def test_transcript_panel_lists_history_rows_without_submitting(monkeypatch) -> 
 
     host.transport.request = history_handler  # type: ignore[attr-defined]
 
-    def spy(panel, items, **_kwargs):  # type: ignore[no-untyped-def]
+    async def spy(panel, items, **_kwargs):  # type: ignore[no-untyped-def]
         seen.append(list(items))
         return "2"
 
@@ -143,7 +146,10 @@ def test_unavailable_catalog_does_not_open_a_panel(monkeypatch) -> None:  # type
         raise RuntimeError("connection closed")
 
     host.transport.request = boom  # type: ignore[attr-defined]
-    monkeypatch.setattr(pickers, "open_panel", lambda *a, **k: "work")
+    async def _work(*_a: object, **_k: object) -> str:
+        return "work"
+
+    monkeypatch.setattr(pickers, "open_panel", _work)
 
     assert asyncio.run(terminal_client._open_panel(host, renderer, ":model")) is None
     assert "面板取不到数据" in buffer.getvalue()

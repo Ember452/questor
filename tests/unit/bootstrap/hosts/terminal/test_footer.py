@@ -21,11 +21,12 @@ def _plain(renderable: object) -> str:
     return console.export_text()
 
 
-def test_missing_optional_fields_render_a_visible_placeholder() -> None:
-    """空白等于静默：缺数据时必须看得见 `—`。"""
+def test_missing_optional_fields_are_omitted_not_faked() -> None:
+    """没有真值的字段直接不画：`ctx —` / `$—` 是噪音，不是信息（实跑反馈）。"""
     text = _plain(footer.render(footer.FooterVM(profile="coding")))
     assert "coding" in text
-    assert text.count(strings.PLACEHOLDER) >= 3  # ctx / 费用 / 权限模式 / 分支
+    assert "ctx" not in text
+    assert "$" not in text
 
 
 def test_context_shows_ratio_and_share_when_the_window_is_known() -> None:

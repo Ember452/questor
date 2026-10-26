@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import sys
 
+# ---- 品牌（首屏一句话；ASCII art 已退役：它拼不出产品名，还会在窄屏断裂）----
+BRAND_TAGLINE = "本地优先的编码 Agent"
+BRAND_HINT = "/ 查指令 · : 打开面板 · /help 看全部"
+
 # ---- 未实现徽标（plan03 §5）--------------------------------------------
 BADGE_MARK = "⊘"
 BADGE_FORMAT = "{mark} 未实现 · {gap_id} {name}"
@@ -16,26 +20,41 @@ GAPS_LEAD = "  未实现的入口："
 # ---- 输入框（形态取自 Reasonix `tui/chrome.go` 的提示符）------------------
 PROMPT = "❯ "
 PROMPT_FALLBACK = "> "
-CONTINUATION = "… "
 
 # ---- 缺数据占位（FooterVM 的可选字段）-----------------------------------
 PLACEHOLDER = "—"
 
 # ---- 空态提示（对齐 Reasonix Hero 的一句话）-----------------------------
 EMPTY_STATE_LINES = (
-    "输入一句话开始；/ 查指令，:model 等打开面板。",
+    "说一句话开始；" + BRAND_HINT,
     "↑↓ 翻历史 · Tab 补全 · Ctrl-C 中止回合 · Ctrl-D 退出",
 )
+
+# ---- 回合进行中的静默期（模型吐第一个字节之前的唯一反馈）----------------
+THINKING = "⋯ 思考中…（Ctrl-C 中止）"
 
 # ---- 卡片内的补充文案（主题里的固定文案仍归 terminal_theme）-------------
 STREAM_RESET = "数据流已重置，正在重取历史"
 UNSUPPORTED_LEAD = "降级"
 IMAGE_BLOCK = "[图片 {media_type}]"
-TOOL_USE_BLOCK = "工具 call {tool_use_id} · {name}"
-APPROVAL_CHOICES = "  y 允许 · N 拒绝（回车默认拒绝）"
+APPROVAL_CHOICES = "  y 允许 · n 拒绝（回车默认拒绝）"
 APPROVAL_MODE_HINT = "  换档：:mode 或 /permissions <default|plan|full_auto>"
+APPROVAL_UNKNOWN = "  只认 y / n（回车默认拒绝）"
 ASK_HINT = "  输入回答后回车；有编号时可直接打序号（空输入视为未回答）"
 DIFF_TRUNCATED = "补丁过长，已截断（完整内容见编辑工具输出）"
+
+# ---- 指令面（未知指令不得漏给模型）--------------------------------------
+UNKNOWN_COMMAND = "  未知指令 {name} · 未发送给模型 · Tab 补全，:help 看全部指令"
+COMMAND_LIST_LEAD = "  可用指令（前 {shown} 条；:help 面板里搜）"
+NO_MATCH_HINT = "  没有匹配的指令（继续打字以缩小范围）"
+BUSY_REFUSED = "  回合进行中：先 Ctrl-C 中止，或等它跑完"
+
+# ---- 回合结果标签（主题只管图标与颜色，文案在这里）----------------------
+OUTCOME_LABELS = {
+    "completed": "完成",
+    "failed": "失败",
+    "cancelled": "已取消",
+}
 
 # ---- 回合控制 -----------------------------------------------------------
 QUEUED = "  … 已排队（回合结束后自动开始）"

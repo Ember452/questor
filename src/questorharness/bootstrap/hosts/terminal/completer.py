@@ -2,6 +2,11 @@
 
 参照 Reasonix `tui/complete.go` 的三类补全（命令 / 参数 / 路径）收窄成本项目需要的两类：
 本仓命令语义归引擎注册表，这里只负责**怎么让人更快打出来**。
+
+排序规则只有一条：**前缀优先且互斥**——有前缀命中时子序列不得入菜单（`/m` 只给
+`/model`，不给 `lark-markdown`），没有前缀命中时才轮到子序列（`/cmp` → `/compact`）。
+两层内部一律保持目录顺序：目录来自 `/commands`，其顺序即注册顺序即 `/help` 顺序，
+重排会打掉这个既定次序（零前缀的 `/` 尤其致命：字母序只会给你 agents/autopilot）。
 """
 
 from __future__ import annotations
@@ -36,13 +41,13 @@ class SlashCompleter(Completer):
         if not text.startswith("/") or " " in text:
             return
         token = text
-        exact = sorted(name for name in self._catalog if name.startswith(token))
-        fuzzy = sorted(
-            name
-            for name in self._catalog
-            if name not in exact and _subsequence(token.lstrip("/"), name.lstrip("/"))
-        )
-        for name in (*exact, *fuzzy):
+        # 目录顺序即答案顺序：按 `self._catalog` 的插入序过滤，不排序。
+        names = [name for name in self._catalog if name.startswith(token)]
+        if not names and token.lstrip("/"):
+            names = [
+                name for name in self._catalog if _subsequence(token.lstrip("/"), name.lstrip("/"))
+            ]
+        for name in names:
             yield Completion(
                 name,
                 start_position=-len(token),

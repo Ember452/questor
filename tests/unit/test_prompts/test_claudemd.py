@@ -79,6 +79,9 @@ def test_build_runtime_system_prompt_includes_project_context_and_fast_mode(tmp_
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
     repo = tmp_path / "repo"
     repo.mkdir()
+    # `get_project_*` 不再靠副作用建目录（启动链不能因为只读 cwd 崩），
+    # 写文件的人自己 ensure。
+    (repo / ".questorharness").mkdir()
     get_project_issue_file(repo).write_text("# Bug\nNeed to fix flaky test.\n", encoding="utf-8")
     get_project_pr_comments_file(repo).write_text(
         "# PR Comments\n- app.py:12: Please simplify this branch.\n",
@@ -98,6 +101,7 @@ def test_build_runtime_system_prompt_includes_active_repo_context(tmp_path: Path
     monkeypatch.setenv("QUESTORHARNESS_DATA_DIR", str(tmp_path / "data"))
     repo = tmp_path / "repo"
     repo.mkdir()
+    (repo / ".questorharness").mkdir()
     get_project_active_repo_context_path(repo).write_text(
         "# Active Repo Context\n\n- Current focus: fix issue #98\n",
         encoding="utf-8",

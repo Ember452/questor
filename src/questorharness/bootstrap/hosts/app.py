@@ -56,8 +56,13 @@ async def run_repl(
     restore_tool_metadata: dict[str, object] | None = None,
     permission_mode: str | None = None,
     overrides: dict[str, object] | None = None,
+    tui: bool = False,
 ) -> None:
-    """Run the interactive application: the terminal thin client over serve routes."""
+    """Run the interactive application: the terminal thin client over serve routes.
+
+    `tui=True` 进全屏 Textual 界面（终端即产品本体）；`False` 回退行式 REPL
+    （管道、CI、以及 `--plain`）。
+    """
     await run_terminal_repl(
         prompt=prompt,
         cwd=cwd,
@@ -73,6 +78,7 @@ async def run_repl(
         restore_tool_metadata=restore_tool_metadata,
         permission_mode=permission_mode,
         overrides=overrides,
+        tui=tui,
     )
 
 

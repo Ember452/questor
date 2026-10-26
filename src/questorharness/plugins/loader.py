@@ -33,18 +33,31 @@ from questorharness.capabilities.skills.definition import SkillDefinition
 logger = logging.getLogger(__name__)
 
 
+def _best_effort_mkdir(path: Path) -> None:
+    """建目录失败不得拖垮启动：插件是可选能力，只读/受保护目录下必须降级。"""
+
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        logger.debug("plugin dir not creatable, skipping: %s", path, exc_info=True)
+
+
 def get_user_plugins_dir() -> Path:
     """Return the user plugin directory."""
     path = get_config_dir() / "plugins"
-    path.mkdir(parents=True, exist_ok=True)
+    _best_effort_mkdir(path)
     return path
 
 
 def get_project_plugins_dir(cwd: str | Path) -> Path:
-    """Return the project plugin directory."""
-    path = Path(cwd).resolve() / ".questorharness" / "plugins"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    """Return the project plugin directory.
+
+    **只算路径，不建目录**：cwd 可能是受保护目录（实跑现场：从
+    `C:\\Windows\\System32` 启动），一个可选功能的目录建不出来不该让整个 CLI
+    带着一屏 traceback 挂掉。不存在就当没有项目插件。
+    """
+
+    return Path(cwd).resolve() / ".questorharness" / "plugins"
 
 
 def _find_manifest(plugin_dir: Path) -> Path | None:
@@ -58,21 +71,36 @@ def _find_manifest(plugin_dir: Path) -> Path | None:
     return None
 
 
+def _iter_plugin_dirs(root: Path) -> list[Path]:
+    """列出插件根下的候选目录；目录不存在/不可读 → 空表，**永不抛**。
+
+    启动链上跑的东西不允许因为一个可选目录把整个进程带走（实跑现场：从
+    `C:\\Windows\\System32` 启动时 `.questorharness` 建不出来）。
+    """
+
+    if not root.is_dir():
+        return []
+    try:
+        entries = sorted(root.iterdir())
+    except OSError:
+        logger.debug("plugin root not readable, treated as empty: %s", root, exc_info=True)
+        return []
+    return [path for path in entries if path.is_dir() and _find_manifest(path) is not None]
+
+
 def discover_plugin_paths(cwd: str | Path, extra_roots: Iterable[str | Path] | None = None) -> list[Path]:
     """Find plugin directories from user and project locations."""
     roots = [get_user_plugins_dir(), get_project_plugins_dir(cwd)]
     if extra_roots:
         for root in extra_roots:
             path = Path(root).expanduser().resolve()
-            path.mkdir(parents=True, exist_ok=True)
+            _best_effort_mkdir(path)
             roots.append(path)
     paths: list[Path] = []
     seen: set[Path] = set()
     for root in roots:
-        if not root.exists():
-            continue
-        for path in sorted(root.iterdir()):
-            if path.is_dir() and _find_manifest(path) is not None and path not in seen:
+        for path in _iter_plugin_dirs(root):
+            if path not in seen:
                 seen.add(path)
                 paths.append(path)
     return paths
@@ -90,15 +118,13 @@ def discover_plugin_paths_for_settings(
     if extra_roots:
         for root in extra_roots:
             path = Path(root).expanduser().resolve()
-            path.mkdir(parents=True, exist_ok=True)
+            _best_effort_mkdir(path)
             roots.append(path)
     paths: list[Path] = []
     seen: set[Path] = set()
     for root in roots:
-        if not root.exists():
-            continue
-        for path in sorted(root.iterdir()):
-            if path.is_dir() and _find_manifest(path) is not None and path not in seen:
+        for path in _iter_plugin_dirs(root):
+            if path not in seen:
                 seen.add(path)
                 paths.append(path)
     return paths
@@ -107,9 +133,8 @@ def discover_plugin_paths_for_settings(
 def load_plugins(settings, cwd: str | Path, extra_roots: Iterable[str | Path] | None = None) -> list[LoadedPlugin]:
     """Load plugins from disk."""
     project_plugins_dir = get_project_plugins_dir(cwd)
-    if not getattr(settings, "allow_project_plugins", False) and any(
-        path.is_dir() and _find_manifest(path) is not None for path in sorted(project_plugins_dir.iterdir())
-    ):
+    project_entries = _iter_plugin_dirs(project_plugins_dir)
+    if not getattr(settings, "allow_project_plugins", False) and project_entries:
         logger.warning(
             "Found project-local plugins in %s, but they are disabled by default. "
             "Set allow_project_plugins=true if you trust this workspace.",

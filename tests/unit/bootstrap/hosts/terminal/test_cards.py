@@ -98,8 +98,8 @@ def test_turn_done_card_shows_outcome_duration_and_usage() -> None:
         usage=view.UsageVM(input_tokens=3, output_tokens=5),
     )
     text = _plain(cards.render_item(item))
-    assert "completed" in text
-    assert "1200" in text
+    assert "完成" in text
+    assert "1.2s" in text
     assert "3" in text and "5" in text
 
 
@@ -125,7 +125,8 @@ def test_message_item_renders_text_and_marks_tool_blocks() -> None:
     )
     text = _plain(cards.render_item(item))
     assert "做完了" in text
-    assert "bash" in text
+    # tool_use 块不再重复一行 `工具 call <id> · name`（同一件事已在工具卡里出现过）
+    assert "工具 call" not in text
     assert "image/png" in text
 
 

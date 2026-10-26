@@ -22,10 +22,9 @@ def test_placeholder_is_a_single_visible_glyph() -> None:
     assert strings.PLACEHOLDER == "—"
 
 
-def test_prompt_and_continuation_end_with_a_space() -> None:
+def test_prompt_ends_with_a_space() -> None:
     """提示符后必须留一个空格，否则用户输入会贴住符号。"""
     assert strings.PROMPT.endswith(" ")
-    assert strings.CONTINUATION.endswith(" ")
 
 
 def test_prompt_marker_keeps_the_glyph_when_the_host_can_encode_it() -> None:

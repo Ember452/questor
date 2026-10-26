@@ -1,4 +1,9 @@
-"""回到底线：回合没结束，用户也能继续输入；第二句排上队并可见。"""
+"""取舍：回合内不读行——prompt 只在空闲时存在，输出才不会被 prompt 重绘碾成一行。
+
+代价是放弃“回合中排队新消息”：第二句要等第一回合收尾后才提交。
+理由（实跑）：`patch_stdout` 包住整个循环后，分界线/状态栏与正文会粘成一行，
+且 Windows 上会刷 `Executor shutdown` 堆栈。先要“看得清”。
+"""
 
 from __future__ import annotations
 
@@ -57,7 +62,7 @@ class _HoldingHost:
         )
 
 
-def test_second_line_is_queued_while_the_first_turn_runs(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_second_line_waits_for_the_first_turn_to_finish(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     host = _HoldingHost(tmp_path)
     step = {"n": 0}
 
@@ -75,12 +80,12 @@ def test_second_line_is_queued_while_the_first_turn_runs(tmp_path, monkeypatch) 
     output = Console(file=io.StringIO(), force_terminal=False)
 
     async def driver() -> None:
-        while len(host.running) == 0:
-            await asyncio.sleep(0.005)
-        await asyncio.sleep(0.05)
-        host.finish_next()
-        await asyncio.sleep(0.05)
-        host.finish_next()
+        # 串行回合：每个回合都要等它真的开始再收尾（第二回合在第一回合结束后才提交）。
+        for _ in range(2):
+            while len(host.running) == 0:
+                await asyncio.sleep(0.005)
+            await asyncio.sleep(0.02)
+            host.finish_next()
 
     async def scenario() -> int:
         asyncio.get_running_loop().create_task(driver())
@@ -90,8 +95,9 @@ def test_second_line_is_queued_while_the_first_turn_runs(tmp_path, monkeypatch) 
 
     assert asyncio.run(scenario()) == 0
     text = output.file.getvalue()  # type: ignore[union-attr]
-    assert strings.QUEUED in text, text
-    assert text.count("completed") == 2, text
+    # 不再出现“已排队”：第二句是在第一回合收尾后才读进来的（串行，可预测）。
+    assert strings.QUEUED not in text, text
+    assert text.count("完成") == 2, text
 
 
 def test_queue_receipt_shows_the_depth_in_the_status_bar(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]

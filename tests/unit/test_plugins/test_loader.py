@@ -9,8 +9,47 @@ from pathlib import Path
 from questorharness.config.settings import Settings
 from questorharness.runtime.hooks.loader import load_hook_registry
 from questorharness.plugins import load_plugins
-from questorharness.plugins.loader import get_user_plugins_dir
+from questorharness.plugins.loader import get_project_plugins_dir, get_user_plugins_dir
 from questorharness.capabilities.skills import load_skill_registry
+
+
+def test_project_plugins_dir_never_creates_directories(tmp_path: Path) -> None:
+    """受保护目录下启动不得崩：项目插件目录只算路径，不在 cwd 里建目录。
+
+    实跑现场：从 `C:\\Windows\\System32` 启动 → WinError 5 → 整个 CLI 带一屏
+    traceback 挂掉。插件是可选能力，不存在就当没有。
+    """
+
+    project = tmp_path / "readonly-workspace"
+    project.mkdir()
+    target = get_project_plugins_dir(project)
+
+    assert target == project / ".questorharness" / "plugins"
+    assert not target.exists()
+    assert not (project / ".questorharness").exists()
+
+
+def test_load_plugins_survives_an_unreadable_project_dir(tmp_path: Path, monkeypatch) -> None:
+    """项目插件目录不可读时降级为空，而不是把异常抛到启动链上。"""
+
+    from questorharness.plugins import loader as loader_module
+
+    target = loader_module.get_project_plugins_dir(tmp_path)
+    target.mkdir(parents=True)
+    real_iterdir = Path.iterdir
+
+    def _iterdir(self: Path) -> list[Path]:  # type: ignore[no-untyped-def]
+        if self == target:
+            raise PermissionError(5, "Access is denied")
+        return list(real_iterdir(self))
+
+    # 只让**项目**插件目录不可读；用户插件目录照常（否则测的是全局爆炸）。
+    monkeypatch.setattr(Path, "iterdir", _iterdir)
+    settings = Settings()
+    settings.allow_project_plugins = True
+
+    assert load_plugins(settings, tmp_path) == []
+
 
 
 def _write_plugin(root: Path) -> None:
