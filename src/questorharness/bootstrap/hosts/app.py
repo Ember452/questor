@@ -57,11 +57,12 @@ async def run_repl(
     permission_mode: str | None = None,
     overrides: dict[str, object] | None = None,
     tui: bool = False,
+    replay: bool = False,
 ) -> None:
     """Run the interactive application: the terminal thin client over serve routes.
 
     `tui=True` 进全屏 Textual 界面（终端即产品本体）；`False` 回退行式 REPL
-    （管道、CI、以及 `--plain`）。
+    （管道、CI、以及 `--plain`）。`replay=True` 让 TUI 回放上次会话的历史。
     """
     await run_terminal_repl(
         prompt=prompt,
@@ -79,6 +80,7 @@ async def run_repl(
         permission_mode=permission_mode,
         overrides=overrides,
         tui=tui,
+        replay=replay,
     )
 
 

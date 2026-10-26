@@ -416,6 +416,7 @@ def main(
                 effort=effort,
                 overrides=tool_overrides,
                 tui=use_tui,
+                replay=True,
             )
         )
         return

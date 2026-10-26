@@ -11,7 +11,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
-from questorharness.bootstrap.hosts.terminal import strings, width
+from questorharness.bootstrap.hosts.terminal import panel_filter, strings, width
 
 VISIBLE_ROWS = 12
 
@@ -30,16 +30,9 @@ class PanelState:
     kind: str = "browse"
 
     def visible(self) -> list[dict[str, Any]]:
-        """当前过滤后的行（搜索按 id/label/detail 子串匹配）。"""
+        """当前过滤后的行（口径与 TUI 面板同源于 `pickers.filter_items`）。"""
 
-        if not self.query:
-            return list(self.items)
-        needle = self.query.lower()
-        return [
-            item
-            for item in self.items
-            if any(needle in str(item.get(key, "")).lower() for key in ("id", "label", "detail"))
-        ]
+        return panel_filter.filter_items(self.items, self.query)
 
     def selected(self) -> dict[str, Any] | None:
         rows = self.visible()

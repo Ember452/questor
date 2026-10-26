@@ -121,6 +121,8 @@ files = [
     # plan03: the terminal presentation layer is written annotated from the first
     # commit, so it joins the strict whitelist instead of the deferred pool.
     "src/questorharness/bootstrap/hosts/terminal",
+    # tui 是全屏终端宿主：从第一行就按 strict 写，直接进白名单。
+    "src/questorharness/bootstrap/hosts/tui",
     # W8 unit 2: both halves of the split lsp helpers join the strict whitelist
     # instead of enlarging the deferred pool.
     "src/questorharness/providers/lsp/python_index.py",

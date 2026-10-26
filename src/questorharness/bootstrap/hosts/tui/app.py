@@ -1,35 +1,36 @@
-"""Textual 全屏 TUI：对话区 + 带框输入 + `/` 候选 + 状态栏 + 审批模态。
+"""Textual 全屏 TUI：对话区 + 带框输入 + `/` 候选 + `:` 面板 + 状态栏 + 审批。
 
 形态照 OpenHarness `ui/textual_app.py`：App + VerticalScroll + Input + Footer +
 ModalScreen。事件源仍是本仓 serve 的 SSE 帧，所以引擎与协议一行不改。
 
-为什么必须换成这个（而不是继续 prompt_toolkit 行式 prompt）：
-- 行式 prompt 只能在"一行提示符"上打补丁：输入框没法画框、状态栏没法固定、
-  `/` 候选只能靠浮动菜单（Windows 控制台上经常不出现）；
-- Textual 自己拥有屏幕，以上三件事都是普通控件，且流式文本可以**原地重排**
-  （scrollback 模型做不到：写出去的字不能再改）。
+分层（每个文件一个职责，避免又长成 god file）：
+- `app.py`     ：装配、提交、流式、状态栏、事件消费
+- `panels.py`  ：`:` 面板（列表 + 搜索 + 选中回命令）
+- `approval.py`：审批模态
+- `replay.py`  ：`--resume` 的历史回放（纯函数）
 """
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import json
 import os
-from typing import Any
+from typing import Any, ClassVar
 
 from rich.text import Text
 from textual import on
 from textual.app import App, ComposeResult
-from textual.binding import Binding
-from textual.containers import Container, Horizontal, VerticalScroll
-from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Input, Markdown, Static
+from textual.binding import Binding, BindingType
+from textual.containers import Container, VerticalScroll
+from textual.widgets import Footer, Input, Markdown, Static
 
 from questorharness.bootstrap.hosts.serve import terminal_theme as theme
 from questorharness.bootstrap.hosts.serve.host import ServeHost
-from questorharness.bootstrap.hosts.terminal import cards, diff as diff_card, footer, strings, width
+from questorharness.bootstrap.hosts.terminal import cards, footer, pickers, strings
 from questorharness.bootstrap.hosts.terminal import wire_view as view
+from questorharness.bootstrap.hosts.tui.approval import ApprovalScreen, approval_head
+from questorharness.bootstrap.hosts.tui.panels import PanelScreen
+from questorharness.bootstrap.hosts.tui.replay import history_renderables
 
 PREFIX = "/rt/r1"
 
@@ -38,60 +39,13 @@ STREAM_REFRESH_SECONDS = 0.08
 #: 候选清单最多显示多少行（再多就把输入区挤没了）。
 HINT_ROWS = 8
 
-
-class ApprovalScreen(ModalScreen[str]):
-    """审批模态：y 允许 / n 拒绝（回车默认拒绝，与服务端 fail-closed 一致）。
-
-    只放“要你决定的那一行”：工具名 + 目标（截断）+ diff。
-    说明文字、档位提示、选项说明**不在这里重复**——按钮就是选项，
-    档位提示属于 `:mode`，塞进模态只会把框撑成整屏（实跑反馈“太大了”）。
-    """
-
-    BINDINGS = [
-        Binding("y", "choose('y')", "允许"),
-        Binding("n", "choose('n')", "拒绝"),
-        Binding("escape", "choose('n')", "拒绝"),
-    ]
-
-    def __init__(self, item: view.ApprovalItem) -> None:
-        super().__init__()
-        self._item = item
-
-    def compose(self) -> ComposeResult:
-        item = self._item
-        body: list[Any] = [Static(approval_head(item))]
-        if item.patch:
-            body.append(
-                Static(
-                    diff_card.render_patch(
-                        item.patch, added=item.added or 0, removed=item.removed or 0
-                    )
-                )
-            )
-        elif item.detail:
-            body.append(Static(diff_card.render_detail(item.detail)))
-        yield Container(
-            *body,
-            Horizontal(
-                Button("允许 y", id="y", variant="success"),
-                Button("拒绝 n", id="n", variant="error"),
-                classes="approval-actions",
-            ),
-            id="approval-box",
-        )
-
-    @on(Button.Pressed)
-    def _pressed(self, event: Button.Pressed) -> None:
-        self.dismiss(event.button.id or "n")
-
-    def action_choose(self, value: str) -> None:
-        self.dismiss(value)
+__all__ = ["QuestorApp", "approval_head", "run_tui"]
 
 
 class QuestorApp(App[None]):
-    """终端产品本体：一个屏幕内完成对话、工具、审批、指令。"""
+    """终端产品本体：一个屏幕内完成对话、工具、审批、指令与面板。"""
 
-    CSS = """
+    CSS: ClassVar[str] = """
     Screen { layout: vertical; }
     #conversation { height: 1fr; padding: 0 1; }
     #hints {
@@ -108,6 +62,7 @@ class QuestorApp(App[None]):
     }
     #prompt { border: none; background: transparent; }
     #status { height: 1; padding: 0 1; color: $text-muted; }
+    /* 审批模态：固定窄宽，长说明压成一行，见 approval.py */
     #approval-box {
         width: 76;
         max-width: 96%;
@@ -120,23 +75,36 @@ class QuestorApp(App[None]):
     }
     .approval-actions { height: auto; padding: 1 0 0 0; align: center middle; }
     .approval-actions Button { width: 14; min-width: 14; height: 3; }
-    /* 会话区里每条消息之间的呼吸 */
+    /* `:` 面板 */
+    #panel-box {
+        width: 90;
+        max-width: 96%;
+        height: auto;
+        max-height: 80%;
+        border: round $primary;
+        padding: 0 1;
+        background: $surface;
+        align: center middle;
+    }
+    #panel-list { height: auto; max-height: 20; }
     .turn-rule { color: $text-muted; }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("ctrl+c", "interrupt", "中止回合"),
         Binding("ctrl+d", "quit_app", "退出"),
         Binding("ctrl+l", "clear_screen", "清屏"),
     ]
 
-    def __init__(self, host: ServeHost, *, profile_name: str = "?") -> None:
+    def __init__(self, host: ServeHost, *, profile_name: str = "?", replay: bool = False) -> None:
         super().__init__()
         self._host = host
         self._profile_name = profile_name
+        self._replay = replay
         self._commands: dict[str, str] = {}
         self._busy = False
         self._pending: view.ApprovalItem | None = None
+        self._pending_panel: pickers.Panel | None = None
         self._stream_buffer = ""
         self._stream_view: Markdown | None = None
         self._stream_dirty = False
@@ -147,7 +115,10 @@ class QuestorApp(App[None]):
         yield VerticalScroll(id="conversation")
         yield Static("", id="hints")
         with Container(id="prompt-box"):
-            yield Input(placeholder="说一句话开始 · / 看指令 · Ctrl-C 中止", id="prompt")
+            yield Input(
+                placeholder="说一句话 · / 指令 · : 面板 · Ctrl-C 中止",
+                id="prompt",
+            )
         yield Static("", id="status")
         yield Footer()
 
@@ -161,6 +132,8 @@ class QuestorApp(App[None]):
         self._write(Text(strings.EMPTY_STATE_LINES[1], style=theme.DIM))
         self._render_status()
         await self._refresh_status()
+        if self._replay:
+            await self._replay_history()
         self.run_worker(self._consume_events(), exclusive=False, name="sse")
 
     async def _load_commands(self) -> None:
@@ -171,6 +144,21 @@ class QuestorApp(App[None]):
 
         self._commands = completion_catalog(await fetch_commands(self._host))
 
+    async def _replay_history(self) -> None:
+        """`--resume`：把上次会话的文本回放进对话区（失败不阻断）。"""
+
+        try:
+            response = await self._host.transport.request("GET", f"{PREFIX}/history")
+            payload = json.loads(response.body)
+        except Exception:  # noqa: BLE001 - 回放是增强，读不到就当新会话
+            return
+        rows = history_renderables(list(payload.get("messages", [])))
+        if not rows:
+            return
+        self._write(Text(strings.REPLAY_LEAD.format(shown=len(rows)), style=theme.DIM))
+        for row in rows:
+            self._write(row)
+
     # ---- 写屏 -----------------------------------------------------------
     def _conversation(self) -> VerticalScroll:
         return self.query_one("#conversation", VerticalScroll)
@@ -180,6 +168,7 @@ class QuestorApp(App[None]):
 
         self._end_stream()
         self._conversation().mount(Static(renderable))
+        self._conversation().scroll_end(animate=False)
 
     def _begin_stream(self) -> None:
         if self._stream_view is None:
@@ -327,6 +316,9 @@ class QuestorApp(App[None]):
 
         hints = self.query_one("#hints", Static)
         text = event.value
+        if text.startswith(":"):
+            hints.update(Text(pickers.list_hint(), style=theme.DIM))
+            return
         if not text.startswith("/") or " " in text:
             hints.update("")
             return
@@ -347,14 +339,24 @@ class QuestorApp(App[None]):
     async def _submit(self, event: Input.Submitted) -> None:
         line = event.value.strip()
         event.input.value = ""
+        await self._dispatch(line)
+
+    async def _dispatch(self, line: str) -> None:
+        """一行输入的统一入口（输入框与面板选中都走这里）。"""
+
         if not line:
             return
         if self._busy:
             self._write(Text(strings.BUSY_REFUSED, style=theme.WARN))
             return
-        unknown = line.split(maxsplit=1)[0]
-        if line.startswith("/") and unknown not in self._commands:
-            self._write(Text(strings.UNKNOWN_COMMAND.format(name=unknown), style=theme.WARN))
+        if line.startswith(":"):
+            # 面板是模态：选中结果走回调（`wait_for_dismiss` 只能在 worker 里用，
+            # 而输入事件本身不在 worker 上）。
+            await self._open_panel(line)
+            return
+        head = line.split(maxsplit=1)[0]
+        if line.startswith("/") and head not in self._commands:
+            self._write(Text(strings.UNKNOWN_COMMAND.format(name=head), style=theme.WARN))
             return
         self._write(Text(f"❯ {line}", style=theme.BOLD))
         self._busy = True
@@ -371,9 +373,39 @@ class QuestorApp(App[None]):
                     strings.SUBMIT_REFUSED.format(
                         detail=f"{payload.get('code')}: {payload.get('message')}"
                     ),
-                    style=theme.ERROR,
+                    style=theme.ERR,
                 )
             )
+
+    async def _open_panel(self, line: str) -> None:
+        """`:` 面板：取数（与行式 REPL 同源）→ 打开选择器，选中后走回调。"""
+
+        from questorharness.bootstrap.hosts.terminal.app import panel_items
+
+        panel = pickers.resolve(line)
+        if panel is None:
+            self._write(Text(pickers.list_hint(), style=theme.DIM))
+            return
+        try:
+            items = await panel_items(self._host, panel)
+        except Exception as exc:  # noqa: BLE001 - 取数失败不得影响会话
+            self._write(Text(strings.PANEL_UNAVAILABLE.format(reason=exc), style=theme.WARN))
+            return
+        if not items:
+            self._write(Text(strings.PANEL_EMPTY, style=theme.DIM))
+            return
+        self._pending_panel = panel
+        self.push_screen(PanelScreen(panel, items), self._on_panel_choice)
+
+    def _on_panel_choice(self, chosen: str | None) -> None:
+        """面板选定：拼成命令再走同一条提交链。"""
+
+        panel, self._pending_panel = self._pending_panel, None
+        if panel is None or not isinstance(chosen, str):
+            return
+        action = pickers.action_line(panel, chosen)
+        if action:
+            self.run_worker(self._dispatch(action), exclusive=False)
 
     # ---- 动作 -----------------------------------------------------------
     def action_interrupt(self) -> None:
@@ -391,28 +423,6 @@ class QuestorApp(App[None]):
         self._stream_buffer = ""
 
 
-def approval_head(item: view.ApprovalItem) -> Text:
-    """审批模态的标题行：工具名 + 目标（压成一行、截断）。
-
-    只占一行是硬约束：目标（subject）在 default 模式下是一整段英文说明，
-    原样塞进模态会把框撑成整屏（实跑截图）。
-    """
-
-    head = Text()
-    head.append("⚠ 需要审批  ", style=theme.ACCENT)
-    head.append(item.tool, style=theme.BOLD)
-    target = _one_line(item.subject)
-    if target:
-        head.append("  " + width.truncate(target, 72), style=theme.NET)
-    return head
-
-
-def _one_line(text: str) -> str:
-    """压成一行（审批目标通常是长句，多行会把模态撑高）。"""
-
-    return " ".join(text.split())
-
-
 def _frame(block: bytes) -> dict[str, Any] | None:
     for line in block.splitlines():
         if line.startswith(b"data: "):
@@ -428,12 +438,12 @@ def _request_id() -> str:
     return os.urandom(8).hex()
 
 
-async def run_tui(host: ServeHost) -> int:
+async def run_tui(host: ServeHost, *, replay: bool = False) -> int:
     """跑全屏 TUI 直到用户退出；宿主生命周期由调用方管理。"""
 
     from questorharness.bootstrap.hosts.terminal.app import profile_info
 
     name, _description = await profile_info(host)
-    app = QuestorApp(host, profile_name=name)
+    app = QuestorApp(host, profile_name=name, replay=replay)
     await app.run_async()
     return 0

@@ -20,10 +20,11 @@
     "src/questorharness/vim": 1
   },
   "pinned_at": "741c3840979376ffa2bd5de398a7f81b0977601a",
-  "whitelist_modules": 38,
+  "whitelist_modules": 42,
   "whitelist_roots": [
     "src/questorharness/bootstrap/hosts/serve",
     "src/questorharness/bootstrap/hosts/terminal",
+    "src/questorharness/bootstrap/hosts/tui",
     "src/questorharness/profiles",
     "src/questorharness/surfaces/channels/filenames.py",
     "src/questorharness/surfaces/channels/message_chunks.py",

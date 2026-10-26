@@ -251,6 +251,26 @@ async def command_rows(host: ServeHost) -> list[dict[str, Any]]:
     return rows
 
 
+async def panel_items(host: ServeHost, panel: pickers.Panel) -> list[dict[str, Any]]:
+    """一个面板的数据行——行式 REPL 与 TUI 共用这一处取数。
+
+    取不到就抛（调用方决定怎么提示）；空表 = 面板真的是空的。两个宿主
+    各写一份取数，早晚会漂出两种口径（一个显示 family、一个不显示）。
+    """
+
+    if panel.kind == "transcript":
+        # 只读 transcript：数据已在会话里，走 `/history`，不动 catalog。
+        return await history_rows(host)
+    if panel.kind == "help":
+        # 只读命令面板：与补全菜单同源（禁硬编码清单）。
+        return await command_rows(host)
+    response = await host.transport.request("GET", f"{PREFIX}/catalog/{panel.kind}")
+    payload = json.loads(response.body)
+    if response.status >= 400:
+        raise RuntimeError(str(payload.get("code", "error")))
+    return [dict(item) for item in payload.get("items", [])]
+
+
 async def open_panel(host: ServeHost, renderer: TerminalRenderer, line: str) -> str | None:
     """`:` 开头的本地面板入口：拉数据 → 打开面板 → 返回要提交的命令。"""
 
@@ -259,21 +279,7 @@ async def open_panel(host: ServeHost, renderer: TerminalRenderer, line: str) -> 
         renderer.show(pickers.list_hint())
         return None
     try:
-        if panel.kind == "transcript":
-            # 只读 transcript：数据已在会话里，走 `/history`，不动 catalog。
-            items = await history_rows(host)
-        elif panel.kind == "help":
-            # 只读命令面板：与补全菜单同源（禁硬编码清单）。
-            items = await command_rows(host)
-        else:
-            response = await host.transport.request("GET", f"{PREFIX}/catalog/{panel.kind}")
-            payload = json.loads(response.body)
-            if response.status >= 400:
-                renderer.show(
-                    strings.PANEL_UNAVAILABLE.format(reason=payload.get("code", "error"))
-                )
-                return None
-            items = [dict(item) for item in payload.get("items", [])]
+        items = await panel_items(host, panel)
     except Exception as exc:  # noqa: BLE001 - 面板取数失败不得影响 REPL
         renderer.show(strings.PANEL_UNAVAILABLE.format(reason=exc))
         return None

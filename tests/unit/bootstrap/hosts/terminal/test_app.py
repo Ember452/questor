@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -242,6 +243,53 @@ def test_unknown_slash_command_is_never_sent_to_the_model(monkeypatch) -> None: 
     assert result == 0
     assert transport.calls == []  # 没有 POST /submit
     assert shown and "未知指令" in shown[0]
+
+
+def test_panel_items_share_one_source_between_hosts() -> None:
+    """面板取数真源：transcript→/history，help→/commands，其余→/catalog/<kind>。"""
+
+    from questorharness.bootstrap.hosts.terminal import pickers
+
+    requested: list[str] = []
+
+    async def request(method: str, path: str, body: bytes = b"", **_kw: object) -> SimpleNamespace:
+        requested.append(path)
+        if path.endswith("/history"):
+            payload = {"messages": [{"role": "user", "blocks": [{"type": "text", "text": "问题"}]}]}
+        elif path.endswith("/commands"):
+            payload = {"commands": [{"name": "help", "description": "d", "aliases": [], "family": "session"}]}
+        else:
+            payload = {"items": [{"id": "glm"}]}
+        return SimpleNamespace(status=200, body=json.dumps(payload).encode(), headers={}, stream=None)
+
+    host = SimpleNamespace(transport=SimpleNamespace(request=request))
+
+    transcript = asyncio.run(app_module.panel_items(host, pickers.PANELS["transcript"]))  # type: ignore[arg-type]
+    help_rows = asyncio.run(app_module.panel_items(host, pickers.PANELS["help"]))  # type: ignore[arg-type]
+    models = asyncio.run(app_module.panel_items(host, pickers.PANELS["models"]))  # type: ignore[arg-type]
+
+    assert transcript and transcript[0]["detail"] == "问题"
+    assert help_rows and help_rows[0]["id"] == "/help"
+    assert models == [{"id": "glm"}]
+    assert requested == ["/rt/r1/history", "/rt/r1/commands", "/rt/r1/catalog/models"]
+
+
+def test_panel_items_raises_when_the_catalog_refuses() -> None:
+    """取数失败要抛（由调用方决定提示），不能静默返回空表。"""
+
+    from questorharness.bootstrap.hosts.terminal import pickers
+
+    async def request(method: str, path: str, body: bytes = b"", **_kw: object) -> SimpleNamespace:
+        return SimpleNamespace(status=404, body=b'{"code":"catalog.unknown"}', headers={}, stream=None)
+
+    host = SimpleNamespace(transport=SimpleNamespace(request=request))
+
+    try:
+        asyncio.run(app_module.panel_items(host, pickers.PANELS["models"]))  # type: ignore[arg-type]
+    except RuntimeError as exc:
+        assert "catalog.unknown" in str(exc)
+    else:  # pragma: no cover - 没有抛就是错
+        raise AssertionError("panel_items 必须抛出取数失败")
 
 
 def test_prompt_marker_has_a_single_source() -> None:

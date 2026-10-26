@@ -438,6 +438,8 @@ tests/unit/bootstrap/hosts/terminal/test_app.py::test_completion_catalog_maps_na
 tests/unit/bootstrap/hosts/terminal/test_app.py::test_drive_turns_shows_refusal_through_the_renderer
 tests/unit/bootstrap/hosts/terminal/test_app.py::test_eof_exits_without_submitting
 tests/unit/bootstrap/hosts/terminal/test_app.py::test_help_panel_is_read_only
+tests/unit/bootstrap/hosts/terminal/test_app.py::test_panel_items_raises_when_the_catalog_refuses
+tests/unit/bootstrap/hosts/terminal/test_app.py::test_panel_items_share_one_source_between_hosts
 tests/unit/bootstrap/hosts/terminal/test_app.py::test_profile_info_feeds_the_footer_even_without_a_banner
 tests/unit/bootstrap/hosts/terminal/test_app.py::test_profile_info_is_fail_soft
 tests/unit/bootstrap/hosts/terminal/test_app.py::test_prompt_marker_has_a_single_source
@@ -528,6 +530,9 @@ tests/unit/bootstrap/hosts/terminal/test_package_contract.py::test_package_is_co
 tests/unit/bootstrap/hosts/terminal/test_package_contract.py::test_prompt_toolkit_exemption_is_scoped_to_the_terminal_package
 tests/unit/bootstrap/hosts/terminal/test_package_contract.py::test_terminal_package_does_not_eagerly_import_prompt_toolkit
 tests/unit/bootstrap/hosts/terminal/test_package_contract.py::test_unsupported_registry_ids_are_the_declared_gaps
+tests/unit/bootstrap/hosts/terminal/test_panel_filter.py::test_empty_query_returns_a_copy_of_every_row
+tests/unit/bootstrap/hosts/terminal/test_panel_filter.py::test_query_matches_id_label_and_detail_case_insensitively
+tests/unit/bootstrap/hosts/terminal/test_panel_filter.py::test_search_fields_are_the_documented_three
 tests/unit/bootstrap/hosts/terminal/test_paste.py::test_bracketed_paste_markers_are_stripped
 tests/unit/bootstrap/hosts/terminal/test_paste.py::test_crlf_is_normalized_to_lf
 tests/unit/bootstrap/hosts/terminal/test_paste.py::test_text_is_never_rewritten_beyond_markers
@@ -625,6 +630,13 @@ tests/unit/bootstrap/hosts/test_terminal_panels.py::test_model_panel_selection_b
 tests/unit/bootstrap/hosts/test_terminal_panels.py::test_transcript_panel_lists_history_rows_without_submitting
 tests/unit/bootstrap/hosts/test_terminal_panels.py::test_unavailable_catalog_does_not_open_a_panel
 tests/unit/bootstrap/hosts/test_terminal_panels.py::test_unknown_alias_shows_the_available_panels_without_requesting
+tests/unit/bootstrap/hosts/tui/test_panels.py::test_colon_panel_lists_the_catalog_and_submits_the_choice
+tests/unit/bootstrap/hosts/tui/test_panels.py::test_colon_panel_reports_an_empty_catalog_instead_of_opening
+tests/unit/bootstrap/hosts/tui/test_panels.py::test_unknown_colon_alias_prints_the_panel_list
+tests/unit/bootstrap/hosts/tui/test_replay.py::test_history_renderables_keeps_user_and_assistant_text
+tests/unit/bootstrap/hosts/tui/test_replay.py::test_message_text_joins_text_blocks_and_ignores_tools
+tests/unit/bootstrap/hosts/tui/test_replay.py::test_resume_replays_history_into_the_conversation
+tests/unit/bootstrap/hosts/tui/test_replay.py::test_without_resume_the_conversation_stays_empty
 tests/unit/bootstrap/hosts/tui/test_tui_app.py::test_approval_head_is_one_short_line
 tests/unit/bootstrap/hosts/tui/test_tui_app.py::test_approval_modal_does_not_repeat_the_choices
 tests/unit/bootstrap/hosts/tui/test_tui_app.py::test_plain_input_is_submitted

@@ -157,8 +157,13 @@ async def run_terminal_repl(
     profile_root: Path | None = None,
     overrides: Mapping[str, object] | None = None,
     tui: bool = False,
+    replay: bool = False,
 ) -> int:
-    """装配 runtime + serve 宿主，然后进入终端（默认全屏 TUI，`tui=False` 回退行式 REPL）。"""
+    """装配 runtime + serve 宿主，然后进入终端（默认全屏 TUI，`tui=False` 回退行式 REPL）。
+
+    `replay=True`（`--continue` / `--resume`）让 TUI 启动时把上次会话的历史
+    回放进对话区；行式 REPL 本来就是回放路径，无需这个开关。
+    """
     host = await build_serve_host(
         cwd=cwd,
         model=model,
@@ -180,7 +185,7 @@ async def run_terminal_repl(
         if tui:
             from questorharness.bootstrap.hosts.tui import run_tui
 
-            return await run_tui(host)
+            return await run_tui(host, replay=replay)
         return await run_terminal_client(host, prompt=prompt)
     finally:
         await host.close()

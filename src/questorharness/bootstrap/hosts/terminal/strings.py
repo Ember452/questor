@@ -49,7 +49,9 @@ COMMAND_LIST_LEAD = "  可用指令（前 {shown} 条；:help 面板里搜）"
 NO_MATCH_HINT = "  没有匹配的指令（继续打字以缩小范围）"
 BUSY_REFUSED = "  回合进行中：先 Ctrl-C 中止，或等它跑完"
 
-# ---- 回合结果标签（主题只管图标与颜色，文案在这里）----------------------
+# ---- 会话恢复与回合结果（主题只管图标与颜色，文案在这里）--------------
+REPLAY_LEAD = "  已恢复上次会话（{shown} 块），可以接着聊"
+
 OUTCOME_LABELS = {
     "completed": "完成",
     "failed": "失败",

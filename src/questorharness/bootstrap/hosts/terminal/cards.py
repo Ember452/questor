@@ -15,8 +15,7 @@ from rich.text import Text
 
 from questorharness.bootstrap.hosts.serve import terminal_theme as theme
 from questorharness.bootstrap.hosts.terminal import diff as diff_card
-from questorharness.bootstrap.hosts.terminal import strings, unsupported
-from questorharness.bootstrap.hosts.terminal import width
+from questorharness.bootstrap.hosts.terminal import strings, unsupported, width
 from questorharness.bootstrap.hosts.terminal import wire_view as view
 
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from questorharness.bootstrap.hosts.terminal import overlay
+from questorharness.bootstrap.hosts.terminal import overlay, panel_filter
 
 
 @dataclass(frozen=True)
@@ -70,6 +70,12 @@ ALIASES: Final[dict[str, str]] = {
     ":help": "help",
     ":cmd": "help",
 }
+
+
+SEARCH_FIELDS: Final[tuple[str, ...]] = panel_filter.SEARCH_FIELDS
+
+# 对外沿用 `pickers.filter_items`（调用方不必知道口径住在哪个模块）。
+filter_items = panel_filter.filter_items
 
 
 def resolve(kind_or_alias: str) -> Panel | None:
