@@ -17,15 +17,21 @@ def test_registry_values_are_name_and_reason_pairs() -> None:
 
 
 def test_badge_text_names_the_gap_and_its_id() -> None:
-    """徽标文本形如 `⊘ 未实现 · A2 Ask 选项/多选`，用户看得见缺什么。"""
-    text = unsupported.badge_text("A2")
-    assert text == f"{strings.BADGE_MARK} 未实现 · A2 Ask 选项/多选"
+    """徽标文本形如 `⊘ 未实现 · A3 回合中插话`，用户看得见缺什么。"""
+    text = unsupported.badge_text("A3")
+    assert text == f"{strings.BADGE_MARK} 未实现 · A3 回合中插话"
 
 
 def test_badge_reason_names_the_missing_contract() -> None:
     """展开说明要指出缺的是哪条后端契约，而不是“暂不支持”。"""
-    reason = unsupported.badge_reason("A2")
-    assert "ask_user_question_tool" in reason
+    assert "/steer" in unsupported.badge_reason("A3")
+    assert "attachments" in unsupported.badge_reason("A5")
+
+
+def test_landed_gaps_are_deregistered() -> None:
+    """A1/A2 已在波 F 落地：登记表里残留就等于给已能用的功能盖“未实现”。"""
+    assert "A1" not in unsupported.UNSUPPORTED
+    assert "A2" not in unsupported.UNSUPPORTED
 
 
 def test_badge_rejects_unknown_id() -> None:

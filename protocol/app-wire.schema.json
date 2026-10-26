@@ -154,7 +154,8 @@
         "seq": { "type": "integer" },
         "kind": { "const": "ask_request" },
         "id": { "type": "string" },
-        "question": { "type": "string" }
+        "question": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } }
       }
     },
     "Notice": {

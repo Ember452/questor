@@ -59,6 +59,8 @@ class PendingPrompt:
     patch: str | None = None
     added: int | None = None
     removed: int | None = None
+    # 提问选项（plan03 A2）：仅 `kind="ask"` 时有意义，None = 自由文本提问。
+    options: list[str] | None = None
 
 
 class Authority:
@@ -193,9 +195,15 @@ class Authority:
         finally:
             self._prompts.pop(prompt.prompt_id, None)
 
-    async def ask_user_prompt(self, question: str) -> str:
-        """工具提问：超时返回空串（调用方按"未回答"处理）。"""
-        prompt = self._open("ask", question)
+    async def ask_user_prompt(
+        self, question: str, options: list[str] | None = None
+    ) -> str:
+        """工具提问：超时返回空串（调用方按"未回答"处理）。
+
+        `options` 只是随提示登记的候选（plan03 A2）：结算仍走同一个 `/ask` 通道，
+        客户端可以用序号回答，也可以回原文。
+        """
+        prompt = self._open("ask", question, options=options)
         try:
             answer = await asyncio.wait_for(prompt.future, timeout=self._prompt_timeout)
         except TimeoutError:
@@ -229,6 +237,7 @@ class Authority:
         patch: str | None = None,
         added: int | None = None,
         removed: int | None = None,
+        options: list[str] | None = None,
     ) -> PendingPrompt:
         """登记一个待答提示，并通过回调交给宿主广播。"""
         loop = asyncio.get_running_loop()
@@ -243,6 +252,7 @@ class Authority:
             patch=patch,
             added=added,
             removed=removed,
+            options=list(options) if options else None,
             future=loop.create_future(),
         )
         self._prompts[prompt.prompt_id] = prompt

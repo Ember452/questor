@@ -30,6 +30,26 @@ def _current_id(items: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def resolve_answer(raw: str | None, options: tuple[str, ...]) -> str:
+    """把用户的回答归一成回传值（plan03 A2）。
+
+    - None/空 → 空串（服务端按“未回答”处理）；
+    - 给了选项且输入是序号 → 映射回选项原文（越界不猜，原样回传）；
+    - 其余一律原样回传（允许自由文本覆盖选项）。
+    """
+
+    if raw is None:
+        return ""
+    text = raw.strip()
+    if not text:
+        return ""
+    if options and text.isdigit():
+        index = int(text) - 1
+        if 0 <= index < len(options):
+            return options[index]
+    return text
+
+
 def frame_from_sse(block: bytes) -> dict[str, Any] | None:
     """从一条 SSE 事件块里取出 data 帧。"""
     for line in block.splitlines():
@@ -240,10 +260,11 @@ class TerminalRenderer:
             notice = strings.ASK_TIMEOUT if answer is None else ""
         if notice:
             self._console.print(notice, style=theme.WARN)
+        payload = resolve_answer(answer, item.options)
         await self._host.transport.request(
             "POST",
             f"{PREFIX}/ask",
-            body=json.dumps({"id": item.prompt_id, "answer": answer or ""}).encode(),
+            body=json.dumps({"id": item.prompt_id, "answer": payload}).encode(),
         )
 
     def _prompt_timeout(self) -> float:

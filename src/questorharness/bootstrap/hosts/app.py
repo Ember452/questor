@@ -101,7 +101,7 @@ async def run_task_worker(
     async def _noop_permission(_tool_name: str, _reason: str) -> bool:
         return True
 
-    async def _noop_ask(_question: str) -> str:
+    async def _noop_ask(_question: str, _options: list[str] | None = None) -> str:
         return ""
 
     async def _print_system(message: str) -> None:
@@ -200,7 +200,8 @@ async def run_print_mode(
     async def _noop_permission(tool_name: str, reason: str) -> bool:
         return True
 
-    async def _noop_ask(question: str) -> str:
+    async def _noop_ask(question: str, options: list[str] | None = None) -> str:
+        del question, options
         return ""
 
     bundle = await build_runtime(

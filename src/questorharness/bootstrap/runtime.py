@@ -53,7 +53,7 @@ from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, Sess
 from questorharness.state import AppState, AppStateStore
 
 PermissionPrompt = Callable[[str, str], Awaitable[bool]]
-AskUserPrompt = Callable[[str], Awaitable[str]]
+AskUserPrompt = Callable[[str, "list[str] | None"], Awaitable[str]]
 EditApprovalPrompt = Callable[[str, str, int, int], Awaitable[str]]
 SystemPrinter = Callable[[str], Awaitable[None]]
 StreamRenderer = Callable[[StreamEvent], Awaitable[None]]
@@ -795,7 +795,7 @@ async def run_autopilot_prompt(
     async def _allow(_tool_name: str, _reason: str) -> bool:
         return True
 
-    async def _ask(_question: str) -> str:
+    async def _ask(_question: str, _options: list[str] | None = None) -> str:
         return ""
 
     bundle = await build_runtime(

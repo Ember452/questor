@@ -21,7 +21,7 @@
 | id | 功能 | status | 终端载体 | 来源 |
 |---|---|---|---|---|
 | A1 | 审批第三档 / 记住本次选择 | ready | `:mode` → `GET /catalog/posture`（三档即引擎 `PermissionMode`）→ `/permissions <档>`；档位由 settings 持久化（记住选择）；状态栏显示当前档 | Reasonix `tui/posture.go` + 本仓 `commands/families/policy.py` |
-| A2 | Ask 单选 / 多选 / 自填 | absent | 自由文本问答卡 + 徽标 | Reasonix `tui/ask.go` |
+| A2 | Ask 单选 / 多选 / 自填 | ready | 卡片列编号选项；序号映回选项原文，自由文本照传，空=未回答；帧 `ask_request.options`（additive） | Reasonix `tui/ask.go` |
 | A3 | 回合中插话（steer） | absent | 排队 pending 行 + 徽标 | Reasonix `tui/queue_slash.go` |
 | A4 | 任意检查点回滚 | declared | `/rewind` 一步 + help 注明"部分可用" | Reasonix `tui/rewind.go` |
 | A5 | 图片 / 附件提交 | absent | 粘贴图片时徽标 | Reasonix `tui/clippaste.go` |

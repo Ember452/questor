@@ -134,6 +134,7 @@ class ApprovalItem:
 class AskItem:
     prompt_id: str
     question: str
+    options: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -341,7 +342,16 @@ def _approval(frame: Mapping[str, Any]) -> Item:
 
 
 def _ask(frame: Mapping[str, Any]) -> Item:
-    return AskItem(prompt_id=_str(frame, "id"), question=_str(frame, "question"))
+    raw = frame.get("options")
+    if raw is None:
+        raw = []
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, Sequence):
+        raise _Malformed("options 不是数组")
+    return AskItem(
+        prompt_id=_str(frame, "id"),
+        question=_str(frame, "question"),
+        options=tuple(str(option) for option in raw),
+    )
 
 
 def _compaction_started(frame: Mapping[str, Any]) -> Item:

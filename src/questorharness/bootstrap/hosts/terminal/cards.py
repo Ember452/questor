@@ -96,7 +96,15 @@ def _ask_card(item: view.AskItem) -> RenderableType:
     head = Text()
     head.append("  ? ", style=theme.ACCENT)
     head.append(item.question, style=theme.BOLD)
-    return Group(head, Text(strings.ASK_HINT, style=theme.DIM), _badge_line("A2"))
+    parts: list[RenderableType] = [head]
+    for index, option in enumerate(item.options, start=1):
+        # 编号选项（plan03 A2）：用户可按序号回答，也可回原文。
+        line = Text()
+        line.append(f"   {index}. ", style=theme.NET)
+        line.append(option)
+        parts.append(line)
+    parts.append(Text(strings.ASK_HINT, style=theme.DIM))
+    return Group(*parts)
 
 
 def _compaction_progress(item: view.CompactionProgressItem) -> RenderableType:

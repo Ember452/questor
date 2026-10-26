@@ -110,6 +110,7 @@ export interface AskRequest {
   kind: "ask_request";
   id: string;
   question: string;
+  options?: string[];
 }
 export interface Notice {
   seq: number;

@@ -136,3 +136,21 @@ def test_ask_uses_ask_specific_refusal_codes() -> None:
         assert await waiter == "a.txt"
 
     asyncio.run(scenario())
+
+
+def test_ask_options_ride_the_pending_prompt() -> None:
+    """A2：选项随提示登记；结算仍走既有 /ask 通道，不新开端点。"""
+
+    async def scenario() -> None:
+        authority = Authority()
+        authority.begin("owner", "r1", "one")
+        waiter = asyncio.create_task(
+            authority.ask_user_prompt("选哪个？", options=["a", "b"])
+        )
+        await asyncio.sleep(0)
+        prompt_id = next(iter(authority._prompts))
+        assert authority.pending(prompt_id).options == ["a", "b"]
+        authority.settle(prompt_id, "a", "owner")
+        assert await waiter == "a"
+
+    asyncio.run(scenario())

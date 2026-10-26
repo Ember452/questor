@@ -132,8 +132,8 @@
       "e2e": 15,
       "gate": true,
       "integration": 32,
-      "unit": 180,
-      "value": 247
+      "unit": 182,
+      "value": 249
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
@@ -152,7 +152,7 @@
     }
   },
   "pin": {
-    "commit": "54ed69934c007aab798c51625748519db03e1c16",
+    "commit": "11d7e195b3419d26713b6e5165a144361a292b07",
     "date": "2026-10-26"
   }
 }

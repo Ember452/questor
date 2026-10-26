@@ -35,6 +35,7 @@ class AskRequest(TypedDict):
     kind: Literal["ask_request"]
     id: str
     question: str
+    options: NotRequired[list[str]]
 
 
 class CancelRequest(TypedDict):

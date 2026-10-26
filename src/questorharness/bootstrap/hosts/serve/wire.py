@@ -122,9 +122,14 @@ def approval_request_frame(
     return frame
 
 
-def ask_request_frame(*, prompt_id: str, question: str) -> Frame:
-    """工具提问；客户端用 id 回 `/ask`。"""
-    return {"kind": "ask_request", "id": prompt_id, "question": question}
+def ask_request_frame(
+    *, prompt_id: str, question: str, options: list[str] | None = None
+) -> Frame:
+    """工具提问；客户端用 id 回 `/ask`。`options` 可选（A2），老帧形状不变。"""
+    frame: Frame = {"kind": "ask_request", "id": prompt_id, "question": question}
+    if options:
+        frame["options"] = list(options)
+    return frame
 
 
 def stream_reset_frame(*, reason: str, watermark: int) -> Frame:

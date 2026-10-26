@@ -224,7 +224,9 @@ class ServeHost:
                 removed=prompt.removed,
             )
         else:
-            frame = ask_request_frame(prompt_id=prompt.prompt_id, question=subject)
+            frame = ask_request_frame(
+                prompt_id=prompt.prompt_id, question=subject, options=prompt.options
+            )
         await self.broadcaster.publish(frame)
 
     def _context_window(self) -> int | None:

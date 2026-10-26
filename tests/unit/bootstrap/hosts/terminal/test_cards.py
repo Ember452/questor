@@ -55,10 +55,19 @@ def test_approval_card_offers_two_choices_and_points_at_the_mode_picker() -> Non
     assert ":mode" in text  # 第三档已落地（A1 注销）：指到 /permissions 三态换档
 
 
-def test_ask_card_shows_the_question_and_the_missing_options() -> None:
+def test_ask_card_shows_the_question_and_the_answer_hint() -> None:
     text = _plain(cards.render_item(view.AskItem(prompt_id="p2", question="选哪个模式？")))
     assert "选哪个模式？" in text
-    assert unsupported.badge_text("A2") in text
+    assert strings.ASK_HINT in text
+
+
+def test_ask_card_numbers_its_options_and_drops_the_badge() -> None:
+    """A2 落地后：选项编号可见，且不再挂“未实现”徽标。"""
+
+    item = view.AskItem(prompt_id="p1", question="选哪个？", options=("保守", "激进"))
+    text = _plain(cards.render_item(item))
+    assert "1. 保守" in text and "2. 激进" in text
+    assert "未实现" not in text
 
 
 def test_notice_card_marks_errors_visibly() -> None:

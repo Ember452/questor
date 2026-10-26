@@ -76,6 +76,26 @@ def test_ask_request_projects_the_question() -> None:
     assert item == view.AskItem(prompt_id="p2", question="选哪个？")
 
 
+def test_ask_request_projects_options_when_present() -> None:
+    """A2：选项随帧下来；没有 options 时是空元组（老帧仍可用）。"""
+
+    with_options = view.view_of(
+        _frame("ask_request", id="p1", question="选哪个？", options=["a", "b"])
+    )
+    assert with_options == view.AskItem(
+        prompt_id="p1", question="选哪个？", options=("a", "b")
+    )
+    bare = view.view_of(_frame("ask_request", id="p2", question="q"))
+    assert isinstance(bare, view.AskItem)
+    assert bare.options == ()
+
+
+def test_ask_request_with_broken_options_degrades() -> None:
+    item = view.view_of(_frame("ask_request", id="p1", question="q", options="a"))
+    assert isinstance(item, view.UnsupportedItem)
+    assert item.kind == "ask_request"
+
+
 def test_notice_projects_level_and_text() -> None:
     item = view.view_of(_frame("notice", level="warning", text="代理未设置"))
     assert item == view.NoticeItem(level="warning", text="代理未设置")
