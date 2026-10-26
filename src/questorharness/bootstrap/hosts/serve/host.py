@@ -20,7 +20,13 @@ from questorharness.bootstrap.hosts.serve.wire import (
     WireEncoder,
     approval_request_frame,
     ask_request_frame,
+    parse_checklist,
+    todos_frame,
     turn_done_frame,
+)
+from questorharness.contracts.domain.events import (
+    ToolExecutionCompleted,
+    ToolExecutionStarted,
 )
 
 if TYPE_CHECKING:
@@ -44,11 +50,13 @@ class ServeHost:
         self.profile_root = Path(profile_root)
         self.profile_id = profile_id
         self.broadcaster = Broadcaster()
-        self.encoder = WireEncoder()
+        self.encoder = WireEncoder(context_window=self._context_window)
         self.router = Router(self)
         self.transport = MemoryTransport(self.router)
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._background: set[asyncio.Task[None]] = set()
+        # todo_write 最近一次写入的清单路径（W-D4：路径来自 ToolExecutionStarted）。
+        self._todo_path: str = "TODO.md"
         authority.set_notifier(self._on_prompt)
 
     # ---- 生命周期 -------------------------------------------------------
@@ -163,9 +171,32 @@ class ServeHost:
 
     # ---- 渲染器（注入给 handle_line） -----------------------------------
     async def render_event(self, event: StreamEvent) -> None:
-        """把引擎事件编码成帧并广播。"""
+        """把引擎事件编码成帧并广播；todo_write 完成后补一帧清单快照。"""
         for frame in self.encoder.encode(event):
             await self.broadcaster.publish(frame)
+        await self._publish_todos(event)
+
+    async def _publish_todos(self, event: StreamEvent) -> None:
+        """`todo_write` 的**成功**完成后，读它刚写的清单并广播 `todos`（计划 W-D4）。
+
+        引擎事件不改：路径从 `ToolExecutionStarted.tool_input` 记住，内容以文件为真源。
+        读取失败不伪造空清单——直接不发帧（终端不会看到一个假清单）。
+        """
+
+        if isinstance(event, ToolExecutionStarted) and event.tool_name == "todo_write":
+            path = str(event.tool_input.get("path") or "TODO.md")
+            self._todo_path = path
+            return
+        if not isinstance(event, ToolExecutionCompleted):
+            return
+        if event.tool_name != "todo_write" or event.is_error:
+            return
+        target = Path(self.runtime.cwd) / self._todo_path
+        try:
+            rows = parse_checklist(target.read_text(encoding="utf-8"))
+        except OSError:
+            return
+        await self.broadcaster.publish(todos_frame(path=self._todo_path, items=rows))
 
     async def print_system(self, text: str) -> None:
         """系统提示走 notice(info)，与前端分支二消费的一致。"""
@@ -188,10 +219,25 @@ class ServeHost:
                 tool=prompt.tool or "unknown",
                 subject=subject,
                 detail=prompt.detail,
+                patch=prompt.patch,
+                added=prompt.added,
+                removed=prompt.removed,
             )
         else:
-            frame = ask_request_frame(prompt_id=prompt.prompt_id, question=subject)
+            frame = ask_request_frame(
+                prompt_id=prompt.prompt_id, question=subject, options=prompt.options
+            )
         await self.broadcaster.publish(frame)
+
+    def _context_window(self) -> int | None:
+        """当前模型的上下文窗口（拿不到就返回 None，客户端渲染 `—`）。"""
+
+        try:
+            settings = self.runtime.current_settings()
+        except Exception:  # noqa: BLE001 - 元数据缺席不得影响回合
+            return None
+        window = getattr(settings, "context_window_tokens", None)
+        return int(window) if isinstance(window, int) and window > 0 else None
 
     def _spawn(self, coro: Any) -> None:
         """把协程挂成后台任务，避免被 GC 提前回收。"""

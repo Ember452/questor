@@ -8,6 +8,7 @@ because ``/help`` and remote listings preserve registration order.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Iterable
 
 from questorharness.capabilities.skills import load_skill_registry
@@ -90,21 +91,28 @@ def register_builtin_commands(
     plugin_commands: Iterable[PluginCommandDefinition] | None = None,
 ) -> None:
     """Register every built-in family in the order users see in ``/help``."""
-    register_session_commands(registry)
-    register_memory_commands(registry)
-    register_workspace_commands(registry)
-    register_account_commands(registry)
-    register_skill_commands(registry)
-    register_config_commands(registry)
-    register_plugin_management_commands(registry)
-    register_policy_commands(registry)
-    register_model_commands(registry)
-    register_appearance_commands(registry)
-    register_diagnostics_commands(registry)
-    register_git_commands(registry)
-    register_project_context_commands(registry)
-    register_settings_display_commands(registry)
-    register_agents_commands(registry)
+    families: tuple[tuple[str, Callable[[CommandRegistry], None]], ...] = (
+        ("session", register_session_commands),
+        ("memory", register_memory_commands),
+        ("workspace", register_workspace_commands),
+        ("account", register_account_commands),
+        ("skill", register_skill_commands),
+        ("config", register_config_commands),
+        ("plugin-management", register_plugin_management_commands),
+        ("policy", register_policy_commands),
+        ("model", register_model_commands),
+        ("appearance", register_appearance_commands),
+        ("diagnostics", register_diagnostics_commands),
+        ("git", register_git_commands),
+        ("project", register_project_context_commands),
+        ("settings", register_settings_display_commands),
+        ("agents", register_agents_commands),
+    )
+    for family, register in families:
+        # 族名随注册一起打标（plan03 T18）：`/commands` 与 `:help` 都靠它分组。
+        registry.set_family(family)
+        register(registry)
+    registry.set_family("plugin")
     register_plugin_commands(registry, plugin_commands)
 
 

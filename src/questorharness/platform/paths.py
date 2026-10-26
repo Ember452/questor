@@ -12,6 +12,21 @@ _DEFAULT_BASE_DIR = ".questorharness"
 _CONFIG_FILE_NAME = "settings.json"
 
 
+def _ensure_dir(path: Path) -> None:
+    """建目录，但**建不出来不致命**。
+
+    这些路径函数会在启动链上被调用（构建 system prompt 时就要读
+    `.questorharness/issue.md` 等），而 cwd 可能是受保护目录（实跑现场：从
+    `C:\\Windows\\System32` 启动）。一个可选状态的目录建不出来，不该让整个
+    CLI 带一屏 traceback 挂掉；调用方用 `.exists()` 判断就自然降级。
+    """
+
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
+
 def get_config_dir() -> Path:
     """Return the configuration directory, creating it if needed.
 
@@ -100,10 +115,14 @@ def get_cron_registry_path() -> Path:
 
 
 def get_project_config_dir(cwd: str | Path) -> Path:
-    """Return the per-project .questorharness directory."""
-    project_dir = Path(cwd).resolve() / ".questorharness"
-    project_dir.mkdir(parents=True, exist_ok=True)
-    return project_dir
+    """Return the per-project .questorharness directory.
+
+    **不建目录**：这个函数在构建 system prompt 时就会被调用，而 cwd 可能是受保护
+    目录（实跑现场：从 `C:\\Windows\\System32` 启动 → WinError 5 → 整个 CLI 带
+    一屏 traceback 挂掉）。需要写入的调用方自己 `mkdir`。
+    """
+
+    return Path(cwd).resolve() / ".questorharness"
 
 
 def get_project_issue_file(cwd: str | Path) -> Path:
@@ -117,9 +136,9 @@ def get_project_pr_comments_file(cwd: str | Path) -> Path:
 
 
 def get_project_autopilot_dir(cwd: str | Path) -> Path:
-    """Return the per-project autopilot state directory."""
+    """Return the per-project autopilot state directory（建不出来也不致命）。"""
     autopilot_dir = get_project_config_dir(cwd) / "autopilot"
-    autopilot_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_dir(autopilot_dir)
     return autopilot_dir
 
 

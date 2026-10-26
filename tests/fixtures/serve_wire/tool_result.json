@@ -2,7 +2,7 @@
   "isError": false,
   "kind": "tool_result",
   "output": "ok",
-  "seq": 11,
+  "seq": 12,
   "tool": "bash",
   "toolCallId": "bash-1-1"
 }

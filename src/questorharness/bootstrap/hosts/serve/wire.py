@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Callable
 from typing import Any, Final
 
 from questorharness.contracts.domain.events import (
@@ -39,9 +40,34 @@ _END_PHASE: Final[str] = "compact_end"
 _FAILED_PHASE: Final[str] = "compact_failed"
 
 
-def usage_frame(usage: UsageSnapshot) -> Frame:
-    """把 UsageSnapshot 转成 wire 形状。"""
-    return {"inputTokens": usage.input_tokens, "outputTokens": usage.output_tokens}
+def usage_frame(
+    usage: UsageSnapshot,
+    *,
+    cost_usd: float | None = None,
+    context_window: int | None = None,
+    context_used: int | None = None,
+    cached_tokens: int | None = None,
+) -> Frame:
+    """把 UsageSnapshot 转成 wire 形状。
+
+    四个扩展字段都是 **可空**：引擎目前只产 input/output tokens，其余由宿主
+    能拿到就填（如 contextWindow 来自当前模型配置），拿不到就不出现——
+    终端会把它渲染成 `—`，不会伪造一个 0。
+    """
+
+    frame: Frame = {
+        "inputTokens": usage.input_tokens,
+        "outputTokens": usage.output_tokens,
+    }
+    if cost_usd is not None:
+        frame["costUsd"] = cost_usd
+    if context_window is not None:
+        frame["contextWindow"] = context_window
+    if context_used is not None:
+        frame["contextUsed"] = context_used
+    if cached_tokens is not None:
+        frame["cachedTokens"] = cached_tokens
+    return frame
 
 
 # ---- 宿主直出的 5 帧：唯一构造函数 ------------------------------------
@@ -74,23 +100,75 @@ def turn_done_frame(
 
 
 def approval_request_frame(
-    *, prompt_id: str, tool: str, subject: str, detail: str = ""
+    *,
+    prompt_id: str,
+    tool: str,
+    subject: str,
+    detail: str = "",
+    patch: str | None = None,
+    added: int | None = None,
+    removed: int | None = None,
 ) -> Frame:
-    """权限审批请求；detail 携带编辑类的补丁摘要（可为空），客户端用 id 回 `/approve`。"""
+    """权限审批请求；`detail` 保留给旧客户端，结构化 diff 走 `patch`/`added`/`removed`。"""
     frame: Frame = {"kind": "approval_request", "id": prompt_id, "tool": tool, "subject": subject}
     if detail:
         frame["detail"] = detail
+    if patch is not None:
+        frame["patch"] = patch
+    if added is not None:
+        frame["added"] = added
+    if removed is not None:
+        frame["removed"] = removed
     return frame
 
 
-def ask_request_frame(*, prompt_id: str, question: str) -> Frame:
-    """工具提问；客户端用 id 回 `/ask`。"""
-    return {"kind": "ask_request", "id": prompt_id, "question": question}
+def ask_request_frame(
+    *, prompt_id: str, question: str, options: list[str] | None = None
+) -> Frame:
+    """工具提问；客户端用 id 回 `/ask`。`options` 可选（A2），老帧形状不变。"""
+    frame: Frame = {"kind": "ask_request", "id": prompt_id, "question": question}
+    if options:
+        frame["options"] = list(options)
+    return frame
 
 
 def stream_reset_frame(*, reason: str, watermark: int) -> Frame:
     """重放窗口越界；客户端应重取 `/history`。"""
     return {"kind": "stream_reset", "reason": reason, "seq": watermark}
+
+
+def parse_checklist(text: str) -> list[dict[str, object]]:
+    """markdown 清单 → [{text, checked}]（只认 `- [ ]` / `- [x]` 行）。"""
+
+    items: list[dict[str, object]] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        lowered = stripped.lower()
+        if lowered.startswith("- [x]") or lowered.startswith("* [x]"):
+            items.append({"text": stripped[5:].strip(), "checked": True})
+        elif lowered.startswith("- [ ]") or lowered.startswith("* [ ]"):
+            items.append({"text": stripped[5:].strip(), "checked": False})
+    return items
+
+
+def todos_frame(*, path: str, items: list[dict[str, object]]) -> Frame:
+    """清单快照（plan03 W-D4）：宿主读完刚写的清单文件后发布。"""
+    return {"kind": "todos", "path": path, "items": items}
+
+
+_DETAIL_KEYS: tuple[str, ...] = ("command", "path", "pattern", "query", "url", "prompt")
+
+
+def _tool_detail(tool_input: object) -> str:
+    """工具入参的一行摘要（终端工具行专用；拿不到就空串）。"""
+
+    if not isinstance(tool_input, dict):
+        return ""
+    for key in _DETAIL_KEYS:
+        value = tool_input.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip().splitlines()[0][:160]
+    return ""
 
 
 def _blocks(message: Any) -> tuple[list[Frame], list[str]]:
@@ -126,13 +204,21 @@ def _blocks(message: Any) -> tuple[list[Frame], list[str]]:
 class WireEncoder:
     """有状态编码器：持有当前 turn 的上下文与工具调用配对表。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, context_window: Callable[[], int | None] | None = None) -> None:
         self.turn_id: str = ""
         self.index: int = 0
         self.via: str = "studio"
         self.last_usage: UsageSnapshot | None = None
         self._tool_calls: dict[str, deque[str]] = {}
         self._tool_seq = 0
+        # 波 D1：宿主能知道当前模型窗口就报给客户端（拿不到则不出现）。
+        self._context_window = context_window
+
+    def _usage(self, usage: UsageSnapshot) -> Frame:
+        """带宿主已知元数据的 usage 帧（窗口大小由调用方注入）。"""
+
+        window = self._context_window() if self._context_window is not None else None
+        return usage_frame(usage, context_window=window)
 
     def start_turn(self, *, turn_id: str, index: int, via: str) -> Frame:
         """生成 turn_started 帧并重置工具配对表。"""
@@ -181,7 +267,7 @@ class WireEncoder:
                 {
                     "kind": "message",
                     "blocks": blocks,
-                    "usage": usage_frame(event.usage),
+                    "usage": self._usage(event.usage),
                 }
             )
             return frames
@@ -191,6 +277,8 @@ class WireEncoder:
                     "kind": "tool_dispatch",
                     "toolCallId": self._mint_tool_call(event.tool_name),
                     "tool": event.tool_name,
+                    # 工具行要能回答“它在干什么”：命令看 command，文件看 path，搜索看 pattern。
+                    "detail": _tool_detail(event.tool_input),
                 }
             ]
         if isinstance(event, ToolExecutionCompleted):

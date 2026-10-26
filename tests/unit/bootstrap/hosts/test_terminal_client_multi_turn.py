@@ -68,4 +68,4 @@ def test_two_turns_both_complete(tmp_path, monkeypatch) -> None:  # type: ignore
 
     assert asyncio.run(scenario()) == 0
     text = output.file.getvalue()  # type: ignore[union-attr]
-    assert text.count("completed") == 2, text
+    assert text.count("完成") == 2, text

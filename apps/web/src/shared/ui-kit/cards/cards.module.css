@@ -84,3 +84,29 @@
   font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
   color: var(--app-muted, var(--muted, #8b9aab));
 }
+
+/* 清单卡（plan03 W-D4）：与终端 todo_card 同一套语汇（n/m + ✓/○）。 */
+.list {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.list li {
+  line-height: 1.5;
+}
+
+.done {
+  color: var(--app-muted, var(--muted, #8b9aab));
+  text-decoration: line-through;
+}
+
+.empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--app-muted, var(--muted, #8b9aab));
+}

@@ -13,7 +13,7 @@ from questorharness.runtime.hooks import HookExecutor
 
 
 PermissionPrompt = Callable[[str, str], Awaitable[bool]]
-AskUserPrompt = Callable[[str], Awaitable[str]]
+AskUserPrompt = Callable[[str, "list[str] | None"], Awaitable[str]]
 
 # 协调者运行时上下文消息的首行标记。query_engine 构造该消息、query 回收它,
 # 两处共用这一个定义;识别协调者回合靠 QueryContext.coordinator_mode 这个

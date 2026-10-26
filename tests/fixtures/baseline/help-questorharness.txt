@@ -58,6 +58,8 @@
 │                                        environment)                          │
 │ --bare                                 Minimal mode: skip hooks, plugins,    │
 │                                        MCP, and auto-discovery               │
+│ --plain                                Line-mode REPL instead of the         │
+│                                        full-screen terminal UI               │
 │ --api-format                    <str>  API format: 'anthropic' (default),    │
 │                                        'openai' (DashScope, GitHub Models,   │
 │                                        etc.), or 'copilot' (GitHub Copilot)  │

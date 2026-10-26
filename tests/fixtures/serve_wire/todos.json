@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "checked": true,
+      "text": "写文档"
+    },
+    {
+      "checked": false,
+      "text": "补测试"
+    }
+  ],
+  "kind": "todos",
+  "path": "TODO.md",
+  "seq": 10
+}

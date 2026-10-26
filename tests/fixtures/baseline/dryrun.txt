@@ -40,7 +40,7 @@ Discovery
 
 Available Tools
 - bash (required: command; optional: cwd, timeout_seconds)
-- ask_user_question (required: question)
+- ask_user_question (required: question; optional: options)
 - read_file (required: path; optional: limit, offset)
 - write_file (required: content, path; optional: create_directories)
 - edit_file (required: new_str, old_str, path; optional: replace_all)

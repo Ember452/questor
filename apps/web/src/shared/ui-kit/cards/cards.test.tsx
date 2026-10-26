@@ -6,6 +6,7 @@ import { ApprovalCard } from "./ApprovalCard";
 import { AskCard } from "./AskCard";
 import { CompactionCard } from "./CompactionCard";
 import { SayCard } from "./SayCard";
+import { TodoCard } from "./TodoCard";
 import { ToolCard } from "./ToolCard";
 
 describe("对话五卡", () => {
@@ -44,5 +45,26 @@ describe("对话五卡", () => {
   it("CompactionCard 显示 phase/status", () => {
     render(<CompactionCard phase="compact_end" status="progress" />);
     expect(screen.getByText(/compact_end/)).toBeTruthy();
+  });
+
+  it("TodoCard 显示路径、完成计数与逐项勾选态", () => {
+    render(
+      <TodoCard
+        path="TODO.md"
+        rows={[
+          { text: "写文档", checked: true },
+          { text: "补测试", checked: false },
+        ]}
+      />,
+    );
+    expect(screen.getByText(/TODO\.md/)).toBeTruthy();
+    expect(screen.getByText(/1\/2/)).toBeTruthy();
+    expect(screen.getByText("写文档")).toBeTruthy();
+    expect(screen.getByText("补测试")).toBeTruthy();
+  });
+
+  it("TodoCard 空清单给空态而不是空白卡", () => {
+    render(<TodoCard path="TODO.md" rows={[]} />);
+    expect(screen.getByText("还没有清单项")).toBeTruthy();
   });
 });

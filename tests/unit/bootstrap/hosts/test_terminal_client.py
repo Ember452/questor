@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+
+import pytest
 
 from questorharness.bootstrap.hosts import terminal_client
 
@@ -64,3 +68,48 @@ def test_build_serve_host_forwards_profile_tool_surface(tmp_path, monkeypatch) -
     asyncio.run(terminal_client.build_serve_host(profile_root=tmp_path, profile_id="personal"))
     assert captured["allowed_tools"] == ["ask_user_question"]
     assert captured["denied_tools"] == ["bash", "edit_file"]
+
+
+def test_completion_catalog_maps_names_and_aliases() -> None:
+    """补全目录：主名与别名都指向描述，主名优先不被别名覆盖。"""
+    commands = [
+        {"name": "help", "description": "列出指令", "aliases": ["h"]},
+        {"name": "exit", "description": "退出", "aliases": []},
+    ]
+    catalog = terminal_client.completion_catalog(commands)
+    assert catalog["/help"] == "列出指令"
+    assert catalog["/h"] == "列出指令"
+    assert catalog["/exit"] == "退出"
+    assert len(catalog) == 3
+
+
+def test_build_prompt_session_returns_none_off_tty(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """非 TTY（管道/CI）一律回退裸 input，不建交互会话。"""
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    assert terminal_client._build_prompt_session([]) is None
+
+
+def test_default_profile_comes_from_the_bundle_not_a_hardcoded_name(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """plan03 §2.3：默认形态取 bundle 的 `is_default`，不写死 "coding"。"""
+
+    (tmp_path / "alpha.yaml").write_text("name: alpha\n", encoding="utf-8")
+    (tmp_path / "beta.yaml").write_text("name: beta\nis_default: true\n", encoding="utf-8")
+    assert terminal_client.default_profile_id(tmp_path) == "beta"
+
+
+def test_missing_default_profile_is_an_error(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """两个 bundle 都没标默认值时必须报错，而不是偷偷倒向某个名字。"""
+
+    (tmp_path / "alpha.yaml").write_text("name: alpha\n", encoding="utf-8")
+    with pytest.raises(Exception):
+        terminal_client.default_profile_id(tmp_path)
+
+
+def test_terminal_package_never_hardcodes_a_profile_name() -> None:
+    """形态门控（plan03 §2.3）：终端包里不得出现写死的形态名。"""
+
+    package = Path(terminal_client.__file__).with_name("terminal")
+    offenders = [
+        path.name for path in package.rglob("*.py") if '"coding"' in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == []

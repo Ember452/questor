@@ -14,6 +14,7 @@ from questorharness.bootstrap.hosts.serve.wire import (
     approval_request_frame,
     ask_request_frame,
     stream_reset_frame,
+    todos_frame,
     turn_done_frame,
     turn_started_frame,
 )
@@ -79,6 +80,13 @@ def build_frames() -> dict[str, dict[str, object]]:
             turn_id="turn-0001", cancelled=False, outcome="completed", duration_ms=42
         ),
         "stream_reset": stream_reset_frame(reason="replay_gap", watermark=13),
+        "todos": todos_frame(
+            path="TODO.md",
+            items=[
+                {"text": "写文档", "checked": True},
+                {"text": "补测试", "checked": False},
+            ],
+        ),
     }
 
 

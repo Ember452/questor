@@ -9,13 +9,20 @@ from pydantic import BaseModel, Field
 from questorharness.capabilities.tools.contract import ToolCapabilities, BaseTool, ToolExecutionContext, ToolResult
 
 
-AskUserPrompt = Callable[[str], Awaitable[str]]
+AskUserPrompt = Callable[[str, "list[str] | None"], Awaitable[str]]
 
 
 class AskUserQuestionToolInput(BaseModel):
     """Arguments for asking the user a question."""
 
     question: str = Field(description="The exact question to ask the user")
+    options: list[str] | None = Field(
+        default=None,
+        description=(
+            "候选选项（可选）。给了选项时用户可按序号或原文回答；"
+            "不给就是自由文本提问。选项只是提示，客户端仍会把回答原样回传。"
+        ),
+    )
 
 
 class AskUserQuestionTool(BaseTool):
@@ -42,7 +49,7 @@ class AskUserQuestionTool(BaseTool):
                 output="ask_user_question is unavailable in this session",
                 is_error=True,
             )
-        answer = str(await prompt(arguments.question)).strip()
+        answer = str(await prompt(arguments.question, arguments.options)).strip()
         if not answer:
             return ToolResult(output="(no response)")
         return ToolResult(output=answer)

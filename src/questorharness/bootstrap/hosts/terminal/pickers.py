@@ -1,0 +1,113 @@
+"""六个面板：kind → 标题 + 选中后的动作（plan03 E1-E6）。
+
+动作一律走 `/submit` 的斜杠命令，不在终端里重写命令语义：
+能带参数的命令（模型 / 技能）把 id 拼进去，列表型命令（会话/任务/cron/git/MCP）
+只刷新列表——宁可少做一步，也不伪造一个引擎不支持的调用。
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Final
+
+from questorharness.bootstrap.hosts.terminal import overlay, panel_filter
+
+
+@dataclass(frozen=True)
+class Panel:
+    kind: str
+    title: str
+    action: str  # 斜杠命令模板，`{id}` 会被选中项替换；空串 = 只看不动
+    uses_id: bool = False
+
+
+PANELS: Final[dict[str, Panel]] = {
+    "models": Panel("models", "模型 / 认证档位", "/model {id}", uses_id=True),
+    "sessions": Panel("sessions", "历史会话", "/resume"),
+    "skills": Panel("skills", "技能", "/{id}", uses_id=True),
+    "mcp": Panel("mcp", "MCP 服务器", "/mcp"),
+    "plugins": Panel("plugins", "插件", "/plugin"),
+    "jobs": Panel("jobs", "定时任务", "/tasks"),
+    "tasks": Panel("tasks", "后台任务", "/tasks"),
+    "git": Panel("git", "分支与工作区", "/branch"),
+    # 权限模式三档落在引擎已有的 /permissions 上（plan03 波 F：A1 注销）。
+    "posture": Panel("posture", "权限模式", "/permissions {id}", uses_id=True),
+    # status 只给人看（模型/推理强度现状），也是状态栏的真值源。
+    "status": Panel("status", "运行状态（只读）", ""),
+    # todos 只读面板：清单写入是模型侧工具，这里只回看（数据与 todos 帧同源）。
+    "todos": Panel("todos", "清单（只读）", ""),
+    # transcript 不走 catalog：数据源是 `/history`（已在会话里的内容）。
+    "transcript": Panel("transcript", "会话记录（只读）", ""),
+    # help 不走 catalog：数据源是 `/commands`（与补全菜单同源，禁硬编码清单）。
+    "help": Panel("help", "命令（只读）", ""),
+}
+
+ALIASES: Final[dict[str, str]] = {
+    ":model": "models",
+    ":models": "models",
+    ":session": "sessions",
+    ":sessions": "sessions",
+    ":skill": "skills",
+    ":skills": "skills",
+    ":mcp": "mcp",
+    ":plugin": "plugins",
+    ":plugins": "plugins",
+    ":job": "jobs",
+    ":jobs": "jobs",
+    ":task": "tasks",
+    ":tasks": "tasks",
+    ":git": "git",
+    ":mode": "posture",
+    ":posture": "posture",
+    ":permission": "posture",
+    ":status": "status",
+    ":todo": "todos",
+    ":todos": "todos",
+    ":t": "transcript",
+    ":transcript": "transcript",
+    ":history": "transcript",
+    ":?": "help",
+    ":help": "help",
+    ":cmd": "help",
+}
+
+
+SEARCH_FIELDS: Final[tuple[str, ...]] = panel_filter.SEARCH_FIELDS
+
+# 对外沿用 `pickers.filter_items`（调用方不必知道口径住在哪个模块）。
+filter_items = panel_filter.filter_items
+
+
+def resolve(kind_or_alias: str) -> Panel | None:
+    """`:model` / `models` → Panel；不认识返回 None（调用方提示可用清单）。"""
+
+    key = kind_or_alias.strip().lower()
+    kind = ALIASES.get(key, key)
+    return PANELS.get(kind)
+
+
+def action_line(panel: Panel, selected_id: str | None) -> str | None:
+    """选中项 → 要提交的斜杠命令；列表型面板回刷新命令，只读面板不回命令。"""
+
+    if not panel.action:
+        return None
+    if not panel.uses_id:
+        return panel.action
+    if not selected_id:
+        return None
+    return panel.action.format(id=selected_id)
+
+
+async def open_panel(
+    panel: Panel, items: list[dict[str, object]], *, full_screen: bool = True
+) -> str | None:
+    """打开面板（异步：与 REPL 共用一个 event loop，不另建线程/loop）。"""
+
+    state = overlay.PanelState(title=panel.title, items=[dict(item) for item in items], kind=panel.kind)
+    return await overlay.run_async(state, full_screen=full_screen)
+
+
+def list_hint() -> str:
+    """面板清单（未知 kind 时给用户看）。"""
+
+    return "可用面板：" + " · ".join(f":{key}" for key in PANELS)

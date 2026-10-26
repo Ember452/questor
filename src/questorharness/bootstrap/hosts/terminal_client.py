@@ -1,27 +1,60 @@
-"""终端瘦客户端：复用 serve 路由与 wire 帧，不复制业务与状态投影。
+"""终端瘦客户端的门面：装配 runtime + serve 宿主，其余实现都在 `terminal/`。
 
-REPL 与 Studio 走同一套端点（submit / cancel / approve / ask / events），
-只是 transport 换成进程内实现、渲染器换成 rich。
+REPL 与 Studio 走同一套端点（submit / cancel / approve / ask / events / commands），
+只是 transport 换成进程内实现、渲染器换成 rich（plan03 §2.1）。
+本模块只保留**装配**与对产品暴露的符号；会话循环、渲染、输入、覆盖层、键位
+分别位于 `terminal/app.py`、`renderer.py`、`input_session.py`、`overlay.py`、`keymap.py`。
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
 import os
-import sys
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from rich.console import Console
-
 from questorharness.bootstrap.hosts.serve.authority import Authority
 from questorharness.bootstrap.hosts.serve.host import ServeHost
+from questorharness.bootstrap.hosts.terminal import app as terminal_app
+from questorharness.bootstrap.hosts.terminal.renderer import TerminalRenderer
+from questorharness.bootstrap.hosts.terminal.renderer import frame_from_sse as _frame_from_sse
 from questorharness.bootstrap.runtime import build_runtime
-from questorharness.profiles import load_profile
+from questorharness.profiles import ProfileError, list_profiles, load_profile
 
-_PREFIX = "/rt/r1"
+# 私有别名：保持既有导入方（宿主/测试）零改动。
+SubmitResult = terminal_app.SubmitResult
+_submit = terminal_app.submit
+_open_panel = terminal_app.open_panel
+_output_channel = terminal_app.output_channel
+_build_prompt_session = terminal_app.build_prompt_session
+completion_catalog = terminal_app.completion_catalog
+_read_line = terminal_app.read_line
+
+__all__ = [
+    "SubmitResult",
+    "TerminalRenderer",
+    "_build_prompt_session",
+    "_frame_from_sse",
+    "_open_panel",
+    "_output_channel",
+    "_read_line",
+    "_submit",
+    "build_serve_host",
+    "completion_catalog",
+    "default_profile_root",
+    "merge_tool_overrides",
+    "run_terminal_client",
+    "run_terminal_repl",
+]
+
+
+def default_profile_id(root: Path) -> str:
+    """形态 bundle 里标了 `is_default` 的那一个；没有就报错（不隐式兼容某个名字）。"""
+
+    for profile in list_profiles(root):
+        if profile.is_default:
+            return profile.name
+    raise ProfileError(f"{root}: no profile is marked is_default")
 
 
 def default_profile_root() -> Path:
@@ -32,151 +65,14 @@ def default_profile_root() -> Path:
     return Path(__file__).resolve().parents[3] / "questor" / "profiles"
 
 
-def _frame_from_sse(block: bytes) -> dict[str, Any] | None:
-    """从一条 SSE 事件块里取出 data 帧。"""
-    for line in block.splitlines():
-        if line.startswith(b"data: "):
-            try:
-                parsed = json.loads(line[len(b"data: ") :])
-            except json.JSONDecodeError:
-                return None
-            return parsed if isinstance(parsed, dict) else None
-    return None
-
-
-class TerminalRenderer:
-    """把 wire 帧渲染到终端，并把审批/提问回灌成 HTTP 调用。"""
-
-    def __init__(self, host: ServeHost, console: Console) -> None:
-        self._host = host
-        self._console = console
-        self._streaming = False
-        self.done = asyncio.Event()
-
-    async def consume(self, stream: AsyncIterator[bytes]) -> None:
-        """持续消费 SSE 字节流。"""
-        buffer = b""
-        async for chunk in stream:
-            buffer += chunk
-            while b"\n\n" in buffer:
-                block, buffer = buffer.split(b"\n\n", 1)
-                if not block.startswith(b"id:"):
-                    continue
-                frame = _frame_from_sse(block)
-                if frame is not None:
-                    await self._render(frame)
-                # 不能在 turn_done 后 return：交互模式要连续多轮；单次 prompt
-                # 由调用方 done.wait() 收尾，两种模式都靠 finally 的 cancel 退订。
-
-    async def _render(self, frame: dict[str, Any]) -> None:
-        """按 kind 渲染；审批/提问直接就地询问。"""
-        kind = frame.get("kind")
-        if kind == "turn_started":
-            self._console.print(f"[dim]── turn {frame.get('turnId', '')[:8]} ──[/dim]")
-        elif kind == "text":
-            self._console.print(str(frame.get("text", "")), end="", soft_wrap=True)
-            self._streaming = True
-        elif kind == "message":
-            if self._streaming:
-                self._console.print()
-                self._streaming = False
-        elif kind == "tool_dispatch":
-            self._console.print(f"[cyan]▸ {frame.get('tool')}[/cyan]")
-        elif kind == "tool_result":
-            state = "[red]错误[/red]" if frame.get("isError") else "[green]完成[/green]"
-            preview = str(frame.get("output", "")).strip().splitlines()
-            head = preview[0][:120] if preview else ""
-            self._console.print(f"  {state} {frame.get('tool')}: {head}")
-        elif kind == "notice":
-            self._console.print(f"[yellow]{frame.get('text', '')}[/yellow]")
-        elif kind in {"compaction_started", "compaction_progress", "compaction_done"}:
-            self._console.print(f"[dim]{kind} {frame.get('phase', '')}[/dim]")
-        elif kind == "approval_request":
-            await self._ask_approval(frame)
-        elif kind == "ask_request":
-            await self._answer_question(frame)
-        elif kind == "turn_done":
-            outcome = frame.get("outcome")
-            self._console.print(f"[dim]── {outcome} ({frame.get('durationMs')}ms) ──[/dim]")
-            self.done.set()
-
-    async def _ask_approval(self, frame: dict[str, Any]) -> None:
-        """审批：y 通过，其余拒绝（fail-closed 由服务端兜底）。编辑类先给 diff 摘要。"""
-        detail = str(frame.get("detail") or "").strip()
-        if detail:
-            preview = "\n".join(detail.splitlines()[:6])
-            self._console.print(f"[dim]{preview}[/dim]")
-        prompt = f"允许 {frame.get('tool')} 执行 {frame.get('subject')}? [y/N] "
-        answer = await asyncio.to_thread(input, prompt)
-        decision = "approve" if answer.strip().lower() in {"y", "yes"} else "deny"
-        await self._host.transport.request(
-            "POST",
-            f"{_PREFIX}/approve",
-            body=json.dumps({"id": frame.get("id"), "decision": decision}).encode(),
-        )
-
-    async def _answer_question(self, frame: dict[str, Any]) -> None:
-        """工具提问：空输入即视为未回答。"""
-        answer = await asyncio.to_thread(input, f"? {frame.get('question')} ")
-        await self._host.transport.request(
-            "POST",
-            f"{_PREFIX}/ask",
-            body=json.dumps({"id": frame.get("id"), "answer": answer}).encode(),
-        )
-
-
-async def _submit(host: ServeHost, line: str) -> str | None:
-    """提交一行；返回 turnId（busy/queued 时打印提示）。"""
-    response = await host.transport.request(
-        "POST",
-        f"{_PREFIX}/submit",
-        body=json.dumps({"line": line, "clientRequestId": os.urandom(8).hex()}).encode(),
-    )
-    payload = json.loads(response.body)
-    if response.status >= 400:
-        print(f"[拒绝] {payload.get('code')}: {payload.get('message')}", file=sys.stderr)
-        return None
-    if payload.get("state") == "queued":
-        print("[排队] 当前回合结束后自动开始", file=sys.stderr)
-    return str(payload.get("turnId"))
-
-
 async def run_terminal_client(
     host: ServeHost,
     *,
     prompt: str | None = None,
-    console: Console | None = None,
+    console: Any = None,
 ) -> int:
-    """跑交互循环（或单次 prompt），直到 EOF / 回合结束。"""
-    output = console or Console()
-    events = await host.transport.request("GET", f"{_PREFIX}/events")
-    assert events.stream is not None
-    renderer = TerminalRenderer(host, output)
-    consumer = asyncio.create_task(renderer.consume(events.stream))
-    try:
-        if prompt:
-            await _submit(host, prompt)
-            await renderer.done.wait()
-            return 0
-        while True:
-            try:
-                line = await asyncio.to_thread(input, "> ")
-            except EOFError:
-                return 0
-            if not line.strip():
-                continue
-            renderer.done.clear()
-            turn = await _submit(host, line)
-            if turn is None:
-                continue
-            await renderer.done.wait()
-    except KeyboardInterrupt:
-        await host.transport.request("POST", f"{_PREFIX}/cancel")
-        output.print("[dim]已请求取消[/dim]")
-        return 130
-    finally:
-        consumer.cancel()
-        await asyncio.gather(consumer, return_exceptions=True)
+    """跑交互循环（或单次 prompt）；实现在 `terminal/app.py`。"""
+    return await terminal_app.run_terminal_client(host, prompt=prompt, console=console)
 
 
 def merge_tool_overrides(
@@ -202,17 +98,19 @@ async def build_serve_host(
     api_key: str | None = None,
     api_format: str | None = None,
     api_client: Any = None,
-    restore_messages: list[dict] | None = None,
+    restore_messages: list[dict[str, Any]] | None = None,
     restore_tool_metadata: dict[str, object] | None = None,
     permission_mode: str | None = None,
     profile_root: Path | None = None,
-    profile_id: str = "coding",
+    profile_id: str | None = None,
     overrides: Mapping[str, object] | None = None,
 ) -> ServeHost:
     """装配 runtime 与 serve 宿主（REPL 与 Studio 共用）。"""
     authority = Authority()
     root = profile_root or default_profile_root()
-    profile = load_profile(root, profile_id)
+    # 形态是数据不是分支（plan03 §2.3）：默认取值也来自 bundle 的 is_default，不写死名字。
+    resolved_id = profile_id or default_profile_id(root)
+    profile = load_profile(root, resolved_id)
     extra = merge_tool_overrides(profile, overrides)
     runtime = await build_runtime(
         cwd=cwd,
@@ -237,7 +135,7 @@ async def build_serve_host(
         runtime,
         authority=authority,
         profile_root=root,
-        profile_id=profile_id,
+        profile_id=resolved_id,
     )
 
 
@@ -253,13 +151,19 @@ async def run_terminal_repl(
     api_key: str | None = None,
     api_format: str | None = None,
     api_client: Any = None,
-    restore_messages: list[dict] | None = None,
+    restore_messages: list[dict[str, Any]] | None = None,
     restore_tool_metadata: dict[str, object] | None = None,
     permission_mode: str | None = None,
     profile_root: Path | None = None,
     overrides: Mapping[str, object] | None = None,
+    tui: bool = False,
+    replay: bool = False,
 ) -> int:
-    """装配 runtime + serve 宿主，然后进入终端循环。"""
+    """装配 runtime + serve 宿主，然后进入终端（默认全屏 TUI，`tui=False` 回退行式 REPL）。
+
+    `replay=True`（`--continue` / `--resume`）让 TUI 启动时把上次会话的历史
+    回放进对话区；行式 REPL 本来就是回放路径，无需这个开关。
+    """
     host = await build_serve_host(
         cwd=cwd,
         model=model,
@@ -278,6 +182,10 @@ async def run_terminal_repl(
     )
     await host.start()
     try:
+        if tui:
+            from questorharness.bootstrap.hosts.tui import run_tui
+
+            return await run_tui(host, replay=replay)
         return await run_terminal_client(host, prompt=prompt)
     finally:
         await host.close()

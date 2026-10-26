@@ -19,7 +19,7 @@
     "capabilities_size": {
       "caliber": "git ls-files src | non-__init__ under capabilities/",
       "gate": true,
-      "ratio": 31.0,
+      "ratio": 28.5,
       "subdirs_ge2": 18,
       "tool_files": 44,
       "value": 87
@@ -94,7 +94,7 @@
         "src/questor/AGENTS.md"
       ],
       "gate": true,
-      "value": 16
+      "value": 18
     },
     "packages_without_all": {
       "caliber": "top-level packages under src/questorharness without a literal __all__",
@@ -116,30 +116,30 @@
       "value": 1178
     },
     "root_agents": {
-      "bytes": 7154,
+      "bytes": 7367,
       "caliber": "len(read_text('AGENTS.md').splitlines())",
       "gate": true,
-      "value": 115
+      "value": 116
     },
     "src_files": {
       "caliber": "git ls-files src | *.py",
       "gate": true,
-      "modules": 281,
-      "value": 347
+      "modules": 305,
+      "value": 374
     },
     "test_files": {
       "caliber": "git ls-files tests | *.py",
       "e2e": 15,
       "gate": true,
       "integration": 32,
-      "unit": 155,
-      "value": 219
+      "unit": 186,
+      "value": 253
     },
     "test_mirror_rate": {
       "caliber": "tests/**/test_<stem>.py for every non-__init__ src module",
       "gate": true,
-      "percent": 47.7,
-      "value": "134/281"
+      "percent": 52.5,
+      "value": "160/305"
     },
     "tool_radius": {
       "caliber": "shared files a new tool must touch: registration point + consumers with hard-coded names",
@@ -152,7 +152,7 @@
     }
   },
   "pin": {
-    "commit": "656de15417c01894a202568fe58ab27fe627f43a",
-    "date": "2026-10-25"
+    "commit": "52e486f37676a0b9f82c4798d4c2151ff5b88eb1",
+    "date": "2026-10-26"
   }
 }

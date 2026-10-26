@@ -34,7 +34,7 @@ kind 覆盖守卫（`tests/ci/test_kind_coverage.py`）以本表与 `tests/ci/te
 |---|---|---|
 | 对话流 / 流式回复 / 思考 | Transcript 卡片流（SayCard） | Reasonix 原样 |
 | 取消当前回合（Stop） | Composer 停止按钮 → `turn_done{cancelled}` | 阶段 1 `/cancel` 端点；按钮取自 上游骨架 `Composer` |
-| 提交队列 / 插话（followup / steer） | 无独立界面 | **初版登记：暂不暴露**（引擎单回合无队列；要开先走计划 §3） |
+| 提交队列（容量 1） | 终端 pending 行 + 状态栏“队列 1”；Studio 端待接 | 载体非视觉来源；队列已于计划 02 §8 落地（本行旧文案为漂移，plan03 F2 订正） |
 | 工具执行可视化（fs/shell/web/media…） | ToolCard 原位展开 + diff/输出面板 | Reasonix 原样 |
 | 权限审批（三态+敏感路径拦截） | ApprovalCard 三档按钮 | Reasonix 原样 |
 | 工具提问 AskUserQuestion | AskCard（单选/多选/自填） | Reasonix 原样 |
@@ -69,5 +69,7 @@ kind 覆盖守卫（`tests/ci/test_kind_coverage.py`）以本表与 `tests/ci/te
 
 ## 已登记"暂不暴露"（coding 形态）
 
-autopilot、coordinator、提交队列/插话（followup/steer，首版）。
+autopilot、coordinator、插话 steer（followup）。提交队列已按计划 02 §8 落地并在终端有载体
+（plan03 T1），已从本清单移出；steer 仍缺后端契约，登记在
+[`terminal-coding.md`](./terminal-coding.md) 的 A3（`absent`）。
 **需新增 kind**：swarm/team 生命周期、渠道会话标识。此三处是计划 §3 中断-上报-授权的预定触发点。

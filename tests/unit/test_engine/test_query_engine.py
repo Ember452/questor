@@ -1092,8 +1092,9 @@ async def test_execute_tool_call_returns_actionable_reason_when_user_denies_conf
 
 @pytest.mark.asyncio
 async def test_query_engine_executes_ask_user_tool(tmp_path: Path):
-    async def _answer(question: str) -> str:
+    async def _answer(question: str, options: list[str] | None = None) -> str:
         assert question == "Which color?"
+        assert options is None
         return "green"
 
     engine = QueryEngine(

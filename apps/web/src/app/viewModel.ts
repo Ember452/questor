@@ -1,4 +1,4 @@
-/** 帧 → 视图模型的纯函数。13 个 kind 全部覆盖；不认识的 kind 由 tsc 穷尽拦截。 */
+/** 帧 → 视图模型的纯函数。14 个 kind 全部覆盖；不认识的 kind 由 tsc 穷尽拦截。 */
 
 import type { ServerFrame } from "../shared/transport/wireTypes";
 import type { HistoryMessage, UsageTotals } from "../shared/transport/wireTypes";
@@ -18,6 +18,7 @@ export type ViewItem =
   | { id: string; kind: "compaction"; phase: string; status: "started" | "progress" | "done" }
   | { id: string; kind: "approval"; promptId: string; tool: string; subject: string; detail: string }
   | { id: string; kind: "ask"; promptId: string; question: string }
+  | { id: string; kind: "todos"; path: string; rows: { text: string; checked: boolean }[] }
   | { id: string; kind: "turn"; turnId: string; label: string };
 
 export interface ViewState {
@@ -225,6 +226,16 @@ export function applyFrame(state: ViewState, frame: ServerFrame): ViewState {
       };
     case "stream_reset":
       return { ...state, lastSeq: Math.max(lastSeq, frame.seq) };
+    case "todos":
+      // 清单快照（W-D4）：同一回合重复写入时以后一次为准，不在时间线上堆一叠旧清单。
+      return {
+        ...state,
+        lastSeq,
+        items: [
+          ...state.items.filter((item) => item.kind !== "todos"),
+          { id: nextId("todos"), kind: "todos", path: frame.path, rows: frame.items },
+        ],
+      };
     default: {
       const exhaustive: never = frame;
       return { ...state, lastSeq, items: [...state.items, { id: nextId("unknown"), kind: "notice", level: "error", text: String(exhaustive) }] };

@@ -1,4 +1,4 @@
-/** 对话页：虚拟化 transcript + 五卡分发 + 精简 Composer。 */
+/** 对话页：虚拟化 transcript + 五卡分发（+清单卡）+ 精简 Composer。 */
 
 import { useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -11,6 +11,7 @@ import { ApprovalCard } from "../shared/ui-kit/cards/ApprovalCard";
 import { AskCard } from "../shared/ui-kit/cards/AskCard";
 import { CompactionCard } from "../shared/ui-kit/cards/CompactionCard";
 import { SayCard } from "../shared/ui-kit/cards/SayCard";
+import { TodoCard } from "../shared/ui-kit/cards/TodoCard";
 import { ToolCard } from "../shared/ui-kit/cards/ToolCard";
 import styles from "../app/App.module.css";
 import type { PageProps } from "./types";
@@ -41,6 +42,8 @@ function renderItem(item: ViewItem, props: PageProps) {
       return <AskCard question={item.question} onAnswer={(answer) => props.onAsk(item.promptId, answer)} />;
     case "compaction":
       return <CompactionCard phase={item.phase} status={item.status} />;
+case "todos":
+      return <TodoCard path={item.path} rows={item.rows} />;
     case "notice":
       return (
         <div className={`${styles.row} ${styles.notice}`}>

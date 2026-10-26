@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from questorharness.bootstrap.hosts.serve.authority import Authority, TurnRecord
 from questorharness.bootstrap.hosts.serve.broadcaster import Broadcaster
 from questorharness.bootstrap.hosts.serve.routes import Router
-from questorharness.bootstrap.hosts.serve.transport import MemoryTransport
+from questorharness.bootstrap.hosts.serve.transport import MemoryTransport, Request
 from questorharness.bootstrap.hosts.serve.wire import WireEncoder
 
 PROFILE_YAML = """
@@ -317,3 +318,27 @@ def test_unknown_route_is_404(tmp_path: Path) -> None:
         assert response.status == 404
 
     asyncio.run(scenario())
+
+
+def test_commands_endpoint_lists_registry_in_order() -> None:
+    """GET /commands：来自真实注册表，顺序即 /help 顺序，含别名与描述。"""
+    import asyncio
+
+    from questorharness.commands.registry import create_default_command_registry
+
+    runtime = SimpleNamespace(cwd=".", session_id="s", commands=create_default_command_registry())
+    host = SimpleNamespace(runtime=runtime, authority=Authority(), broadcaster=None,
+                           encoder=None, profile_root=None, profile_id="coding")
+    router = Router(host)  # type: ignore[arg-type]
+
+    async def scenario() -> dict:
+        response = await router(
+            Request(method="GET", path="/rt/r1/commands")
+        )
+        return json.loads(response.body)
+
+    payload = asyncio.run(scenario())
+    names = [c["name"] for c in payload["commands"]]
+    assert names, "builtin commands must be listed"
+    assert names == list(dict.fromkeys(names)), "canonical order without duplicates"
+    assert all(isinstance(c["aliases"], list) and c["description"] for c in payload["commands"])

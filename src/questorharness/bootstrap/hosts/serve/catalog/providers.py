@@ -1,0 +1,294 @@
+"""只读内省目录：一个路由、按 kind 分发的纯函数提供者（plan03 波 D catalog）。
+
+同构的只读查询（sessions/models/skills/mcp/plugins/jobs/tasks/git/posture/status）
+在形状上是同一件事：`GET → 读一个内部注册表 → JSON`。合并成一个
+`GET /catalog/{kind}` 之后，新增一个面板只需加一个 provider 函数 + schema 加一个
+kind 分支，扇出表只加一行。
+
+响应 **不是** wire 帧：`CatalogResponse` 独立于 `ServerFrame` 联合，否则会触发
+`apps/web` 的 cardSlots 全等守卫（plan03 §2.3）。
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from questorharness.capabilities.schedule.cron import load_cron_jobs
+from questorharness.capabilities.skills.bundled import get_bundled_skills
+from questorharness.config.settings import load_settings
+from questorharness.contracts.policy import PermissionMode
+from questorharness.platform.session_storage import list_session_snapshots
+from questorharness.plugins.loader import load_plugins
+from questorharness.providers.auth.auth_manager import AuthManager
+from questorharness.runtime.tasks.task_manager import get_task_manager
+
+KINDS: tuple[str, ...] = (
+    "sessions",
+    "models",
+    "skills",
+    "mcp",
+    "plugins",
+    "jobs",
+    "tasks",
+    "git",
+    "posture",
+    "status",
+    "todos",
+)
+
+CatalogItem = dict[str, Any]
+
+SettingsProvider = Callable[[], Any]
+
+_POSTURE_DETAILS = {
+    PermissionMode.DEFAULT.value: "每个敏感工具都审批",
+    PermissionMode.PLAN.value: "只读先行，写入要审批",
+    PermissionMode.FULL_AUTO.value: "不再弹审批",
+}
+
+
+@dataclass(frozen=True)
+class CatalogContext:
+    """provider 需要的全部上下文——不藏宿主对象，方便单测。
+
+    `settings_provider` 是 runtime 的 `current_settings`（含 CLI 覆盖与
+    运行时切换后的真值）；缺省回退磁盘 settings（纯函数单测 / 旧宿主）。
+    """
+
+    cwd: Path
+    settings_provider: SettingsProvider | None = None
+    # 宿主记住的最近一次 todo_write 路径（W-D4 同源）；缺省读默认 TODO.md。
+    todo_path: str | None = None
+
+    def settings(self) -> Any:
+        """当前生效的 settings：运行时真值优先，回退磁盘。"""
+
+        if self.settings_provider is not None:
+            return self.settings_provider()
+        return load_settings()
+
+
+def _item(item_id: str, label: str, detail: str = "", *, current: bool = False) -> CatalogItem:
+    entry: CatalogItem = {"id": item_id, "label": label}
+    if detail:
+        entry["detail"] = detail
+    if current:
+        entry["current"] = True
+    return entry
+
+
+def sessions(ctx: CatalogContext) -> list[CatalogItem]:
+    """历史会话快照（新的在前）；空目录返回空表而不是报错。"""
+
+    snapshots = list_session_snapshots(ctx.cwd)
+    items: list[CatalogItem] = []
+    for snapshot in snapshots:
+        session_id = str(snapshot.get("session_id", "")) or "?"
+        stamp = str(snapshot.get("saved_at", "")) or "?"
+        count = snapshot.get("message_count")
+        detail = stamp if count is None else f"{stamp} · {count} 条"
+        items.append(_item(session_id, session_id[:8], detail, current=bool(snapshot.get("current"))))
+    return items
+
+
+def models(ctx: CatalogContext) -> list[CatalogItem]:
+    """已配置的认证档位（每档一条），标出当前生效的那条。"""
+
+    del ctx
+    manager = AuthManager()
+    try:
+        active = manager.get_active_profile()
+    except Exception:  # noqa: BLE001 - 无凭据时也要能列出空表
+        active = None
+    items: list[CatalogItem] = []
+    raw_profiles: object
+    try:
+        raw_profiles = manager.list_profiles()
+    except Exception:  # noqa: BLE001 - 读取失败按空表处理，面板显示空态
+        raw_profiles = []
+    profiles: list[object] = list(raw_profiles) if isinstance(raw_profiles, (list, tuple)) else []
+    for profile in profiles:
+        name = str(getattr(profile, "name", "") or getattr(profile, "id", "") or "")
+        if not name:
+            continue
+        provider = str(getattr(profile, "provider", "") or "")
+        model = str(getattr(profile, "model", "") or "")
+        detail = " · ".join(part for part in (provider, model) if part)
+        items.append(_item(name, name, detail, current=name == str(active or "")))
+    return items
+
+
+def skills(ctx: CatalogContext) -> list[CatalogItem]:
+    """随包技能清单（/skills 的数据源同源）。"""
+
+    del ctx
+    items: list[CatalogItem] = []
+    for skill in get_bundled_skills():
+        name = str(getattr(skill, "name", "") or "")
+        if not name:
+            continue
+        items.append(_item(name, name, str(getattr(skill, "description", "") or "")))
+    return items
+
+
+def mcp(ctx: CatalogContext) -> list[CatalogItem]:
+    """配置里的 MCP 服务器（连接状态由 /mcp 命令查询，不在这里伪造）。"""
+
+    servers = getattr(ctx.settings(), "mcp_servers", None)
+    if not isinstance(servers, dict):
+        return []
+    return [_item(str(name), str(name)) for name in servers]
+
+
+def plugins(ctx: CatalogContext) -> list[CatalogItem]:
+    """已发现的插件（用户 / 项目两级）；启停状态一并带出。"""
+
+    items: list[CatalogItem] = []
+    try:
+        loaded = load_plugins(ctx.settings(), ctx.cwd)
+    except Exception:  # noqa: BLE001 - 插件目录坏掉不能拖垮面板
+        return []
+    for plugin in loaded:
+        manifest = getattr(plugin, "manifest", None)
+        name = str(getattr(manifest, "name", "") or getattr(plugin, "path", ""))
+        if not name:
+            continue
+        description = str(getattr(manifest, "description", "") or "")
+        enabled = bool(getattr(plugin, "enabled", False))
+        detail = " · ".join(part for part in ("on" if enabled else "off", description) if part)
+        items.append(_item(name, name, detail, current=enabled))
+    return items
+
+
+def jobs(ctx: CatalogContext) -> list[CatalogItem]:
+    """cron 任务（enabled / 表达式 / 下次运行）。"""
+
+    del ctx
+    items: list[CatalogItem] = []
+    for job in load_cron_jobs():
+        name = str(job.get("name", "")) or "?"
+        enabled = "on" if job.get("enabled", True) else "off"
+        expression = str(job.get("expression", "") or "")
+        detail = " · ".join(part for part in (enabled, expression) if part)
+        items.append(_item(name, name, detail))
+    return items
+
+
+def tasks(ctx: CatalogContext) -> list[CatalogItem]:
+    """后台任务：进行中的排在前面。"""
+
+    del ctx
+    try:
+        records = get_task_manager().list_tasks()
+    except Exception:  # noqa: BLE001 - 任务管理器未初始化时给空表
+        return []
+    items: list[CatalogItem] = []
+    for record in records:
+        task_id = str(getattr(record, "task_id", "") or getattr(record, "id", "") or "")
+        status = str(getattr(record, "status", "") or "")
+        task_type = str(getattr(record, "task_type", "") or "")
+        label = task_id[:8] or status or "task"
+        items.append(_item(task_id or label, label, " · ".join(p for p in (task_type, status) if p)))
+    return items
+
+
+def git(ctx: CatalogContext) -> list[CatalogItem]:
+    """当前分支与工作区改动数（只读，失败不影响其它 kind）。"""
+
+    import subprocess
+
+    def _run(*args: str) -> str:
+        result = subprocess.run(
+            ("git", "-C", str(ctx.cwd), *args),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+
+    branch = _run("rev-parse", "--abbrev-ref", "HEAD")
+    if not branch:
+        return []
+    status = _run("status", "--porcelain")
+    changed = len([line for line in status.splitlines() if line.strip()])
+    return [_item(branch, branch, "工作区干净" if changed == 0 else f"{changed} 个文件改动", current=True)]
+
+
+def posture(ctx: CatalogContext) -> list[CatalogItem]:
+    """权限模式三档（/permissions 的档位集），标出运行时生效的那档。
+
+    档位集就是引擎 `PermissionMode` 枚举——不在这里另立清单，否则
+    `/permissions` 换档后面板会漂。
+    """
+
+    current = str(getattr(ctx.settings().permission.mode, "value", ""))
+    items: list[CatalogItem] = []
+    for mode in PermissionMode:
+        items.append(
+            _item(
+                mode.value,
+                mode.value,
+                _POSTURE_DETAILS.get(mode.value, ""),
+                current=mode.value == current,
+            )
+        )
+    return items
+
+
+def status(ctx: CatalogContext) -> list[CatalogItem]:
+    """运行时现状（状态栏真值源）：模型与推理强度各一行，值进 label。"""
+
+    settings = ctx.settings()
+    return [
+        _item("model", str(getattr(settings, "model", "") or "")),
+        _item("effort", str(getattr(settings, "effort", "") or "")),
+    ]
+
+
+def todos(ctx: CatalogContext) -> list[CatalogItem]:
+    """:todo 面板的数据源：直读清单文件（与 git provider 读工作区同构）。
+
+    解析复用 wire 的 `parse_checklist`（todos 帧同款），保证面板与帧永远同形。
+    """
+
+    from questorharness.bootstrap.hosts.serve.wire import parse_checklist
+
+    target = ctx.cwd / (ctx.todo_path or "TODO.md")
+    try:
+        rows = parse_checklist(target.read_text(encoding="utf-8"))
+    except OSError:
+        return []
+    items: list[CatalogItem] = []
+    for row in rows:
+        text = str(row.get("text", ""))
+        checked = bool(row.get("checked", False))
+        items.append(_item(text, ("✓ " if checked else "○ ") + text, current=checked))
+    return items
+
+
+PROVIDERS: dict[str, Callable[[CatalogContext], list[CatalogItem]]] = {
+    "sessions": sessions,
+    "models": models,
+    "skills": skills,
+    "mcp": mcp,
+    "plugins": plugins,
+    "jobs": jobs,
+    "tasks": tasks,
+    "git": git,
+    "posture": posture,
+    "status": status,
+    "todos": todos,
+}
+
+
+def build(kind: str, ctx: CatalogContext) -> list[CatalogItem] | None:
+    """未知 kind 返回 None（路由翻成 404，绝不返回空表装成功）。"""
+
+    provider = PROVIDERS.get(kind)
+    if provider is None:
+        return None
+    return provider(ctx)

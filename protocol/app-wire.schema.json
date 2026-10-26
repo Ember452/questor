@@ -9,13 +9,17 @@
   ],
   "$defs": {
     "Usage": {
-      "description": "Mirror of contracts/usage.py UsageSnapshot.",
+      "description": "Mirror of contracts/usage.py UsageSnapshot. The four extension fields are optional: the engine only produces input/output tokens today, the host fills what it can know (plan03 wave D).",
       "type": "object",
       "additionalProperties": false,
       "required": ["inputTokens", "outputTokens"],
       "properties": {
         "inputTokens": { "type": "integer" },
-        "outputTokens": { "type": "integer" }
+        "outputTokens": { "type": "integer" },
+        "costUsd": { "type": "number" },
+        "contextWindow": { "type": "integer" },
+        "contextUsed": { "type": "integer" },
+        "cachedTokens": { "type": "integer" }
       }
     },
     "TextBlock": {
@@ -105,12 +109,13 @@
     "ToolDispatch": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["seq", "kind", "toolCallId", "tool"],
+      "required": ["seq", "kind", "toolCallId", "tool", "detail"],
       "properties": {
         "seq": { "type": "integer" },
         "kind": { "const": "tool_dispatch" },
         "toolCallId": { "type": "string" },
-        "tool": { "type": "string" }
+        "tool": { "type": "string" },
+        "detail": { "type": "string" }
       }
     },
     "ToolResult": {
@@ -136,7 +141,10 @@
         "id": { "type": "string" },
         "tool": { "type": "string" },
         "subject": { "type": "string" },
-        "detail": { "type": "string" }
+        "detail": { "type": "string" },
+        "patch": { "type": "string" },
+        "added": { "type": "integer" },
+        "removed": { "type": "integer" }
       }
     },
     "AskRequest": {
@@ -147,7 +155,8 @@
         "seq": { "type": "integer" },
         "kind": { "const": "ask_request" },
         "id": { "type": "string" },
-        "question": { "type": "string" }
+        "question": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } }
       }
     },
     "Notice": {
@@ -231,6 +240,65 @@
         "reason": { "enum": ["replay_gap", "server_restart"] }
       }
     },
+    "CatalogItem": {
+      "description": "One row of a read-only catalog panel. Deliberately generic so every picker renders the same way (plan03 wave D).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "detail": { "type": "string" },
+        "current": { "type": "boolean" }
+      }
+    },
+    "CatalogResponse": {
+      "description": "HTTP response of GET /catalog/{kind}. Not a wire frame: it must stay out of ServerFrame or the web cardSlots equality guard would demand a card slot.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "items"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "sessions",
+            "models",
+            "skills",
+            "mcp",
+            "plugins",
+            "jobs",
+            "tasks",
+            "git",
+            "posture",
+            "status",
+            "todos"
+          ]
+        },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/CatalogItem" } }
+      }
+    },
+    "Todos": {
+      "description": "Checklist snapshot after a todo_write tool call (plan03 W-D4). Derived by the host from the checklist file the tool just wrote; the engine events are unchanged.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "kind", "path", "items"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "kind": { "const": "todos" },
+        "path": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text", "checked"],
+            "properties": {
+              "text": { "type": "string" },
+              "checked": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
     "ServerFrame": {
       "description": "Downstream SSE frame union.",
       "oneOf": [
@@ -246,7 +314,8 @@
         { "$ref": "#/$defs/CompactionProgress" },
         { "$ref": "#/$defs/CompactionDone" },
         { "$ref": "#/$defs/TurnDone" },
-        { "$ref": "#/$defs/StreamReset" }
+        { "$ref": "#/$defs/StreamReset" },
+        { "$ref": "#/$defs/Todos" }
       ]
     },
     "SubmitRequest": {

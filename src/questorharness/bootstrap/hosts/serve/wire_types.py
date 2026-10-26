@@ -15,6 +15,9 @@ class ApprovalRequest(TypedDict):
     tool: str
     subject: str
     detail: NotRequired[str]
+    patch: NotRequired[str]
+    added: NotRequired[int]
+    removed: NotRequired[int]
 
 
 class ApproveRequest(TypedDict):
@@ -32,10 +35,27 @@ class AskRequest(TypedDict):
     kind: Literal["ask_request"]
     id: str
     question: str
+    options: NotRequired[list[str]]
 
 
 class CancelRequest(TypedDict):
     pass
+
+
+class CatalogItem(TypedDict):
+    """One row of a read-only catalog panel. Deliberately generic so every picker renders the same way (plan03 wave D)."""
+
+    id: str
+    label: str
+    detail: NotRequired[str]
+    current: NotRequired[bool]
+
+
+class CatalogResponse(TypedDict):
+    """HTTP response of GET /catalog/{kind}. Not a wire frame: it must stay out of ServerFrame or the web cardSlots equality guard would demand a card slot."""
+
+    kind: Literal["sessions", "models", "skills", "mcp", "plugins", "jobs", "tasks", "git", "posture", "status", "todos"]
+    items: list[CatalogItem]
 
 
 class CompactionDone(TypedDict):
@@ -134,11 +154,21 @@ class TextBlock(TypedDict):
     text: str
 
 
+class Todos(TypedDict):
+    """Checklist snapshot after a todo_write tool call (plan03 W-D4). Derived by the host from the checklist file the tool just wrote; the engine events are unchanged."""
+
+    seq: int
+    kind: Literal["todos"]
+    path: str
+    items: list[dict[str, object]]
+
+
 class ToolDispatch(TypedDict):
     seq: int
     kind: Literal["tool_dispatch"]
     toolCallId: str
     tool: str
+    detail: str
 
 
 class ToolResult(TypedDict):
@@ -183,10 +213,14 @@ class TurnStarted(TypedDict):
 
 
 class Usage(TypedDict):
-    """Mirror of contracts/usage.py UsageSnapshot."""
+    """Mirror of contracts/usage.py UsageSnapshot. The four extension fields are optional: the engine only produces input/output tokens today, the host fills what it can know (plan03 wave D)."""
 
     inputTokens: int
     outputTokens: int
+    costUsd: NotRequired[float]
+    contextWindow: NotRequired[int]
+    contextUsed: NotRequired[int]
+    cachedTokens: NotRequired[int]
 
 
 CapabilityMap = dict[str, Literal["ready", "declared", "absent"]]
@@ -195,7 +229,7 @@ CapabilityMap = dict[str, Literal["ready", "declared", "absent"]]
 ContentBlock = Union[TextBlock, ImageBlock, ToolUseBlock, ToolResultBlock]
 
 
-ServerFrame = Union[TurnStarted, Text, Message, ToolDispatch, ToolResult, ApprovalRequest, AskRequest, Notice, CompactionStarted, CompactionProgress, CompactionDone, TurnDone, StreamReset]
+ServerFrame = Union[TurnStarted, Text, Message, ToolDispatch, ToolResult, ApprovalRequest, AskRequest, Notice, CompactionStarted, CompactionProgress, CompactionDone, TurnDone, StreamReset, Todos]
 
 
 KIND_APPROVAL_REQUEST: Final[str] = "approval_request"
@@ -207,6 +241,7 @@ KIND_MESSAGE: Final[str] = "message"
 KIND_NOTICE: Final[str] = "notice"
 KIND_STREAM_RESET: Final[str] = "stream_reset"
 KIND_TEXT: Final[str] = "text"
+KIND_TODOS: Final[str] = "todos"
 KIND_TOOL_DISPATCH: Final[str] = "tool_dispatch"
 KIND_TOOL_RESULT: Final[str] = "tool_result"
 KIND_TURN_DONE: Final[str] = "turn_done"
@@ -224,6 +259,7 @@ SERVER_FRAME_KINDS: Final[frozenset[str]] = frozenset(
         "notice",
         "stream_reset",
         "text",
+        "todos",
         "tool_dispatch",
         "tool_result",
         "turn_done",
@@ -242,6 +278,7 @@ SERVER_FRAME_KIND_BY_DEF: Final[dict[str, str]] = {
     "Notice": "notice",
     "StreamReset": "stream_reset",
     "Text": "text",
+    "Todos": "todos",
     "ToolDispatch": "tool_dispatch",
     "ToolResult": "tool_result",
     "TurnDone": "turn_done",

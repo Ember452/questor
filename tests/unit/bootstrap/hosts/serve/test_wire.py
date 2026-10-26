@@ -20,3 +20,12 @@ def test_usage_frame_shape() -> None:
         "inputTokens": 1,
         "outputTokens": 2,
     }
+
+
+def test_ask_request_frame_carries_options_only_when_present() -> None:
+    """A2：有选项才带 `options`（additive），老帧形状不变。"""
+
+    frame = wire.ask_request_frame(prompt_id="q1", question="选？", options=["a", "b"])
+    assert frame["options"] == ["a", "b"]
+    bare = wire.ask_request_frame(prompt_id="q2", question="选？")
+    assert "options" not in bare

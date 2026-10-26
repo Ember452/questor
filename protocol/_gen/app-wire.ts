@@ -25,7 +25,8 @@ export type ServerFrame =
   | CompactionProgress
   | CompactionDone
   | TurnDone
-  | StreamReset;
+  | StreamReset
+  | Todos;
 /**
  * Flattened ConversationMessage content block; input payloads stay on the engine side.
  */
@@ -69,17 +70,22 @@ export interface ToolResultBlock {
   isError: boolean;
 }
 /**
- * Mirror of contracts/usage.py UsageSnapshot.
+ * Mirror of contracts/usage.py UsageSnapshot. The four extension fields are optional: the engine only produces input/output tokens today, the host fills what it can know (plan03 wave D).
  */
 export interface Usage {
   inputTokens: number;
   outputTokens: number;
+  costUsd?: number;
+  contextWindow?: number;
+  contextUsed?: number;
+  cachedTokens?: number;
 }
 export interface ToolDispatch {
   seq: number;
   kind: "tool_dispatch";
   toolCallId: string;
   tool: string;
+  detail: string;
 }
 export interface ToolResult {
   seq: number;
@@ -96,12 +102,16 @@ export interface ApprovalRequest {
   tool: string;
   subject: string;
   detail?: string;
+  patch?: string;
+  added?: number;
+  removed?: number;
 }
 export interface AskRequest {
   seq: number;
   kind: "ask_request";
   id: string;
   question: string;
+  options?: string[];
 }
 export interface Notice {
   seq: number;
@@ -150,4 +160,16 @@ export interface StreamReset {
   seq: number;
   kind: "stream_reset";
   reason: "replay_gap" | "server_restart";
+}
+/**
+ * Checklist snapshot after a todo_write tool call (plan03 W-D4). Derived by the host from the checklist file the tool just wrote; the engine events are unchanged.
+ */
+export interface Todos {
+  seq: number;
+  kind: "todos";
+  path: string;
+  items: {
+    text: string;
+    checked: boolean;
+  }[];
 }

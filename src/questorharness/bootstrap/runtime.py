@@ -14,13 +14,14 @@ from questorharness.capabilities.tools import ToolRegistry, create_default_tool_
 from questorharness.commands import (
     CommandContext,
     CommandResult,
+    CommandRegistry,
     MemoryCommandBackend,
     create_default_command_registry,
     lookup_skill_slash_command,
 )
 from questorharness.config import load_settings
 from questorharness.config.settings_models import Settings
-from questorharness.contracts.domain.events import StreamEvent
+from questorharness.contracts.domain.events import ErrorEvent, StreamEvent
 from questorharness.contracts.domain.message import (
     ConversationMessage,
     sanitize_conversation_messages,
@@ -52,7 +53,7 @@ from questorharness.runtime.session.backend import DEFAULT_SESSION_BACKEND, Sess
 from questorharness.state import AppState, AppStateStore
 
 PermissionPrompt = Callable[[str, str], Awaitable[bool]]
-AskUserPrompt = Callable[[str], Awaitable[str]]
+AskUserPrompt = Callable[[str, "list[str] | None"], Awaitable[str]]
 EditApprovalPrompt = Callable[[str, str, int, int], Awaitable[str]]
 SystemPrinter = Callable[[str], Awaitable[None]]
 StreamRenderer = Callable[[StreamEvent], Awaitable[None]]
@@ -136,7 +137,7 @@ class RuntimeBundle:
     app_state: AppStateStore
     hook_executor: HookExecutor
     engine: QueryEngine
-    commands: object
+    commands: CommandRegistry
     external_api_client: bool
     enforce_max_turns: bool = True
     session_id: str = ""
@@ -660,6 +661,13 @@ async def handle_line(
         if user_message is not None
         else (bundle.commands.lookup(line) or lookup_skill_slash_command(line, command_context))
     )
+    if parsed is None and user_message is None and line.lstrip().startswith("/"):
+        # 未知指令不得漏给模型：实跑现场里用户打 `/` 想找指令，结果整个句子
+        # 被当成 prompt，模型“帮忙查”然后开始连发 bash。这里回一条错误提醒
+        # 就结束，不产生模型回合。
+        name = line.lstrip().split(maxsplit=1)[0]
+        await render_event(ErrorEvent(message=f"unknown command: {name} (not sent to the model)"))
+        return True
     if parsed is not None:
         command, args = parsed
         result = await command.handler(
@@ -794,7 +802,7 @@ async def run_autopilot_prompt(
     async def _allow(_tool_name: str, _reason: str) -> bool:
         return True
 
-    async def _ask(_question: str) -> str:
+    async def _ask(_question: str, _options: list[str] | None = None) -> str:
         return ""
 
     bundle = await build_runtime(

@@ -55,12 +55,12 @@
 
 | module | imported by | 类型 |
 | --- | ---: | --- |
-| `questorharness.config.settings` | 39 | 实现 |
+| `questorharness.config.settings` | 40 | 实现 |
 | `questorharness.platform.paths` | 30 | 原语 |
 | `questorharness.contracts.domain.message` | 27 | 契约 |
 | `questorharness.api` | 25 | 门面 |
-| `questorharness.providers.auth.auth_manager` | 17 | 实现 |
-| `questorharness.contracts.domain.events` | 16 | 契约 |
+| `questorharness.providers.auth.auth_manager` | 18 | 实现 |
+| `questorharness.contracts.domain.events` | 17 | 契约 |
 | `questorharness.config` | 15 | 门面 |
 | `questorharness.contracts.hooks` | 14 | 契约 |
 | `questorharness.platform.io` | 14 | 原语 |
@@ -73,14 +73,14 @@
 
 | package | imported by |
 | --- | ---: |
-| `questorharness.contracts` | 118 |
-| `questorharness.platform` | 65 |
-| `questorharness.capabilities` | 62 |
-| `questorharness.config` | 60 |
-| `questorharness.providers` | 59 |
-| `questorharness.runtime` | 34 |
+| `questorharness.contracts` | 120 |
+| `questorharness.platform` | 66 |
+| `questorharness.capabilities` | 64 |
+| `questorharness.config` | 61 |
+| `questorharness.providers` | 60 |
+| `questorharness.runtime` | 35 |
 | `questorharness.api` | 25 |
-| `questorharness.plugins` | 14 |
+| `questorharness.plugins` | 15 |
 | `questor.workspace` | 9 |
 | `questorharness.execution` | 8 |
 
@@ -92,7 +92,7 @@
 
 ### 目录（>=17 个非 init 源文件）
 
-- 无
+- `src/questorharness/bootstrap/hosts/terminal`: 18 files
 
 ## vacuous-contracts
 

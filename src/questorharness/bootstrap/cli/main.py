@@ -210,6 +210,12 @@ def main(
         help="Minimal mode: skip hooks, plugins, MCP, and auto-discovery",
         rich_help_panel="System & Context",
     ),
+    plain: bool = typer.Option(
+        False,
+        "--plain",
+        help="Line-mode REPL instead of the full-screen terminal UI",
+        rich_help_panel="System & Context",
+    ),
     api_format: str | None = typer.Option(
         None,
         "--api-format",
@@ -283,6 +289,9 @@ def main(
 
     if dangerously_skip_permissions:
         permission_mode = "full_auto"
+
+    # 全屏 TUI 需要真终端；管道/CI/`--plain` 走行式 REPL（脚本化调用不能断）。
+    use_tui = not plain and sys.stdin.isatty() and sys.stdout.isatty()
 
     # 将 --theme 覆盖项应用到设置
     if theme:
@@ -406,6 +415,8 @@ def main(
                 api_format=api_format,
                 effort=effort,
                 overrides=tool_overrides,
+                tui=use_tui,
+                replay=True,
             )
         )
         return
@@ -486,6 +497,7 @@ def main(
             permission_mode=permission_mode,
             effort=effort,
             overrides=tool_overrides,
+            tui=use_tui,
         )
     )
 
