@@ -43,7 +43,7 @@ def test_tool_dispatch_renders_as_running() -> None:
     assert "grep" in text
 
 
-def test_approval_card_offers_two_choices_and_names_the_missing_third() -> None:
+def test_approval_card_offers_two_choices_and_points_at_the_mode_picker() -> None:
     item = view.ApprovalItem(
         prompt_id="p1", tool="edit_file", subject="a.py", detail="+1/-2\n@@ -1 +1 @@"
     )
@@ -52,7 +52,7 @@ def test_approval_card_offers_two_choices_and_names_the_missing_third() -> None:
     assert "edit_file" in text
     assert "a.py" in text
     assert "+1/-2" in text
-    assert unsupported.badge_text("A1") in text
+    assert ":mode" in text  # 第三档已落地（A1 注销）：指到 /permissions 三态换档
 
 
 def test_ask_card_shows_the_question_and_the_missing_options() -> None:

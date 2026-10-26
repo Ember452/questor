@@ -20,7 +20,7 @@
 
 | id | 功能 | status | 终端载体 | 来源 |
 |---|---|---|---|---|
-| A1 | 审批第三档 / 记住本次选择 | absent | 两档审批卡 + 徽标 | Reasonix `tui/approve` + `ApprovalCard` |
+| A1 | 审批第三档 / 记住本次选择 | ready | `:mode` → `GET /catalog/posture`（三档即引擎 `PermissionMode`）→ `/permissions <档>`；档位由 settings 持久化（记住选择）；状态栏显示当前档 | Reasonix `tui/posture.go` + 本仓 `commands/families/policy.py` |
 | A2 | Ask 单选 / 多选 / 自填 | absent | 自由文本问答卡 + 徽标 | Reasonix `tui/ask.go` |
 | A3 | 回合中插话（steer） | absent | 排队 pending 行 + 徽标 | Reasonix `tui/queue_slash.go` |
 | A4 | 任意检查点回滚 | declared | `/rewind` 一步 + help 注明"部分可用" | Reasonix `tui/rewind.go` |
@@ -44,7 +44,8 @@
 | T16 | 清单卡（todos 帧） | ready | 终端 `theme.todo_card`（路径 + n/m + ✓/○）；web `TodoCard`；同回合只保留最新清单 | Reasonix `todos.go` |
 | T17 | 命令面板 | ready | `:help`（等价 `:?` / `:cmd`）读 `/commands`，与补全菜单同源，禁硬编码清单 | Reasonix `help.go` |
 | T18 | 命令按族分组 | ready | `SlashCommand.family` 由 `registry.set_family` 在注册时打标，`/commands` 透出，`:help` 族变即插标题行（默认 15 族；`plugin` 族仅在装了插件时有成员） | Reasonix `help.go` 分组 |
+| T19 | 权限模式面板与状态栏真值 | ready | `:mode`（等价 `:posture` / `:permission`）；状态栏 model/effort/权限档/分支取 `catalog/posture`+`catalog/status`+`catalog/git`，回合结束自动重拉 | Reasonix `posture.go` + `footer.go` |
 
 > `id` 一入表即不重新编号、不删除；下线只改 `status`。`absent` 行集合必须与
-> `terminal/unsupported.py` 的 key 集合相等（`tests/ci/test_unsupported_badges.py`）；
-> `todos` 面板与 `plugins` kind 落地时把对应行改 `ready`。
+> `terminal/unsupported.py` 的 key 集合相等（`tests/ci/test_unsupported_badges.py`）。
+> A1 于 plan03 波 F 落地（`/permissions` 三态早就在引擎侧，此前缺的只是终端载体）。

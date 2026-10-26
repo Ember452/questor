@@ -21,6 +21,15 @@ from questorharness.bootstrap.hosts.terminal import wire_view as view
 PREFIX = "/rt/r1"
 
 
+def _current_id(items: list[dict[str, Any]]) -> str | None:
+    """带 current 标记的行 id（没有标记行 → None）。"""
+
+    for item in items:
+        if item.get("current"):
+            return str(item.get("id", ""))
+    return None
+
+
 def frame_from_sse(block: bytes) -> dict[str, Any] | None:
     """从一条 SSE 事件块里取出 data 帧。"""
     for line in block.splitlines():
@@ -46,6 +55,11 @@ class TerminalRenderer:
         self._queue_depth = 0
         self._pending_turns = 0
         self._usage: view.UsageVM | None = None
+        # 状态栏四字段真值（模型/推理强度/权限模式/分支），来自 catalog，缺省渲染 —。
+        self._model: str | None = None
+        self._effort: str | None = None
+        self._permission_mode: str | None = None
+        self._branch: str | None = None
         self.done = asyncio.Event()
 
     @property
@@ -130,6 +144,8 @@ class TerminalRenderer:
             self._pending_turns = max(0, self._pending_turns - 1)
             if item.usage is not None:
                 self._usage = item.usage
+            # 回合可能换过模型/权限档（/model、/permissions）：重拉一次状态栏真值。
+            await self.refresh_status()
             self._console.print()
             self._console.print(self._footer())
             self.done.set()
@@ -148,6 +164,10 @@ class TerminalRenderer:
         return footer.render(
             footer.FooterVM(
                 profile=self._profile_name,
+                model=self._model,
+                effort=self._effort,
+                permission_mode=self._permission_mode,
+                branch=self._branch,
                 busy=self._busy,
                 queue_depth=self._queue_depth,
                 context_used=None if self._usage is None else self._usage.context_used,
@@ -155,6 +175,33 @@ class TerminalRenderer:
                 cost_usd=None if self._usage is None else self._usage.cost_usd,
             )
         )
+
+    async def refresh_status(self) -> None:
+        """从 catalog 拉状态栏四字段真值（posture / status / git）。
+
+        fail-soft：任何一步失败都保留上次已知值——状态栏是增强信息，
+        不得让它拖垮 REPL。
+        """
+
+        async def _items(kind: str) -> list[dict[str, Any]]:
+            response = await self._host.transport.request("GET", f"{PREFIX}/catalog/{kind}")
+            if response.status >= 400:
+                return []
+            return list(json.loads(response.body).get("items", []))
+
+        for kind in ("posture", "status", "git"):
+            try:
+                items = await _items(kind)
+            except Exception:  # noqa: BLE001 - 状态栏缺数据不阻断回合
+                continue
+            if kind == "posture":
+                self._permission_mode = _current_id(items) or self._permission_mode
+            elif kind == "status":
+                labels = {str(item.get("id")): str(item.get("label", "")) for item in items}
+                self._model = labels.get("model") or self._model
+                self._effort = labels.get("effort") or self._effort
+            else:
+                self._branch = (items[0].get("id") if items else None) or self._branch
 
     async def _ask_approval(self, item: view.ApprovalItem) -> None:
         """审批：y 通过，其余拒绝（fail-closed 由服务端兜底）。编辑类先给 diff 卡。"""

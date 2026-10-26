@@ -296,8 +296,12 @@ async def run_terminal_client(
     events = await host.transport.request("GET", f"{PREFIX}/events")
     assert events.stream is not None
     interactive = prompt is None and sys.stdin.isatty()
-    profile_name = await print_banner(host, output) if interactive else (await profile_info(host))[0]
+    if interactive:
+        profile_name = await print_banner(host, output)
+    else:
+        profile_name = (await profile_info(host))[0]
     renderer = TerminalRenderer(host, output, profile_name=profile_name)
+    await renderer.refresh_status()  # 状态栏四字段真值（fail-soft）
     consumer = asyncio.create_task(renderer.consume(events.stream))
     session = None
     if interactive:

@@ -42,6 +42,8 @@ def render(vm: FooterVM) -> Text:
     """一行状态栏；每段之间统一用 ` · ` 分隔（对齐 Reasonix chrome 的 status span）。"""
 
     text = theme.status_bar(vm.profile, vm.model, vm.busy)
+    if vm.effort:
+        text.append(f" · {vm.effort}", style=theme.DIM)
     text.append(" · ctx ", style=theme.DIM)
     text.append(_context(vm), style=theme.DIM)
     text.append(" · $", style=theme.DIM)

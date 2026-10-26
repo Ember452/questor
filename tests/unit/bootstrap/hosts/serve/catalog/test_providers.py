@@ -88,3 +88,50 @@ def test_git_provider_reports_branch_and_dirty_count(tmp_path) -> None:  # type:
 
 def test_build_returns_none_for_unknown_kind(tmp_path) -> None:  # type: ignore[no-untyped-def]
     assert providers.build("nope", CatalogContext(cwd=tmp_path)) is None
+
+
+class _Settings:
+    """provider 眼里的 settings：permission.mode.value / model / effort。"""
+
+    def __init__(self, mode: str, model: str = "m1", effort: str = "low") -> None:
+        self.permission = SimpleNamespace(mode=SimpleNamespace(value=mode))
+        self.model = model
+        self.effort = effort
+
+
+def test_posture_provider_lists_three_modes_and_marks_the_current_one(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """/permissions 的三档就是引擎 PermissionMode 枚举；current 来自运行时 settings。"""
+
+    ctx = CatalogContext(
+        cwd=tmp_path, settings_provider=lambda: _Settings("plan", model="glm", effort="high")
+    )
+    items = providers.posture(ctx)
+    assert [item["id"] for item in items] == ["default", "plan", "full_auto"]
+    assert [item["id"] for item in items if item.get("current")] == ["plan"]
+
+
+def test_status_provider_reports_model_and_effort(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """状态栏真值源：模型与推理强度各一行（值进 label，缺省回空串）。"""
+
+    ctx = CatalogContext(
+        cwd=tmp_path, settings_provider=lambda: _Settings("default", model="glm-4.7", effort="high")
+    )
+    items = providers.status(ctx)
+    labels = {item["id"]: item["label"] for item in items}
+    assert labels["model"] == "glm-4.7"
+    assert labels["effort"] == "high"
+
+
+def test_router_passes_the_runtime_settings_provider(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """路由必须把 runtime.current_settings 接给 provider，否则 CLI 覆盖会漂。"""
+
+    host = _Host(tmp_path)
+    host.runtime = SimpleNamespace(
+        cwd=str(tmp_path),
+        session_id="sid",
+        current_settings=lambda: _Settings("full_auto", model="glm", effort="low"),
+    )
+    response = _get(host, "/rt/r1/catalog/posture")
+    assert response.status == 200
+    payload = json.loads(response.body)
+    assert [item["id"] for item in payload["items"] if item.get("current")] == ["full_auto"]

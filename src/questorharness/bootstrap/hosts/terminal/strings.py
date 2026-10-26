@@ -30,6 +30,7 @@ UNSUPPORTED_LEAD = "降级"
 IMAGE_BLOCK = "[图片 {media_type}]"
 TOOL_USE_BLOCK = "工具 call {tool_use_id} · {name}"
 APPROVAL_CHOICES = "  y 允许 · N 拒绝（回车默认拒绝）"
+APPROVAL_MODE_HINT = "  换档：:mode 或 /permissions <default|plan|full_auto>"
 ASK_HINT = "  输入回答后回车（空输入视为未回答）"
 DIFF_TRUNCATED = "补丁过长，已截断（完整内容见编辑工具输出）"
 

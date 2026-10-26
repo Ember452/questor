@@ -39,10 +39,10 @@ def test_package_is_cold_importable_and_declares_all() -> None:
 
 
 def test_unsupported_registry_ids_are_the_declared_gaps() -> None:
-    """徽标登记表只装计划里登记为 absent 的缺口。"""
+    """徽标登记表只装计划里登记为 absent 的缺口（A1 已在波 F 落地注销）。"""
     from questorharness.bootstrap.hosts.terminal import unsupported
 
-    assert set(unsupported.UNSUPPORTED) == {"A1", "A2", "A3", "A5", "A6"}
+    assert set(unsupported.UNSUPPORTED) == {"A2", "A3", "A5", "A6"}
 
 
 def test_prompt_toolkit_exemption_is_scoped_to_the_terminal_package() -> None:

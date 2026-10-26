@@ -30,6 +30,10 @@ PANELS: Final[dict[str, Panel]] = {
     "jobs": Panel("jobs", "定时任务", "/tasks"),
     "tasks": Panel("tasks", "后台任务", "/tasks"),
     "git": Panel("git", "分支与工作区", "/branch"),
+    # 权限模式三档落在引擎已有的 /permissions 上（plan03 波 F：A1 注销）。
+    "posture": Panel("posture", "权限模式", "/permissions {id}", uses_id=True),
+    # status 只给人看（模型/推理强度现状），也是状态栏的真值源。
+    "status": Panel("status", "运行状态（只读）", ""),
     # transcript 不走 catalog：数据源是 `/history`（已在会话里的内容）。
     "transcript": Panel("transcript", "会话记录（只读）", ""),
     # help 不走 catalog：数据源是 `/commands`（与补全菜单同源，禁硬编码清单）。
@@ -51,6 +55,10 @@ ALIASES: Final[dict[str, str]] = {
     ":task": "tasks",
     ":tasks": "tasks",
     ":git": "git",
+    ":mode": "posture",
+    ":posture": "posture",
+    ":permission": "posture",
+    ":status": "status",
     ":t": "transcript",
     ":transcript": "transcript",
     ":history": "transcript",

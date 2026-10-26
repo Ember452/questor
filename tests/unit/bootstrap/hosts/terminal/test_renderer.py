@@ -133,3 +133,53 @@ def test_ask_interrupt_settles_unanswered(monkeypatch) -> None:  # type: ignore[
     assert posted and posted[0][:2] == ("POST", "/rt/r1/ask")
     assert json.loads(posted[0][2]) == {"id": "q1", "answer": ""}
     assert "已中断" in buffer.getvalue()
+
+
+def test_refresh_status_fills_the_footer_fields() -> None:
+    """状态栏四字段（模型/推理强度/权限模式/分支）取 catalog 真值，不再永远 `—`。"""
+    import json
+
+    payloads = {
+        "/rt/r1/catalog/posture": {
+            "kind": "posture",
+            "items": [{"id": "full_auto", "label": "全自动", "current": True}],
+        },
+        "/rt/r1/catalog/status": {
+            "kind": "status",
+            "items": [
+                {"id": "model", "label": "glm-4.7"},
+                {"id": "effort", "label": "high"},
+            ],
+        },
+        "/rt/r1/catalog/git": {
+            "kind": "git",
+            "items": [{"id": "feat/terminal-repl", "label": "feat/terminal-repl", "current": True}],
+        },
+    }
+
+    async def _request(method: str, path: str, body: bytes = b"", **_kw: object) -> SimpleNamespace:
+        return SimpleNamespace(
+            status=200, body=json.dumps(payloads[path]).encode(), headers={}, stream=None
+        )
+
+    instance, buffer = _renderer()
+    instance._host.transport.request = _request  # type: ignore[attr-defined]
+
+    asyncio.run(instance.refresh_status())
+    instance.note_queued()  # 顺带渲染一次状态栏
+    text = buffer.getvalue()
+    for expected in ("glm-4.7", "high", "full_auto", "feat/terminal-repl"):
+        assert expected in text, expected
+
+
+def test_refresh_status_is_fail_soft() -> None:
+    """catalog 取不到（旧宿主/断连）不得拖垮 REPL：字段保持缺省 `—`。"""
+
+    async def _boom(method: str, path: str, body: bytes = b"", **_kw: object) -> SimpleNamespace:
+        raise RuntimeError("down")
+
+    instance, buffer = _renderer()
+    instance._host.transport.request = _boom  # type: ignore[attr-defined]
+    asyncio.run(instance.refresh_status())
+    instance.note_queued()
+    assert "—" in buffer.getvalue()

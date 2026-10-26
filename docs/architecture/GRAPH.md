@@ -73,7 +73,7 @@
 
 | package | imported by |
 | --- | ---: |
-| `questorharness.contracts` | 119 |
+| `questorharness.contracts` | 120 |
 | `questorharness.platform` | 66 |
 | `questorharness.capabilities` | 64 |
 | `questorharness.config` | 61 |

@@ -1,8 +1,9 @@
 """只读内省目录：一个路由、按 kind 分发的纯函数提供者（plan03 波 D catalog）。
 
-八个同构端点（sessions/models/skills/mcp/jobs/tasks/git）在形状上是同一件事：
-`GET → 读一个内部注册表 → JSON`。合并成一个 `GET /catalog/{kind}` 之后，
-新增一个面板只需加一个 provider 函数 + schema 加一个 kind 分支，扇出表只加一行。
+同构的只读查询（sessions/models/skills/mcp/plugins/jobs/tasks/git/posture/status）
+在形状上是同一件事：`GET → 读一个内部注册表 → JSON`。合并成一个
+`GET /catalog/{kind}` 之后，新增一个面板只需加一个 provider 函数 + schema 加一个
+kind 分支，扇出表只加一行。
 
 响应 **不是** wire 帧：`CatalogResponse` 独立于 `ServerFrame` 联合，否则会触发
 `apps/web` 的 cardSlots 全等守卫（plan03 §2.3）。
@@ -18,6 +19,7 @@ from typing import Any
 from questorharness.capabilities.schedule.cron import load_cron_jobs
 from questorharness.capabilities.skills.bundled import get_bundled_skills
 from questorharness.config.settings import load_settings
+from questorharness.contracts.policy import PermissionMode
 from questorharness.platform.session_storage import list_session_snapshots
 from questorharness.plugins.loader import load_plugins
 from questorharness.providers.auth.auth_manager import AuthManager
@@ -32,16 +34,38 @@ KINDS: tuple[str, ...] = (
     "jobs",
     "tasks",
     "git",
+    "posture",
+    "status",
 )
 
 CatalogItem = dict[str, Any]
 
+SettingsProvider = Callable[[], Any]
+
+_POSTURE_DETAILS = {
+    PermissionMode.DEFAULT.value: "每个敏感工具都审批",
+    PermissionMode.PLAN.value: "只读先行，写入要审批",
+    PermissionMode.FULL_AUTO.value: "不再弹审批",
+}
+
 
 @dataclass(frozen=True)
 class CatalogContext:
-    """provider 需要的全部上下文（当前目录）——不藏宿主对象，方便单测。"""
+    """provider 需要的全部上下文——不藏宿主对象，方便单测。
+
+    `settings_provider` 是 runtime 的 `current_settings`（含 CLI 覆盖与
+    运行时切换后的真值）；缺省回退磁盘 settings（纯函数单测 / 旧宿主）。
+    """
 
     cwd: Path
+    settings_provider: SettingsProvider | None = None
+
+    def settings(self) -> Any:
+        """当前生效的 settings：运行时真值优先，回退磁盘。"""
+
+        if self.settings_provider is not None:
+            return self.settings_provider()
+        return load_settings()
 
 
 def _item(item_id: str, label: str, detail: str = "", *, current: bool = False) -> CatalogItem:
@@ -110,8 +134,7 @@ def skills(ctx: CatalogContext) -> list[CatalogItem]:
 def mcp(ctx: CatalogContext) -> list[CatalogItem]:
     """配置里的 MCP 服务器（连接状态由 /mcp 命令查询，不在这里伪造）。"""
 
-    del ctx
-    servers = getattr(load_settings(), "mcp_servers", None)
+    servers = getattr(ctx.settings(), "mcp_servers", None)
     if not isinstance(servers, dict):
         return []
     return [_item(str(name), str(name)) for name in servers]
@@ -122,7 +145,7 @@ def plugins(ctx: CatalogContext) -> list[CatalogItem]:
 
     items: list[CatalogItem] = []
     try:
-        loaded = load_plugins(load_settings(), ctx.cwd)
+        loaded = load_plugins(ctx.settings(), ctx.cwd)
     except Exception:  # noqa: BLE001 - 插件目录坏掉不能拖垮面板
         return []
     for plugin in loaded:
@@ -192,6 +215,37 @@ def git(ctx: CatalogContext) -> list[CatalogItem]:
     return [_item(branch, branch, "工作区干净" if changed == 0 else f"{changed} 个文件改动", current=True)]
 
 
+def posture(ctx: CatalogContext) -> list[CatalogItem]:
+    """权限模式三档（/permissions 的档位集），标出运行时生效的那档。
+
+    档位集就是引擎 `PermissionMode` 枚举——不在这里另立清单，否则
+    `/permissions` 换档后面板会漂。
+    """
+
+    current = str(getattr(ctx.settings().permission.mode, "value", ""))
+    items: list[CatalogItem] = []
+    for mode in PermissionMode:
+        items.append(
+            _item(
+                mode.value,
+                mode.value,
+                _POSTURE_DETAILS.get(mode.value, ""),
+                current=mode.value == current,
+            )
+        )
+    return items
+
+
+def status(ctx: CatalogContext) -> list[CatalogItem]:
+    """运行时现状（状态栏真值源）：模型与推理强度各一行，值进 label。"""
+
+    settings = ctx.settings()
+    return [
+        _item("model", str(getattr(settings, "model", "") or "")),
+        _item("effort", str(getattr(settings, "effort", "") or "")),
+    ]
+
+
 PROVIDERS: dict[str, Callable[[CatalogContext], list[CatalogItem]]] = {
     "sessions": sessions,
     "models": models,
@@ -201,6 +255,8 @@ PROVIDERS: dict[str, Callable[[CatalogContext], list[CatalogItem]]] = {
     "jobs": jobs,
     "tasks": tasks,
     "git": git,
+    "posture": posture,
+    "status": status,
 }
 
 

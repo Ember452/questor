@@ -10,7 +10,6 @@ from __future__ import annotations
 from questorharness.bootstrap.hosts.terminal import strings
 
 UNSUPPORTED: dict[str, tuple[str, str]] = {
-    "A1": ("审批第三档", "缺三态 PermissionPrompt（runtime.py:55 返回 bool）"),
     "A2": ("Ask 选项/多选", "引擎回调只收自由文本（ask_user_question_tool.py:12）"),
     "A3": ("回合中插话", "无 /steer 端点，authority 只有 1 个排队槽"),
     "A5": ("图片/附件提交", "/submit 无 attachments 字段"),

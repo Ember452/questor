@@ -29,6 +29,24 @@ def test_model_panel_submits_the_selected_profile() -> None:
     assert pickers.action_line(panel, None) is None
 
 
+def test_mode_panel_submits_the_permissions_command() -> None:
+    """:mode 面板落在引擎已有的 /permissions 三态上，不新写语义。"""
+
+    panel = pickers.resolve(":mode")
+    assert panel is not None and panel.kind == "posture"
+    assert pickers.action_line(panel, "full_auto") == "/permissions full_auto"
+    assert pickers.resolve(":posture").kind == "posture"
+    assert pickers.resolve(":permission").kind == "posture"
+
+
+def test_status_panel_is_read_only() -> None:
+    """:status 只给人看（模型/推理强度现状），选中不得误发命令。"""
+
+    panel = pickers.resolve(":status")
+    assert panel is not None and panel.kind == "status"
+    assert pickers.action_line(panel, "glm") is None
+
+
 def test_skill_panel_submits_the_skill_command() -> None:
     panel = pickers.resolve(":skills")
     assert panel is not None

@@ -17,15 +17,15 @@ def test_registry_values_are_name_and_reason_pairs() -> None:
 
 
 def test_badge_text_names_the_gap_and_its_id() -> None:
-    """徽标文本形如 `⊘ 未实现 · A1 审批第三档`，用户看得见缺什么。"""
-    text = unsupported.badge_text("A1")
-    assert text == f"{strings.BADGE_MARK} 未实现 · A1 审批第三档"
+    """徽标文本形如 `⊘ 未实现 · A2 Ask 选项/多选`，用户看得见缺什么。"""
+    text = unsupported.badge_text("A2")
+    assert text == f"{strings.BADGE_MARK} 未实现 · A2 Ask 选项/多选"
 
 
 def test_badge_reason_names_the_missing_contract() -> None:
     """展开说明要指出缺的是哪条后端契约，而不是“暂不支持”。"""
-    reason = unsupported.badge_reason("A1")
-    assert "PermissionPrompt" in reason
+    reason = unsupported.badge_reason("A2")
+    assert "ask_user_question_tool" in reason
 
 
 def test_badge_rejects_unknown_id() -> None:

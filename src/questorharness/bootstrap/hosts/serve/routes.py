@@ -292,7 +292,10 @@ class Router:
     def _catalog(self, kind: str) -> Response:
         """只读内省目录（plan03 波 D）：未知 kind 必须 404，不得回空表装成功。"""
 
-        items = build_catalog(kind, CatalogContext(cwd=Path(self._host.runtime.cwd)))
+        # current_settings 含 CLI 覆盖与运行时切换后的真值；老宿主缺它就回退磁盘。
+        provider = getattr(self._host.runtime, "current_settings", None)
+        ctx = CatalogContext(cwd=Path(self._host.runtime.cwd), settings_provider=provider)
+        items = build_catalog(kind, ctx)
         if items is None:
             raise refusals.Refusal(
                 refusals.NOT_FOUND, f"unknown catalog kind: {kind}", status=404

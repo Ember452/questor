@@ -87,7 +87,8 @@ def _approval_card(item: view.ApprovalItem) -> RenderableType:
     elif item.detail:
         parts.append(diff_card.render_detail(item.detail))
     parts.append(Text(strings.APPROVAL_CHOICES, style=theme.DIM))
-    parts.append(_badge_line("A1"))
+    # A1 已落地：第三档不再是徽标，而是指到 :mode（引擎 /permissions 三态）。
+    parts.append(Text(strings.APPROVAL_MODE_HINT, style=theme.DIM))
     return Group(*parts)
 
 
