@@ -33,7 +33,7 @@ import stat
 import tempfile
 from pathlib import Path
 
-__all__ = ["atomic_write_bytes", "atomic_write_text"]
+__all__ = ["atomic_write_bytes", "atomic_write_text", "sanitize_text"]
 
 
 def atomic_write_bytes(path: str | os.PathLike[str], data: bytes, *, mode: int | None = None) -> None:
@@ -73,8 +73,41 @@ def atomic_write_text(
     encoding: str = "utf-8",
     mode: int | None = None,
 ) -> None:
-    """Text variant of :func:`atomic_write_bytes`."""
-    atomic_write_bytes(path, data.encode(encoding), mode=mode)
+    """Text variant of :func:`atomic_write_bytes`.
+
+    Lone surrogates (cp936 console / argv decode leftovers) cannot be encoded
+    as UTF-8 and once crashed the session-memory checkpoint mid-turn. They are
+    sanitized here so a single bad character degrades one glyph instead of
+    aborting the write.
+    """
+    atomic_write_bytes(path, _encode_text(data, encoding), mode=mode)
+
+
+def sanitize_text(text: str) -> str:
+    """Return *text* with every lone surrogate removed (always UTF-8 encodable).
+
+    Surrogates usually come from ``surrogateescape`` decoding of bytes that were
+    never valid UTF-8 (Windows console code pages, argv round-trips). Recover the
+    original bytes when the surrogate range allows it, otherwise replace.
+    """
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        pass
+    else:
+        return text
+    try:
+        return text.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
+    except UnicodeEncodeError:
+        return text.encode("utf-8", "replace").decode("utf-8")
+
+
+def _encode_text(data: str, encoding: str) -> bytes:
+    """Encode strictly; only on a lone surrogate fall back to a sanitized write."""
+    try:
+        return data.encode(encoding)
+    except UnicodeEncodeError:
+        return sanitize_text(data).encode(encoding, "replace")
 
 
 def _resolve_target_mode(path: Path, explicit_mode: int | None) -> int:

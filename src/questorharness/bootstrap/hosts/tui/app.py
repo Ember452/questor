@@ -15,10 +15,11 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import time
 from typing import Any, ClassVar
 
 from rich.text import Text
-from textual import on
+from textual import events, on
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Container, VerticalScroll
@@ -26,7 +27,14 @@ from textual.widgets import Footer, Input, Markdown, Static
 
 from questorharness.bootstrap.hosts.serve import terminal_theme as theme
 from questorharness.bootstrap.hosts.serve.host import ServeHost
-from questorharness.bootstrap.hosts.terminal import cards, footer, pickers, strings
+from questorharness.bootstrap.hosts.terminal import (
+    cards,
+    completion_menu,
+    footer,
+    pickers,
+    strings,
+)
+from questorharness.bootstrap.hosts.terminal import width as term_width
 from questorharness.bootstrap.hosts.terminal import wire_view as view
 from questorharness.bootstrap.hosts.tui.approval import ApprovalScreen, approval_head
 from questorharness.bootstrap.hosts.tui.panels import PanelScreen
@@ -36,10 +44,25 @@ PREFIX = "/rt/r1"
 
 #: 流式正文的重排节流：Textual 的 Markdown 每次 update 都是全量重渲染。
 STREAM_REFRESH_SECONDS = 0.08
-#: 候选清单最多显示多少行（再多就把输入区挤没了）。
-HINT_ROWS = 8
+#: 空闲时连按两次 Ctrl-C 退出的窗口（Reasonix `quitArmWindow` 同义）。
+QUIT_ARM_SECONDS = 2.0
 
 __all__ = ["QuestorApp", "approval_head", "run_tui"]
+
+
+class PromptInput(Input):
+    """把 ↑/↓/Tab 交给 App 决定（补全菜单 vs 历史），其余走 Input 默认。
+
+    只在 prompt 有焦点时生效——面板/审批模态各自有焦点，不会被这套键位串台。
+    """
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.key in ("up", "down", "tab"):
+            handler = getattr(self.app, "handle_prompt_key", None)
+            if handler is not None and handler(event.key):
+                event.stop()
+                return
+        await super()._on_key(event)
 
 
 class QuestorApp(App[None]):
@@ -102,6 +125,12 @@ class QuestorApp(App[None]):
         self._profile_name = profile_name
         self._replay = replay
         self._commands: dict[str, str] = {}
+        self._menu: completion_menu.Menu | None = None
+        self._history: list[str] = []
+        self._hist_pos = 0
+        self._draft = ""
+        self._cancelling = False
+        self._quit_armed = 0.0
         self._busy = False
         self._pending: view.ApprovalItem | None = None
         self._pending_panel: pickers.Panel | None = None
@@ -115,8 +144,8 @@ class QuestorApp(App[None]):
         yield VerticalScroll(id="conversation")
         yield Static("", id="hints")
         with Container(id="prompt-box"):
-            yield Input(
-                placeholder="说一句话 · / 指令 · : 面板 · Ctrl-C 中止",
+            yield PromptInput(
+                placeholder="说一句话 · / 指令 · : 面板 · Ctrl-C 中止（空闲两下退出）",
                 id="prompt",
             )
         yield Static("", id="status")
@@ -282,6 +311,7 @@ class QuestorApp(App[None]):
         if isinstance(item, view.TurnDoneItem):
             self._end_stream()
             self._busy = False
+            self._cancelling = False
             self._pending = None
             self._status = dataclasses.replace(self._status, busy=False)
             self._render_status()
@@ -312,33 +342,140 @@ class QuestorApp(App[None]):
     # ---- 输入 -----------------------------------------------------------
     @on(Input.Changed, "#prompt")
     def _show_hints(self, event: Input.Changed) -> None:
-        """打 `/` 立刻在输入框上方给出候选——不依赖任何浮动菜单。"""
+        """打 `/` 立刻在输入框上方给出可导航的候选（Reasonix 菜单，不依赖浮动层）。"""
 
         hints = self.query_one("#hints", Static)
         text = event.value
         if text.startswith(":"):
+            self._menu = None
             hints.update(Text(pickers.list_hint(), style=theme.DIM))
             return
         if not text.startswith("/") or " " in text:
+            self._menu = None
             hints.update("")
             return
-        matches = [(name, desc) for name, desc in self._commands.items() if name.startswith(text)]
-        if not matches:
-            matches = [
-                (name, desc)
-                for name, desc in self._commands.items()
-                if text.lstrip("/") and text.lstrip("/") in name
-            ]
-        if not matches:
+        rows = self._completion_rows(text)
+        if not rows:
+            self._menu = None
             hints.update(Text(strings.NO_MATCH_HINT, style=theme.WARN))
             return
-        lines = [f"{name:<24}{desc}" for name, desc in matches[:HINT_ROWS]]
-        hints.update(Text("\n".join(lines), style=theme.DIM))
+        self._menu = self._build_menu(rows, len(text))
+        self._render_completion()
+
+    def _completion_rows(self, text: str) -> list[completion_menu.MenuRow]:
+        """命令目录 → 候选行：前缀优先，其次子串（与旧 `_show_hints` 同口径）。"""
+
+        prefix = [(name, desc) for name, desc in self._commands.items() if name.startswith(text)]
+        matches = prefix or [
+            (name, desc)
+            for name, desc in self._commands.items()
+            if text.lstrip("/") and text.lstrip("/") in name
+        ]
+        return [
+            completion_menu.MenuRow(label=name, insert=name, hint=desc) for name, desc in matches
+        ]
+
+    def _build_menu(self, rows: list[completion_menu.MenuRow], end: int) -> completion_menu.Menu | None:
+        """重建菜单，按标签保留原选中项（连续打字不会把高亮弹回第一行）。"""
+
+        previous = self._menu.selected() if self._menu is not None else None
+        menu = completion_menu.build(rows, 0, end, kind="slash")
+        if menu is not None and previous is not None:
+            for index, row in enumerate(menu.rows):
+                if row.label == previous.label:
+                    menu.sel = index
+                    break
+        return menu
+
+    def _render_completion(self) -> None:
+        """把菜单渲染成 `#hints`：选中行 `›`+粗体，超 8 行自动滞动。"""
+
+        hints = self.query_one("#hints", Static)
+        menu = self._menu
+        if menu is None or not menu.rows:
+            hints.update("")
+            return
+        columns = max(20, (self.size.width or 80) - 2)
+        text = Text()
+        for index, row in completion_menu.visible_rows(menu):
+            selected = index == menu.sel
+            marker = completion_menu.SELECT_MARKER if selected else completion_menu.INDENT
+            line = f"{marker}{row.label}"
+            if row.hint:
+                line = f"{line}  {row.hint}"
+            style = "bold" if selected else theme.DIM
+            text.append(term_width.truncate(line, columns) + "\n", style=style)
+        text.append(strings.MENU_HINT_SLASH, style=theme.DIM)
+        hints.update(text)
+
+    def _move_completion(self, delta: int) -> None:
+        menu = self._menu
+        if menu is None or not menu.rows:
+            return
+        completion_menu.move(menu, delta)
+        self._render_completion()
+
+    def _accept_completion(self) -> None:
+        """用选中项替换当前输入（写回 value 会触发 Input.Changed 重建菜单）。"""
+
+        menu = self._menu
+        if menu is None or not menu.rows:
+            return
+        prompt = self.query_one("#prompt", Input)
+        new_text, _cursor = completion_menu.accept_text(menu, prompt.value)
+        prompt.value = new_text
+
+    def handle_prompt_key(self, key: str) -> bool:
+        """prompt 的 ↑/↓/Tab：菜单开着走菜单，否则走历史召回。返回是否吃掉按键。"""
+
+        if key == "tab":
+            if self._menu is not None and self._menu.rows:
+                self._accept_completion()
+                return True
+            return False
+        delta = -1 if key == "up" else 1
+        if self._menu is not None and self._menu.rows:
+            self._move_completion(delta)
+            return True
+        self._recall(delta)
+        return True
+
+    def _recall(self, delta: int) -> None:
+        """上下翻历史（Reasonix `recall`）：从最新往旧走，走完回到未发的草稿。"""
+
+        if not self._history:
+            return
+        prompt = self.query_one("#prompt", Input)
+        live = self._hist_pos == len(self._history)
+        if delta < 0:
+            if live:
+                self._draft = prompt.value
+            self._hist_pos = max(0, self._hist_pos - 1)
+            prompt.value = self._history[self._hist_pos]
+        elif not live:
+            self._hist_pos = min(len(self._history), self._hist_pos + 1)
+            prompt.value = (
+                self._draft
+                if self._hist_pos == len(self._history)
+                else self._history[self._hist_pos]
+            )
 
     @on(Input.Submitted, "#prompt")
     async def _submit(self, event: Input.Submitted) -> None:
-        line = event.value.strip()
+        value = event.value
+        menu = self._menu
+        # Reasonix 的 Enter 规则：行只是高亮项的前缀 → 先补全；已是整条命令 → 提交。
+        if menu is not None and menu.rows and completion_menu.should_accept_on_enter(menu, value):
+            self._accept_completion()
+            return
+        line = value.strip()
+        if line and (not self._history or self._history[-1] != line):
+            self._history.append(line)
+        self._hist_pos = len(self._history)
+        self._draft = ""
         event.input.value = ""
+        self._menu = None
+        self._render_completion()
         await self._dispatch(line)
 
     async def _dispatch(self, line: str) -> None:
@@ -409,10 +546,27 @@ class QuestorApp(App[None]):
 
     # ---- 动作 -----------------------------------------------------------
     def action_interrupt(self) -> None:
-        if not self._busy:
+        """Reasonix 的 Ctrl-C 语义：忙→取消，取消中再按→退出；空闲→两下退出。"""
+
+        if self._busy:
+            if self._cancelling:
+                self.exit()
+                return
+            self._cancelling = True
+            self.run_worker(self._post("cancel", {}))
+            self._write(Text(strings.CANCEL_SENT, style=theme.WARN))
             return
-        self.run_worker(self._post("cancel", {}))
-        self._write(Text(strings.CANCEL_SENT, style=theme.WARN))
+        self._cancelling = False
+        prompt = self.query_one("#prompt", Input)
+        if prompt.value:
+            prompt.value = ""
+            return
+        now = time.monotonic()
+        if now - self._quit_armed <= QUIT_ARM_SECONDS:
+            self.exit()
+            return
+        self._quit_armed = now
+        self._write(Text(strings.CTRL_C_QUIT_HINT, style=theme.WARN))
 
     def action_quit_app(self) -> None:
         self.exit()

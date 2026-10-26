@@ -83,16 +83,23 @@ def command_list_text(catalog: dict[str, str], *, limit: int = 24) -> str:
 
 
 def build_prompt_session(commands: list[dict[str, Any]]) -> "_PS | None":
-    """有 prompt_toolkit 且在 TTY 上时建交互会话；否则返回 None（回退裸 input）。"""
+    """有 prompt_toolkit 且在 TTY 上时建交互会话；否则返回 None（回退裸 input）。
+
+    菜单控制器是会话与键位的共享真相：键位"吃掉"菜单键，会话把菜单画进底部
+    工具栏——两边必须拿着**同一个**实例，否则按 ↑↓ 动的是另一份菜单状态。
+    """
+
     # 惰性导入：输入层与键位都不属包根的冷导入路径（prompt_toolkit 是可选依赖）。
-    from questorharness.bootstrap.hosts.terminal import input_session, keymap
+    from questorharness.bootstrap.hosts.terminal import input_session, keymap, menu_controller
 
     catalog = completion_catalog(commands)
     history_path = Path.home() / ".questorharness" / "terminal_history"
+    menu = menu_controller.MenuController()
     return input_session.build(
         catalog,
         history_path=history_path,
-        key_bindings=keymap.build(),
+        key_bindings=keymap.build(menu),
+        menu=menu,
     )
 
 

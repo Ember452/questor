@@ -8,11 +8,11 @@
     "broken": 0,
     "kept": 10
   },
-  "main_node_id_count": 2234,
-  "node_id_count": 2290,
+  "main_node_id_count": 2276,
+  "node_id_count": 2332,
   "pytest": {
     "deselected": 19,
-    "total": 2290
+    "total": 2332
   },
   "snapshot_messages": 4
 }

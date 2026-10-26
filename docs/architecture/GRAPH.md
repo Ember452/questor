@@ -62,8 +62,8 @@
 | `questorharness.providers.auth.auth_manager` | 18 | 实现 |
 | `questorharness.contracts.domain.events` | 17 | 契约 |
 | `questorharness.config` | 15 | 门面 |
+| `questorharness.platform.io` | 15 | 原语 |
 | `questorharness.contracts.hooks` | 14 | 契约 |
-| `questorharness.platform.io` | 14 | 原语 |
 | `questorharness.contracts.usage` | 11 | 契约 |
 
 ## 包级扇入（Top10）
@@ -74,7 +74,7 @@
 | package | imported by |
 | --- | ---: |
 | `questorharness.contracts` | 120 |
-| `questorharness.platform` | 66 |
+| `questorharness.platform` | 67 |
 | `questorharness.capabilities` | 64 |
 | `questorharness.config` | 61 |
 | `questorharness.providers` | 60 |
@@ -92,7 +92,7 @@
 
 ### 目录（>=17 个非 init 源文件）
 
-- `src/questorharness/bootstrap/hosts/terminal`: 18 files
+- `src/questorharness/bootstrap/hosts/terminal`: 20 files
 
 ## vacuous-contracts
 
