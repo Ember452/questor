@@ -13,6 +13,30 @@ def test_build_returns_bindings_with_ctrl_c_and_ctrl_l() -> None:
     assert ("c-l",) in keys
 
 
+def test_build_registers_the_menu_keys_when_a_menu_is_given() -> None:
+    """菜单键必须是真绑定（否则 ↑↓ 永远只动光标、菜单不会走）。"""
+
+    from prompt_toolkit.keys import Keys
+
+    class _Menu:
+        active = False
+
+    bindings = keymap.build(_Menu())
+    assert bindings is not None
+    keys = {binding.keys for binding in bindings.bindings}
+    # prompt_toolkit 把 tab/enter 归一成 ControlI/ControlM；按枚举成员比对。
+    for expected in (
+        Keys.Up,
+        Keys.Down,
+        Keys.ControlP,
+        Keys.ControlN,
+        Keys.ControlI,
+        Keys.ControlM,
+        Keys.Escape,
+    ):
+        assert (expected,) in keys
+
+
 def test_build_is_optional_dependency_safe(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """没有 prompt_toolkit 时返回 None，让输入层回退裸 input。"""
 

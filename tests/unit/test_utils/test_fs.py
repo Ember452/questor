@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from questorharness.platform.io import atomic_write_bytes, atomic_write_text
+from questorharness.platform.io import atomic_write_bytes, atomic_write_text, sanitize_text
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +50,38 @@ def test_atomic_write_does_not_leave_tempfiles(tmp_path: Path) -> None:
     assert path.exists()
     leftover = [p for p in tmp_path.iterdir() if p != path]
     assert leftover == []
+
+
+# ---------------------------------------------------------------------------
+# Lone surrogates (Windows console code page / argv decoding)
+# ---------------------------------------------------------------------------
+
+
+def test_sanitize_text_passes_clean_text_through() -> None:
+    """合法文本必须原样返回（不能因“防代理对”而改写中文）。"""
+    assert sanitize_text("中文 abc") == "中文 abc"
+
+
+def test_sanitize_text_leaves_no_lone_surrogates() -> None:
+    """cp936 解码残留的低代理对必须被清掉（结果能按 UTF-8 编码）。"""
+    cleaned = sanitize_text("a\udc80b")
+    cleaned.encode("utf-8")  # 不抛即合格
+    assert "a" in cleaned and "b" in cleaned
+
+
+def test_sanitize_text_handles_a_high_surrogate() -> None:
+    """高代理对（surrogateescape 也恢复不了）退化为替换，而不是放过。"""
+    cleaned = sanitize_text("x\ud800y")
+    cleaned.encode("utf-8")
+    assert "x" in cleaned and "y" in cleaned
+
+
+def test_atomic_write_text_never_crashes_on_lone_surrogates(tmp_path: Path) -> None:
+    """session memory 写入阶段曾因代理对抛 UnicodeEncodeError、把整轮掀翻。"""
+    path = tmp_path / "session.md"
+    atomic_write_text(path, "start a\udc80b end")
+    text = path.read_bytes().decode("utf-8")
+    assert "start" in text and "end" in text
 
 
 # ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 
-def build() -> Any:
+def build(menu: Any | None = None) -> Any:
     """构造 prompt_toolkit KeyBindings；缺依赖时返回 None（回退裸 input 路径）。
 
     语义与 plan03 的 Ctrl-C 四语义表一致：
@@ -22,14 +22,20 @@ def build() -> Any:
     - 回合中：哨兵变成 `POST /cancel`（见 `app.drive_turns`）；
     - Ctrl-D：EOF，退出前收完已受理回合；
     - Ctrl-L：清屏重画（终端惯例，避免长输出刷屏后上下文丢失）。
+
+    菜单键（Reasonix `menuKey` 语义）：菜单开着时 ↑↓/Ctrl-P/Ctrl-N 环形移动、
+    Tab/Enter 接受（Enter 仅在"行已成前缀"时接受，否则提交）、Esc 关闭；
+    菜单没开时 ↑↓/Ctrl-P/Ctrl-N 回落历史与光标移动，与默认键位一致。
     """
 
     try:
+        from prompt_toolkit.filters import Condition
         from prompt_toolkit.key_binding import KeyBindings
     except ImportError:  # pragma: no cover - 输入层可选依赖
         return None
 
     bindings = KeyBindings()
+    has_menu = Condition(lambda: menu is not None and bool(getattr(menu, "active", False)))
 
     @bindings.add("c-c")
     def _interrupt(event: Any) -> None:
@@ -44,11 +50,51 @@ def build() -> Any:
         event.app.renderer.clear()
         event.app.invalidate()
 
+    @bindings.add("up")
+    def _up(event: Any) -> None:
+        """↑：菜单开着就移动选中项，否则回落光标/历史。"""
+
+        buffer = event.current_buffer
+        if menu is not None and menu.move(buffer, -1):
+            return
+        buffer.auto_up(count=event.arg)
+
+    @bindings.add("down")
+    def _down(event: Any) -> None:
+        """↓：菜单开着就移动选中项，否则回落光标/历史。"""
+
+        buffer = event.current_buffer
+        if menu is not None and menu.move(buffer, 1):
+            return
+        buffer.auto_down(count=event.arg)
+
+    @bindings.add("c-p")
+    def _prev(event: Any) -> None:
+        """Ctrl-P：同 ↑（Reasonix 同款别名）。"""
+
+        buffer = event.current_buffer
+        if menu is not None and menu.move(buffer, -1):
+            return
+        buffer.auto_up(count=event.arg)
+
+    @bindings.add("c-n")
+    def _next(event: Any) -> None:
+        """Ctrl-N：同 ↓（Reasonix 同款别名）。"""
+
+        buffer = event.current_buffer
+        if menu is not None and menu.move(buffer, 1):
+            return
+        buffer.auto_down(count=event.arg)
+
     @bindings.add("enter")
     def _submit(event: Any) -> None:
-        """Enter = 提交（多行模式下也要保住这条肌肉记忆）。"""
+        """Enter：行已成高亮项前缀则接受补全，否则提交（多行模式下也要保住）。"""
 
-        event.current_buffer.validate_and_handle()
+        buffer = event.current_buffer
+        if menu is not None and menu.should_accept_on_enter(buffer):
+            menu.accept(buffer)
+            return
+        buffer.validate_and_handle()
 
     @bindings.add("escape", "enter")
     def _newline(event: Any) -> None:
@@ -58,12 +104,19 @@ def build() -> Any:
 
     @bindings.add("tab")
     def _complete(event: Any) -> None:
-        """Tab 显式打开补全菜单（自动弹出失效时这是兜底入口）。"""
+        """Tab：菜单开着就接受选中项；没开就强制开菜单（显式补全入口）。"""
 
-        buffer = event.current_buffer
-        if buffer.complete_state:
-            buffer.complete_next()
-        else:
-            buffer.start_completion(select_first=False)
+        if menu is None:
+            return
+        if menu.accept(event.current_buffer):
+            return
+        menu.refresh(event.current_buffer, force=True)
+
+    @bindings.add("escape", filter=has_menu)
+    def _close_menu(event: Any) -> None:
+        """Esc：只吞掉"关菜单"；菜单没开时不拦键，Alt+Enter 不受影响。"""
+
+        if menu is not None:
+            menu.close(event.current_buffer)
 
     return bindings

@@ -44,9 +44,17 @@ def _row_text(item: dict[str, Any]) -> str:
 
 
 class PanelScreen(ModalScreen[str]):
-    """一个只读列表：Enter 选中返回 id，Esc 取消。"""
+    """一个可搜索列表：打字过滤、↑↓ 移动高亮、Enter 选中高亮行、Esc 取消。
 
-    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "取消")]
+    对齐 Reasonix `quickPicker`：一个焦点拥有全部按键——搜索框吃打字，
+    ↑/↓ 由本屏接管（Input 单行不吃这两个键），Enter 拿当前高亮行而不是永远第一行。
+    """
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "cancel", "取消"),
+        Binding("up", "prev", "上一条", show=False),
+        Binding("down", "next", "下一条", show=False),
+    ]
 
     def __init__(self, panel: pickers.Panel, items: list[dict[str, Any]]) -> None:
         super().__init__()
@@ -85,8 +93,28 @@ class PanelScreen(ModalScreen[str]):
 
     @on(Input.Submitted, "#panel-search")
     def _accept_from_search(self) -> None:
-        if self._visible:
-            self.dismiss(str(self._visible[0].get("id", "")))
+        """Enter 选中当前高亮行（不是永远第一行）；无高亮时退回首行。"""
+
+        listing = self.query_one("#panel-list", OptionList)
+        index = listing.highlighted
+        if index is None:
+            index = 0
+        if 0 <= index < len(self._visible):
+            self.dismiss(str(self._visible[index].get("id", "")))
+
+    def _move(self, delta: int) -> None:
+        listing = self.query_one("#panel-list", OptionList)
+        count = listing.option_count
+        if count == 0:
+            return
+        current = listing.highlighted if listing.highlighted is not None else 0
+        listing.highlighted = (current + delta) % count
+
+    def action_prev(self) -> None:
+        self._move(-1)
+
+    def action_next(self) -> None:
+        self._move(1)
 
     @on(OptionList.OptionSelected, "#panel-list")
     def _pick(self, event: OptionList.OptionSelected) -> None:

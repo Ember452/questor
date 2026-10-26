@@ -16,12 +16,19 @@ from questorharness.bootstrap.cli.preview import (
     _build_dry_run_preview,
     _format_dry_run_preview,
 )
+from questorharness.platform.io import sanitize_text
 
 
 def _version_callback(value: bool) -> None:
     if value:
         print(f"questorharness {__version__}")
         raise typer.Exit()
+
+
+def _clean_arg(value: str | None) -> str | None:
+    """argv 可能带孤立代理对（非 UTF-8 代码页解码残留）；进引擎前先归一。"""
+
+    return None if value is None else sanitize_text(value)
 
 
 app = typer.Typer(
@@ -270,6 +277,12 @@ def main(
     """Start an interactive session or run a single prompt."""
     if ctx.invoked_subcommand is not None:
         return
+
+    # Windows 控制台代码页会把中文 argv 解成孤立代理对；先归一，别让它一路
+    # 走到 session memory 写入再炸（子智能体派发实跑撞过）。
+    print_mode = _clean_arg(print_mode)
+    system_prompt = _clean_arg(system_prompt)
+    append_system_prompt = _clean_arg(append_system_prompt)
 
     import asyncio
     import logging
