@@ -506,6 +506,11 @@ tests/unit/bootstrap/hosts/terminal/test_markdown.py::test_half_written_table_ro
 tests/unit/bootstrap/hosts/terminal/test_markdown.py::test_long_text_without_newline_is_not_buffered
 tests/unit/bootstrap/hosts/terminal/test_markdown.py::test_open_fence_is_held_back_until_it_closes
 tests/unit/bootstrap/hosts/terminal/test_markdown.py::test_plain_text_streams_immediately
+tests/unit/bootstrap/hosts/terminal/test_output.py::test_console_writes_through_the_tolerant_stream
+tests/unit/bootstrap/hosts/terminal/test_output.py::test_tolerant_stream_forwards_flush_and_isatty
+tests/unit/bootstrap/hosts/terminal/test_output.py::test_tolerant_stream_keeps_working_with_a_plain_string_stream
+tests/unit/bootstrap/hosts/terminal/test_output.py::test_tolerant_stream_passes_encodable_text_through_unchanged
+tests/unit/bootstrap/hosts/terminal/test_output.py::test_tolerant_stream_replaces_what_the_host_cannot_encode
 tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_empty_panel_has_no_selection_and_says_so
 tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_empty_search_query_clears_the_filter
 tests/unit/bootstrap/hosts/terminal/test_overlay.py::test_move_clamps_at_both_ends
@@ -545,6 +550,7 @@ tests/unit/bootstrap/hosts/terminal/test_pickers.py::test_status_panel_is_read_o
 tests/unit/bootstrap/hosts/terminal/test_pickers.py::test_todo_panel_is_read_only
 tests/unit/bootstrap/hosts/terminal/test_pickers.py::test_transcript_panel_is_read_only
 tests/unit/bootstrap/hosts/terminal/test_pickers.py::test_unknown_panel_returns_none
+tests/unit/bootstrap/hosts/terminal/test_renderer.py::test_a_glyph_the_console_cannot_encode_does_not_kill_the_consumer
 tests/unit/bootstrap/hosts/terminal/test_renderer.py::test_approval_interrupt_settles_deny_and_does_not_kill_the_repl
 tests/unit/bootstrap/hosts/terminal/test_renderer.py::test_ask_interrupt_settles_unanswered
 tests/unit/bootstrap/hosts/terminal/test_renderer.py::test_frame_from_sse_reads_the_data_line
@@ -565,6 +571,10 @@ tests/unit/bootstrap/hosts/terminal/test_strings.py::test_badge_format_renders_w
 tests/unit/bootstrap/hosts/terminal/test_strings.py::test_empty_state_has_usage_lines
 tests/unit/bootstrap/hosts/terminal/test_strings.py::test_placeholder_is_a_single_visible_glyph
 tests/unit/bootstrap/hosts/terminal/test_strings.py::test_prompt_and_continuation_end_with_a_space
+tests/unit/bootstrap/hosts/terminal/test_strings.py::test_prompt_marker_defaults_to_the_live_stdout_encoding
+tests/unit/bootstrap/hosts/terminal/test_strings.py::test_prompt_marker_falls_back_on_a_code_page_that_cannot_encode_it
+tests/unit/bootstrap/hosts/terminal/test_strings.py::test_prompt_marker_falls_back_on_an_unknown_encoding
+tests/unit/bootstrap/hosts/terminal/test_strings.py::test_prompt_marker_keeps_the_glyph_when_the_host_can_encode_it
 tests/unit/bootstrap/hosts/terminal/test_unsupported.py::test_badge_reason_names_the_missing_contract
 tests/unit/bootstrap/hosts/terminal/test_unsupported.py::test_badge_rejects_unknown_id
 tests/unit/bootstrap/hosts/terminal/test_unsupported.py::test_badge_text_names_the_gap_and_its_id
