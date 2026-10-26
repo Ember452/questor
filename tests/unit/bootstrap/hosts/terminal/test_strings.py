@@ -28,6 +28,29 @@ def test_prompt_and_continuation_end_with_a_space() -> None:
     assert strings.CONTINUATION.endswith(" ")
 
 
+def test_prompt_marker_keeps_the_glyph_when_the_host_can_encode_it() -> None:
+    """UTF-8 宿主直接用完整的提示符。"""
+    assert strings.prompt_marker("utf-8") == strings.PROMPT
+
+
+def test_prompt_marker_falls_back_on_a_code_page_that_cannot_encode_it() -> None:
+    """cp936 控制台写 `\\u276f` 会 UnicodeEncodeError（实跑撞过），必顶退 ASCII。"""
+    assert strings.prompt_marker("gbk") == strings.PROMPT_FALLBACK
+
+
+def test_prompt_marker_falls_back_on_an_unknown_encoding() -> None:
+    """未知编码名不能把 REPL 卡死，只能降级。"""
+    assert strings.prompt_marker("no-such-codec") == strings.PROMPT_FALLBACK
+
+
+def test_prompt_marker_defaults_to_the_live_stdout_encoding(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """不传参时看真实 stdout 编码（管道/重定向下的宿主编码）。"""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(strings.sys, "stdout", SimpleNamespace(encoding="gbk"))
+    assert strings.prompt_marker() == strings.PROMPT_FALLBACK
+
+
 def test_empty_state_has_usage_lines() -> None:
     """空态至少要给出“怎么开始”和一条键位提示。"""
     assert len(strings.EMPTY_STATE_LINES) >= 2

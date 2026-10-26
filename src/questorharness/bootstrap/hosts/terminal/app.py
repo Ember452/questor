@@ -20,6 +20,7 @@ from rich.console import Console
 from questorharness.bootstrap.hosts.serve import terminal_theme as theme
 from questorharness.bootstrap.hosts.serve.host import ServeHost
 from questorharness.bootstrap.hosts.terminal import cards, paste, pickers, strings
+from questorharness.bootstrap.hosts.terminal.output import console as build_console
 from questorharness.bootstrap.hosts.terminal.renderer import TerminalRenderer
 
 if TYPE_CHECKING:
@@ -67,7 +68,8 @@ def _prompt_once(session: "_PS") -> str:
     """同步读一行：Ctrl-C 交回中断哨兵（回合中会变成 /cancel）。运行在 worker 线程。"""
     while True:
         try:
-            text: str = session.prompt(strings.PROMPT)
+            # `❯ ` 在 cp936 控制台写不出去（UnicodeEncodeError），由 strings 探编码降级。
+            text: str = session.prompt(strings.prompt_marker())
             return text
         except KeyboardInterrupt:
             return INTERRUPT
@@ -77,7 +79,7 @@ async def read_line(session: "_PS | None") -> str:
     """读一行输入；EOF / Ctrl-C 各走一个哨兵。session 为空时回退裸 input。"""
     if session is None:
         try:
-            return await asyncio.to_thread(input, strings.PROMPT)
+            return await asyncio.to_thread(input, strings.prompt_marker())
         except EOFError:
             return EOF
         except KeyboardInterrupt:
@@ -299,7 +301,7 @@ async def run_terminal_client(
     console: Console | None = None,
 ) -> int:
     """跑交互循环（或单次 prompt），直到 EOF / 回合结束。"""
-    output = console or Console()
+    output = console or build_console()
     events = await host.transport.request("GET", f"{PREFIX}/events")
     assert events.stream is not None
     interactive = prompt is None and sys.stdin.isatty()

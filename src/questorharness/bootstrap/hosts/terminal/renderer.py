@@ -127,7 +127,23 @@ class TerminalRenderer:
                     continue
                 frame = frame_from_sse(block)
                 if frame is not None:
-                    await self._render(frame)
+                    try:
+                        await self._render(frame)
+                    except Exception as exc:  # noqa: BLE001 - 单帧任何异常不得杀死消费链
+                        # 不能回 `console.print`：rich 会把上一行没写出去的字节再拼进来，
+                        # 坏控制台依旧抛。直写一眼纯文本，失败也只丢这一行。
+                        try:
+                            self._console.file.write(
+                                strings.render_failed(
+                                    item=str(frame.get("kind", "?")), detail=type(exc).__name__
+                                )
+                                + "\n"
+                            )
+                            self._console.file.flush()
+                        except Exception:  # noqa: BLE001 - 降级也要尽力而为
+                            pass
+                        if frame.get("kind") == "turn_done":
+                            self.done.set()
                 # 不能在 turn_done 后 return：交互模式要连续多轮；单次 prompt
                 # 由调用方 done.wait() 收尾，两种模式都靠 finally 的 cancel 退订。
 
@@ -158,17 +174,23 @@ class TerminalRenderer:
             self._streamed_text = False
             self._busy = True
             self._queue_depth = 0
-        self._console.print(self._safe_render(item))
         if isinstance(item, view.TurnDoneItem):
             self._busy = False
             self._pending_turns = max(0, self._pending_turns - 1)
-            if item.usage is not None:
-                self._usage = item.usage
-            # 回合可能换过模型/权限档（/model、/permissions）：重拉一次状态栏真值。
-            await self.refresh_status()
-            self._console.print()
-            self._console.print(self._footer())
-            self.done.set()
+            try:
+                self._console.print(self._safe_render(item))
+                if item.usage is not None:
+                    self._usage = item.usage
+                # 回合可能换过模型/权限档（/model、/permissions）：重拉一次状态栏真值。
+                await self.refresh_status()
+                self._console.print()
+                self._console.print(self._footer())
+            finally:
+                # 无论打印是否成功（写端仍可能抛编码错）：`done` 必须置位，
+                # 否则 EOF 前的 drain 会白等到超时（实跑现场：白等 300s）。
+                self.done.set()
+            return
+        self._console.print(self._safe_render(item))
 
     def _safe_render(self, item: view.Item) -> Any:
         """单帧渲染不得杀死消费循环：异常降级成一行可见提示，继续消费。"""

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import sys
+
 # ---- 未实现徽标（plan03 §5）--------------------------------------------
 BADGE_MARK = "⊘"
 BADGE_FORMAT = "{mark} 未实现 · {gap_id} {name}"
@@ -13,6 +15,7 @@ GAPS_LEAD = "  未实现的入口："
 
 # ---- 输入框（形态取自 Reasonix `tui/chrome.go` 的提示符）------------------
 PROMPT = "❯ "
+PROMPT_FALLBACK = "> "
 CONTINUATION = "… "
 
 # ---- 缺数据占位（FooterVM 的可选字段）-----------------------------------
@@ -60,3 +63,19 @@ PANEL_CHOICE_PROMPT = "  选择序号（/ 搜索 · 空=取消）："
 PANEL_SEARCH_PROMPT = "  搜索（回车应用 · 空=清过滤 · Ctrl-C 保持）："
 PANEL_EMPTY = "  这个面板现在是空的"
 PANEL_UNAVAILABLE = "  面板取不到数据（{reason}）"
+
+
+def prompt_marker(encoding: str | None = None) -> str:
+    """接台能编码就返回 `❯ `，否则退回 `> `（plan03 波 F：cp936 控制台实跑撞过）。
+
+    不传 `encoding` 时看当前 stdout 的编码（管道/重定向下就是宿主编码）。
+    `input()` / `PromptSession.prompt()` 会先把提示符写到 stdout，
+    字面量无法编码时整个 REPL 直接抛 UnicodeEncodeError，所以降级必须在传入前完成。
+    """
+
+    target = encoding or getattr(sys.stdout, "encoding", None) or "ascii"
+    try:
+        PROMPT.encode(target)
+    except (LookupError, UnicodeEncodeError):
+        return PROMPT_FALLBACK
+    return PROMPT

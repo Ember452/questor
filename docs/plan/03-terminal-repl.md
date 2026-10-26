@@ -61,8 +61,8 @@
 
 | # | 能力 | 参照 | 本仓缺在哪（证据） | 处置 |
 |---|---|---|---|---|
-| A1 | 审批三档 / 记住本次选择 | Reasonix `ApprovalCard` + `tool-approval-mode`（`footer.go` 标签：Ask/Auto/yolo/Read only/Don't ask） | `PermissionPrompt = Callable[[str, str], Awaitable[bool]]`（[runtime.py:55](../../src/questorharness/bootstrap/runtime.py)）**只有 bool**；`/approve` 只收 `approve\|deny`（`routes.py:191`） | 做两档；第三档渲染 `⊘ 未实现 · A1`（§5） |
-| A2 | Ask 单选 / 多选 / 自填 | Reasonix `AskCard` | 工具入参只有 `question: str`（`capabilities/tools/agent/ask_user_question_tool.py:15-20`）；回调 `Callable[[str], Awaitable[str]]`（`:12`）；帧只有 `{id,question}`（`wire.py:86-88`） | 做自由文本；选项类渲染 `⊘ 未实现 · A2` |
+| A1 | 审批三档 / 记住本次选择 | Reasonix `ApprovalCard` + `tool-approval-mode`（`footer.go` 标签：Ask/Auto/yolo/Read only/Don't ask） | `PermissionPrompt = Callable[[str, str], Awaitable[bool]]`（[runtime.py:55](../../src/questorharness/bootstrap/runtime.py)）**只有 bool**；`/approve` 只收 `approve\|deny`（`routes.py:191`） | **波 F 已落地**：三档本就在引擎侧（`/permissions` + settings 持久化），缺的只是载体 → `:mode` 面板 + `/catalog/posture` + 状态栏真值 |
+| A2 | Ask 单选 / 多选 / 自填 | Reasonix `AskCard` | 工具入参只有 `question: str`（`capabilities/tools/agent/ask_user_question_tool.py:15-20`）；回调 `Callable[[str], Awaitable[str]]`（`:12`）；帧只有 `{id,question}`（`wire.py:86-88`） | **波 F 已落地**（additive）：入参 `options`（可选）+ 帧 `options` + 编号选项卡；序号映回原文，自由文本照传 |
 | A3 | 回合中插话 steer（不打断地增补指令） | Reasonix `Steer`/`Pending`（`transcript.go` `ItemUser.Steer`、`queue_slash.go`） | 无 `/steer` 端点；`authority.py` 只有 **1 个排队槽**（`queue_depth=1`，`authority.py:67,104-117`） | 排队做满；steer 渲染 `⊘ 未实现 · A3` |
 | A4 | 任意检查点回滚 | Reasonix `checkpoints` + `restore.go`(44) + `rewind.go`(284) | 只有 `/rewind` 删最后一轮；无检查点列表 | 标「部分可用」并在 help 注明 |
 | A5 | 提交附件 / 图片输入 | Reasonix `clippaste.go`(96)；Claude Code `attach` | `/submit` 只收 `{line, clientRequestId}`（`routes.py:150-158`）；`turn_started` 无 attachments | 粘贴图片渲染 `⊘ 未实现 · A5` |
@@ -70,6 +70,7 @@
 
 **表 A 的 id 就是契约**：A1–A6 同时是 `terminal/unsupported.py` 的 key、映射表新增 `id` 列的取值。
 三处用同一个 id 对齐，不许各自编号（§5 三条守卫靠它机器执行）。
+**波 F 后仍在册的只有 A3 / A5 / A6**（A1、A2 落地即注销，映射表 `absent` 集合与登记表 key 集合双向锁死）。
 
 ### 表 B：后端有、契约拿不到（投影缺口）——11 项，加 catalog kind / 字段即可
 
@@ -87,7 +88,7 @@
 | B10 | 分支 / worktree 状态 | Claude Code `branch` | `Enter/ExitWorktreeTool` + `/diff` `/branch` | 无 catalog kind `git` |
 | B11 | 编辑审批的结构化 diff | Reasonix `diffview.go`(410) `diffformatter.go`(334) | `detail` 字符串：`+{added}/-{removed}` + 补丁正文 ≤4000 字符（`authority.py:194-195`、`wire.py:76-83`） | 无 `patch`/`added`/`removed` 结构字段 |
 
-**表 B 落地状态（W-D1…W-D4）**：B1（usage 扩展）、B11（结构化 diff）、B2–B7、B9、B10（catalog kind）、B8（`todos` kind + 终端/web 清单卡）**均已落地**；仅 B12（缓存命中）仍为 nullable（引擎无统计）。
+**表 B 落地状态（W-D1…W-D4）**：B1（usage 扩展）、B11（结构化 diff）、B2–B7、B9、B10（catalog kind）、B8（`todos` kind + 终端/web 清单卡）**均已落地**；仅 B1 的 `cachedTokens`（缓存命中）仍为 nullable（引擎无统计，已登记 `declared`）。
 
 ### 表 C：后端够用、纯终端没做——19 项（本计划主战场）
 
@@ -417,6 +418,7 @@ UNSUPPORTED: dict[str, str] = {
 | D 契约扩张 | `feat/terminal-repl`（**偏离**：未切 `feat/terminal-contract`） | be5ee5e（W-D1/2）/ 11112d8（W-D3 catalog）/ ad0b5bb（W-D4 todos） | `test_catalog_coverage` 双向 + `CatalogResponse` 不得进 `ServerFrame` | 8 个 catalog kind（含 `plugins`）与 `todos` kind 全部落地；`cachedTokens` 仍 nullable（引擎无统计，已登记 `declared`） |
 | E 面板接线 | `feat/terminal-repl` | 11112d8 / bdd89e8 / 7f93ff2 | stub 数据 / 绕过端点直读引擎 → 红 | 8 个 catalog kind + transcript + 命令面板全部接真数据；`:help` 按族分组因 `SlashCommand` 无 `family` 字段登记为 `declared` |
 | （结构）入包 | `feat/terminal-repl` | 3c77fbd | 入包后旧导入方仍绿（门面保留全部公开名） | `app.py` / `renderer.py` / `keymap.py` 入包，门面降为 170 行装配 |
+| **F 收尾** | `feat/terminal-repl` | 6368f88（面板搜索 + 提示符单真源 + Ctrl-C fail-closed）/ 54ed699（A1：`catalog/posture`+`status`、`:mode`、状态栏真值）/ 11d7e19（`:todo` 只读面板 + 拒绝输出走 renderer）/ 05b1aae（A2：ask options 全栈 + 编号卡）/ 本刀（文档回填） | 每刀先红：`__search__` 字面量漏到输入框、TTY 下选中项不在过滤集、`app.py` 出现 `"> "` 字面量、Ctrl-C 击穿结算、`posture` 双向覆盖、`print(` 双侧出口、ask options 链三处（工具 / authority / 帧） | 四缺陷修复 + A1/A2 落地 + `:todo` 面板；A3/A5/A6 保留徽标（§9 已裁）；三张对账表见 §附录 B |
 
 **填写规则**：三张对账表齐备才可填；任一表缺失视为该波未完成。
 
@@ -436,20 +438,26 @@ UNSUPPORTED: dict[str, str] = {
   ⑦`apps/web` 条款改为“仅同步 cardSlots + 生成物”；⑧编号去重（F/W-D）；⑨`strings.py` + 渲染异常不吞 + Ctrl-C 四语义表 + 快照参数；
   ⑩计数与行号口径写进 §0-12。
 
-**开放（执行 agent 不得代答）**
+**开放（原列 9 条，波 F 逐条落裁决）**
 
-1. **A1/A2/A3 是否改引擎契约**（三态审批 / Ask options / steer）——不改则永久挂徽标，改则要动 `runtime.py:55,57` 与工具契约，属"经同意不限规模"。
-2. **波 D 契约扩张授权**：1 个新路由（`GET /catalog/{kind}`，8 个 kind）+ 2 处字段扩展（usage / approval patch），是否按"只加不改 + 双侧 codegen"直接推进。
-3. **三处"暂不暴露"是否翻转**：`autopilot`、`coordinator`、`steer`（`questor-coding.md:37,54,57,72`）。
-4. **`/voice` 采集是否排期**（默认不做，只在 UI 标 A6）。
-5. **终端 UI 语言**：中文文案 + 英文标识符（本计划默认）；若要全英文需否决。
-6. **`feat/terminal-contract` 分支是否现在就切**（波 D 之前不动）。
-7. **波 E 是否收敛为 E0（模型 + 会话 picker）**，其余五面板进后置池。评审建议收敛；
-   但**这会改你上一轮"全表覆盖"的裁决**，所以列为待裁而不是默默改（不砍功能，只调投资顺序）。
-8. **`todos` kind 本轮做不做（W-D4）**：做则必须同刀改 `apps/web/src/app/cardSlots.ts` 一处 + 重生生成物。
-   建议：本轮不做，B8 挂徽标；等 E0 上线后按真实使用决定。
-9. **catalog 的 kind 扩展协议**：新 kind 是“加 provider 函数 + schema 加分支”还是“必须同步登记在映射表”
-   （建议两者都要，由 `test_catalog_coverage` 双向锁住）。
+| # | 问题 | 裁决 | 依据 / 落地 |
+|---|---|---|---|
+| 1 | A1/A2/A3 是否改引擎契约 | **A1、A2 已做；A3 不做** | A1 三档本就在引擎侧（`/permissions` + settings 持久化），缺的只是载体 → 54ed699；A2 为 additive 全栈（工具入参 / authority / 帧 / 卡）→ 05b1aae。A3 steer 需在 `query_engine` 回合循环里注入“用户消息插队点”，属架构手术而非载体；authority 的 1 个排队槽已覆盖主场景，故保留 `⊘ 未实现 · A3` |
+| 2 | 波 D 契约扩张授权 | **已授权并执行完毕** | 只加不改 + 双侧 codegen：W-D1/D2（be5ee5e）、W-D3 catalog（11112d8）、W-D4 todos（ad0b5bb） |
+| 3 | 三处“暂不暴露”是否翻转 | **`autopilot`/`coordinator` 维持不暴露；`steer` 见第 1 条** | 映表 `questor-coding.md:37,54,57,72` 仍是产品口径；终端不另开口子 |
+| 4 | `/voice` 采集是否排期 | **不排期（保留 A6 徽标）** | 采集是独立子系统（录音 / 转写 / 设备权限），与终端载体不同层 |
+| 5 | 终端 UI 语言 | **中文文案 + 英文标识符**（已按默认执行） | `terminal/strings.py` 单真源；标识符/帧字段全英文 |
+| 6 | `feat/terminal-contract` 是否现在切 | **不切** | 波 D 已在 `feat/terminal-repl` 完成，偏离已在 §8 登记 |
+| 7 | 波 E 是否收敛为 E0 | **未收敛，已超 E0 交付** | 实际交付 11 个 catalog kind（含 `posture`/`status`/`todos`）+ transcript + 命令面板 + `:mode` + `:todo`；E0 只是最小集，不影响“终端部分收尾即可开发功能”的目标 |
+| 8 | `todos` kind 本轮做不做 | **做** | ad0b5bb（帧 + 终端清单卡 + web `TodoCard`）；另加 `:todo` 只读面板（11d7e19，数据与 `todos` provider 同源） |
+| 9 | catalog kind 扩展协议 | **两者都要，已机器锁死** | `tests/ci/test_catalog_coverage.py` 双向：schema `CatalogResponse` 分支 ↔ `providers.KINDS` ↔ `PROVIDERS` 表；帧侧由 `test_kind_coverage` 同口径锁 |
+
+**本轮明确不做（保留徽标）**
+
+- **A3 steer**：引擎回合循环无用户消息注入点，改它等于改查询循环状态机；排队槽（`authority.queue_depth=1`）已覆盖“回合中补充一句”的主场景。
+- **A5 附件 / 图片**：`/submit` 只有 `{line, clientRequestId}`，扩它要动契约 + 传输面（大体积、断点、清理），收益与改动面不配。
+- **A6 语音**：需新增采集模块（麦克风/编码），与“终端瘦客户端”不相干。
+- **web 页面与交互 / `apps/desktop`**：仅重生生成物与 `TodoCard`（§2.3 例外条款）。
 
 ---
 
@@ -563,6 +571,11 @@ UNSUPPORTED: dict[str, str] = {
 | §5 | 徽标守卫 #2/#3 + 启动缺口行 | `terminal/cards.gaps`、`tests/ci/test_unsupported_badges.py` | 7f93ff2 |
 | 波 B 补 | 审批/提问倒计时工具条 + 无控制台回退 | `terminal/approval.py`、`renderer.py`、`input_session.py` | f1a3059 |
 | 波 E 补 | `plugins` catalog kind + `:help` 命令面板 | `serve/catalog/providers.py`、`terminal/pickers.py`、`terminal/app.py` | a40eb35 |
+| 波 F-1 | 面板搜索环（`__search__` 不再漏进输入框；非 TTY 先问词后编列表）+ 提示符单真源（`strings.PROMPT`） | `terminal/overlay.py`、`terminal/{strings,app,input_session}.py` | 6368f88 |
+| 波 F-2 | 审批/提问 Ctrl-C → fail-closed（deny / 空答案），不击穿 REPL | `terminal/renderer.py` | 6368f88 |
+| 波 F-3（A1） | `catalog/posture` + `catalog/status` kind、`:mode` 面板、状态栏四字段真值 | `serve/catalog/providers.py`、`terminal/{pickers,renderer}.py` | 54ed699 |
+| 波 F-4 | `catalog/todos` provider + `:todo` 只读面板 + 拒绝输出走 renderer（`print(` 退出 app 层） | `serve/catalog/providers.py`、`terminal/{pickers,app}.py` | 11d7e19 |
+| 波 F-5（A2） | ask options 全栈（schema → 工具入参 → authority → 帧 → 编号卡 → 序号映射）+ 模型可见面基线重生 | `protocol/app-wire.schema.json`、`capabilities/tools/agent/ask_user_question_tool.py`、`serve/{authority,wire,host}.py`、`terminal/{wire_view,cards,renderer}.py`、`tests/fixtures/baseline/prompt_surface/*` | 05b1aae |
 
 ### B-2 影响面对账（被改文件 → 上下游）
 
@@ -575,6 +588,9 @@ UNSUPPORTED: dict[str, str] = {
 | `hosts/terminal_client.py` | `bootstrap/hosts/app.py`、`api.py`、`serve/studio.py`、e2e/单测 | `terminal.app`/`renderer` | 5 个导入方零改动（公开名全保留） |
 | `apps/web/src/app/{cardSlots,viewModel}.ts`、`pages/ChatPage.tsx` | web 测试、`test_card_slots_cover_every_schema_kind` | generated types | 新增 `todos` 槽位 + 穷尽 case + TodoCard |
 | `docs/plan/mapping/terminal-coding.md` | `test_unsupported_badges` 双向断言 | `terminal/unsupported.py` | 新增 T1–T18 行 |
+| `capabilities/tools/agent/ask_user_question_tool.py` | `engine/tool_execution.py`（注入 prompt）、`registry`、35 个工具的 prompt surface | `engine/context.AskUserPrompt`、`bootstrap/runtime.AskUserPrompt` | `scripts/ci/prompt_surface.py --record`（3 个宿主快照）；`tool_metadata_golden` 不变（入参 schema 不进 golden） |
+| `serve/authority.py` | `host._publish_prompt`、`terminal_client`、`/ask` 结算、e2e | `PendingPrompt` 全字段、`asyncio` future | `wire.ask_request_frame`、终端 `AskItem.options` |
+| `terminal/unsupported.py` | `cards.gaps()/banner()`、`test_unsupported_badges`、映射表 | `strings` | 删除 A1/A2 后启动缺口行自动减两条（守卫 #3 双向锁） |
 
 ### B-3 判红对账（计划声明的红用例 == 实际存在且可复现为红）
 
@@ -597,3 +613,13 @@ UNSUPPORTED: dict[str, str] = {
 | 成功/失败/缺文件的 todos 发布时机 | `test_host_todos.py`（四条） |
 | 面板游标越界/空表/只读面板误发命令 | `test_overlay.py`、`test_pickers.py::test_transcript_panel_is_read_only` |
 | 图元零调用（F1 回归） | `test_terminal_theme_usage.py::test_every_public_theme_primitive_is_called` |
+| 面板把 `__search__` 当搜索词回显 | `test_overlay.py::test_slash_opens_search_and_refines_the_choice`（含”过滤后选中项来自过滤集“） |
+| 非 TTY 回退不支持搜索 / 空输入不取消 | `test_overlay.py::test_search_matches_detail_text_in_the_numbered_fallback`、`test_non_tty_empty_input_cancels` |
+| 提示符字面量双真源 | `test_app.py::test_prompt_marker_has_a_single_source` |
+| 审批中 Ctrl-C 误放行 / 击穿 REPL | `test_renderer.py::test_approval_interrupt_settles_deny_and_does_not_kill_the_repl` |
+| 提问中 Ctrl-C 不结算 | `test_renderer.py::test_ask_interrupt_settles_unanswered` |
+| posture/status kind 只加一边 | `test_catalog_coverage.py::test_schema_kinds_equal_provider_registry`、`test_schema_declares_the_catalog_kind_enum` |
+| 拒绝输出绕过 renderer | `test_app.py::test_drive_turns_shows_refusal_through_the_renderer` |
+| ask options 丢失（工具/authority/帧） | `test_ask_user_question.py::test_prompt_receives_question_and_options`、`test_authority.py::test_ask_options_ride_the_pending_prompt`、`test_wire.py::test_ask_request_frame_carries_options_only_when_present` |
+| 序号不回映原文 / 越界乱猜 | `test_renderer_answer.py`（6 条）、`test_wire_view.py::test_ask_request_projects_options_when_present` |
+| A1/A2 落地后登记表不清 | `test_unsupported.py::test_landed_gaps_are_deregistered`、`test_package_contract.py::test_unsupported_registry_ids_are_the_declared_gaps` |

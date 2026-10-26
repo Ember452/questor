@@ -204,12 +204,15 @@ def test_help_panel_is_read_only(monkeypatch) -> None:  # type: ignore[no-untype
 
 
 def test_prompt_marker_has_a_single_source() -> None:
-    """提示符唯一真源是 `strings.PROMPT`（Reasonix `❯ `）。
+    """提示符唯一真源是 `strings.prompt_marker()`（Reasonix `❯ `，装不下则 `> `）。
 
     `"> "` 字面量散落会漂出第二真源——`input_session.prompt_text` 曾经
-    文档写 `❯ ` 实际返回 `> `，就是这种漂移的现场。
+    文档写 `❯ ` 实际返回 `> `，就是这种漂移的现场；直接引 `strings.PROMPT`
+    则会在 cp936 控制台上抛 UnicodeEncodeError，同样禁用。
     """
 
     source = Path(app_module.__file__).read_text(encoding="utf-8")
     assert '"> "' not in source
-    assert "strings.PROMPT" in source
+    assert "strings.PROMPT\n" not in source
+    assert "strings.PROMPT)" not in source
+    assert "strings.prompt_marker()" in source

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 from types import SimpleNamespace
 
 from rich.console import Console
@@ -54,6 +55,53 @@ def test_todos_frame_renders_a_checklist_card() -> None:
     asyncio.run(scenario())
     text = buffer.getvalue()
     assert "TODO.md" in text and "写文档" in text
+
+
+def test_a_glyph_the_console_cannot_encode_does_not_kill_the_consumer() -> None:
+    """cp936 控制台写不下 `✓` 时：降级一行，但消费链不能死、`done` 必须置位。
+
+    实跑现场：管道下 `/status` 写完正文后消费任务死在 footer 的 `✓` 上，
+    `turn_done` 的 `done.set()` 永不执行，EOF 前 drain 白等 300s 才退出。
+    """
+
+    class _GbkStream:
+        encoding = "gbk"
+
+        def __init__(self) -> None:
+            self.written: list[str] = []
+
+        def write(self, text: str) -> int:
+            text.encode(self.encoding)
+            self.written.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
+        def isatty(self) -> bool:
+            return False
+
+    stream = _GbkStream()
+    instance, _ = _renderer()
+    instance._console = Console(file=stream, force_terminal=False, width=80)
+    body = json.dumps(
+        {
+            "kind": "turn_done",
+            "turnId": "t1",
+            "cancelled": False,
+            "outcome": "completed",
+            "durationMs": 5,
+            "checkpointTurn": False,
+            "seq": 13,
+        }
+    ).encode()
+
+    async def chunks() -> object:
+        yield b"id: 13\ndata: " + body + b"\n\n"
+
+    asyncio.run(instance.consume(chunks()))  # type: ignore[arg-type]
+    assert instance.done.is_set()
+    assert any("completed" in line or "done" in line or "?" in line for line in stream.written)
 
 
 def test_queued_receipt_updates_footer_depth() -> None:

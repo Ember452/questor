@@ -40,12 +40,14 @@
 | T12 | git 面板 | ready | `:git` → `/catalog/git` → `/branch` | Claude Code `branch` |
 | T13 | 插件面板 | ready | `:plugin` → `/catalog/plugins` → `/plugin`（读 `plugins.loader.load_plugins`） | — |
 | T14 | 费用 / 上下文占比 | declared | 窗口已知则显比例；`costUsd`/`cachedTokens` 引擎无数据 → 显 `—` | Reasonix `footer.go` |
-| T15 | transcript 浏览与搜索 | ready | `:transcript`（等价 `:t` / `:history`）读 `/history`，面板内 `/` 过滤 + j/k 游标；只读不发命令 | Claude Code transcript mode |
+| T15 | transcript 浏览与搜索 | ready | `:transcript`（等价 `:t` / `:history`）读 `/history`，面板内 `/` 过滤 + j/k 游标；只读不发命令；`/` 先退出 alt-screen 用普通 prompt 问搜索词再重开面板（非 TTY 回退先问词后编列表） | Claude Code transcript mode |
 | T16 | 清单卡（todos 帧） | ready | 终端 `theme.todo_card`（路径 + n/m + ✓/○）；web `TodoCard`；同回合只保留最新清单 | Reasonix `todos.go` |
 | T17 | 命令面板 | ready | `:help`（等价 `:?` / `:cmd`）读 `/commands`，与补全菜单同源，禁硬编码清单 | Reasonix `help.go` |
 | T18 | 命令按族分组 | ready | `SlashCommand.family` 由 `registry.set_family` 在注册时打标，`/commands` 透出，`:help` 族变即插标题行（默认 15 族；`plugin` 族仅在装了插件时有成员） | Reasonix `help.go` 分组 |
 | T19 | 权限模式面板与状态栏真值 | ready | `:mode`（等价 `:posture` / `:permission`）；状态栏 model/effort/权限档/分支取 `catalog/posture`+`catalog/status`+`catalog/git`，回合结束自动重拉 | Reasonix `posture.go` + `footer.go` |
+| T20 | 清单只读面板 | ready | `:todo`（等价 `:todos`）→ `GET /catalog/todos`（解 `cwd/TODO.md`，与 `todos` 帧同一 `parse_checklist`）；只读不发命令 | Reasonix `todos.go` |
 
 > `id` 一入表即不重新编号、不删除；下线只改 `status`。`absent` 行集合必须与
 > `terminal/unsupported.py` 的 key 集合相等（`tests/ci/test_unsupported_badges.py`）。
 > A1 于 plan03 波 F 落地（`/permissions` 三态早就在引擎侧，此前缺的只是终端载体）。
+> A2 于 plan03 波 F 落地（additive：`ask_user_question.options` → 帧 `options` → 编号卡 + 序号映回原文）。
