@@ -294,7 +294,11 @@ class Router:
 
         # current_settings 含 CLI 覆盖与运行时切换后的真值；老宿主缺它就回退磁盘。
         provider = getattr(self._host.runtime, "current_settings", None)
-        ctx = CatalogContext(cwd=Path(self._host.runtime.cwd), settings_provider=provider)
+        ctx = CatalogContext(
+            cwd=Path(self._host.runtime.cwd),
+            settings_provider=provider,
+            todo_path=getattr(self._host, "_todo_path", None),
+        )
         items = build_catalog(kind, ctx)
         if items is None:
             raise refusals.Refusal(

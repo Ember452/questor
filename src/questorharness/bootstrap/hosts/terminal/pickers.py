@@ -34,6 +34,8 @@ PANELS: Final[dict[str, Panel]] = {
     "posture": Panel("posture", "权限模式", "/permissions {id}", uses_id=True),
     # status 只给人看（模型/推理强度现状），也是状态栏的真值源。
     "status": Panel("status", "运行状态（只读）", ""),
+    # todos 只读面板：清单写入是模型侧工具，这里只回看（数据与 todos 帧同源）。
+    "todos": Panel("todos", "清单（只读）", ""),
     # transcript 不走 catalog：数据源是 `/history`（已在会话里的内容）。
     "transcript": Panel("transcript", "会话记录（只读）", ""),
     # help 不走 catalog：数据源是 `/commands`（与补全菜单同源，禁硬编码清单）。
@@ -59,6 +61,8 @@ ALIASES: Final[dict[str, str]] = {
     ":posture": "posture",
     ":permission": "posture",
     ":status": "status",
+    ":todo": "todos",
+    ":todos": "todos",
     ":t": "transcript",
     ":transcript": "transcript",
     ":history": "transcript",

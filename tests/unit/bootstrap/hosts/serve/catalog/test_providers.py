@@ -135,3 +135,29 @@ def test_router_passes_the_runtime_settings_provider(tmp_path) -> None:  # type:
     assert response.status == 200
     payload = json.loads(response.body)
     assert [item["id"] for item in payload["items"] if item.get("current")] == ["full_auto"]
+
+
+def test_todos_provider_parses_the_default_checklist_file(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """:todo 面板的数据源：清单文件直读（与 git provider 读工作区同构）。"""
+
+    (tmp_path / "TODO.md").write_text(
+        "# TODO\n\n- [ ] 写文档\n- [x] 跑通 e2e\n", encoding="utf-8"
+    )
+    items = providers.todos(CatalogContext(cwd=tmp_path))
+    assert [item["id"] for item in items] == ["写文档", "跑通 e2e"]
+    assert items[1]["label"].startswith("✓")
+    assert items[0]["label"].startswith("○")
+
+
+def test_todos_provider_reads_the_last_written_path(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """模型可能写自定义路径：跟随宿主记住的最近一次 todo_write 路径。"""
+
+    (tmp_path / "PLAN.md").write_text("- [x] 迁移\n", encoding="utf-8")
+    items = providers.todos(CatalogContext(cwd=tmp_path, todo_path="PLAN.md"))
+    assert [item["id"] for item in items] == ["迁移"]
+
+
+def test_todos_provider_missing_file_is_an_empty_list(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """没有清单（会话里没写过 todo）→ 空表走面板空态，不抛异常。"""
+
+    assert providers.todos(CatalogContext(cwd=tmp_path)) == []

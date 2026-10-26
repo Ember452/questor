@@ -47,6 +47,15 @@ def test_status_panel_is_read_only() -> None:
     assert pickers.action_line(panel, "glm") is None
 
 
+def test_todo_panel_is_read_only() -> None:
+    """:todo 只给人看清单（写入是模型侧工具），选中不得误发命令。"""
+
+    panel = pickers.resolve(":todo")
+    assert panel is not None and panel.kind == "todos"
+    assert pickers.resolve(":todos").kind == "todos"
+    assert pickers.action_line(panel, "写文档") is None
+
+
 def test_skill_panel_submits_the_skill_command() -> None:
     panel = pickers.resolve(":skills")
     assert panel is not None

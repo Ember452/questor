@@ -36,6 +36,7 @@ KINDS: tuple[str, ...] = (
     "git",
     "posture",
     "status",
+    "todos",
 )
 
 CatalogItem = dict[str, Any]
@@ -59,6 +60,8 @@ class CatalogContext:
 
     cwd: Path
     settings_provider: SettingsProvider | None = None
+    # 宿主记住的最近一次 todo_write 路径（W-D4 同源）；缺省读默认 TODO.md。
+    todo_path: str | None = None
 
     def settings(self) -> Any:
         """当前生效的 settings：运行时真值优先，回退磁盘。"""
@@ -246,6 +249,27 @@ def status(ctx: CatalogContext) -> list[CatalogItem]:
     ]
 
 
+def todos(ctx: CatalogContext) -> list[CatalogItem]:
+    """:todo 面板的数据源：直读清单文件（与 git provider 读工作区同构）。
+
+    解析复用 wire 的 `parse_checklist`（todos 帧同款），保证面板与帧永远同形。
+    """
+
+    from questorharness.bootstrap.hosts.serve.wire import parse_checklist
+
+    target = ctx.cwd / (ctx.todo_path or "TODO.md")
+    try:
+        rows = parse_checklist(target.read_text(encoding="utf-8"))
+    except OSError:
+        return []
+    items: list[CatalogItem] = []
+    for row in rows:
+        text = str(row.get("text", ""))
+        checked = bool(row.get("checked", False))
+        items.append(_item(text, ("✓ " if checked else "○ ") + text, current=checked))
+    return items
+
+
 PROVIDERS: dict[str, Callable[[CatalogContext], list[CatalogItem]]] = {
     "sessions": sessions,
     "models": models,
@@ -257,6 +281,7 @@ PROVIDERS: dict[str, Callable[[CatalogContext], list[CatalogItem]]] = {
     "git": git,
     "posture": posture,
     "status": status,
+    "todos": todos,
 }
 
 

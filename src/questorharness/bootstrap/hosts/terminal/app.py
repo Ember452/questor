@@ -34,10 +34,11 @@ INTERRUPT = "__questor_interrupt__"
 
 @dataclass(frozen=True)
 class SubmitResult:
-    """提交裁决：started / queued / 被拒（turn_id 为 None）。"""
+    """提交裁决：started / queued / 被拒（turn_id 为 None，detail 带拒绝码）。"""
 
     turn_id: str | None
     state: str
+    detail: str = ""
 
 
 def completion_catalog(commands: list[dict[str, Any]]) -> dict[str, str]:
@@ -143,8 +144,9 @@ async def submit(host: ServeHost, line: str) -> SubmitResult:
     )
     payload = json.loads(response.body)
     if response.status >= 400:
-        print(f"[拒绝] {payload.get('code')}: {payload.get('message')}", file=sys.stderr)
-        return SubmitResult(turn_id=None, state="refused")
+        # 不走 stderr 裸 print：拒绝码随 SubmitResult 回调用方，经 renderer 呈现。
+        detail = f"{payload.get('code')}: {payload.get('message')}"
+        return SubmitResult(turn_id=None, state="refused", detail=detail)
     return SubmitResult(
         turn_id=str(payload.get("turnId") or "") or None,
         state=str(payload.get("state", "started")),
@@ -252,6 +254,8 @@ async def drive_turns(
     if prompt:
         result = await submit(host, prompt)
         if result.turn_id is None:
+            if result.detail:
+                renderer.show(strings.SUBMIT_REFUSED.format(detail=result.detail))
             return 1
         if result.state == "queued":
             renderer.note_queued()
@@ -278,6 +282,9 @@ async def drive_turns(
                 continue
             line = action
         result = await submit(host, line)
+        if result.state == "refused":
+            renderer.show(strings.SUBMIT_REFUSED.format(detail=result.detail))
+            continue
         if result.turn_id is not None:
             renderer.expect_turn()
         if result.state == "queued":

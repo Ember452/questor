@@ -267,7 +267,8 @@
             "tasks",
             "git",
             "posture",
-            "status"
+            "status",
+            "todos"
           ]
         },
         "items": { "type": "array", "items": { "$ref": "#/$defs/CatalogItem" } }

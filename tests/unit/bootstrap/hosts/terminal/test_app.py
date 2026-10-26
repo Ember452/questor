@@ -58,10 +58,37 @@ def test_submit_reports_queued() -> None:
     assert result.state == "queued"
 
 
-def test_submit_refusal_never_looks_like_success() -> None:
+def test_submit_refusal_never_looks_like_success(capsys) -> None:  # type: ignore[no-untyped-def]
+    """拒绝不走 stderr 裸 print（单一写终端出口），detail 随 SubmitResult 带回。"""
     transport = _Transport(status=409, body=b'{"code":"turn.busy","message":"busy"}')
     result = asyncio.run(app_module.submit(_host(transport), "x"))  # type: ignore[arg-type]
-    assert result == app_module.SubmitResult(turn_id=None, state="refused")
+    assert result == app_module.SubmitResult(
+        turn_id=None, state="refused", detail="turn.busy: busy"
+    )
+    captured = capsys.readouterr()
+    assert captured.out == "" and captured.err == ""
+
+
+def test_drive_turns_shows_refusal_through_the_renderer(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """交互模式被拒：经 renderer.show 给一行可见提示，然后继续读下一行。"""
+
+    async def _one_line_then_eof(_session: object) -> str:
+        if not getattr(_one_line_then_eof, "called", False):
+            _one_line_then_eof.called = True  # type: ignore[attr-defined]
+            return "x"
+        return app_module.EOF
+
+    transport = _Transport(status=409, body=b'{"code":"turn.busy","message":"busy"}')
+    shown: list[str] = []
+    renderer = _renderer()
+    renderer.show = shown.append  # type: ignore[method-assign]
+    monkeypatch.setattr(app_module, "read_line", _one_line_then_eof)
+
+    result = asyncio.run(
+        app_module.drive_turns(_host(transport), renderer, None, None)  # type: ignore[arg-type]
+    )
+    assert result == 0
+    assert shown == ["  提交被拒（turn.busy: busy）"]
 
 
 def test_read_line_returns_eof_and_interrupt_sentinels(monkeypatch) -> None:  # type: ignore[no-untyped-def]

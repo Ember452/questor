@@ -53,7 +53,7 @@ class CatalogItem(TypedDict):
 class CatalogResponse(TypedDict):
     """HTTP response of GET /catalog/{kind}. Not a wire frame: it must stay out of ServerFrame or the web cardSlots equality guard would demand a card slot."""
 
-    kind: Literal["sessions", "models", "skills", "mcp", "plugins", "jobs", "tasks", "git", "posture", "status"]
+    kind: Literal["sessions", "models", "skills", "mcp", "plugins", "jobs", "tasks", "git", "posture", "status", "todos"]
     items: list[CatalogItem]
 
 
