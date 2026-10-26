@@ -14,6 +14,9 @@ from questorharness.bootstrap.hosts.terminal import strings, width
 
 VISIBLE_ROWS = 12
 
+# 面板内按 `/` 请求进入搜索的哨兵：只在 run() 的循环里流转，绝不作为选中 id 外泄。
+SEARCH = "__search__"
+
 
 @dataclass
 class PanelState:
@@ -95,8 +98,8 @@ def render_lines(state: PanelState, *, limit: int = VISIBLE_ROWS) -> list[str]:
     return lines
 
 
-def _fallback_choice(state: PanelState) -> str | None:
-    """非 TTY：打印编号列表并读一个序号（空输入=取消）。"""
+def _numbered_choice(state: PanelState) -> str | None:
+    """非 TTY：打印编号列表并读一个序号（`/` 请求搜索，空输入=取消）。"""
 
     rows = state.visible()
     for number, item in enumerate(rows, start=1):
@@ -108,6 +111,8 @@ def _fallback_choice(state: PanelState) -> str | None:
     except (EOFError, KeyboardInterrupt):
         return None
     raw = raw.strip()
+    if raw == "/":
+        return SEARCH
     if not raw.isdigit():
         return None
     index = int(raw) - 1
@@ -116,18 +121,40 @@ def _fallback_choice(state: PanelState) -> str | None:
     return None
 
 
+def _read_search(state: PanelState) -> None:
+    """读一个搜索词并应用（空=清过滤；EOF/Ctrl-C 保持现状）。"""
+
+    try:
+        query = input(strings.PANEL_SEARCH_PROMPT)
+    except (EOFError, KeyboardInterrupt):
+        return
+    set_query(state, query.strip())
+
+
 def run(
     state: PanelState, *, console: Any | None = None, full_screen: bool = True
 ) -> str | None:
     """打开面板并返回被选中项的 id（Esc/q/空输入 → None）。
 
+    `/` 请求搜索时先退出面板读一个搜索词，再带着过滤重开；搜索哨兵只在
+    本循环流转，绝不当成选中 id 返回（否则会被拼进斜杠命令提交出去）。
     TTY + prompt_toolkit 时进 alt-screen；否则退化为编号选择。
     """
+
+    while True:
+        result = _open_once(state, full_screen=full_screen)
+        if result != SEARCH:
+            return result if isinstance(result, str) else None
+        _read_search(state)
+
+
+def _open_once(state: PanelState, *, full_screen: bool) -> str | None:
+    """打开一次面板（不处理搜索往返）。"""
 
     import sys
 
     if not full_screen or not sys.stdin.isatty():
-        return _fallback_choice(state)
+        return _numbered_choice(state)
 
     try:
         from prompt_toolkit import Application
@@ -135,7 +162,7 @@ def run(
         from prompt_toolkit.layout import Layout, Window
         from prompt_toolkit.layout.controls import FormattedTextControl
     except ImportError:  # 没有 prompt_toolkit 就退回编号选择
-        return _fallback_choice(state)
+        return _numbered_choice(state)
 
     bindings = KeyBindings()
 
@@ -154,7 +181,7 @@ def run(
     @bindings.add("/")
     def _search(event: Any) -> None:
         state.kind = "search"
-        event.app.exit(result="__search__")
+        event.app.exit(result=SEARCH)
 
     @bindings.add("escape")
     @bindings.add("q")

@@ -160,9 +160,16 @@ class TerminalRenderer:
         """审批：y 通过，其余拒绝（fail-closed 由服务端兜底）。编辑类先给 diff 卡。"""
         self._console.print(cards.render_item(item))
         self._console.print(limits.deadline_hint(self._prompt_timeout()), style=theme.DIM)
-        answer = await self._read_answer("  [y/N] 允许执行? ", kind="审批")
-        if answer is None:
-            self._console.print(strings.APPROVAL_TIMEOUT, style=theme.WARN)
+        notice = ""
+        try:
+            answer = await self._read_answer("  [y/N] 允许执行? ", kind="审批")
+        except KeyboardInterrupt:
+            # Ctrl-C 四语义表：审批中 = deny；异常击穿 REPL 才是错的。
+            answer, notice = None, strings.APPROVAL_INTERRUPT
+        else:
+            notice = strings.APPROVAL_TIMEOUT if answer is None else ""
+        if notice:
+            self._console.print(notice, style=theme.WARN)
         decision = "approve" if (answer or "").strip().lower() in {"y", "yes"} else "deny"
         await self._host.transport.request(
             "POST",
@@ -176,9 +183,16 @@ class TerminalRenderer:
         self._console.print(
             limits.deadline_hint(self._prompt_timeout(), kind="提问"), style=theme.DIM
         )
-        answer = await self._read_answer("  → ", kind="提问")
-        if answer is None:
-            self._console.print(strings.ASK_TIMEOUT, style=theme.WARN)
+        notice = ""
+        try:
+            answer = await self._read_answer("  → ", kind="提问")
+        except KeyboardInterrupt:
+            # Ctrl-C 四语义表：提问中 = 未回答，不得击穿 REPL。
+            answer, notice = None, strings.ASK_INTERRUPT
+        else:
+            notice = strings.ASK_TIMEOUT if answer is None else ""
+        if notice:
+            self._console.print(notice, style=theme.WARN)
         await self._host.transport.request(
             "POST",
             f"{PREFIX}/ask",

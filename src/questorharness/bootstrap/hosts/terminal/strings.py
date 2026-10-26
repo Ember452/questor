@@ -40,6 +40,8 @@ CANCEL_SENT = "  已请求取消（Ctrl-C）"
 # ---- 时限与降级 ---------------------------------------------------------
 APPROVAL_TIMEOUT = "  已超时，按拒绝处理"
 ASK_TIMEOUT = "  已超时，按未回答处理"
+APPROVAL_INTERRUPT = "  已中断，按拒绝处理"
+ASK_INTERRUPT = "  已中断，按未回答处理"
 RENDER_FAILED = "  降级 {item} · 渲染失败：{detail}"
 
 
@@ -52,6 +54,7 @@ def render_failed(item: str, detail: str) -> str:
 # ---- 面板（alt-screen 与编号回退共用）------------------------------------
 PANEL_HINT = "  j/k ↑↓ 选择 · Enter 确认 · / 搜索 · Esc 退出"
 PANEL_GROUP = "  ── {group} ──"
-PANEL_CHOICE_PROMPT = "  选择序号（空=取消）："
+PANEL_CHOICE_PROMPT = "  选择序号（/ 搜索 · 空=取消）："
+PANEL_SEARCH_PROMPT = "  搜索（回车应用 · 空=清过滤 · Ctrl-C 保持）："
 PANEL_EMPTY = "  这个面板现在是空的"
 PANEL_UNAVAILABLE = "  面板取不到数据（{reason}）"

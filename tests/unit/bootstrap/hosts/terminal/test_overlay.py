@@ -93,6 +93,53 @@ def test_non_tty_falls_back_to_numbered_choice(monkeypatch) -> None:  # type: ig
     assert overlay.run(_state()) == "beta"
 
 
+def test_slash_opens_search_and_refines_the_choice(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """/ 进入搜索：读一个搜索词后重列编号，选中项必须来自过滤集。
+
+    旧实现把 `__search__` 哨兵当选中 id 返回（随后被拼进斜杠命令）——本用例锁死
+    这条路径：搜索必须真的过滤，选择必须真的生效。
+    """
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    answers = iter(["/", "bet", "1"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
+    assert overlay.run(_state()) == "beta"
+
+
+def test_search_matches_detail_text_in_the_numbered_fallback(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """编号回退同样吃中文搜索词（detail 列参与匹配）。"""
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    answers = iter(["/", "第二", "1"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
+    assert overlay.run(_state()) == "beta"
+
+
+def test_empty_search_query_clears_the_filter(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """空搜索词 = 清掉过滤回到全表；连续两次搜索以最后一次为准。"""
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    answers = iter(["/", "第二", "/", "", "3"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
+    assert overlay.run(_state()) == "gamma"
+
+
+def test_search_eof_keeps_the_previous_filter(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """搜索输入被 EOF 打断：保持既有过滤继续选，不得崩、不得清空。"""
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    state = _state()
+    overlay.set_query(state, "第二")
+
+    def _input(prompt: str = "") -> str:
+        if prompt == strings.PANEL_SEARCH_PROMPT:
+            raise EOFError
+        return "1"
+
+    monkeypatch.setattr("builtins.input", _input)
+    assert overlay.run(state) == "beta"
+
+
 def test_non_tty_empty_input_cancels(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     monkeypatch.setattr("builtins.input", lambda _prompt="": "")

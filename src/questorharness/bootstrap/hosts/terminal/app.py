@@ -66,7 +66,7 @@ def _prompt_once(session: "_PS") -> str:
     """同步读一行：Ctrl-C 交回中断哨兵（回合中会变成 /cancel）。运行在 worker 线程。"""
     while True:
         try:
-            text: str = session.prompt("> ")
+            text: str = session.prompt(strings.PROMPT)
             return text
         except KeyboardInterrupt:
             return INTERRUPT
@@ -76,7 +76,7 @@ async def read_line(session: "_PS | None") -> str:
     """读一行输入；EOF / Ctrl-C 各走一个哨兵。session 为空时回退裸 input。"""
     if session is None:
         try:
-            return await asyncio.to_thread(input, "> ")
+            return await asyncio.to_thread(input, strings.PROMPT)
         except EOFError:
             return EOF
         except KeyboardInterrupt:

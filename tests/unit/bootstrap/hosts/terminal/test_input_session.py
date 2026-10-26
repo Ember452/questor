@@ -1,4 +1,4 @@
-"""`input_session.py`：非 TTY 回退、粘贴归一化、提示符。"""
+"""`input_session.py`：非 TTY 回退、粘贴归一化。"""
 
 from __future__ import annotations
 
@@ -16,7 +16,3 @@ def test_non_tty_host_falls_back_to_none(monkeypatch) -> None:  # type: ignore[n
 def test_prepare_line_strips_paste_markers() -> None:
     raw = f"{paste.BRACKETED_PASTE_START}你好{paste.BRACKETED_PASTE_END}"
     assert input_session.prepare_line(raw) == "你好"
-
-
-def test_prompt_text_matches_the_reasonix_marker() -> None:
-    assert input_session.prompt_text() == "> "

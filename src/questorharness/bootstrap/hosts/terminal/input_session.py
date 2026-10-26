@@ -14,8 +14,6 @@ from typing import Any
 from questorharness.bootstrap.hosts.terminal import paste
 from questorharness.bootstrap.hosts.terminal.completer import FileCompleter, SlashCompleter
 
-_PROMPT = "> "
-
 
 def build(
     catalog: Mapping[str, str],
@@ -57,9 +55,3 @@ def prepare_line(raw: str) -> str:
     """粘贴归一化：去括号粘贴标记、统一换行；其余内容一字不改。"""
 
     return paste.normalize(raw)
-
-
-def prompt_text() -> str:
-    """提示符（Reasonix chrome 的 `❯ `）。"""
-
-    return _PROMPT
