@@ -4,9 +4,12 @@
 已原样迁至 [docs/CONVENTIONS.md](./docs/CONVENTIONS.md)。
 优先级：用户指令 → [ARCHITECTURE](./docs/ARCHITECTURE.md) → [docs/adr](./docs/adr)
 → [docs/architecture](./docs/architecture) → [docs/plan](./docs/plan) → 其他。守则自身的
-§5.5 仍引用重置前的文档集（`docs/design/`、`docs/ROADMAP.md`、`docs/pitfalls.md`）；
-这些文件已在 W10 离开仓库——见 `docs-pre-reset-v1/README.md` 的指引与 CONVENTIONS.md
-顶部的勘误块。
+§5.5 仍引用重置前的文档集（蓝图、路线图、坑位清单与 design 目录）；这些文件已在 W10
+离开仓库——路径对照表见 [CONVENTIONS](./docs/CONVENTIONS.md) 顶部的勘误块，归档指引见
+`docs-pre-reset-v1/README.md`。
+
+对外文档（安装、命令、环境变量、原理）在 [docs/README.md](./docs/README.md) 的读者分流页，
+不在这里重复。
 永远不要凭记忆工作：这些链接才是事实，而且它们会移动。
 
 ## 顶层结构
