@@ -5,10 +5,22 @@ build-backend = "hatchling.build"
 [project]
 name = "questorharness-ai"
 version = "0.1.0"
-description = "QuestorHarness: a local-first AI coding assistant engine"
+description = "Questor: a local-first agent harness with a desktop personal agent"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
+authors = [{ name = "Ember452" }]
+keywords = ["agent", "agent-harness", "llm", "mcp", "local-first", "coding-agent"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Code Generators",
+]
 
 dependencies = [
     "anthropic>=0.40.0",
@@ -44,6 +56,13 @@ dev = [
     "import-linter>=2.0.0",
     "pytest-timeout>=2.4.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Ember452/questor"
+Repository = "https://github.com/Ember452/questor"
+Issues = "https://github.com/Ember452/questor/issues"
+Documentation = "https://github.com/Ember452/questor/blob/main/docs/README.md"
+Changelog = "https://github.com/Ember452/questor/blob/main/CHANGELOG.md"
 
 [[tool.uv.index]]
 url = "https://mirrors.aliyun.com/pypi/simple/"

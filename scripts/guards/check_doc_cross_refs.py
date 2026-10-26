@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check relative documentation links and repository paths referenced in docs."""
+"""Check documentation cross references: dead links and unreachable pages."""
 
 from __future__ import annotations
 
@@ -34,6 +34,8 @@ except ImportError:  # direct script execution
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DOCS = ROOT / "docs"
+# 读者入口：docs 目录下每个 md 都必须能从它沿链接走到。
+INDEX_NAME = "README.md"
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 CODE_PATH_RE = re.compile(r"`([^`\n]+)`")
 PATH_ROOTS = ("src/", "tests/", "scripts/", "docs/", "frontend/", ".github/")
@@ -44,6 +46,20 @@ SIMPLE_PATHS = (
     ".pre-commit-config.yaml",
     "Makefile",
     "README.md",
+)
+
+# 根目录下的活文档：必须一并扫描，否则 README / 贡献指南里的死链会一路绿灯。
+# 用显式白名单而不是扫整个仓库根：`apps/*/node_modules` 与 `.venv` 里
+# 躺着上千个第三方 README，卷进来只会制造噪音与极慢的扫描。
+ROOT_DOC_FILES = (
+    "README.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "AGENTS.md",
+    "CODE_OF_CONDUCT.md",
+    "CHANGELOG.md",
+    "THIRD_PARTY_NOTICES.md",
+    "CLAUDE.md",
 )
 
 
@@ -157,6 +173,8 @@ def check_doc(doc: Path, *, root: Path) -> list[Violation]:
 
 
 def _self_test() -> int:
+    import contextlib
+    import io
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -201,6 +219,42 @@ def _self_test() -> int:
         declared_hits = check_doc(declared, root=root)
         stale_hits = check_doc(stale, root=root)
         described_hits = check_doc(described, root=root)
+
+        # 根目录文档白名单必须真的生效：README 里的死链要能让整次扫描判红，
+        # 而未列入白名单的根文件不应被卷进来。
+        def _quiet_scan(docs_dir: Path, scan_root: Path) -> int:
+            captured_out = io.StringIO()
+            captured_err = io.StringIO()
+            with contextlib.redirect_stdout(captured_out), contextlib.redirect_stderr(captured_err):
+                return _scan(docs_dir, root=scan_root, fail_on_empty_scan=False)
+
+        with tempfile.TemporaryDirectory() as tmp2:
+            root2 = Path(tmp2)
+            docs2 = root2 / "docs"
+            docs2.mkdir()
+            (docs2 / "ok.md").write_text("# ok\n", encoding="utf-8")
+            (docs2 / "README.md").write_text("# index\n\n[ok](ok.md)\n", encoding="utf-8")
+            (root2 / "README.md").write_text("[bad](missing-root.md)\n", encoding="utf-8")
+            root_doc_red = _quiet_scan(docs2, root2)
+            (root2 / "README.md").write_text("# clean\n", encoding="utf-8")
+            root_doc_green = _quiet_scan(docs2, root2)
+            (root2 / "notes.md").write_text("[bad](missing-notes.md)\n", encoding="utf-8")
+            non_allowlisted = _quiet_scan(docs2, root2)
+
+        # 可达性：写了但没人链的页必须判红；全部链上后必须判绿。
+        with tempfile.TemporaryDirectory() as tmp3:
+            root3 = Path(tmp3)
+            docs3 = root3 / "docs"
+            docs3.mkdir()
+            (docs3 / "leaf.md").write_text("# leaf\n", encoding="utf-8")
+            (docs3 / "orphan.md").write_text("# orphan\n", encoding="utf-8")
+            (docs3 / "README.md").write_text("# index\n\n[leaf](leaf.md)\n", encoding="utf-8")
+            orphan_red = _quiet_scan(docs3, root3)
+            (docs3 / "README.md").write_text(
+                "# index\n\n[leaf](leaf.md) [orphan](orphan.md)\n", encoding="utf-8"
+            )
+            no_orphan_green = _quiet_scan(docs3, root3)
+
         cases = [
             (
                 "marker-in-body-is-not-an-opt-in",
@@ -224,16 +278,92 @@ def _self_test() -> int:
                 any("missing code path" in item.message for item in broken_hits),
                 f"{len(broken_hits)} violations",
             ),
+            (
+                "root-doc-dead-link-goes-red",
+                root_doc_red == EXIT_RED,
+                f"exit={root_doc_red}",
+            ),
+            (
+                "root-doc-clean-is-green",
+                root_doc_green == EXIT_OK,
+                f"exit={root_doc_green}",
+            ),
+            (
+                "non-allowlisted-root-file-not-scanned",
+                non_allowlisted == EXIT_OK,
+                f"exit={non_allowlisted}",
+            ),
+            (
+                "unreachable-doc-goes-red",
+                orphan_red == EXIT_RED,
+                f"exit={orphan_red}",
+            ),
+            (
+                "all-docs-reachable-is-green",
+                no_orphan_green == EXIT_OK,
+                f"exit={no_orphan_green}",
+            ),
         ]
     return run_self_test(cases)
 
 
-def _scan(docs: Path, *, fail_on_empty_scan: bool) -> int:
+def _outbound_targets(doc: Path, universe: set[Path]) -> set[Path]:
+    """Return the in-scope documents that one page links to."""
+
+    out: set[Path] = set()
+    for match in LINK_RE.finditer(read_text(doc)):
+        target = match.group(1).strip().strip("<>")
+        if not target:
+            continue
+        raw = target.split()[0]
+        if raw.startswith(("#", "http://", "https://", "mailto:", "tel:", "data:")):
+            continue
+        path_part = unquote(raw.split("#", 1)[0])
+        if not path_part:
+            continue
+        candidate = (doc.parent / path_part).resolve()
+        if candidate in universe:
+            out.add(candidate)
+    return out
+
+
+def _unreachable_docs(docs: Path, files: list[Path]) -> list[Path]:
+    """Documents a reader can never arrive at, measured from the docs index.
+
+    Reachability is transitive: index -> section page -> leaf page. A page nobody
+    links is invisible no matter how correct its content is, so a missing index
+    entry is a documentation defect rather than a style nit.
+    """
+
+    index = (docs / INDEX_NAME).resolve()
+    universe = {path.resolve() for path in files}
+    if index not in universe:
+        return []
+    seen = {index}
+    stack = [index]
+    while stack:
+        for target in _outbound_targets(stack.pop(), universe):
+            if target not in seen:
+                seen.add(target)
+                stack.append(target)
+    return sorted(path for path in universe if path not in seen)
+
+
+def _scan(docs: Path, *, root: Path = ROOT, fail_on_empty_scan: bool) -> int:
     if not docs.exists():
         print(f"doc-cross-refs guard: docs directory missing: {docs}", file=sys.stderr)
         return EXIT_CONFIG
-    files = _markdown_files(docs)
+    doc_files = _markdown_files(docs)
+    files = list(doc_files)
+    files.extend(root / name for name in ROOT_DOC_FILES if (root / name).exists())
+    files.sort()
     if fail_on_empty_scan:
+        if not (docs / INDEX_NAME).exists():
+            print(
+                f"doc-cross-refs guard: config error: reader index {docs / INDEX_NAME} is missing",
+                file=sys.stderr,
+            )
+            return EXIT_CONFIG
         try:
             fail_on_empty("markdown files", files)
         except GuardConfigError as exc:
@@ -245,10 +375,19 @@ def _scan(docs: Path, *, fail_on_empty_scan: bool) -> int:
     for doc in files:
         text = read_text(doc)
         references += len(LINK_RE.findall(text)) + len(CODE_PATH_RE.findall(text))
-        violations.extend(check_doc(doc, root=ROOT))
+        violations.extend(check_doc(doc, root=root))
     if fail_on_empty_scan and references == 0:
         print("doc-cross-refs guard: config error: no documentation references found", file=sys.stderr)
         return EXIT_CONFIG
+
+    for orphan in _unreachable_docs(docs, doc_files):
+        violations.append(
+            Violation(
+                orphan,
+                1,
+                "document is unreachable from the docs index; link it from an index page",
+            )
+        )
 
     for item in violations:
         print(f"{item.path}:{item.line}: {item.message}", file=sys.stderr)
@@ -270,7 +409,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.self_test:
         return _self_test()
-    return _scan(args.docs, fail_on_empty_scan=args.fail_on_empty)
+    return _scan(args.docs, root=ROOT, fail_on_empty_scan=args.fail_on_empty)
 
 
 if __name__ == "__main__":

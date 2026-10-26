@@ -6,6 +6,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — 对外文档层（分支 docs/open-source-surface，2026-10-26）
+- New reader-facing documentation set in Chinese: install, quickstart, desktop, and
+  troubleshooting guides; CLI, environment-variable, and settings references;
+  an `internals/` layer that explains the turn lifecycle, the event model, and the
+  permission gate; plus privacy/diagnostics and MCP integration pages.
+- `docs/README.md` is now a reader-routing page with a Diátaxis mapping and an
+  explicit language policy (new pages in Chinese, existing English pages converted
+  as they are touched; no parallel `en/` tree).
+- `README.md` was rewritten for first-time readers and no longer links to the
+  removed pre-reset documentation tree.
+
+### Changed
+- `check_doc_cross_refs` now also scans an explicit allowlist of root documents
+  (`README`, `CONTRIBUTING`, `SECURITY`, `AGENTS`, `CODE_OF_CONDUCT`, `CHANGELOG`,
+  `THIRD_PARTY_NOTICES`, `CLAUDE`). Its self-test proves a dead link in a root
+  document turns the guard red and that unlisted root files stay out of scope.
+- The guard also enforces reachability: every `docs/**/*.md` must be walkable from
+  `docs/README.md` by following links, so a new page that nobody indexes turns CI
+  red instead of quietly going stale. `docs/plan/README.md` was added as the plan
+  index, which previously had five unreachable pages.
+- `pyproject.toml` gained `[project.urls]`, keywords, classifiers and authors, so a
+  package page has somewhere to point. `requires-python` stays `>=3.10` (an
+  untested lower bound) and the contributor guide now says plainly that only 3.13
+  is verified, instead of the two documents contradicting each other.
+
+### Fixed
+- `README.md` advertised a Tauri desktop shell; the shipped shell is Electron
+  (`apps/desktop`). It also described `python -m questor` as the full-screen TUI,
+  which is `python -m questorharness`; the product entry point runs a line-mode REPL.
+- `CONTRIBUTING.md` claimed there were no console scripts and no optional
+  dependencies; both exist (`questor`/`questorharness`/`oh`/`openh`, and a `dev`
+  extra), and it pointed at deleted documents (roadmap, vision, hard constraints,
+  ADR-0012, ADR-0036).
+- `.github/PULL_REQUEST_TEMPLATE.md` required the retired hard-constraints document
+  in its definition of done, so every PR author saw a dead reference.
+- AGENTS.md still referenced the removed design directory, roadmap and pitfalls
+  file as live paths.
+- `.gitignore` had mojibake in six comment lines that had swallowed the
+  `scripts/_*` ignore rule and its negation onto comment lines, so temporary
+  scripts were silently not ignored; the file was also saved with a UTF-8 BOM.
+
 ### Fixed — structure-hardening repair round (branch `ci/structure-hardening`, 2026-10-24)
 - The react backend host loop now converts unexpected engine exceptions into
   error events and keeps running; previously they escaped the loop, tore down
