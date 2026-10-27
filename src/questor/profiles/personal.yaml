@@ -27,6 +27,10 @@ ui:
     schedule: declared
     channels: declared
 # runtime 能力位：本阶段只立位、不接消费方；三个键必须显式声明（缺失视为全 off）。
+# 未来消费方登记（计划 04，裁决本体见 docs/adr/0009-proactive-runtime.md）：
+#   schedule           → A4 触发层升级（at/every 触发、跨进程 claim、进程内回合 runner）
+#   delivery           → A5-lite 守门器与投递（每日上限 / 安静时段 / 跳过可观测，feishu_dm）
+#   memory_consumption → A3d 检索降级链（keyword → trigram → LIKE，注入端口落 providers/store）
 runtime:
   schedule: off
   delivery: off

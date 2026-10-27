@@ -8,6 +8,7 @@
 | [01 结构加固](01-structure-hardening.md) | 分层、目录预算、守卫体系与验收台账 |
 | [02 Studio serve 宿主](02-studio-serve-host.md) | 回环宿主与线协议 |
 | [03 终端 REPL](03-terminal-repl.md) | 行式 REPL 与全屏 TUI 的落地路径 |
+| [04 personal 就绪](04-personal-readiness.md) | 主动运行时、检索降级链与三个 runtime 位的消费方落地 |
 
 ## 形态映射
 
