@@ -11,4 +11,6 @@ contracts, persistence, security, or the public CLI.
 - [0006: serve host and the wire protocol](0006-serve-host-and-wire-protocol.md)
 - [0007: frontend base and contract codegen](0007-frontend-base-and-contract-codegen.md)
 - [0008: profile-driven modes and capability bits](0008-profile-driven-modes.md)
+- [0009: proactive runtime and the second turn kind](0009-proactive-runtime.md)
+- [0010: journal write order and snapshot format](0010-journal-write-order.md)
 - [Template](template.md)
