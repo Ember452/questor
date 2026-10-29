@@ -75,7 +75,7 @@ jobs:
 
       # 契约 TS 侧 codegen 守卫需要 node 与生成器依赖（scripts/codegen）。
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
 
@@ -136,7 +136,7 @@ jobs:
 
       # tests 里含 tests/ci/test_wire_codegen.py（TS 侧 codegen 守卫），同样需要生成器依赖。
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
 
@@ -182,7 +182,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
 
